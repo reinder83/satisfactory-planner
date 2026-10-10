@@ -283,7 +283,8 @@ test('leaving the page asks first; kept, the text stays; left anyway, nothing is
   assert.deepEqual(sent, []);
 });
 
-test('changing the phase asks too, and saves only the phase', async () => {
+// The phase picked is only shown since #1053 (it was saved before), so nothing is sent at all.
+test('changing the phase asks too, and saves nothing', async () => {
   type('title', 'Typed but not saved');
   const asked = answerConfirms(false);
   const phasePicker = $<HTMLSelectElement>('#phase-picker')!;
@@ -298,7 +299,8 @@ test('changing the phase asks too, and saves only the phase', async () => {
   phasePicker.value = '4';
   phasePicker.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(sentTypes(), ['phase'], 'only the phase is saved, never the step');
+  assert.deepEqual(sentTypes(), [], 'the phase is only shown, and the step is not saved');
+  assert.equal(phasePicker.value, '4', 'Phase 4 is shown');
   assert.equal(state.taskEdits?.titles?.[id], undefined);
 });
 

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.ts';
-import { phase, setView, setWorkspace } from '../../public/app/session.ts';
+import { phase, setView, setWorkspace, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { showSignedOut, unmountShell } from '../../public/app/ui/mount.ts';
 import { $$, applyUpdate, generated, handbook, open as openProfile, stubFetch } from './setup.ts';
@@ -92,26 +92,33 @@ test('the phase picker offers the profile’s phases and shows the working one',
   assert.equal(picker.disabled, false);
 });
 
-// SP-44 (#279): the phase track replaces the breadcrumb's phase and, above 720px, the select:
-// radio buttons named "Working phase", one per phase with its checklist's progress, switching
-// with the same save and guard. The select stays for phone widths (style.css hides one of them).
+// SP-44 (#279): the phase track replaces the breadcrumb's phase and, above 720px, the select: one
+// segment per phase with its checklist's progress, switching with the same guard. The select stays
+// for phone widths (style.css hides one of them). Since #1053 the segments are tabs (they were
+// radio buttons named "Working phase" that saved the phase picked): a click shows the phase
+// without saving it, and the track names and marks the working phase.
 test('the phase track shows each phase’s progress and switches phases like the select (SP-44)', async () => {
   const phase4 = handbook.phases['4']!;
   openProfile({ phase: '4', state: { checks: { [phase4[0]!.id]: true } } });
   render();
   const track = $('[data-phase-track]')!;
-  assert.equal(track.getAttribute('role'), 'radiogroup');
-  assert.equal(track.getAttribute('aria-label'), 'Working phase');
-  const radios = () => $$<HTMLInputElement>('[data-phase-track] input[type=radio]');
+  assert.equal(track.getAttribute('role'), 'tablist');
+  assert.equal(track.getAttribute('aria-label'), 'Showing phase, working on Phase 4');
+  const tabs = () => $$<HTMLButtonElement>('[data-phase-track] [role="tab"]');
   assert.deepEqual(
-    radios().map(r => [r.value, r.name, r.checked]),
+    tabs().map(tab => [
+      tab.dataset.phaseSeg,
+      tab.getAttribute('aria-selected'),
+      tab.tabIndex,
+      tab.getAttribute('aria-controls'),
+    ]),
     [
-      ['3', 'phase-track', false],
-      ['4', 'phase-track', true],
-      ['5', 'phase-track', false],
-      ['post', 'phase-track', false],
+      ['3', 'false', -1, 'main'],
+      ['4', 'true', 0, 'main'],
+      ['5', 'false', -1, 'main'],
+      ['post', 'false', -1, 'main'],
     ],
-    'the select’s phases, the working one checked',
+    'the select’s phases, the one shown selected and the only Tab stop',
   );
   const segment = (phaseId: string) => $(`[data-phase-seg="${phaseId}"]`)!;
   assert.ok(segment('4').classList.contains('current'));
@@ -134,36 +141,21 @@ test('the phase track shows each phase’s progress and switches phases like the
     $('.breadcrumbs a')!.textContent + '/' + $('[data-crumb-profile]')!.textContent,
   );
   assert.ok($('#phase-picker'), 'the select stays for phone widths');
-  // Choosing a segment saves the phase, as the select does, and redraws both.
+  // Choosing a segment shows the phase, as the select does, redraws both and saves nothing.
   const calls = stubFetch<{ type: string; value: string }>({ '/api/update': applyUpdate });
-  const pick = async (value: string) => {
-    const radio = radios().find(x => x.value === value)!;
-    radio.focus();
-    radio.checked = true;
-    radio.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise(resolve => setTimeout(resolve, 20));
-    await nextTick();
-  };
-  await pick('5');
-  assert.deepEqual(calls.at(-1), ['/api/update', { type: 'phase', value: '5' }]);
+  const tab = (value: string) => tabs().find(x => x.dataset.phaseSeg === value)!;
+  tab('5').focus();
+  tab('5').click();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await nextTick();
+  assert.deepEqual(calls, [], 'nothing is saved');
   assert.equal(phase(), '5');
+  assert.equal(state.settings.phase, '4');
   assert.equal($<HTMLSelectElement>('#phase-picker')!.value, '5');
   assert.ok(segment('5').classList.contains('current'));
-  assert.equal(
-    document.activeElement,
-    radios().find(x => x.value === '5'),
-    'focus stays',
-  );
-  // A refused save checks the saved phase again.
-  stubFetch({});
-  await pick('3');
-  assert.equal(phase(), '5');
-  assert.deepEqual(
-    radios()
-      .filter(x => x.checked)
-      .map(x => x.value),
-    ['5'],
-  );
+  assert.equal(tab('5').tabIndex, 0, 'the Tab stop follows the phase shown');
+  assert.ok(segment('4').classList.contains('working'), 'the working phase is marked');
+  assert.equal(document.activeElement?.getAttribute('data-phase-seg'), '5', 'focus stays');
 });
 
 test('the top bar carries a short save status for phone widths, announced politely', () => {

@@ -4,11 +4,14 @@
   <main> by render() in shell.ts.
 
   The phase picker is a phase track (SP-44, #279): one segment per phase, each with its
-  checklist's progress (views/phase-track.ts), as a group of radio buttons named "Working
-  phase", so the arrow keys move between phases and a click switches, saved and guarded as the
-  select is. At 720px and below the track gives way to the select, which is always there. While
-  the tab shows a phase other than the working one, both are called "Showing" and name the
-  working phase (pickerWords, #992).
+  checklist's progress (views/phase-track.ts). At 720px and below the track gives way to the
+  select, which is always there. Either one only shows a phase in this tab (viewPhase in
+  session.ts, #1053), guarded for unsaved notes as a page change is; nothing is saved. The track
+  is a tab list (the WAI-ARIA tabs pattern with manual activation): one Tab stop, on the phase
+  shown; the arrow keys, Home and End move focus between the phases, and Enter, Space or a click
+  shows one. Both name the working phase (pickerWords), the track marks its segment, and while
+  the tab shows another phase the label reads "Showing" rather than "Working on" (#992) and "Work
+  on Phase N" beside it saves the phase shown as the working phase (`save({ type: 'phase' })`).
 
   The profile switcher (SP-07, #242) is the sidebar footer as a menu button (ui/ActionMenu.vue):
   the open profile's name and settings lines on the button, and in its menu the open save's
@@ -50,6 +53,8 @@ import {
   setOpenedPhase,
   setQuery,
   view,
+  viewPhase,
+  workingPhase,
   workingPhaseNotShown,
   workspace,
 } from '../session.ts';
@@ -62,7 +67,6 @@ import { phaseTrack } from '../views/phase-track.ts';
 import AdaPanel from './AdaPanel.vue';
 import GroupMovedNotice from './GroupMovedNotice.vue';
 import { legacy } from './bridge.ts';
-import { isBusy, whileBusy } from '../busy.ts';
 import ActionMenu from './ActionMenu.vue';
 import { openProfile, signOut } from './actions.ts';
 
@@ -101,6 +105,7 @@ const frame = computed(() =>
     editable: !!(currentSave.id && calculated),
     canPickPhase: !!currentSave.id,
     phase: phase(),
+    phaseLabel: phaseLabel(phase()),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
     track: phaseTrack(),
     picker: pickerWords(),
@@ -255,71 +260,101 @@ function profileFooter() {
   return ['Create or select a profile'];
 }
 
-// What the phase picker (the select and the track) is called (#992). It always shows the phase on
-// screen, and picking one saves it as the working phase. While the working phase is on screen it
-// is "Working on" ("Working phase"); while the tab shows another (the phase the profile opened on,
-// #570, or a flow page's address names, #926) it is "Showing", naming the working phase, which
-// the notice below the top bar also names ("You are working on Phase 3"), so the two never call
-// different phases the one being worked on. `working` is that phase, or null.
-function pickerWords(): { label: string; name: string; working: Phase | null } {
-  const working = workingPhaseNotShown();
-  return working
-    ? {
-        label: 'Showing',
-        name: `Showing phase, working on ${phaseLabel(working)}`,
-        working,
-      }
-    : { label: 'Working on', name: 'Working phase', working: null };
+// What the phase picker (the select and the track) is called (#992, #1053). It shows the phase on
+// screen and names the working phase: "Showing phase, working on Phase 3". Its visible label is
+// "Working on" while the working phase is on screen and "Showing" while the tab shows another (one
+// picked to look at, #1053, the phase the profile opened on, #570, or a flow page's address
+// names, #926), as the notices below the top bar say ("You are working on Phase 3"), so the two
+// never call different phases the one being worked on. `working` is the working phase, which the
+// track marks; `elsewhere` says the tab shows another, which offers "Work on Phase N".
+function pickerWords(): { label: string; name: string; working: Phase; elsewhere: boolean } {
+  const elsewhere = !!workingPhaseNotShown(),
+    working = workingPhase();
+  return {
+    label: elsewhere ? 'Showing' : 'Working on',
+    name: `Showing phase, working on ${phaseLabel(working)}`,
+    working,
+    elsewhere,
+  };
 }
 
-// The "Working on" select: save the profile's selected phase, show it rather than the phase the
-// profile opened on (#570), clear the search and redraw;
-// on failure it shows the saved phase again. The redraw shows the new phase's notes, so an
-// unsaved note is asked about first; kept, the select goes back to the saved phase.
-// Busy while it saves (app/busy.ts, #299): a key pressed on it meanwhile shows the saved phase again.
-async function pickPhase(event: Event) {
-  const el = event.target as HTMLSelectElement;
-  if (isBusy(el) || trackBusy.value || !(await allowSwitch())) {
-    el.value = phase();
-    return;
-  }
-  await whileBusy(el, async () => {
-    try {
-      // The options are phaseOptions(), so the value is a phase.
-      await save({ type: 'phase', value: el.value as Phase });
-      setOpenedPhase(null);
-      setQuery('');
-      render();
-    } catch {
-      el.value = phase();
-    }
-  });
-}
-
-// The phase track's radio buttons (SP-44): the same save, guard and redraw as the select. The
-// arrow keys check the next radio at once, so while one switch saves, another is refused and
-// the saved phase is checked again (the track is aria-busy meanwhile, like a busy select).
-const trackBusy = ref(false);
-function checkSavedPhase() {
-  const saved = document.querySelector<HTMLInputElement>(
-    `[data-phase-track] input[value="${phase()}"]`,
-  );
-  if (saved) saved.checked = true;
-}
-async function pickTrack(event: Event) {
-  const el = event.target as HTMLInputElement;
-  if (trackBusy.value || isBusy(document.querySelector('#phase-picker'))) return checkSavedPhase();
-  trackBusy.value = true;
+// Shows phase `target` in this tab (#1053): never saved, so another tab, another device and a
+// reload still go by the working phase. The redraw shows that phase's notes, so an unsaved note
+// is asked about first, and the search is cleared as on a page change. True once it is shown;
+// false when the note was kept or another switch is still asking.
+const phaseSwitching = ref(false);
+async function showPhase(target: Phase): Promise<boolean> {
+  if (target === phase()) return true;
+  if (phaseSwitching.value) return false;
+  phaseSwitching.value = true;
   try {
-    if (!(await allowSwitch())) return checkSavedPhase();
-    await save({ type: 'phase', value: el.value as Phase });
-    setOpenedPhase(null);
+    if (!(await allowSwitch())) return false;
+    viewPhase(target);
     setQuery('');
     render();
-  } catch {
-    checkSavedPhase();
+    return true;
   } finally {
-    trackBusy.value = false;
+    phaseSwitching.value = false;
+  }
+}
+
+// The select (phone widths): shows the phase chosen, or the phase on screen again when the switch
+// is refused.
+async function pickPhase(event: Event) {
+  const el = event.target as HTMLSelectElement;
+  // The options are phaseOptions(), so the value is a phase.
+  if (!(await showPhase(el.value as Phase))) el.value = phase();
+}
+
+// The phase track's keys (WAI-ARIA tabs with manual activation, #1053): the arrow keys, Home and
+// End move focus between the segments, wrapping around, and show nothing; Enter or Space presses
+// the focused segment, which shows its phase. Only the segment of the phase shown is a Tab stop.
+function trackKey(event: KeyboardEvent) {
+  const tabs = [
+    ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>(
+      '[role="tab"]:not([disabled])',
+    ),
+  ];
+  const at = tabs.indexOf(document.activeElement as HTMLButtonElement);
+  const next =
+    event.key === 'ArrowRight' || event.key === 'ArrowDown'
+      ? (at + 1) % tabs.length
+      : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+        ? (at - 1 + tabs.length) % tabs.length
+        : event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? tabs.length - 1
+            : null;
+  if (next === null || !tabs.length) return;
+  event.preventDefault();
+  tabs[next]?.focus();
+}
+
+// "Work on Phase N" (#1053): saves the phase shown as the profile's working phase, the one other
+// tabs, devices and a reload open. Busy while it saves (#299). The button goes once the phase
+// shown is the working phase, so focus moves to the phase picker that now says "Working on": the
+// track's segment, or the select at phone widths. A failed write reports through the error toast
+// and leaves everything as it was.
+const committing = ref(false);
+async function workOnShown() {
+  const target = phase();
+  if (committing.value || !workingPhaseNotShown()) return;
+  committing.value = true;
+  try {
+    await save({ type: 'phase', value: target });
+    setOpenedPhase(null);
+    render();
+    toast(`You are now working on ${phaseLabel(target)}.`);
+    await nextTick();
+    const picker = wide?.matches
+      ? document.querySelector<HTMLElement>('[data-phase-track] [aria-selected="true"]')
+      : document.querySelector<HTMLElement>('#phase-picker');
+    picker?.focus();
+  } catch {
+    // Reported by the error toast; the phase shown stays and so does the button.
+  } finally {
+    committing.value = false;
   }
 }
 </script>
@@ -522,33 +557,40 @@ async function pickTrack(event: Event) {
         <div class="topbar-tools">
           <div
             class="phase-track"
-            role="radiogroup"
+            role="tablist"
             :aria-label="frame.picker.name"
-            :aria-busy="trackBusy || undefined"
             data-phase-track
+            @keydown="trackKey"
           >
-            <label
+            <button
               v-for="segment in frame.track"
               :key="segment.phase"
-              :class="['phase-track-seg', segment.phase === frame.phase ? 'current' : '']"
+              type="button"
+              role="tab"
+              aria-controls="main"
+              :aria-selected="segment.phase === frame.phase ? 'true' : 'false'"
+              :tabindex="segment.phase === frame.phase ? 0 : -1"
+              :class="[
+                'phase-track-seg',
+                segment.phase === frame.phase ? 'current' : '',
+                frame.canPickPhase && segment.phase === frame.picker.working ? 'working' : '',
+              ]"
               :data-phase-seg="segment.phase"
-              ><input
-                type="radio"
-                name="phase-track"
-                :value="segment.phase"
-                :checked="segment.phase === frame.phase"
-                :disabled="!frame.canPickPhase"
-                @change="pickTrack" /><span class="phase-track-name">{{ segment.label }}</span
+              :disabled="!frame.canPickPhase"
+              @click="showPhase(segment.phase)"
+            >
+              <span class="phase-track-name">{{ segment.label }}</span
               ><span v-if="segment.pct !== null" class="visually-hidden"
                 >, {{ segment.pct }}% done</span
               ><span
-                v-if="segment.phase === frame.picker.working"
+                v-if="frame.canPickPhase && segment.phase === frame.picker.working"
                 class="visually-hidden"
                 data-working-phase
                 >, working phase</span
               ><span v-if="segment.pct !== null" class="phase-track-bar" aria-hidden="true"
                 ><span :style="{ width: segment.pct + '%' }"></span></span
-            ></label>
+              >
+            </button>
           </div>
           <label class="small phase-select"
             ><span data-phase-picker-label>{{ frame.picker.label }}</span>
@@ -563,7 +605,16 @@ async function pickTrack(event: Event) {
                 {{ label }}
               </option>
             </select></label
+          ><button
+            v-if="frame.canPickPhase && frame.picker.elsewhere"
+            type="button"
+            class="btn work-on-phase"
+            :aria-disabled="committing || undefined"
+            data-work-on-phase
+            @click="workOnShown"
           >
+            Work on {{ frame.phaseLabel }}
+          </button>
           <div :class="['save-status', frame.notSaved ? 'is-not-saved' : '']">
             <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
             ><span class="save-label"

@@ -1,18 +1,20 @@
 <!--
-  On a calculated profile's build plan, factories, logistics, resources and factory flow pages
-  while a milestone-only phase is shown (#759, milestoneOnly() in session.ts): a phase before the
-  profile's start phase, which lists only the milestones that belong there. Says so, and where
-  production starts, so an empty factories, logistics or resources page is not taken for a
-  missing plan, and offers "Go to Phase N" as the
-  one next step (#786). Draws nothing in any other phase.
+  On a calculated profile's build plan, factories, logistics, storage, resources and factory flow
+  pages while a milestone-only phase is shown (#759, milestoneOnly() in session.ts): a phase
+  before the profile's start phase, which lists only the milestones that belong there. Says so,
+  and where production starts, so an empty factories, logistics or resources page is not taken
+  for a missing plan, and offers "Go to Phase N" as the one next step (#786). The storage room
+  (`place="storage"`, #1053) covers every phase, so there it says the room is the plan's from the
+  start phase on. Draws nothing in any other phase.
 
-  When the profile opened here although its saved working phase is a later one (#570,
-  openedFrom()), it also says what ui/plan/OpenedEarlierNotice.vue would (the working phase and the
-  open steps), so the build plan shows one notice rather than two; OpenedEarlierNotice draws
-  nothing in a milestone-only phase. The button then goes to the saved phase, as that notice's
-  does, writing nothing. Otherwise the saved phase is this earlier one (picked on the phase track),
-  and the button picks the start phase the way the phase track does: saved, the search cleared and
-  the page redrawn.
+  While the saved working phase is another one (workingPhaseNotShown() in session.ts: the tab
+  shows this phase because it was picked in the phase picker, #1053, or the profile opened here,
+  #570), it also says what ui/plan/OpenedEarlierNotice.vue would (the working phase, and the open
+  steps when the profile opened here, openedFrom()), so the build plan shows one notice rather
+  than two; OpenedEarlierNotice draws nothing in a milestone-only phase. The button then shows the
+  working phase, as that notice's does, writing nothing. Otherwise the saved phase is this
+  milestone-only one, and the button saves the start phase as the working phase, as "Work on
+  Phase N" does: saved, the search cleared and the page redrawn.
 
   While any step of the milestone-only phases is open, "Mark everything before Phase N done"
   (#1068, data-earlier-done) ticks those open steps after a confirmation, in one `checks` update
@@ -35,6 +37,7 @@ import {
   setQuery,
   startPhase,
   state,
+  workingPhaseNotShown,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { planTasks } from '../../tasks.ts';
@@ -43,20 +46,26 @@ import { confirmAction } from '../confirm.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import { earlierPhasesWords, milestoneOnlyPhases, stepsBeforeStart } from '../../../progression.ts';
 
+// `place` is the page that shows it, where that changes the wording.
+const props = defineProps<{ place?: 'storage' }>();
+
 const notice = computed(() =>
   legacy(() => {
     if (!milestoneOnly() || !calculated) return null;
-    const saved = openedFrom(),
+    const saved = workingPhaseNotShown(),
+      opened = !!openedFrom(),
       shown = phaseLabel(phase()),
       start = phaseLabel(startPhase()),
-      open = saved ? planTasks().filter(task => !checked(task.id)).length : 0;
-    // The working phase and why the plan starts here, when it opened on this phase.
+      open = opened ? planTasks().filter(task => !checked(task.id)).length : 0;
+    // The working phase, and why the plan starts here when the profile opened on this phase.
     const working = !saved
       ? ''
       : `You are working on ${phaseLabel(saved)}. ` +
-        (open
-          ? `${shown} still has ${open} open ${open === 1 ? 'step' : 'steps'}, so the plan starts here. `
-          : `All ${shown} steps are done now. `);
+        (!opened
+          ? ''
+          : open
+            ? `${shown} still has ${open} open ${open === 1 ? 'step' : 'steps'}, so the plan starts here. `
+            : `All ${shown} steps are done now. `);
     const earlierOpen = stepsBeforeStart(calculated, state, progressionData).filter(
       key => !checked(key),
     );
@@ -64,7 +73,9 @@ const notice = computed(() =>
       text:
         working +
         `This profile plans production from ${start} on. ${shown} lists only the HUB milestones ` +
-        'and MAM research that belong to it: no production lines, storage or power to build here.',
+        (props.place === 'storage'
+          ? `and MAM research that belong to it; the storage room below is the plan's from ${start} on.`
+          : 'and MAM research that belong to it: no production lines, storage or power to build here.'),
       target: phaseLabel(saved || startPhase()),
       start,
       earlier: earlierPhasesWords(milestoneOnlyPhases(calculated)),
@@ -92,8 +103,8 @@ async function goOn(event: Event) {
 
 // Leave the milestone-only phase for the saved working phase, or the start phase (saved).
 async function showTarget() {
-  // The saved phase already is the one to show: only stop showing the earlier one.
-  if (!openedFrom()) await save({ type: 'phase', value: startPhase() });
+  // The saved phase already is the one to show: only stop showing this one.
+  if (!workingPhaseNotShown()) await save({ type: 'phase', value: startPhase() });
   setOpenedPhase(null);
   setQuery('');
   render();
