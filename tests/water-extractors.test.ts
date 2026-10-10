@@ -2,6 +2,8 @@
 // options with the clocks adding up to exactly the Water needed, the shards and the MW, and the
 // advice for the Water no byproduct covers (public/app/recycle.ts), on the planner's own plans.
 // Numbers are written as in en-US.
+// The numbers read as in en-US whatever this machine's locale is.
+import './helpers/en-us-numbers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -28,15 +30,6 @@ import { defaultFactoryGroups } from '../public/state/factory-groups.ts';
 import { calculate } from '../planner.ts';
 import type { AdviceWords } from '../public/app/recycle.ts';
 import type { CalcRow } from '../public/types/index.ts';
-
-const toLocale = Number.prototype.toLocaleString;
-Number.prototype.toLocaleString = function (
-  this: number,
-  _locale?: unknown,
-  options?: Intl.NumberFormatOptions,
-) {
-  return toLocale.call(this, 'en-US', options);
-};
 
 type ExtractorOption = NonNullable<ReturnType<typeof waterExtractors>>['plain'];
 

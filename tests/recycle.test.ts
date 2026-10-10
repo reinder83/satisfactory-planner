@@ -3,6 +3,8 @@
 // Logistics page and a group's flow page, in the wording the owner approved. Numbers are the
 // planner's own (a new profile with every alternate recipe, from Phase 3, default factory groups),
 // written as in en-US.
+// The numbers read as in en-US whatever this machine's locale is.
+import './helpers/en-us-numbers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,16 +25,6 @@ import { calculate } from '../planner.ts';
 import { adaRemarks } from '../public/ada.ts';
 import type { AdviceWords } from '../public/app/recycle.ts';
 import type { CalcRow, FactoryGroups, StoredStage } from '../public/types/index.ts';
-
-// The numbers read as in en-US whatever this machine's locale is.
-const toLocale = Number.prototype.toLocaleString;
-Number.prototype.toLocaleString = function (
-  this: number,
-  _locale?: unknown,
-  options?: Intl.NumberFormatOptions,
-) {
-  return toLocale.call(this, 'en-US', options);
-};
 
 const items: Record<string, { fluid: boolean }> = JSON.parse(
   fs.readFileSync(new URL('../recipes.json', import.meta.url), 'utf8'),
