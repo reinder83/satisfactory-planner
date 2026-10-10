@@ -32,14 +32,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { choiceDrafts, save, type ChoiceDraft } from '../../api.ts';
 import { calculated, stage } from '../../session.ts';
 import { render } from '../../shell.ts';
-import {
-  onSiteChange,
-  onSitePickerOffers,
-  RAW_NOTE,
-  UNUSED_NOTE,
-  type OnSiteEntry,
-} from '../../on-site-picker.ts';
-import { onSitePlannable } from '../../on-site.ts';
+import { onSiteChange, onSitePickerOffers, type OnSiteEntry } from '../../on-site-picker.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
@@ -84,24 +77,18 @@ const sections = computed(() =>
   legacy((): PickerSection[] => {
     // The items its lines in this phase use, then the ingredients of the parts ticked here
     // (#967), then by phase those only its lines in other phases use (#941, #963). The boxes
-    // ticked count before they are saved, so ticking Wire offers Copper Ingot at once.
+    // ticked count before they are saved, so ticking Wire offers Copper Ingot at once. A marked
+    // or ticked item it does not offer stays, after the first part, so it can be cleared, with
+    // the heading's own note (#951, #953, #1007): an ingredient whose part was cleared, a raw
+    // resource marked in an older or hand-edited save (#921), or a radioactive item (#933).
     const offers = calculated
-      ? onSitePickerOffers(calculated, factoryGroupsState(), props.groupId, stage(), chosen.value)
+      ? onSitePickerOffers(calculated, factoryGroupsState(), props.groupId, stage(), chosen.value, [
+          ...saved.value,
+          ...chosen.value,
+        ])
       : { here: [], elsewhere: [] };
-    const offered = new Set(
-      [offers.here, ...offers.elsewhere.map(group => group.entries)]
-        .flat()
-        .map(entry => entry.item),
-    );
-    // A marked or ticked item no row of the group uses any more (an ingredient whose part was
-    // cleared, #951) stays, so it can be cleared, with the heading's note. A raw resource marked
-    // in an older or hand-edited save (such as Water) can never be made on site (#921), so its
-    // note says that instead. Both are the heading's own wording (#953).
-    const stale = sorted([...new Set([...saved.value, ...chosen.value])])
-      .filter(item => !offered.has(item))
-      .map(item => ({ item, note: onSitePlannable(item) ? UNUSED_NOTE : RAW_NOTE }));
     return [
-      { key: '', heading: '', entries: [...offers.here, ...stale] },
+      { key: '', heading: '', entries: offers.here },
       ...offers.elsewhere.map(group => ({
         key: group.phases.join('-'),
         heading: "Used only by this factory's lines in " + group.where,

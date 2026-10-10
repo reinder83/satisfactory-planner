@@ -1,8 +1,9 @@
 // A factory group's heading outside edit mode lists the marks that share a reason under one note
-// (#955): "Cable and Quickwire (no line here uses it now); Water (can't be made on site)", not the
-// note after each mark. The notes keep their wording and the order they come in (the marks sorted
-// by item), and the "Made on site" line groups its "(until a recalculation)" items the same way
-// (GroupSections.vue, onSiteEntriesText in app/on-site-picker.ts). Plain text, never markup.
+// (#955): "Cable and Quickwire (no line here uses them now); Water (can't be made on site)", not
+// the note after each mark. The notes keep their wording, in the plural after two or more marks
+// (#978), and the order they come in (the marks sorted by item), and the "Made on site" line
+// groups its "(until a recalculation)" items the same way (GroupSections.vue, onSiteEntriesText
+// in app/on-site-picker.ts). Plain text, never markup.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
@@ -69,12 +70,12 @@ test('marks that share a reason are listed under one note, in the order the note
   const text = marked(MOTORS)!;
   assert.equal(
     text,
-    'Marked, not made on site: Cable and Quickwire (no line here uses it now); ' +
+    'Marked, not made on site: Cable and Quickwire (no line here uses them now); ' +
       'Iron Rod, Screws and Steel Pipe (needs a recalculation); ' +
       "Water (can't be made on site)",
   );
   for (const note of [
-    '(no line here uses it now)',
+    '(no line here uses them now)',
     '(needs a recalculation)',
     "(can't be made on site)",
   ])
@@ -97,7 +98,7 @@ test('the order of the notes follows the first mark of each, not a fixed order',
   await show(bothMakeWire(), groups({ [MOTORS]: ['Wire'], [WIRING]: ['Wire', 'Screws', 'Rotor'] }));
   assert.equal(
     marked(WIRING),
-    'Marked, not made on site: Rotor and Screws (no line here uses it now)',
+    'Marked, not made on site: Rotor and Screws (no line here uses them now)',
   );
 });
 

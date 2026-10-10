@@ -21,19 +21,22 @@ import type {
 type PickerPlan = Pick<StoredCalculatedPlan, 'stages' | 'settings' | 'guide'>;
 type PickerGroups = Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined;
 
-// One use of an item the picker offers: the phase, and the name of the group's line that uses it
-// there. For an ingredient of a part the group marks (#967), `part` is that part and `line` the
-// plan's line of it, whose recipe the group's own line would follow.
+// One use of an item by the group's lines: the phase, and the name of the group's line that uses
+// it there. For an ingredient of a part the group marks (#967), `part` is that part and `line` the
+// plan's line of it, whose recipe the group's own line would follow. `lined`: a line of that phase
+// makes the item by a recipe the planner copies for a group (onSiteCopyable), so a recalculation
+// can give the group its own line there (onSiteLineItems in on-site.ts).
 interface OfferUse {
   phase: StageKey;
   line: string;
   part?: string;
+  lined: boolean;
 }
 
-// Each item group `groupId` can mark as made on site in `plan`, with where it would be used, by
-// the rule a recalculation follows (onSiteSettings, then siteCopies in planner/on-site.ts; #951,
-// #967). In a phase the plan builds (not a milestone-only phase, #759), an item some plan row
-// makes that
+// Each item group `groupId`'s lines use that it could mark as made on site in `plan`, with where
+// it would be used, by the rule a recalculation follows (onSiteSettings, then siteCopies in
+// planner/on-site.ts; #951, #967). In a phase the plan builds (not a milestone-only phase, #759),
+// an item some plan row makes that
 // - a row with a share in the group uses (rowPlaces), other than a line made on site: a
 //   recalculation sizes the group's lines to its other rows (onSiteSettings), so an item only a
 //   line made on site uses gets no line of its own, or
@@ -56,8 +59,10 @@ function offerUses(
     if (milestoneOnlyPhase(plan, phase)) continue;
     const rows = stage?.rows || [];
     const made = new Set(rows.flatMap(row => Object.keys(row.outputs || {})));
-    const add = (item: string, use: OfferUse) => {
-      if (made.has(item) && onSitePlannable(item)) uses.set(item, [...(uses.get(item) || []), use]);
+    const add = (item: string, use: Omit<OfferUse, 'lined'>) => {
+      const lined = rows.some(row => onSiteCopyable(row, item));
+      if (made.has(item) && onSitePlannable(item))
+        uses.set(item, [...(uses.get(item) || []), { ...use, lined }]);
     };
     const consumers = rows.filter(
       row => !row.onSite && (rowPlaces(row, groups).get(groupId) || 0) > LINK_DUST,
@@ -100,14 +105,23 @@ function partIngredients(
 // The items group `groupId` can mark as made on site in `plan`, sorted (offerUses), with `marks`
 // its marks (by default the saved ones). Every phase the plan builds counts, not only the one the
 // page shows: a mark is the group's in every phase (factoryGroups.local), and a recalculation
-// gives the group a line wherever its rows use the item (onSiteSettings).
+// gives the group a line wherever its rows use the item (onSiteSettings). An item its lines use
+// that no recipe the planner copies for a group makes where they use it (a radioactive item such
+// as Encased Uranium Cell, #933, or Heavy Oil Residue, which the plan makes only as a byproduct,
+// #1012) is not offered (#1007): a recalculation would give it no line.
 export const onSiteOffers = (
   plan: PickerPlan,
   groups: PickerGroups,
   groupId: string,
   marks: readonly string[] = groups?.local?.[groupId] || [],
-): string[] =>
-  [...offerUses(plan, groups, groupId, marks).keys()].sort((a, b) => a.localeCompare(b));
+): string[] => sortedItems(offerUses(plan, groups, groupId, marks), true);
+
+// The items of `uses` with (`lined` true) or without (false) a use a recalculation gives a line.
+const sortedItems = (uses: ReadonlyMap<string, OfferUse[]>, lined: boolean) =>
+  [...uses]
+    .filter(([, list]) => list.some(use => use.lined) === lined)
+    .map(([item]) => item)
+    .sort((a, b) => a.localeCompare(b));
 
 // The boxes of group `groupId`'s "Made on site" picker while the page shows phase `shown` (#941,
 // #963), with `marks` the picker's choice, saved or not. `here`: the items its lines in that phase
@@ -117,7 +131,10 @@ export const onSiteOffers = (
 // ("Used only by this group's lines in Phases 4 and 5") and each item a short note naming only
 // the lines ("(used by Alternate: Turbo Pressure Motor)") or the parts ("(for Wire made on
 // site)"), so an item no card on the page uses still says why it is offered. Groups in the order
-// of their phases, items sorted within each part. The same items as onSiteOffers.
+// of their phases, items sorted within each part. The same items as onSiteOffers, and after
+// `here`'s, each item of `kept` (the marks saved or ticked) not offered, so it can be cleared, with
+// the heading's note (markNote): `RAW_NOTE` for a raw resource (#921) and for an item the group's
+// lines use that no recipe the planner copies makes (#1007), else `UNUSED_NOTE` (#951, #953).
 export interface OnSitePickerOffers {
   here: OnSiteEntry[];
   elsewhere: OnSiteElsewhere[];
@@ -137,6 +154,7 @@ export function onSitePickerOffers(
   groupId: string,
   shown: StageKey | undefined,
   marks: readonly string[] = groups?.local?.[groupId] || [],
+  kept: readonly string[] = [],
 ): OnSitePickerOffers {
   const here: OnSiteEntry[] = [],
     ingredients: OnSiteEntry[] = [],
@@ -148,19 +166,28 @@ export function onSitePickerOffers(
     if (found) found.entries.push(entry);
     else elsewhere.set(key, { phases, where: phasesText(phases), entries: [entry] });
   };
-  for (const [item, uses] of offerUses(plan, groups, groupId, marks)) {
-    const direct = uses.filter(use => !use.part),
-      shownUses = uses.filter(use => use.phase === shown);
+  const uses = offerUses(plan, groups, groupId, marks);
+  for (const [item, itemUses] of uses) {
+    if (!itemUses.some(use => use.lined)) continue;
+    const direct = itemUses.filter(use => !use.part),
+      shownUses = itemUses.filter(use => use.phase === shown);
     if (direct.some(use => use.phase === shown)) here.push({ item, note: '' });
     else if (shownUses.length) ingredients.push({ item, note: partNote(shownUses) });
     else if (direct.length) {
       const lines = listNames(uniqueSorted(direct.map(use => use.line)));
       addElsewhere(direct, { item, note: `(used by ${lines})` });
-    } else addElsewhere(uses, { item, note: partNote(uses) });
+    } else addElsewhere(itemUses, { item, note: partNote(itemUses) });
   }
   const byItem = (a: OnSiteEntry, b: OnSiteEntry) => a.item.localeCompare(b.item);
+  const unlined = sortedItems(uses, false);
+  const stale = uniqueSorted([...kept])
+    .filter(item => !uses.get(item)?.some(use => use.lined))
+    .map(item => ({
+      item,
+      note: !onSitePlannable(item) || unlined.includes(item) ? RAW_NOTE : UNUSED_NOTE,
+    }));
   return {
-    here: [...here.sort(byItem), ...ingredients.sort(byItem)],
+    here: [...here.sort(byItem), ...ingredients.sort(byItem), ...stale],
     elsewhere: [...elsewhere.values()]
       .sort((a, b) => a.phases.join(',').localeCompare(b.phases.join(',')))
       .map(group => ({ ...group, entries: group.entries.sort(byItem) })),
@@ -343,8 +370,9 @@ export function onSiteSummaries(
   const out: Record<string, OnSiteSummary> = {};
   for (const { id } of groups?.groups || []) {
     const lines = siteLineItems(stage, id, had?.[id]?.items);
+    const uses = offerUses(plan, groups, id, groups?.local?.[id] || []);
     const marks: GroupMarks = {
-      used: onSiteOffers(plan, groups, id),
+      used: [...uses.keys()],
       wanted: want?.[id]?.items || [],
       planned: planned[id] || [],
       dropped: stage?.onSiteDropped?.[id] || [],
@@ -410,12 +438,19 @@ function siteLineItems(
 
 // A list of entries as the heading words it (#955): the items that share a note under that note
 // once, each run in the order its note first comes and joined as a list, the runs apart by "; ":
-// "Cable and Quickwire (no line here uses it now); Water (can't be made on site)". Items without a
-// note make a run of their own: "Copper Ingot (until a recalculation); Wire". '' for none.
+// "Cable and Quickwire (no line here uses them now); Water (can't be made on site)". Items without
+// a note make a run of their own: "Copper Ingot (until a recalculation); Wire". '' for none.
 export function onSiteEntriesText(entries: readonly OnSiteEntry[]): string {
   const byNote = new Map<string, string[]>();
   for (const { item, note } of entries) byNote.set(note, [...(byNote.get(note) || []), item]);
   return [...byNote]
-    .map(([note, items]) => (note ? `${listNames(items)} ${note}` : listNames(items)))
+    .map(([note, items]) =>
+      note ? `${listNames(items)} ${items.length > 1 ? pluralNote(note) : note}` : listNames(items),
+    )
     .join('; ');
 }
+
+// A note as it reads after two or more items (#978): "(no line here uses them now)". The picker
+// keeps the singular, since each of its notes follows one item.
+const UNUSED_NOTE_PLURAL = '(no line here uses them now)';
+const pluralNote = (note: string) => (note === UNUSED_NOTE ? UNUSED_NOTE_PLURAL : note);
