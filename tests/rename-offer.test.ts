@@ -480,11 +480,11 @@ test('the field is optional in a full export; any value but true is left out, no
   const flagged = validateTransfer(exported).saves[0]!.profiles[0]!;
   assert.equal(flagged.renameOfferDismissed, true);
   assert.deepEqual(without(flagged, 'renameOfferDismissed'), plain.saves[0]!.profiles[0]);
-  for (const value of [false, 'yes', 1, null, {}]) {
+  for (const value of [false, 'yes', 1, null, {}] as unknown[]) {
     save.profiles[0] = {
       ...save.profiles[0]!,
       renameOfferDismissed: value,
-    } as unknown as SaveExport['saves'][0]['profiles'][0];
+    } as SaveExport['saves'][0]['profiles'][0];
     const checked = validateTransfer(exported).saves[0]!.profiles[0]!;
     assert.equal('renameOfferDismissed' in checked, false, JSON.stringify(value));
   }
