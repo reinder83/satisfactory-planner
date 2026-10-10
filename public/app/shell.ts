@@ -29,7 +29,7 @@ let drawnRoute = '';
 // page as soon as this returns; an update to a page already shown lands on the next tick.
 // When a new page replaces another and focus went with the old one, focus goes to the new
 // page's heading (focusOpenedPage, #304), or, back from a group's flow page, to that group's
-// "Build order →" (#917).
+// "Build order →" (#917) or the build-plan step's "Open factory: <name> →" that opened it (#1047).
 // A render() asked for while the old page is being unmounted (a focused field's change event,
 // which Edge and Chrome fire as the field goes, #366) waits until the unmount is over and then
 // runs, so it still draws what its caller changed but never re-enters Vue's unmount.

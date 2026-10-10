@@ -29,7 +29,8 @@ const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
-const stepOf = (rowId: string) => $(`#main details[data-task="calc-3-${rowId}"]`)!;
+const stepOf = (rowId: string) =>
+  $<HTMLDetailsElement>(`#main details[data-task="calc-3-${rowId}"]`)!;
 const factoryLinkOf = (rowId: string) =>
   stepOf(rowId).querySelector<HTMLAnchorElement>('.task-link[data-step-factory]');
 const lineButtonOf = (rowId: string) =>
@@ -225,6 +226,53 @@ test('a link opened another way, or another page change, leaves the flow page’
   await settle();
   location.hash = '#' + flowRoute(HOME, '3');
   await settle();
+  assert.equal(document.activeElement, $('#main h1'), describeFocus());
+});
+
+// Follows step `rowId`'s "Open factory: … →" as Enter on it does, from its unfolded step.
+async function followFactoryLink(rowId: string) {
+  stepOf(rowId).open = true;
+  const link = factoryLinkOf(rowId)!;
+  link.focus();
+  link.click();
+  if (location.hash !== link.getAttribute('href')) location.hash = link.getAttribute('href')!;
+  await settle();
+  assert.ok($('[data-gf-back]'), 'the flow page is shown');
+}
+
+test('Back from the flow page puts focus back on the step’s "Open factory" link, as for "Build order →"', async () => {
+  // Two steps of lines the same factory builds: Back returns to the one that was followed.
+  const sibling = rows.find(
+    row => row.id !== WIRE && groups.assignments[row.id]?.[0]?.group === HOME,
+  )!;
+  assert.ok(sibling, 'another line of Wire’s factory');
+  for (const rowId of [WIRE, sibling.id]) {
+    await showPlan();
+    assert.ok(factoryLinkOf(rowId), rowId + ' links its factory');
+    await followFactoryLink(rowId);
+    scrolled = [];
+    history.back();
+    await settle();
+    assert.equal(location.hash, '#plan');
+    const link = factoryLinkOf(rowId)!;
+    assert.equal(document.activeElement, link, rowId + ': ' + describeFocus());
+    assert.ok(stepOf(rowId).open, rowId + ': its step is unfolded again');
+    assert.ok(scrolled.includes(link), rowId + ': and brought into view');
+  }
+});
+
+test('Back to the build plan from another factory’s flow page leaves the heading focused', async () => {
+  // A step's link followed to Wire's factory and back, then another factory's flow page opened
+  // by its address: no step opened that one.
+  await showPlan();
+  await followFactoryLink(WIRE);
+  history.back();
+  await settle();
+  location.hash = '#' + flowRoute(OTHER, '3');
+  await settle();
+  history.back();
+  await settle();
+  assert.equal(location.hash, '#plan');
   assert.equal(document.activeElement, $('#main h1'), describeFocus());
 });
 

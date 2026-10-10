@@ -5457,6 +5457,13 @@ button.rail-tile:hover {
 
 /* ── Print: revert to paper ────────────────────────────── */
 @media print {
+  /* A margin on every side of every printed page (#1025): the workspace prints without its
+     padding (below), and most printers cannot print near the paper's edge, so a print without
+     it cut off the flow page's headings and card borders. The bottom leaves room for the
+     browser's page numbers. */
+  @page {
+    margin: 12mm 12mm 14mm;
+  }
   /* On paper the lanes would not line up with the printed cards, so the rows' own words
      ("from 01 Iron Ingot", "to 02, 03") carry the links, and the cards stay whole. */
   .gf-host {

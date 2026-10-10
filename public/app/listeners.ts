@@ -42,7 +42,8 @@ document.addEventListener(
 // first load (no state) nothing is drawn. Unsaved notes are asked about first (acceptRoute),
 // and when the user keeps them the page stays as it is. The scroll comes before the redraw, so
 // the new page starts at its top unless render() brings something else into view: a group's
-// "Build order →" on the way back from its flow page (#917, focusOpenedPage in ui/refocus.ts).
+// "Build order →" or a step's "Open factory: <name> →" on the way back from its flow page (#917,
+// #1047, focusOpenedPage in ui/refocus.ts).
 window.addEventListener('hashchange', () => {
   if (!acceptRoute()) return;
   setView(viewOf(location.hash.slice(1)));

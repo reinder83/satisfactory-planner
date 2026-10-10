@@ -245,11 +245,13 @@ export function flowNames(flow: GroupFlow): FlowNames {
     places.set(port.place, PORT_WORDS[port.kind] ?? port.label);
   return { lines: new Map(flow.lines.map(line => [line.id, line])), places };
 }
-const endName = (names: FlowNames, end: FlowLink['from'], withRecipe: boolean) => {
+// One end of a link: a place by its words, a line by its number and its build-plan name
+// ("01 Wire for Alpha") with `withName`, else by its number alone ("01").
+const endName = (names: FlowNames, end: FlowLink['from'], withName: boolean) => {
   if (end.kind === 'place') return names.places.get(end.id) ?? end.id;
   const line = names.lines.get(end.id);
   if (!line) return end.id;
-  return withRecipe ? `${lineNumber(line.no)} ${line.name}` : lineNumber(line.no);
+  return withName ? `${lineNumber(line.no)} ${line.name}` : lineNumber(line.no);
 };
 
 // Where an input row's item comes from: "from 01 Iron Ingot", "from itself", or a place outside
