@@ -24,7 +24,7 @@ import {
   calcTasks,
   orderedPhaseSteps,
   rowIcon,
-  rowName,
+  stepRowName,
 } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
@@ -288,14 +288,14 @@ export function rowFactory(row: CalcRow): StepFactory | null {
 
 // What a step's edit form offers: the production lines of this phase as [row id, name], and
 // the one the step links to now (its saved link, or the automatic one). Each line is named as
-// its build-plan step (rowName), so a group's own line made on site is "Wire for Alpha" beside
-// the central "Wire" (#954).
+// its build-plan step (stepRowName), so a group's own line made on site is "Wire for Alpha"
+// beside the central "Wire" (#954).
 export function taskLinkChoices(step: Step): {
   options: [id: string, name: string][];
   current: string;
 } {
   return {
-    options: (calcStage()?.rows || []).map((r): [string, string] => [r.id, rowName(r)]),
+    options: (calcStage()?.rows || []).map((r): [string, string] => [r.id, stepRowName(r)]),
     current: stepLink(step.id),
   };
 }
