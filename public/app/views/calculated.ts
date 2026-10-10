@@ -145,12 +145,24 @@ function carriedStepText(row: CalcRow, shownPhase: Phase): string {
 
 // A production row's build-plan step text: its machines, inputs and outputs, with the pointer
 // to an easier rounded option only where the dialog shows one (#379), then the factory dialog's
-// byproduct advice in `snapshot`, the stage of the phase the step is in (#1022).
+// byproduct advice in `snapshot`, the stage of the phase the step is in (#1022). The machine
+// setup is worked out once per row (#1060).
 const rowStepBody = (row: CalcRow, snapshot: StoredStage | undefined): string =>
   siteLineText(row) +
   stockLineText(row) +
-  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
+  `${setupText(machineSetup(row))} ${sloopText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
   recycleStepText(row, snapshot);
+
+// A step's machines (machineSetup): the summary, then the adjustable machine's clock and output
+// with the pointer to an easier rounded option, or what each machine makes.
+const setupText = (setup: ReturnType<typeof machineSetup>): string =>
+  `${setup.summary} ${setup.partial ? 'Adjustable machine: ≈ ' + num(setup.clock) + '% → ≈ ' + setup.lastOutput + '.' + (easierSetup(setup) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + setup.fullOutput + '.'}`;
+
+// The somersloops an amplified line takes, as a sentence with a space after it; '' for any other.
+const sloopText = (row: CalcRow): string =>
+  row.amplified
+    ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. `
+    : '';
 
 // A step's byproduct advice (adviceText in recycle.ts) after a space, or '' for none.
 function recycleStepText(row: CalcRow, snapshot: StoredStage | undefined): string {
