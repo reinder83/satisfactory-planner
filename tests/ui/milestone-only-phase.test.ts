@@ -19,6 +19,7 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { phaseTrack } from '../../public/app/views/phase-track.ts';
 import { $, $$, applyUpdate, generated, go, open, page, stubFetch } from './setup.ts';
 import type { ContextReply, Phase, StageKey, UpdateOp } from '../../public/types/index.ts';
@@ -259,4 +260,77 @@ test('factories and resources in a milestone-only phase offer Go to Phase 3', as
     assert.equal($('#main [data-milestone-only]'), null, view + ' notice is gone');
     assert.equal(document.activeElement, $('#main h1'), view + ' focus goes to the heading');
   }
+});
+
+// #1021: Logistics on a milestone-only phase says why it is empty, with the Factories page's
+// notice and its "Go to Phase 3", rather than "This phase has no production lines".
+test('Logistics in a milestone-only phase shows the milestone-only notice and Go to Phase 3', async () => {
+  open({ calculated: phaseThreePlan(), phase: '3' });
+  const calls = await openThrough('3', {});
+  go('logistics');
+  render();
+  await settle();
+  assert.equal(phase(), '1');
+  assert.equal($('#main [data-logistics-empty]'), null, 'not the empty-phase line');
+  const notice = $('#main [data-milestone-only]');
+  assert.match(text(notice), /^You are working on Phase 3\. /);
+  assert.match(text(notice), /no production lines, storage or power to build here/);
+  assert.equal($('#main .subtitle'), null, 'no subtitle about what moves in Phase 1');
+  const button = $<HTMLButtonElement>('#main [data-go-to-start-phase]')!;
+  assert.equal(text(button), 'Go to Phase 3');
+  button.focus();
+  button.click();
+  await settle();
+  await settle();
+  assert.equal(phase(), '3', 'shows Phase 3');
+  assert.equal($('#main [data-milestone-only]'), null, 'the notice is gone');
+  assert.equal(document.activeElement, $('#main h1'), 'focus goes to the heading');
+  assert.deepEqual(
+    calls.map(([path]) => path.split('?')[0]),
+    ['/api/context'],
+    'nothing is written: the saved phase already is Phase 3',
+  );
+  assert.equal($('x-evil'), null);
+});
+
+// #1014: the made-on-site recalculation notice is about the whole plan, so the Factories page of
+// a milestone-only phase shows it too, with its button, above the milestone-only notice.
+test('the Factories page of a milestone-only phase shows the made-on-site recalculation notice', async () => {
+  // Alpha holds the Stator line and marks Wire, which the plan does not make on site.
+  const factoryGroups = {
+    groups: [{ id: 'fg-alpha1', name: 'Alpha' }],
+    assignments: { Recipe_Stator_C: [{ group: 'fg-alpha1', rate: null }] },
+    local: { 'fg-alpha1': ['Wire'] },
+  };
+  for (const shown of ['3', '1'] as Phase[]) {
+    open({ calculated: phaseThreePlan(), phase: shown, state: { factoryGroups } });
+    go('factories');
+    render();
+    await settle();
+    const recalc = $('#main [data-on-site-recalc]');
+    assert.ok(recalc, `Phase ${shown} shows the notice`);
+    assert.match(text(recalc), /This plan needs a recalculation\./);
+    assert.equal(
+      text($('#main [data-recalc-on-site]')),
+      'Recalculate in place with items made on site',
+    );
+  }
+  assert.ok($('#main [data-milestone-only]'), 'Phase 1 still says why it has no lines');
+  const notices = $$('#main .notice');
+  assert.ok(
+    notices.indexOf($('#main [data-on-site-recalc]')!) <
+      notices.indexOf($('#main [data-milestone-only]')!),
+    'the recalculation first, as on the build plan',
+  );
+  // ADA's on-site-pending remark, among the ones it cycles through here, points at the button
+  // this page now has.
+  const lines = Array.from({ length: 40 }, (_, i) => {
+    setAdaIndex(i);
+    return adaCurrent()?.text || '';
+  });
+  assert.ok(
+    lines.some(line =>
+      /Recalculate in place with items made on site, on the Factories page/.test(line),
+    ),
+  );
 });

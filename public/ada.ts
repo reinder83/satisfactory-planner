@@ -816,7 +816,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'milestone-only',
-    on: ['plan', 'factories', 'resources'],
+    on: ['plan', 'factories', 'logistics', 'resources'],
     tone: 'calm',
     when: facts => facts.milestoneOnly,
     text: facts =>

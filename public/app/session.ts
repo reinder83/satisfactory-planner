@@ -310,6 +310,14 @@ function workingPhase(): Phase {
   const saved = state.settings.phase;
   return saved !== 'post' && Number(saved) < Number(firstPhase()) ? firstPhase() : saved;
 }
+// The working phase while the tab shows another one (the phase a profile opened on, #570, or a
+// flow page's address names, #926), else null; also null with no save open. The phase picker
+// then says "Showing" rather than "Working on" (#992), as the notices below it name this phase.
+export const workingPhaseNotShown = (): Phase | null => {
+  if (!currentSave.id) return null;
+  const working = workingPhase();
+  return phase() === working ? null : working;
+};
 
 // The data key for the phase: post-game has no stage of its own and uses Phase 5's
 // factories and calculated stage. Checklist ids like factory-<stage>-<id> use this.
