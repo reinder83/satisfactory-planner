@@ -31,7 +31,6 @@ import type {
   StoredStage,
 } from '../public/types/index.ts';
 
-const json = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const fluid = (item: string) => !!DATA.items[item]?.fluid;
 const progression = JSON.parse(
   fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
@@ -270,7 +269,13 @@ const recalculation = (createdAt: string | undefined) => ({
 test('a plan stored before #1055 loads unchanged and burns its coke only when the user recalculates: Docker server', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'planner-1055-'));
   const workspace = await loadWorkspace(dir, validateState);
-  workspace.saves.push({ ...exported(stored).saves[0]!, userId: 'owner' });
+  workspace.saves.push({
+    id: 's1',
+    name: 'World',
+    userId: 'owner',
+    activeProfile: 'p1',
+    profiles: [{ id: 'p1', name: 'Coal', kind: 'calculated', plan: stored, state: storedState() }],
+  });
   await fsp.writeFile(path.join(dir, 'workspace.json'), JSON.stringify(workspace));
   const loaded = await loadWorkspace(dir, validateState);
   assert.equal(JSON.stringify(loaded.saves[0]!.profiles[0]!.plan), JSON.stringify(stored));
