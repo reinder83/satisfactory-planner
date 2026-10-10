@@ -752,8 +752,9 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
 // profile was still on the first. The check key stays `recipe-unlock-<recipe>` whichever phase
 // lists it, so a tick made in a later phase's list counts in the phase that lists it now. The
 // recipe is recipeIdOf's, so an amplified twin or a group's own line shares its recipe's one step
-// (#875, #901); keys an earlier release gave an amplified twin, 'recipe-unlock-amp:<recipe>', are
-// merged into it by validateState (mergeAmplifiedUnlocks in state/validate.ts).
+// (#875, #901); keys an earlier release gave an amplified twin, 'recipe-unlock-amp:<recipe>', or
+// a new profile carried for a group's own line, 'recipe-unlock-<recipe>:<group>' (#1041), are
+// merged into it by validateState (mergeOldUnlockKeys in state/validate.ts).
 export function hardDriveTasks(context: GuideContext): GuideTask[] {
   const { checks, data, stage, rows } = context;
   const earlier = earlierAlternates(context);

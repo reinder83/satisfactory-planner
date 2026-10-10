@@ -41,6 +41,7 @@
 //                            its refusals (checkRestore) and the swap (restoredVersions)
 //   state/rename-offer.ts    the "Rename to …" offer's dismissal flag (renameOfferFields, #1071)
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
+//   state/alternates.ts      ALTERNATE_RECIPE_IDS, every alternate recipe id the game data has held
 //   state/items.ts           ITEM_NAMES, every item name the game data has held
 export {
   bayCapacity,
@@ -49,11 +50,13 @@ export {
   fuelledModes,
   handbookBay,
   handbookFloor,
-  holdsAmplifiedUnlocks,
+  holdsOldUnlockKeys,
   initialState,
   linkPlaces,
   mappingFits,
   mergeAmplifiedUnlocks,
+  mergeGroupLineUnlocks,
+  mergeOldUnlockKeys,
   safeKey,
   slotPosition,
   validateState,
@@ -104,4 +107,5 @@ export {
 } from './state/restore.ts';
 export { renameOfferFields } from './state/rename-offer.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
+export { ALTERNATE_RECIPE_IDS } from './state/alternates.ts';
 export { ITEM_NAMES } from './state/items.ts';
