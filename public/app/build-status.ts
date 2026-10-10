@@ -11,6 +11,15 @@
 // - An item that falls short is shared among everything the plan gives it to (built consumer
 //   rows at their full inputs, protected storage, drone fuel and the elevator delivery) in
 //   proportion to what the plan gives each. Surplus is left over by definition and takes nothing.
+// - A factory group's own line made on site (#875, #876: `onSite`) feeds its own group first, as
+//   the plan models it and the Logistics page's books share it (itemBooks in group-links.ts,
+//   #907): its output of an item made on site for the group goes to a pool of that group alone,
+//   which meets the group's share of each consumer (as rowPlaces places the consumer) up to what
+//   the line makes. Only the part the books offer the rest of the plan (#918, #1063) joins the
+//   item's common pool; the rest of its excess goes to the sink. The other lines making the item
+//   feed the common pool, which serves the rest. So a group's own line never runs another
+//   group's consumers, and the central line never runs the part of a group's consumers that
+//   group's own line was built for (siteRouting).
 // - A row the phase before marked running and this phase builds again (#1069, phaseCarry in
 //   handover.ts) runs, until it is ticked here, at most at the share its earlier machines make
 //   (its capacity), and asks for its inputs at that share. A ticked row's capacity is 1.
@@ -22,7 +31,16 @@
 //   planner's power constraint did (storedPower). Phase 1 runs on hand-fed biomass and has no
 //   power constraint, so it is never flagged.
 import { lineLoad } from '../power.ts';
-import type { CalcRow, ItemRates, StageGrid, StoredStage } from '../types/index.ts';
+import { itemBooks, siteItems } from './group-links.ts';
+import { rowPlaces } from './group-order.ts';
+import type {
+  CalcRow,
+  FactoryGroups,
+  ItemRates,
+  OnSiteSettings,
+  StageGrid,
+  StoredStage,
+} from '../types/index.ts';
 
 export interface RowStatus {
   id: string;
@@ -70,12 +88,113 @@ const add = (into: Record<string, number>, from: ItemRates | undefined, scale = 
   for (const [item, rate] of Object.entries(from || {}))
     into[item] = (into[item] || 0) + rate * scale;
 };
-// Per item: what is always available (raw and supplied), and what these built rows ask for
-// together with what the plan gives outside the rows (storage, drone fuel, delivery). `capacity`
-// is each running row's largest share: 1 for a ticked row, less for a carried one.
+
+// Where the phase's items meet (#907): an item's own name is its common pool, which every line
+// making it and every use of it share; `<item>\u0000<group id>` is a factory group's pool of an
+// item its own lines make on site, which only that group's consumers draw from.
+const localPool = (item: string, group: string) => item + '\u0000' + group;
+const poolItem = (pool: string) => pool.split('\u0000')[0]!;
+// The parts of a row's rate of an item that go to (or come from) each pool, adding up to 1.
+type PoolParts = [pool: string, part: number][];
+// Per row id, per item: the pools its inputs draw from and its outputs go to, where they are not
+// the item's common pool alone. Empty for a plan without lines made on site.
+export interface SiteRouting {
+  inputs: Map<string, Record<string, PoolParts>>;
+  outputs: Map<string, Record<string, PoolParts>>;
+}
+export const NO_SITES: SiteRouting = { inputs: new Map(), outputs: new Map() };
+
+// How a phase's lines made on site share their items, from the Logistics page's books (itemBooks
+// in group-links.ts; `planned` is the plan's settings.onSite, #907). For each item and group
+// whose own lines make it on site:
+// - those lines' output goes to the group's pool, but for the part the books offer the rest of
+//   the plan (`offered`: a group asking for less since the recalculation, #918, or a plan that
+//   routed the excess to the central demand, #1063), which goes to the common pool;
+// - every row's part in that group (rowPlaces) draws its input of the item from the group's pool,
+//   up to what the own lines make against what the group asks (all of it when they make enough),
+//   and the rest from the common pool, as itemBooks meets a group's demand.
+export function siteRouting(
+  stage: StoredStage,
+  groups: FactoryGroups,
+  planned?: OnSiteSettings,
+): SiteRouting {
+  const rows = stage.rows || [];
+  if (!rows.some(row => row.onSite)) return NO_SITES;
+  const { local, offered } = itemBooks(stage, groups, planned);
+  const places = new Map(rows.map(row => [row.id, rowPlaces(row, groups)]));
+  const routing: SiteRouting = { inputs: new Map(), outputs: new Map() };
+  for (const [item, groupsMaking] of Object.entries(local))
+    for (const [group, { made }] of groupsMaking) {
+      const pool = localPool(item, group);
+      const own = rows.filter(
+        row =>
+          row.onSite?.group === group &&
+          (row.outputs?.[item] || 0) > 0 &&
+          siteItems(groups, group, planned).includes(item),
+      );
+      const away = Math.min(1, (offered[item]?.get(group) || 0) / made);
+      for (const row of own) sitePoolParts(routing.outputs, row.id, item).push([pool, 1 - away]);
+      const inGroup = (row: CalcRow) => places.get(row.id)?.get(group) || 0;
+      const asked = rows.reduce((sum, row) => sum + (row.inputs?.[item] || 0) * inGroup(row), 0);
+      const met = asked > 0 ? Math.min(1, made / asked) : 0;
+      for (const row of rows)
+        if (inGroup(row) > 0 && (row.inputs?.[item] || 0) > 0)
+          sitePoolParts(routing.inputs, row.id, item).push([pool, inGroup(row) * met]);
+    }
+  // What a row's group parts leave of each item comes from, or goes to, the common pool.
+  for (const side of [routing.inputs, routing.outputs])
+    for (const byItem of side.values())
+      for (const [item, list] of Object.entries(byItem)) {
+        const left = 1 - list.reduce((sum, [, part]) => sum + part, 0);
+        if (left > EPSILON) list.push([item, left]);
+      }
+  return routing;
+}
+
+// The pool parts of a row's item on one side of the routing, made empty the first time.
+function sitePoolParts(side: SiteRouting['inputs'], rowId: string, item: string): PoolParts {
+  const byItem = side.get(rowId) ?? {};
+  side.set(rowId, byItem);
+  return (byItem[item] ??= []);
+}
+
+// A row as the build status counts it: its id and its inputs and outputs per pool.
+interface PooledRow {
+  id: string;
+  inputs: [pool: string, rate: number][];
+  outputs: [pool: string, rate: number][];
+}
+const pooledRates = (
+  rates: ItemRates | undefined,
+  split: Record<string, PoolParts> | undefined,
+): [string, number][] =>
+  Object.entries(rates || {}).flatMap(([item, rate]): [string, number][] => {
+    const parts = split?.[item];
+    return parts
+      ? parts.filter(([, part]) => part > 0).map(([pool, part]) => [pool, rate * part])
+      : [[item, rate]];
+  });
+const pooledRows = (stage: StoredStage, routing: SiteRouting): PooledRow[] =>
+  (stage.rows || []).map(row => ({
+    id: row.id,
+    inputs: pooledRates(row.inputs, routing.inputs.get(row.id)),
+    outputs: pooledRates(row.outputs, routing.outputs.get(row.id)),
+  }));
+const addPooled = (
+  into: Record<string, number>,
+  rates: [pool: string, rate: number][],
+  scale: number,
+) => {
+  for (const [pool, rate] of rates) into[pool] = (into[pool] || 0) + rate * scale;
+};
+
+// Per pool: what is always available (raw and supplied), and what these built rows ask for
+// together with what the plan gives outside the rows (storage, drone fuel, delivery), which
+// draw from the items' common pools. `capacity` is each running row's largest share: 1 for a
+// ticked row, less for a carried one.
 type Capacity = ReadonlyMap<string, number>;
 const capOf = (capacity: Capacity, id: string) => capacity.get(id) || 0;
-function books(stage: StoredStage, capacity: Capacity) {
+function books(stage: StoredStage, lines: PooledRow[], capacity: Capacity) {
   const extra: Record<string, number> = {};
   add(extra, stage.raw);
   add(extra, stage.supplied);
@@ -84,43 +203,48 @@ function books(stage: StoredStage, capacity: Capacity) {
   add(demand, stage.drone);
   for (const [item, delivery] of Object.entries(stage.delivery || {}))
     add(demand, { [item]: delivery.rate || 0 });
-  for (const row of stage.rows || []) add(demand, row.inputs, capOf(capacity, row.id));
+  for (const line of lines) addPooled(demand, line.inputs, capOf(capacity, line.id));
   return { extra, demand };
 }
 
 // Row shares for given row capacities, lowered from the capacity to a fixed point.
-function shares(stage: StoredStage, capacity: Capacity): Map<string, number> {
-  const rows = stage.rows || [];
-  const { extra, demand } = books(stage, capacity);
-  const share = new Map(rows.map(r => [r.id, capOf(capacity, r.id)]));
+function shares(stage: StoredStage, lines: PooledRow[], capacity: Capacity): Map<string, number> {
+  const { extra, demand } = books(stage, lines, capacity);
+  const share = new Map(lines.map(line => [line.id, capOf(capacity, line.id)]));
   for (let round = 0; round < 100; round++) {
     const supply: Record<string, number> = { ...extra };
-    for (const row of rows) add(supply, row.outputs, share.get(row.id)!);
+    for (const line of lines) addPooled(supply, line.outputs, share.get(line.id)!);
     let changed = false;
-    for (const row of rows) {
-      const cap = capOf(capacity, row.id);
+    for (const line of lines) {
+      const cap = capOf(capacity, line.id);
       if (!cap) continue;
       // A short input reaches each consumer in proportion to what it asks, so a carried row
       // gets that part of its capacity.
       let fed = 1;
-      for (const item of Object.keys(row.inputs || {}))
+      for (const [pool] of line.inputs)
         fed = Math.min(
           fed,
-          demand[item]! > EPSILON ? settle((supply[item] || 0) / demand[item]!) : 1,
+          demand[pool]! > EPSILON ? settle((supply[pool] || 0) / demand[pool]!) : 1,
         );
       const rowShare = cap * fed;
-      if (Math.abs(rowShare - share.get(row.id)!) > EPSILON) changed = true;
-      share.set(row.id, rowShare);
+      if (Math.abs(rowShare - share.get(line.id)!) > EPSILON) changed = true;
+      share.set(line.id, rowShare);
     }
     if (!changed) break;
   }
   return share;
 }
 
-// What the built rows make, the delivery that reaches the elevator, and the mean delivery share.
-function flows(stage: StoredStage, capacity: Capacity, share: Map<string, number>) {
-  const { extra: produced, demand } = books(stage, capacity);
-  for (const row of stage.rows || []) add(produced, row.outputs, share.get(row.id)!);
+// What the built rows make per pool, the delivery that reaches the elevator, and the mean
+// delivery share.
+function flows(
+  stage: StoredStage,
+  lines: PooledRow[],
+  capacity: Capacity,
+  share: Map<string, number>,
+) {
+  const { extra: produced, demand } = books(stage, lines, capacity);
+  for (const line of lines) addPooled(produced, line.outputs, share.get(line.id)!);
   const delivery: DeliveryStatus[] = Object.entries(stage.delivery || {}).map(
     ([item, stageDelivery]) => {
       const planned = stageDelivery.rate || 0;
@@ -134,6 +258,14 @@ function flows(stage: StoredStage, capacity: Capacity, share: Map<string, number
     ? parts.reduce((sum, part) => sum + part.now / part.planned, 0) / parts.length
     : 0;
   return { produced, demand, delivery, deliveryShare };
+}
+
+// What the pools hold, per item: the build status's `produced`.
+function perItem(pools: Record<string, number>): ItemRates {
+  const items: ItemRates = {};
+  for (const [pool, rate] of Object.entries(pools))
+    items[poolItem(pool)] = (items[poolItem(pool)] || 0) + rate;
+  return items;
 }
 
 // What powers stage `stage` once it is fully built, in MW, as the planner balances it: the
@@ -202,7 +334,9 @@ function storedPower(stage: StoredStage, share: Map<string, number>, sparePowerM
 // as in the build plan's step ids. `buildOrder` is the stage's rows in the order the build plan
 // lists them (groupedRows in group-order.ts, #869), which decides ties for the next step.
 // `carried` is the share each unticked row carried from the phase before makes (phaseCarry in
-// handover.ts, #1069); without it only the ticked rows run, as before.
+// handover.ts, #1069); without it only the ticked rows run, as before. `sites` is where the
+// phase's lines made on site send their items (siteRouting, #907); without it every item is
+// shared over the whole phase, as before.
 export function buildStatus(
   stage: StoredStage,
   checks: Record<string, boolean>,
@@ -210,27 +344,30 @@ export function buildStatus(
   sparePowerMW = 0,
   buildOrder: readonly CalcRow[] = stage.rows || [],
   carried: ReadonlyMap<string, number> = new Map(),
+  sites: SiteRouting = NO_SITES,
 ): BuildStatus {
-  const rows = stage.rows || [];
+  const rows = stage.rows || [],
+    lines = pooledRows(stage, sites);
   const built = new Set(rows.filter(r => checks[`calc-${stageKey}-${r.id}`]).map(r => r.id));
   const capacity = new Map<string, number>();
   for (const row of rows) {
     const cap = built.has(row.id) ? 1 : carried.get(row.id) || 0;
     if (cap > 0) capacity.set(row.id, cap);
   }
-  const share = shares(stage, capacity);
-  const { produced, demand, delivery, deliveryShare } = flows(stage, capacity, share);
-  const statusRows: RowStatus[] = rows.map(row => {
+  const share = shares(stage, lines, capacity);
+  const { produced, demand, delivery, deliveryShare } = flows(stage, lines, capacity, share);
+  const statusRows: RowStatus[] = rows.map((row, index) => {
     const rowShare = share.get(row.id)!;
     const status: RowStatus = { id: row.id, built: built.has(row.id), share: rowShare };
     if (!status.built && capacity.has(row.id)) status.carried = capOf(capacity, row.id);
     if (capacity.has(row.id) && rowShare < capOf(capacity, row.id)) {
       // The input with the lowest supply against everything that asks for it (the ratio
-      // shares() limits the row by), so a competing consumer or storage counts too.
+      // shares() limits the row by), so a competing consumer or storage counts too. A group's
+      // own pool of an item made on site counts only what that group asks of it (#907).
       let worst = Infinity;
-      for (const item of Object.keys(row.inputs || {})) {
-        const ratio = demand[item]! > EPSILON ? (produced[item] || 0) / demand[item]! : Infinity;
-        if (ratio < worst) [worst, status.shortOf] = [ratio, item];
+      for (const [pool] of lines[index]!.inputs) {
+        const ratio = demand[pool]! > EPSILON ? (produced[pool] || 0) / demand[pool]! : Infinity;
+        if (ratio < worst) [worst, status.shortOf] = [ratio, poolItem(pool)];
       }
     }
     return status;
@@ -262,8 +399,8 @@ export function buildStatus(
   for (const row of buildOrder) {
     if (built.has(row.id)) continue;
     const trial = new Map(capacity).set(row.id, 1);
-    const trialShares = shares(stage, trial);
-    const gain = Math.max(0, flows(stage, trial, trialShares).deliveryShare - deliveryShare);
+    const trialShares = shares(stage, lines, trial);
+    const gain = Math.max(0, flows(stage, lines, trial, trialShares).deliveryShare - deliveryShare);
     const unblocks = Math.max(0, running(trialShares, row.id) - running(share, row.id));
     const better =
       !next ||
@@ -273,7 +410,7 @@ export function buildStatus(
   }
   return {
     rows: statusRows,
-    produced,
+    produced: perItem(produced),
     delivery,
     deliveryShare,
     power: { drawMW, supplyMW, short },

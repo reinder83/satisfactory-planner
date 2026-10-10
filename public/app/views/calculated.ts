@@ -5,7 +5,7 @@
 // snapshot through calcStage(); nothing here recalculates.
 import { groupedRows, groupedSteps } from '../group-order.ts';
 import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
-import { buildStatus, type BuildStatus } from '../build-status.ts';
+import { buildStatus, siteRouting, type BuildStatus } from '../build-status.ts';
 import {
   carriedLine,
   carriedMachinesText,
@@ -484,7 +484,8 @@ export function expansionPhase(rowPhase: string) {
 // ticked as built, and the lines running from the phase before at their earlier size (#1069),
 // produce now. null without a calculated plan with rows. The pages and ADA ask
 // for it on every redraw, and finding the next step recalculates the stage once per unbuilt row,
-// so the last answer is kept until the plan, the stage or a row tick changes.
+// so the last answer is kept until the plan, the stage, a row tick or where the lines made on site
+// send their items (siteRouting, #907) changes.
 let buildCache: { key: string; status: BuildStatus | null } | null = null;
 let buildPlan: unknown = null;
 export function currentBuildStatus(): BuildStatus | null {
@@ -495,6 +496,8 @@ export function currentBuildStatus(): BuildStatus | null {
   const ordered = groupedRows(snapshot.rows, state.factoryGroups);
   // The lines still running from the phase before, at the share they make (#1069).
   const carried = currentCarry()?.shares || new Map<string, number>();
+  // Where the lines made on site send their items, by the profile's groups (#907).
+  const sites = siteRouting(snapshot, factoryGroupsState(), calculated.settings.onSite);
   const key =
     stage() +
     '|' +
@@ -502,13 +505,15 @@ export function currentBuildStatus(): BuildStatus | null {
     '|' +
     ordered.map(r => r.id).join(',') +
     '|' +
-    [...carried].map(([id, share]) => id + ':' + share).join(',');
+    [...carried].map(([id, share]) => id + ':' + share).join(',') +
+    '|' +
+    JSON.stringify([[...sites.inputs], [...sites.outputs]]);
   if (buildPlan !== calculated || buildCache?.key !== key) {
     buildPlan = calculated;
     const spareMW = (calculated.settings.availablePowerGW || 0) * 1000;
     buildCache = {
       key,
-      status: buildStatus(snapshot, state.checks, stage(), spareMW, ordered, carried),
+      status: buildStatus(snapshot, state.checks, stage(), spareMW, ordered, carried, sites),
     };
   }
   return buildCache.status;
