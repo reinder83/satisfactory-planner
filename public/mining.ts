@@ -19,6 +19,7 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import type { MiningAdvice, MiningRun, MiningSettings } from './preferences/mining.ts';
+import type { StepTable } from './step-table.ts';
 
 // A number as the pages show one (num in app/format.ts): locale-formatted, at most 2 decimals.
 const miningNumber = (value: number) => localeNumber(value);
@@ -57,10 +58,11 @@ export function phaseMinersWords(
   survey: MiningSettings['extraction'],
   from = 1,
   owned?: number,
+  overclock?: boolean,
 ): string {
   const runs: { words: string; phases: number[] }[] = [];
   for (let phase = from; phase <= 5; phase++) {
-    const miner = phaseMiner(phase, survey, owned);
+    const miner = phaseMiner(phase, survey, owned, overclock);
     const words = `Mk.${miner.mark} at ${miningNumber(miner.clock * 100)}%`;
     const run = runs.at(-1);
     if (run?.words === words) run.phases.push(phase);
@@ -195,7 +197,9 @@ function fluidWords(rate: number, sources: MiningSource[], clock: number): strin
 // What a stage's draw of each raw resource taps, the resources with nodes that it draws from,
 // in the stage's raw order (Water has no nodes: each line that takes it says how many Water
 // Extractors to build, #1024). Empty for a stage without mining per phase.
-export function stageMiningAdvice(stage: StoredStage | undefined): ResourceMining[] {
+export function stageMiningAdvice(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+): ResourceMining[] {
   const mining = stage?.mining;
   if (!mining) return [];
   const out: ResourceMining[] = [];
@@ -221,20 +225,145 @@ export function stageMiningAdvice(stage: StoredStage | undefined): ResourceMinin
   return out;
 }
 
+// The first phase in which the MAM's Power Shards research is worth advising (#1137): before it
+// the player cannot use the MAM yet, so the step says nothing about overclocking.
+export const OVERCLOCK_ADVICE_FROM = 2;
+// What researching Power Shards would save on a stage's nodes (#1137): the miners and extractors
+// its draw takes now, and how many it would take overclocked (phaseMiner with overclock, each
+// machine up to 250% and never past its belt or pipe). Null when the player can overclock
+// already (settings.overclock), before OVERCLOCK_ADVICE_FROM, when overclocking would not raise
+// the phase's clock (Phases 4 and 5 already run 250%, or a survey caps it) or would save none.
+export function overclockSaving(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: number,
+  settings: MiningSettings | undefined,
+): { now: number; overclocked: number } | null {
+  const mining = stage?.mining;
+  if (!mining || !settings || settings.overclock || phase < OVERCLOCK_ADVICE_FROM) return null;
+  const clock = phaseMiner(phase, settings.extraction, settings.ownedMiner, true).clock;
+  if (!(clock > mining.miner.clock + 1e-9)) return null;
+  let now = 0,
+    overclocked = 0;
+  for (const entry of stageMiningAdvice(stage)) {
+    now += entry.advice.nodes;
+    overclocked += miningAdvice(entry.rate, mining.sources[entry.resource]!, clock).nodes;
+  }
+  return overclocked < now ? { now, overclocked } : null;
+}
+// The advice to research Power Shards (#1137), or '' (overclockSaving).
+export function overclockAdviceWords(saving: { now: number; overclocked: number } | null): string {
+  if (!saving) return '';
+  const saved = saving.now - saving.overclocked;
+  return `Research Power Shards in the MAM (Blue Power Slugs, then Overclock Production) to halve the miners on these nodes: overclocked up to what their belts and pipes carry, the same draw takes ${miningNumber(saving.overclocked)} machines instead of ${miningNumber(saving.now)}, ${miningNumber(saved)} fewer.`;
+}
+
 // The build plan's mining step for a stage (#1065), or null without mining per phase or with
-// nothing to mine: the phase's equipment, then each resource's nodes.
-export function miningStepBody(stage: StoredStage | undefined, phase: string): string | null {
+// nothing to mine: the phase's equipment, then each resource's nodes, and the Power Shards in all
+// (#1137), as one text (`body`, which search, copying and step edits read) and as a table, one
+// row per resource with a total row (`table`, #1136). `settings` (the plan's) adds the advice to
+// research Power Shards (overclockSaving).
+export function miningStep(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: string,
+  settings?: MiningSettings,
+): { body: string; table: StepTable } | null {
   const resources = stageMiningAdvice(stage);
   if (!stage?.mining || !resources.length) return null;
   const mining = stage.mining;
-  const total = resources.reduce((sum, entry) => sum + entry.advice.mw, 0);
-  return [
-    `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)} for the miners and extractors.`,
+  const total = resources.reduce((sum, entry) => sum + entry.advice.mw, 0),
+    shards = resources.reduce((sum, entry) => sum + entry.advice.shards, 0);
+  const shardWords = shards
+    ? ` and ${miningNumber(shards)} Power Shard${shards === 1 ? '' : 's'}`
+    : '';
+  const advice = overclockAdviceWords(overclockSaving(stage, Number(phase), settings));
+  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.`;
+  const body = [
+    intro,
     ...resources.map(
       entry =>
         `${entry.resource} ${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min: ${entry.words.charAt(0).toLowerCase()}${entry.words.slice(1)}`,
     ),
+    ...(advice ? [advice] : []),
   ].join(' ');
+  const count = (entry: ResourceMining) => ({
+    nodes: entry.advice.nodes + entry.advice.satellites,
+    machines: entry.advice.nodes + entry.advice.pressurizers,
+  });
+  const nodes = resources.reduce((sum, entry) => sum + count(entry).nodes, 0),
+    machines = resources.reduce((sum, entry) => sum + count(entry).machines, 0);
+  return {
+    body,
+    table: {
+      intro,
+      caption: `Phase ${phase}'s resource nodes`,
+      columns: ['Resource', 'Rate', 'Nodes', 'Machines', 'Shards', 'Power'],
+      rows: resources.map(entry => [
+        entry.resource,
+        `${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min`,
+        nodeCells(entry.advice.runs),
+        machineCells(entry, stage.mining!),
+        entry.advice.shards ? miningNumber(entry.advice.shards) : 'None',
+        powerAmount(entry.advice.mw),
+      ]),
+      total: [
+        'Total',
+        '',
+        `${miningNumber(nodes)} node${nodes === 1 ? '' : 's'}`,
+        `${miningNumber(machines)} machine${machines === 1 ? '' : 's'}`,
+        shards ? miningNumber(shards) : 'None',
+        powerAmount(total),
+      ],
+      ...(advice ? { after: advice } : {}),
+    },
+  };
+}
+// The mining step's text alone (miningStep).
+export const miningStepBody = (
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: string,
+  settings?: MiningSettings,
+): string | null => miningStep(stage, phase, settings)?.body ?? null;
+
+// A resource's nodes for the mining table: "8 pure, 9 normal" and "4 well satellites (2 pure, 2
+// normal)".
+function nodeCells(runs: MiningRun[]): string {
+  const counts = new Map<string, number>();
+  for (const run of runs.filter(run => !isWellKind(run.kind)))
+    counts.set(run.kind, (counts.get(run.kind) ?? 0) + run.full + (run.last === null ? 0 : 1));
+  const parts = [...counts].map(([kind, count]) => `${miningNumber(count)} ${kind}`);
+  const wells = runs.filter(run => isWellKind(run.kind));
+  const satellites = wells.reduce((sum, run) => sum + run.full, 0);
+  if (satellites)
+    parts.push(
+      `${miningNumber(satellites)} well satellite${satellites === 1 ? '' : 's'} (${wells.map(run => `${miningNumber(run.full)} ${run.kind.slice('well-'.length)}`).join(', ')})`,
+    );
+  return parts.join('; ');
+}
+// A resource's machines for the mining table: "Miner Mk.2: 4 at 200% and 1 at 181.98%", a
+// resource well's "about 1 Resource Well Pressurizer at 85%", a fluid's other clocks after it
+// ("At 100%: 16 at 100% and 1 at 20.44%"), and what the nodes cannot give.
+function machineCells(entry: ResourceMining, mining: StageMining): string {
+  const nodeRuns = entry.advice.runs.filter(run => !isWellKind(run.kind)),
+    wellRuns = entry.advice.runs.filter(run => isWellKind(run.kind));
+  const parts: string[] = [];
+  if (nodeRuns.length)
+    parts.push(`${nodeRuns[0]!.machine}: ${clockRunWords(nodeRuns, entry.fluid)}`);
+  if (wellRuns.length)
+    parts.push(
+      `about ${miningNumber(entry.advice.pressurizers)} Resource Well Pressurizer${entry.advice.pressurizers === 1 ? '' : 's'} at ${clockWords(wellRuns[0]!.clock, true)}`,
+    );
+  let text = parts.join('; ');
+  if (entry.fluid)
+    for (const at of fluidClocks(mining.miner.clock)) {
+      if (Math.abs(at - mining.miner.clock) < 1e-9) continue;
+      const option = miningAdvice(entry.rate, mining.sources[entry.resource]!, at);
+      const runs = option.runs.filter(run => !isWellKind(run.kind));
+      if (runs.length && !option.short)
+        text += `. At ${miningNumber(at * 100)}%: ${clockRunWords(runs, true)} (${powerAmount(option.mw)})`;
+    }
+  if (entry.advice.short)
+    text += `. ${miningNumber(entry.advice.short)}${entry.fluid ? ' m³' : ''}/min more than this phase's nodes give`;
+  return text;
 }
 
 // The buildings a stage's mining uses (#1065): its belt (for any line), its pipe (for a fluid

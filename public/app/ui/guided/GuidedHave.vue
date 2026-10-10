@@ -43,6 +43,7 @@ const view = computed(() =>
 // The choices on screen, from the draft when the screen opens (the form is keyed by step).
 const miner = ref<number | undefined>(draft().settings.ownedMiner);
 const belt = ref<number | undefined>(draft().settings.ownedBelt);
+const overclock = ref(!!draft().settings.overclock);
 </script>
 
 <template>
@@ -61,7 +62,12 @@ const belt = ref<number | undefined>(draft().settings.ownedBelt);
       ></label
     >
     <div v-if="view.mining" class="guided-have-gear">
-      <OwnedEquipment v-model:miner="miner" v-model:belt="belt" :phase="view.phase" />
+      <OwnedEquipment
+        v-model:miner="miner"
+        v-model:belt="belt"
+        v-model:overclock="overclock"
+        :phase="view.phase"
+      />
       <p v-if="view.phase >= 5" class="small muted">
         Phase 5 already plans with Miner Mk.3 and Mk.6 belts, the best there are.
       </p>

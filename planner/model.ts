@@ -7,6 +7,7 @@ import {
   phaseMining,
   sourceMWPerUnit,
   sourceYield,
+  waterClock,
   waterMWPerUnit,
   wantsStorage,
   storageRateFor,
@@ -576,7 +577,7 @@ function addSources(
         ['item:' + item]: 1,
         ['limit:' + item]: 1,
         power:
-          (mining ? waterMWPerUnit(mining.miner.clock) : extractionMWPerUnit(item, equipment)) *
+          (mining ? waterMWPerUnit(waterClock(mining)) : extractionMWPerUnit(item, equipment)) *
           config.powerFactor,
       };
     // A draft's measurement (#1066): how far the budget must be raised, at a cost that outweighs

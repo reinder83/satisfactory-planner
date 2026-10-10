@@ -105,7 +105,9 @@ export {
   EXTRACTOR_OPTIONS,
   EXTRACTOR_TIERS,
   MINER_MARKS,
+  OVERCLOCK,
   PHASE_CLOCK,
+  phaseClock,
   PIPE_MARKS,
   bestMark,
   extractorBuilt,
@@ -120,5 +122,6 @@ export {
   sourceClock,
   sourceMWPerUnit,
   sourceYield,
+  waterClock,
   waterMWPerUnit,
 } from './preferences/mining.ts';

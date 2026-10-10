@@ -41,6 +41,7 @@ const SHARED = [
   'progression.ts',
   'reviewed-plans.ts',
   'state.ts',
+  'step-table.ts',
   'storage-room.ts',
   'transfer.ts',
   'wording.ts',

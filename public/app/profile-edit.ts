@@ -187,6 +187,8 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
   ['phaseMining', 'Mining and belts per phase', onOff],
   ['ownedMiner', 'Miners you already have', value => (value ? `Miner Mk.${value}` : 'None')],
   ['ownedBelt', 'Belts you already have', value => (value ? `Mk.${value} belts` : 'None')],
+  ['overclock', 'I can overclock', onOff],
+  ['waterOverclock', 'Overclock Water Extractors', onOff],
   [
     'ownedAlternates',
     'Alternates you already own',
@@ -200,6 +202,8 @@ const ABSENT_IS_NONE = new Set([
   'phaseMining',
   'ownedMiner',
   'ownedBelt',
+  'overclock',
+  'waterOverclock',
   'ownedAlternates',
   'ownedGenerators',
 ]);
