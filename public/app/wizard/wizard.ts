@@ -415,7 +415,11 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
 // when it is on screen: its ticked boxes (name="ownedAlt") become settings.ownedAlternates, and
 // none removes the field, so a plan without owned alternates keeps the settings it always had.
 // The guided start's "What you already have" (#1068) shows the same picker and reads it here too.
-export function readOwnedAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+export function readOwnedAlternates(
+  form: HTMLFormElement,
+  data: FormData,
+  settings: WizardSettings,
+) {
   if (!form.querySelector('.owned-alt-list')) return;
   const owned = data.getAll('ownedAlt').map(String);
   if (owned.length) settings.ownedAlternates = owned;

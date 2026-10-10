@@ -41,11 +41,7 @@ const miners = computed(() =>
   listed(MINERS, props.phase ? phaseMiner(props.phase).mark : undefined, props.miner),
 );
 const belts = computed(() =>
-  listed(
-    BELTS,
-    props.phase ? Number(phaseBelt(props.phase).mark.slice(3)) : undefined,
-    props.belt,
-  ),
+  listed(BELTS, props.phase ? Number(phaseBelt(props.phase).mark.slice(3)) : undefined, props.belt),
 );
 
 const chosen = (event: Event) => Number((event.target as HTMLSelectElement).value) || undefined;

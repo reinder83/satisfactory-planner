@@ -6,12 +6,23 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { progressionData, setWizard, wizard } from '../../public/app/session.ts';
+import { progressionData, setWizard, wizard, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { alternateHunts, stepsBeforeStart } from '../../public/progression.ts';
 import { carryOptions } from '../../public/state.ts';
-import { $, $$, catalog, evil, generated, generatedWith, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  $$,
+  catalog,
+  evil,
+  generated,
+  generatedWith,
+  go,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
 
@@ -59,6 +70,16 @@ function guidedAt(
   go('wizard');
   render();
 }
+// The replies to Create profile: the new profile, then its context, as the server sends them.
+const createdReply = (plan: StoredCalculatedPlan) => ({
+  '/api/profiles': { workspace, saveId: 's', profileId: 'p', carriedChecks: 0 },
+  '/api/context': {
+    save: { id: 's', name: 'World' },
+    profile: { id: 'p', kind: 'calculated', name: 'Third' },
+    state: { settings: { phase: '3' }, checks: {}, notes: {}, deliveries: {}, customTasks: [] },
+    plan,
+  },
+});
 const submit = async () => {
   $('#wizard-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await settle();
@@ -66,7 +87,7 @@ const submit = async () => {
 const choose = async (selector: string, value: string | boolean) => {
   const el = $<HTMLInputElement>(selector);
   assert.ok(el, selector + ' is on screen');
-  if (el.type === 'checkbox') el.checked = Boolean(value);
+  if (el.type === 'checkbox' || el.type === 'radio') el.checked = Boolean(value);
   else el.value = String(value);
   el.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
@@ -89,7 +110,10 @@ test('a Phase 3 start is asked what it already has right after its phase; Phase 
   // Everything starts off, with None chosen.
   assert.equal($<HTMLInputElement>('input[name=earlierDone]')!.checked, false);
   assert.match(text('[data-guided-have] .check-row'), /^Everything before Phase 3 is done/);
-  assert.match(text('[data-guided-have] .check-row'), /Phases 1 and 2 list start ticked/);
+  assert.match(
+    text('[data-guided-have] .check-row'),
+    /Ticks the HUB milestones and MAM research listed under Phases 1 and 2, so the plan opens on Phase 3./,
+  );
   assert.equal($<HTMLSelectElement>('select[name=ownedMiner]')!.value, '');
   assert.equal($<HTMLSelectElement>('select[name=ownedBelt]')!.value, '');
   assert.equal($$('input[name=ownedAlt]:checked').length, 0);
@@ -127,14 +151,20 @@ test('the choices offered follow the start phase', () => {
   guidedAt('have', { phase: '2' });
   assert.deepEqual(options('select[name=ownedMiner]'), ['', '3']);
   assert.deepEqual(options('select[name=ownedBelt]'), ['', '4', '5', '6']);
-  assert.match(text('[data-guided-have] .check-row'), /Phase 1 list start ticked/);
+  assert.match(
+    text('[data-guided-have] .check-row'),
+    /listed under Phase 1, so the plan opens on Phase 2./,
+  );
   guidedAt('have', { phase: '4' });
   assert.equal($('select[name=ownedMiner]'), null, 'Phase 4 already mines with Mk.3');
   assert.deepEqual(options('select[name=ownedBelt]'), ['', '6']);
   guidedAt('have', { phase: '5' });
   assert.equal($('select[name=ownedMiner]'), null);
   assert.equal($('select[name=ownedBelt]'), null);
-  assert.match(text('[data-guided-have]'), /Phase 5 already plans with Miner Mk\.3 and Mk\.6 belts/);
+  assert.match(
+    text('[data-guided-have]'),
+    /Phase 5 already plans with Miner Mk\.3 and Mk\.6 belts/,
+  );
   // A mark already chosen stays listed (a draft from All settings step 4).
   guidedAt('have', { phase: '4', ownedMiner: 2 });
   assert.deepEqual(options('select[name=ownedMiner]'), ['', '2']);
@@ -202,19 +232,16 @@ test('the answers reach the settings and Review’s ticks, as All settings’ do
   assert.equal(screw.disabled, true, 'owned, set as on step 2');
   assert.match(text('[data-already-have]'), /owned, set on step 2/);
   // Create sends the same settings and the steps they tick.
-  const created = stubFetch<{ settings: WizardSettings; built: string[] }>({
-    '/api/profiles': { workspace: {}, saveId: 's', profileId: 'p', carriedChecks: 0 },
-    '/api/context': { error: 'not needed' },
-  });
+  const created = stubFetch<{ settings: WizardSettings; built: string[] }>(createdReply(plan));
   await submit();
+  await settle();
   const body = created.find(([path]) => path === '/api/profiles')![1];
   assert.equal(body.settings.ownedMiner, 3);
   assert.equal(body.settings.ownedBelt, 5);
   assert.deepEqual(body.settings.ownedAlternates, [SCREW]);
   const before = stepsBeforeStart(plan, { checks: {} }, progressionData);
   assert.ok(before.length >= 16);
-  for (const key of [...before, `recipe-unlock-${SCREW}`])
-    assert.ok(body.built.includes(key), key);
+  for (const key of [...before, `recipe-unlock-${SCREW}`]) assert.ok(body.built.includes(key), key);
   const hunt = alternateHunts(plan, progressionData).find(entry =>
     entry.recipes.some(recipe => recipe.key === `recipe-unlock-${SCREW}`),
   )!;
@@ -228,7 +255,10 @@ test('the answers reach the settings and Review’s ticks, as All settings’ do
 test('left as it is, the screen changes nothing: every field stays absent', async () => {
   guidedAt('have', { phase: '3' });
   const before = structuredClone(wizard!.settings);
-  assert.equal('ownedMiner' in before || 'ownedBelt' in before || 'ownedAlternates' in before, false);
+  assert.equal(
+    'ownedMiner' in before || 'ownedBelt' in before || 'ownedAlternates' in before,
+    false,
+  );
   await submit();
   assert.equal(guidedFlow()[wizard!.guidedStep - 1]!.id, 'supply');
   assert.deepEqual(wizard!.settings, before, 'the same settings as before the screen');
@@ -252,11 +282,9 @@ test('left as it is, the screen changes nothing: every field stays absent', asyn
   stubFetch({ '/api/preview': plan });
   await submit();
   assert.equal($<HTMLInputElement>('input[data-earlier-done]')!.checked, false);
-  const created = stubFetch<{ settings: WizardSettings; built: string[] }>({
-    '/api/profiles': { workspace: {}, saveId: 's', profileId: 'p', carriedChecks: 0 },
-    '/api/context': { error: 'not needed' },
-  });
+  const created = stubFetch<{ settings: WizardSettings; built: string[] }>(createdReply(plan));
   await submit();
+  await settle();
   const body = created.find(([path]) => path === '/api/profiles')![1];
   assert.deepEqual(body.built, []);
   for (const field of ['ownedMiner', 'ownedBelt', 'ownedAlternates'])

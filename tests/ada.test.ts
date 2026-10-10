@@ -836,7 +836,13 @@ test('a completed Post Phase 5 points to no Phase 6 (#1069)', () => {
 });
 
 test('ADA speaks on the guided start’s "What you already have" screen only (#1068)', () => {
-  const on = facts({ view: 'wizard', guided: true, guidedStep: 2, guidedTotal: 8, guidedHave: true });
+  const on = facts({
+    view: 'wizard',
+    guided: true,
+    guidedStep: 2,
+    guidedTotal: 8,
+    guidedHave: true,
+  });
   const line = adaRemarks(on).find(remark => remark.id === 'guided-have');
   assert.ok(line);
   assert.equal(line.tone, 'calm');

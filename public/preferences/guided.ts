@@ -353,7 +353,7 @@ export const guidedHaveQuestion = (phase: string): GuidedQuestion => ({
   short: 'What you have',
   kind: 'have',
   title: 'What do you already have?',
-  lead: `Tell the plan what is already behind you, so Phase ${phase} does not send you to unlock it again. All of it is optional: leave it as it is if you are starting fresh.`,
+  lead: `Tell the plan what is already behind you, so Phase ${phase} does not send you to unlock it again. Everything here is optional: skip it and the plan lists every earlier unlock for you to tick, and plans with the miners and belts Phase ${phase} unlocks.`,
 });
 // Ticked when someone says the HUB tutorial is behind them. Both keys already
 // exist: the Phase 1 build step, and HUB Upgrade 6 in the unlock data.

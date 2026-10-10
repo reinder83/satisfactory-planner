@@ -52,8 +52,8 @@ const belt = ref<number | undefined>(draft().settings.ownedBelt);
         :checked="view.earlierDone"
       /><span
         ><b>Everything before Phase {{ view.phase }} is done</b><br /><small class="muted"
-          >The HUB milestones and MAM research {{ view.before }} list start ticked, so the plan opens
-          on Phase {{ view.phase }}. You can untick any of them later.</small
+          >Ticks the HUB milestones and MAM research listed under {{ view.before }}, so the plan
+          opens on Phase {{ view.phase }}. You can untick any of them later.</small
         ></span
       ></label
     >
