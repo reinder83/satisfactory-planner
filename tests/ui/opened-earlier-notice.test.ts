@@ -176,9 +176,7 @@ test('picking the saved phase on the phase track also takes the notice away', as
   open();
   await openThrough(calculatedReply('3', {}));
   assert.ok(notice());
-  const three = $<HTMLInputElement>('[data-phase-track] input[value="3"]')!;
-  three.checked = true;
-  three.dispatchEvent(new Event('change', { bubbles: true }));
+  $<HTMLButtonElement>('[data-phase-seg="3"]')!.click();
   await settle();
   assert.equal(notice(), null);
 });

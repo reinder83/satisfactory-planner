@@ -2,7 +2,9 @@
 // earlier phase the profile plans still has an open check, then the first such phase. It applies
 // to every profile loadContext() opens, a new one and an existing one, in both editions (they
 // share this code; only /api/context's transport differs). Opening writes nothing: the saved
-// phase and checks stay as they were, and the phase picker still saves and shows what is picked.
+// phase and checks stay as they were. The phase picker shows what is picked without saving it,
+// and "Work on Phase N" saves it (#1053). A reload or a new tab (boot) opens the working phase
+// instead (#1053, tests/ui/phase-view.test.ts).
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
@@ -220,25 +222,30 @@ test('picking the saved phase on the phase track shows it instead of the phase o
   open();
   await openThrough(calculatedReply('3', {}));
   assert.equal(phase(), '1');
-  const three = $<HTMLInputElement>('[data-phase-track] input[value="3"]')!;
-  three.checked = true;
-  three.dispatchEvent(new Event('change', { bubbles: true }));
+  $<HTMLButtonElement>('[data-phase-seg="3"]')!.click();
   await settle();
   assert.deepEqual(shownPhase(), { phase: '3', picker: '3', track: '3' });
   assert.equal(state.settings.phase, '3');
   assert.equal(openedFrom(), null);
 });
 
-test('picking another phase in the select saves and shows it', async () => {
+// Before #1053 the select saved the phase picked as the working phase.
+test('picking another phase in the select shows it, and "Work on Phase 2" saves it', async () => {
   open();
-  await openThrough(calculatedReply('4', {}));
+  const calls = await openThrough(calculatedReply('4', {}));
   assert.equal(phase(), '1');
   const picker = $<HTMLSelectElement>('#phase-picker')!;
   picker.value = '2';
   picker.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
   assert.deepEqual(shownPhase(), { phase: '2', picker: '2', track: '2' });
+  assert.equal(state.settings.phase, '4', 'only shown');
+  assert.equal(openedFrom(), null, 'a phase picked to look at, not one opened on');
+  $<HTMLButtonElement>('[data-work-on-phase]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1), ['/api/update', { type: 'phase', value: '2' }]);
   assert.equal(state.settings.phase, '2');
+  assert.deepEqual(shownPhase(), { phase: '2', picker: '2', track: '2' });
 });
 
 test('a profile migrated from the handbook, saved on Phase 5, opens on Phase 3 while its steps are open', async () => {

@@ -293,26 +293,28 @@ export const firstPhase = (): StageKey => (calculated ? firstPlanPhase(calculate
 export const milestoneOnly = (shown: Phase = phase()): boolean =>
   !!calculated && milestoneOnlyPhase(calculated, shown);
 
-// The phase being worked on: the saved setting, raised to the profile's first phase. With
-// no save open (the empty workspace's placeholder) there is no profile to raise it to, so
-// the top bar follows the phase picked in the open wizard draft, else the placeholder's (#561).
+// The phase on screen: the working phase (the saved setting, raised to the profile's first
+// phase) unless this tab shows another one. With no save open (the empty workspace's
+// placeholder) there is no profile to raise it to, so the top bar follows the phase picked in the
+// open wizard draft, else the placeholder's (#561).
 export const phase = (): Phase => {
   const saved = state.settings.phase;
   if (!currentSave.id) return wizard?.settings.phase || saved;
-  // Opened on an earlier phase with open checks (#570), or shown by a flow page's address
-  // (#926), while the saved phase is still the one that was worked out from: another tab
-  // picking a phase shows that one.
+  // Opened on an earlier phase with open checks (#570), shown by a flow page's address (#926) or
+  // picked in the phase picker to look at (#1053), while the saved phase is still the one it was
+  // shown from: saving a working phase, in this tab or another, shows that one.
   if (openedOn?.saved === saved) return openedOn.phase;
   return workingPhase();
 };
 // The saved working phase, raised to the profile's first phase.
-function workingPhase(): Phase {
+export function workingPhase(): Phase {
   const saved = state.settings.phase;
   return saved !== 'post' && Number(saved) < Number(firstPhase()) ? firstPhase() : saved;
 }
-// The working phase while the tab shows another one (the phase a profile opened on, #570, or a
-// flow page's address names, #926), else null; also null with no save open. The phase picker
-// then says "Showing" rather than "Working on" (#992), as the notices below it name this phase.
+// The working phase while the tab shows another one (the phase a profile opened on, #570, a flow
+// page's address names, #926, or the phase picker shows, #1053), else null; also null with no
+// save open. The phase picker then says "Showing" rather than "Working on" (#992) and offers
+// "Work on Phase N" (#1053), and the notices below it name the working phase.
 export const workingPhaseNotShown = (): Phase | null => {
   if (!currentSave.id) return null;
   const working = workingPhase();
@@ -457,34 +459,41 @@ export function stayOnTabProfile() {
   writeTabMemory({ ...memory, stay: moved.saveId + '/' + moved.profileId });
 }
 
-// The phase the profile just opened shows (#570, app/opening-phase.ts): the saved working phase,
-// or an earlier one that still has open checks. It is not saved: the saved phase stays the one the
-// user picked, so each opening looks again. The phase picker drops it (setOpenedPhase(null)) once
-// it has saved the phase picked, and opening another profile replaces it. A group's flow page's
-// address sets it too (showRoutePhase, #926).
-let openedOn: { saved: Phase; phase: Phase } | null = null;
+// The phase this tab shows while it is not the working phase, else null. It is view state, never
+// saved and kept in this tab's memory only, so a reload or a new tab opens the working phase
+// (boot(), #1053). `saved` is the saved phase it was shown from: once a working phase is saved,
+// in this tab or another, the tab shows that one. `opened` marks the phase a profile opened on
+// because it still has open checks (#570, app/opening-phase.ts), which the notices and ADA
+// explain; a phase picked in the phase picker (#1053) or named by a flow page's address (#926) is
+// one the user chose to look at. Opening another profile replaces it.
+let openedOn: { saved: Phase; phase: Phase; opened?: boolean } | null = null;
 export function setOpenedPhase(value: typeof openedOn) {
   openedOn = value;
 }
-// The saved working phase while the profile shows an earlier one it opened on, else null (ADA).
+// The saved working phase while the profile shows an earlier one it opened on (#570), else null
+// (the opened-earlier notice and ADA).
 export const openedFrom = (): Phase | null =>
-  openedOn?.saved === state.settings.phase ? openedOn.saved : null;
+  openedOn?.opened && openedOn.saved === state.settings.phase ? openedOn.saved : null;
+// Shows phase `shown` in this tab without saving it (#1053): the phase picker's choice, and the
+// notices' "Go to Phase N" back to the working phase, which clears the view. Only "Work on Phase
+// N" in the top bar (and the build plan's "Go to Phase N+1") saves a working phase. A phase the
+// profile does not offer, or no open save, leaves the phase shown as it was.
+export function viewPhase(shown: Phase) {
+  if (!stateLoaded || !currentSave?.id || !phaseOptions().includes(shown)) return;
+  openedOn = shown === workingPhase() ? null : { saved: state.settings.phase, phase: shown };
+}
 // Shows the phase a group's flow page's address names (#926), for a route just followed or
-// opened (render() in shell.ts, and boot()). Like the phase a profile opens on, it is only shown,
-// never saved: a link opened in another tab, a bookmark or Back must not change the working phase
-// that other tabs and devices go by. Only the phase picker saves one, and the flow page's address
-// then follows the phase shown (shell.ts). A tab shows the working phase or an earlier one, which
-// is how the notices and ADA describe it, so an address is followed from the profile's first
-// phase up to the working phase; a later or unknown phase, an address without one, or no open
-// save leaves the phase shown as it was.
+// opened (render() in shell.ts, and boot()). Like a phase picked in the phase picker, it is only
+// shown, never saved: a link opened in another tab, a bookmark or Back must not change the
+// working phase that other tabs and devices go by. The flow page's address then follows the
+// phase shown (shell.ts). Any phase the profile offers is followed, as the phase picker shows any
+// (#1053); an unknown phase, an address without one, or no open save leaves the phase shown as
+// it was.
 export function showRoutePhase(route: string) {
   const named = flowPhaseOf(route);
-  if (named === null || !stateLoaded || !currentSave.id) return;
-  const options = phaseOptions(),
-    working = workingPhase(),
-    shown = options.find(option => option === named);
-  if (!shown || options.indexOf(shown) > options.indexOf(working)) return;
-  openedOn = shown === working ? null : { saved: state.settings.phase, phase: shown };
+  if (named === null || !stateLoaded || !currentSave?.id) return;
+  const shown = phaseOptions().find(option => option === named);
+  if (shown) viewPhase(shown);
 }
 // Works out where the profile just opened starts. A failure here must not stop it opening, so it
 // then shows the saved phase, as before.
@@ -493,7 +502,7 @@ function openOnPhase() {
     const saved = state.settings.phase,
       open = phaseToOpen();
     // Only an earlier phase, which openingPhase finds from the start phase on.
-    openedOn = open === saved ? null : { saved, phase: open };
+    openedOn = open === saved ? null : { saved, phase: open, opened: true };
   } catch {
     openedOn = null;
   }
@@ -567,6 +576,9 @@ export async function boot() {
       own?.save || workspace.saves.find(s => s.id === workspace.activeSave) || workspace.saves[0];
     if (save) {
       await loadContext(save.id, own?.profile ?? save.activeProfile);
+      // A reload or a new tab opens the working phase (#1053), not the earlier phase with open
+      // steps that opening a profile shows (#570); the phase picker still shows that one.
+      openedOn = null;
       view = viewOf(location.hash.slice(1));
       showRoutePhase(location.hash.slice(1));
       // The wizard lives only in memory, so #wizard after a reload lands on the profiles page.

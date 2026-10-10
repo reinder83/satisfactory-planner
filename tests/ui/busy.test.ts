@@ -441,22 +441,28 @@ test('a factory’s rate field and Add select keep focus while they save', async
   assert.ok(focusedOn(computer), describeFocus());
 });
 
-test('the "Working on" phase select keeps focus while it saves', async () => {
+// Before #1053 the phase select saved the phase picked and was the busy control; now it only
+// shows a phase, and "Work on Phase N" saves it.
+test('"Work on Phase N" keeps focus while it saves, then focus goes to the phase picker', async () => {
   const net = heldFetch(updates);
   go('plan');
   render();
   await nextTick();
-  change('#phase-picker', '4');
-  await settle();
-  assert.ok(busy('#phase-picker'));
-  assert.ok(focusedOn('#phase-picker'), describeFocus());
+  assert.notEqual(state.settings.phase, '5');
   change('#phase-picker', '5');
   await settle();
-  assert.equal(net.calls.length, 1, 'a key pressed on it meanwhile saves nothing');
+  assert.equal(net.calls.length, 0, 'showing a phase saves nothing');
+  press('[data-work-on-phase]');
+  await settle();
+  assert.ok(busy('[data-work-on-phase]'));
+  assert.ok(focusedOn('[data-work-on-phase]'), describeFocus());
+  press('[data-work-on-phase]');
+  await settle();
+  assert.equal(net.calls.length, 1, 'a second press meanwhile saves nothing');
   await net.release();
-  assert.equal(state.settings.phase, '4');
-  assert.ok(ready('#phase-picker'));
-  assert.ok(focusedOn('#phase-picker'), describeFocus());
+  assert.equal(state.settings.phase, '5');
+  assert.equal($('[data-work-on-phase]'), null, 'the button goes with the phase it offered');
+  assert.ok(focusedOn('[data-phase-seg="5"]'), describeFocus());
 });
 
 test('Round up production keeps focus while it calculates, then focus goes to the new page’s heading (#300, #304)', async () => {
