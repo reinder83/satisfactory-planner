@@ -878,3 +878,20 @@ test('ADA speaks on the guided start’s "What you already have" screen only (#1
   assert.ok(!ids({ ...on, guidedHave: false }).includes('guided-have'));
   assert.ok(!ids(facts({ view: 'wizard' })).includes('guided-have'));
 });
+
+test('ADA says the ticks show more than the plan counts, while the build plan offers it (#1068)', () => {
+  const line = adaRemarks(
+    facts({ view: 'plan', ownedTicks: 'Miner Mk.3 and the Cast Screws alternate' }),
+  ).find(r => r.id === 'owned-ticks')!;
+  assert.equal(line.tone, 'calm');
+  assert.match(
+    line.text,
+    /^Your ticks say you have Miner Mk\.3 and the Cast Screws alternate, and this plan was calculated without them\./,
+  );
+  assert.match(
+    line.text,
+    /Nothing recalculates by itself: Recalculate in place with what you have, on the build plan,/,
+  );
+  assert.match(line.text, /keeps this version as a backup/);
+  assert.ok(!ids(facts({ view: 'plan' })).includes('owned-ticks'), 'absent means none');
+});

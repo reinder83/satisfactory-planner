@@ -577,7 +577,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => !!facts.ownedTicks,
     text: facts =>
-      `Your ticks say you have ${facts.ownedTicks}, and this plan was calculated without them. Nothing recalculates by itself: Recalculate in place with what you have plans with them and keeps this version as a backup. Progress noted; plan pending.`,
+      `Your ticks say you have ${facts.ownedTicks}, and this plan was calculated without them. Nothing recalculates by itself: Recalculate in place with what you have, on the build plan, plans with them and keeps this version as a backup. Progress noted; plan pending.`,
   },
   {
     // What whole machines cost in the open phase (#1066), from the calculation's own record.
