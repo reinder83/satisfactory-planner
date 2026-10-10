@@ -91,6 +91,127 @@ await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 // Listening on a TCP port, so the address is an AddressInfo.
 const port = (listener: http.Server) => (listener.address() as AddressInfo).port;
 const base = 'http://127.0.0.1:' + port(server) + '/satisfactory-planner/';
+
+// The performance budget (#1060), on a phone-wide page (390 px) with Phase 5 of a maximum-output
+// plan, its largest: Create profile stores the plan Review showed without calculating again,
+// and a tick and a key in the step search stay inside budgets far above what they take now
+// (about 50 ms and 15 ms on a desktop; before #1060 about 1 s and 0.25 s, four times that with
+// a phone's CPU), so a slower runner does not fail them.
+const TICK_BUDGET_MS = 1500;
+const SEARCH_KEY_BUDGET_MS = 300;
+async function checkPerformance(browser: import('playwright').Browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  try {
+    const page = await context.newPage();
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    // Counts the calculations sent to the calculator worker (not the payoff rankings).
+    await page.addInitScript(() => {
+      const counted = window as Window & { calculations?: number };
+      counted.calculations = 0;
+      const send = Worker.prototype.postMessage;
+      Worker.prototype.postMessage = function (this: Worker, message: unknown) {
+        const job = message as { settings?: unknown; rank?: unknown } | null;
+        if (job?.settings && !job.rank) counted.calculations = (counted.calculations ?? 0) + 1;
+        return Reflect.apply(send, this, [...arguments]);
+      };
+    });
+    const calculations = () =>
+      page.evaluate(() => (window as Window & { calculations?: number }).calculations);
+    await maximumOutputReview(page);
+    const reviewed = await calculations();
+    const started = Date.now();
+    await page.getByRole('button', { name: 'Create profile', exact: true }).click();
+    await page.locator('[data-phase-notes-link]').waitFor({ timeout: 180000 });
+    const createMs = Date.now() - started;
+    assert.equal(await calculations(), reviewed, 'Create profile stores the plan Review showed');
+    await showPhase(page, '5');
+    const ticks = [await tickTime(page), await tickTime(page), await tickTime(page)].sort(
+      (a, b) => a - b,
+    );
+    const search = await searchTimes(page);
+    console.log(
+      `Performance (390 px, Phase 5 of maximum output): Create profile ${createMs} ms, no calculation; ` +
+        `tick ${ticks.map(Math.round).join('/')} ms; search keys ${search.keys.map(Math.round).join('/')} ms, ` +
+        `results ${Math.round(search.results)} ms after the last key`,
+    );
+    assert.ok(ticks[1]! < TICK_BUDGET_MS, `a tick takes ${ticks[1]} ms`);
+    assert.ok(Math.max(...search.keys) < SEARCH_KEY_BUDGET_MS, `search keys ${search.keys} ms`);
+    assert.ok(search.results < TICK_BUDGET_MS, `search results after ${search.results} ms`);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}
+// A new browser save on All settings with maximum output from Phase 1, its budgets confirmed,
+// calculated up to Review.
+async function maximumOutputReview(page: Page) {
+  await page.goto(base);
+  await page.locator('.guided-card').first().waitFor();
+  await page.locator('[name=saveName]').fill('Performance');
+  await page.locator('[data-guided-advanced]').click();
+  await page.locator('[data-wizard-step="1"]').waitFor();
+  await page.locator('[name=phase]').selectOption('1');
+  await page.locator('[data-wizard-step="3"]').click();
+  await page.locator('input[name=goal][value=maximum]').check();
+  await page.locator('[data-wizard-step="4"]').click();
+  await page.locator('input[name=limitsConfirmed]').check();
+  await page.locator('[data-wizard-step="5"]').click();
+  await page
+    .getByRole('button', { name: 'Create profile', exact: true })
+    .waitFor({ timeout: 180000 });
+}
+// Picks `phase` in the phase picker, which the top bar may fold away at this width, and waits
+// for the build plan's progress line to count that phase's steps.
+async function showPhase(page: Page, phase: string) {
+  const progress = page.locator('[data-plan-progress]');
+  const before = await progress.textContent();
+  await page.evaluate(phase => {
+    const picker = document.querySelector<HTMLSelectElement>('#phase-picker')!;
+    picker.value = phase;
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+  }, phase);
+  await page.waitForFunction(
+    before => document.querySelector('[data-plan-progress]')!.textContent !== before,
+    before,
+  );
+}
+// Ticks the lead step and returns the time until the progress line says so and a frame is drawn.
+const tickTime = (page: Page) =>
+  page.evaluate(async () => {
+    const frame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve)));
+    const progress = () => document.querySelector('[data-plan-progress]')!.textContent;
+    const box = document.querySelector<HTMLInputElement>(
+      '#main [data-open-steps] input[data-check]',
+    )!;
+    const before = progress();
+    const start = performance.now();
+    box.click();
+    while (progress() === before) await frame();
+    await frame();
+    return performance.now() - start;
+  });
+// Types "iron" into the step search: the time each key takes until a frame is drawn, and the
+// time from the last key until the filtered list is drawn.
+const searchTimes = (page: Page) =>
+  page.evaluate(async () => {
+    const frame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve)));
+    const input = document.querySelector<HTMLInputElement>('#plan-search')!;
+    const count = () => document.querySelector('.checklist-tools .muted')!.textContent || '';
+    const keys: number[] = [];
+    let last = 0;
+    for (const key of 'iron') {
+      last = performance.now();
+      input.value += key;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await frame();
+      keys.push(performance.now() - last);
+    }
+    while (!/ of /.test(count())) await frame();
+    await frame();
+    return { keys, results: performance.now() - last };
+  });
+
 let browser: import('playwright').Browser | undefined, backend: http.Server | undefined;
 try {
   browser = await chromium.launch({
@@ -894,9 +1015,10 @@ try {
   const reexport: SaveExport = await (await fetch(backendURL + '/api/export-saves')).json();
   assert.equal(reexport.saves.length, 2);
   assert.deepEqual(errors, []);
+  await checkPerformance(browser);
   await page.screenshot({ path: path.join(temp, 'browser-check.png'), fullPage: true });
   console.log(
-    'Browser checks passed: wizard, WASM calculator, IndexedDB reload, profile isolation, tabs, handbook upgrade, export/import, Docker roundtrip.',
+    'Browser checks passed: wizard, WASM calculator, IndexedDB reload, profile isolation, tabs, handbook upgrade, export/import, Docker roundtrip, performance budget.',
   );
 } finally {
   await browser?.close();
