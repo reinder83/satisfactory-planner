@@ -17,6 +17,7 @@
 // POST /api/rank-alternates    hard-drive payoff ranking on the worker, stored on the profile
 // GET  /api/context, /api/state, /api/export   read the scoped profile
 // POST /api/select, /api/remove-profile, /api/rename, /api/update, /api/import
+// POST /api/dismiss-rename-offer   keep the scoped profile's name: its Rename to … offer goes
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
@@ -34,6 +35,7 @@ import {
   recalculatedProfile,
   restoredVersions,
   restoreFields,
+  renameOfferFields,
   currentPayoff,
   phaseProgress,
   roundUpSettings,
@@ -158,6 +160,7 @@ export function createBrowserApi(
           ? cachedPhases(profile.id, profile.plan, profile.state, progression)
           : phaseProgress(profile.plan, profile.state.checks),
         ...restoreFields(save.profiles, profile),
+        ...renameOfferFields(profile),
       })),
     })),
   });
@@ -254,8 +257,13 @@ export function createBrowserApi(
       const { save, profile } = scope(data, url, headers, body);
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
       const profileId = randomId();
-      // As on the server, a copy leaves the kept-version link behind (#1071).
-      const { backupOf: _link, ...copy } = structuredClone(profile);
+      // As on the server, a copy leaves the kept-version link and a dismissed "Rename to …"
+      // offer behind (#1071).
+      const {
+        backupOf: _link,
+        renameOfferDismissed: _dismissed,
+        ...copy
+      } = structuredClone(profile);
       save.profiles.push({
         ...copy,
         id: profileId,
@@ -417,6 +425,12 @@ export function createBrowserApi(
     else throw Error('Invalid rename target.');
     return summary(data);
   }
+  // Mirrors POST /api/dismiss-rename-offer (#1071): the scoped profile's "Rename to …" offer is
+  // not offered again. Only the flag changes.
+  function dismissRenameOffer({ data, profile }: ScopedRequest) {
+    profile.renameOfferDismissed = true;
+    return summary(data);
+  }
   // /api/update applies one save-queue operation through mutate() (state.ts); /api/import
   // restores a progress backup through validateState. Either way writeProgress bumps the
   // revision. As on the server, a backup with a different `format` is rejected before
@@ -489,6 +503,7 @@ export function createBrowserApi(
     '/api/select': selectProfile,
     '/api/remove-profile': removeProfile,
     '/api/rename': rename,
+    '/api/dismiss-rename-offer': dismissRenameOffer,
     '/api/restore-version': restoreVersion,
     '/api/update': updateProgress,
     '/api/import': importProgress,

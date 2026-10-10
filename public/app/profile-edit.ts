@@ -2,7 +2,8 @@
 // named after what it is: its goal, what differs from the settings it started from (the profile
 // it carries from, or a new save's defaults) and the day, "Minimal construction · whole machines
 // · Oct 7" (defaultProfileName), so several profiles of one save no longer share the goal's
-// name. Only new profiles are named this way; a stored name is never changed. Edit settings
+// name. Only new profiles are named this way; a stored name is never changed, but a profile still
+// named after its goal alone is offered such a name on its card (renameOffers). Edit settings
 // recalculates a profile in place and keeps its previous version as a profile named
 // "<name> (before edit, Oct 7, 2:05 PM)" (backupName), which "Restore this version" can swap back
 // (app/restore-version.ts). Review lists what the edit changes
@@ -70,6 +71,51 @@ export function defaultProfileName(
     .slice(0, 2)
     .map(([key, words]) => words(settings[key]));
   return [goal, ...changes, nameDate(date)].join(' · ').slice(0, NAME_LIMIT);
+}
+
+// The "Rename to …" offer (#1071) for profiles made before these names: a profile created
+// without a typed name used to be named after its goal and nothing else ("Balanced progression",
+// the catalog goal's name, which a goal's name in the wizard filled in), so a save could hold four
+// cards of that one name. Such a card (a profile whose name is a goal's, of any goal, since an
+// edit in place can change the goal and keep the name) is offered the name a new profile gets:
+// its goal and up to two changes from a new save's defaults (an old profile records no profile
+// it carried from), then the day its plan was made (today without one). Two offers that would be
+// the same, or match another profile's name in the save, are numbered " · 2", " · 3" in card
+// order, as an import's copies are (labelImport). A dismissed offer (renameOfferDismissed, the
+// summary's) and a profile without settings get none. Returns profile id → offered name; nothing
+// is stored until the user accepts, which renames the profile.
+export function renameOffers(
+  profiles: readonly {
+    id: string;
+    name: string;
+    settings?: object | undefined;
+    planCreatedAt?: string | undefined;
+    renameOfferDismissed?: true | undefined;
+  }[],
+  goals: { id: string; name: string }[],
+): Map<string, string> {
+  const goalNames = new Set((goals || []).map(goal => goal.name));
+  const taken = new Set(profiles.map(profile => profile.name));
+  const offers = new Map<string, string>();
+  for (const profile of profiles) {
+    if (profile.renameOfferDismissed || !profile.settings || !goalNames.has(profile.name.trim()))
+      continue;
+    const made = new Date(profile.planCreatedAt ?? '');
+    const name = defaultProfileName(
+      profile.settings as NameSettings,
+      null,
+      goals,
+      Number.isNaN(made.getTime()) ? new Date() : made,
+    );
+    let offered = name;
+    for (let count = 2; taken.has(offered); count++) {
+      const end = ' · ' + count;
+      offered = name.slice(0, NAME_LIMIT - end.length).trimEnd() + end;
+    }
+    taken.add(offered);
+    offers.set(profile.id, offered);
+  }
+  return offers;
 }
 
 // The name the previous version of an edited profile is kept under: "<name> (before edit, Oct

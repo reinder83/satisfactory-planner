@@ -4186,6 +4186,47 @@ button.rail-tile:hover {
 .profile-card .inline-name > h3 {
   margin: 0;
 }
+/* A card still named after its goal alone (#1071, ProfilesPage.vue): "Rename to “…”" with the
+   name it offers, and ✕ beside it to keep the name. The offered name is long, so the button is
+   in the body's type and case, dashed as a suggestion, and wraps within the card; ✕ keeps its
+   size. On a phone both are 44px tall (.btn), and ✕ 44px wide like the ✎ above it. */
+.rename-offer {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: -2px 0 12px;
+}
+.btn.rename-offer-accept {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+  padding: 7px 10px;
+  border-style: dashed;
+  border-color: var(--warm-border);
+  box-shadow: none;
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.btn.rename-offer-dismiss {
+  flex: none;
+  min-width: 34px;
+  align-self: stretch;
+  padding: 4px 8px;
+  letter-spacing: 0;
+  font-size: 13px;
+  box-shadow: none;
+}
+@media (max-width: 720px) {
+  .btn.rename-offer-dismiss {
+    min-width: 44px;
+  }
+}
 @media (max-width: 720px) {
   .btn.inline-name-edit {
     min-width: 44px;

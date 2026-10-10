@@ -39,6 +39,7 @@ test('a JSON body that is not an object is refused before any route reads it', a
     '/api/select',
     '/api/remove-profile',
     '/api/rename',
+    '/api/dismiss-rename-offer',
     '/api/update',
     '/api/import',
   ];

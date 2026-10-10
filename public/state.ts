@@ -39,6 +39,7 @@
 //                            currentPayoff
 //   state/restore.ts         Restore this version (#1071): the kept-version link (restoreTarget),
 //                            its refusals (checkRestore) and the swap (restoredVersions)
+//   state/rename-offer.ts    the "Rename to …" offer's dismissal flag (renameOfferFields, #1071)
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 //   state/items.ts           ITEM_NAMES, every item name the game data has held
 export {
@@ -101,5 +102,6 @@ export {
   restoreTarget,
   restoreTargetGone,
 } from './state/restore.ts';
+export { renameOfferFields } from './state/rename-offer.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
 export { ITEM_NAMES } from './state/items.ts';

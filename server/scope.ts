@@ -2,7 +2,7 @@
 // save and profile a request is about. Both only ever read saves whose userId is the user's.
 import { readFileSync } from 'node:fs';
 import { isTranscribed } from '../public/handbook-migration.ts';
-import { profilePhasesCache, restoreFields } from '../public/state.ts';
+import { profilePhasesCache, renameOfferFields, restoreFields } from '../public/state.ts';
 import { catalog } from '../planner.ts';
 import { publicUser } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -51,6 +51,7 @@ export const summary = (
         phase: profile.state.settings.phase,
         phases: cachedPhases(profile.id, profile.plan, profile.state, progressionData()),
         ...restoreFields(save.profiles, profile),
+        ...renameOfferFields(profile),
       })),
     })),
 });
