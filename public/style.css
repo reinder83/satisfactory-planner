@@ -1335,9 +1335,12 @@ textarea::placeholder {
   border-bottom: 1px solid var(--line);
   padding-bottom: 11px;
 }
+/* A factory's name may be one unbroken word of up to 80 characters: it wraps rather than making
+   the page scroll sideways (#986), as do the card lines and the editor rows that name it. */
 .site-group .site-head h2 {
   margin: 3px 0 0;
   font-size: 19px;
+  overflow-wrap: anywhere;
 }
 .site-group .site-head p {
   margin: 0;
@@ -5218,6 +5221,7 @@ button.rail-tile:hover {
 .allocation {
   color: var(--accent);
   margin-top: 6px;
+  overflow-wrap: anywhere;
 }
 .assign-editor {
   grid-column: 1/-1;
@@ -5236,6 +5240,9 @@ button.rail-tile:hover {
   gap: 8px;
   align-items: center;
   font-size: 12px;
+}
+.assign-row > span {
+  overflow-wrap: anywhere;
 }
 .assign-row input {
   min-width: 0;
@@ -5304,6 +5311,7 @@ button.rail-tile:hover {
   min-width: 0;
 }
 .on-site-picker legend {
+  overflow-wrap: anywhere;
   font-family: var(--head);
   font-weight: 700;
   font-size: 13px;
