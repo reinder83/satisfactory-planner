@@ -26,6 +26,11 @@ export interface StoredProfile {
   // The last hard-drive payoff ranking (#203). Derived, not progress: left out of exports and
   // shares, and only shown while planCreatedAt matches the plan it was ranked against.
   payoff?: StoredPayoff;
+  // The id of the profile this one is a kept previous version of (#1071): set on the version a
+  // recalculation in place keeps, and on the version a restore replaces, so "Restore this
+  // version" can swap it back (public/state/restore.ts). Absent from every other profile and from
+  // every profile stored before it; older releases keep it without reading it.
+  backupOf?: string;
 }
 
 // POST /api/rank-alternates: rankAlternates (planner.ts) on the profile's plan settings, with
@@ -135,6 +140,11 @@ export interface ProfileSummary {
   transcribed?: true;
   completed: number;
   phase: Phase;
+  // The profile of the same save this one is a kept version of (restoreTarget, #1071): only set
+  // while that profile exists, so only such a card offers "Restore this version".
+  backupOf?: string;
+  // The createdAt of the profile's plan, which a restore names (the stale-tab guard, #1071).
+  planCreatedAt?: string;
   // A calculated profile's progress per phase it offers (SP-32): the milestone-only phases before
   // its start phase (#783, only with `steps`), then each phase from the start phase. The
   // production lines ticked Running over the phase's lines, and its build-plan steps ticked
@@ -212,6 +222,8 @@ export interface SaveExport {
       kind: ProfileKind;
       plan: StoredCalculatedPlan | null;
       state: SavedState;
+      // The kept-version link (StoredProfile.backupOf), only to a profile of the same save.
+      backupOf?: string;
     }[];
   }[];
 }

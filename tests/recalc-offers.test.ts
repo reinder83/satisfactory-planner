@@ -106,7 +106,10 @@ function assertBackup(backup: StoredProfile | undefined, before: StoredProfile, 
   assert.ok(backup);
   assert.equal(backup.name, name);
   assert.notEqual(backup.id, before.id);
-  assert.deepEqual({ ...backup, id: before.id, name: before.name }, before);
+  // Linked to the profile it was kept for, so it can be restored (#1071).
+  const { backupOf, ...copy } = backup;
+  assert.equal(backupOf, before.id, 'linked to the profile it was kept for');
+  assert.deepEqual({ ...copy, id: before.id, name: before.name }, before);
 }
 
 async function pressEachOffer(edition: Edition) {

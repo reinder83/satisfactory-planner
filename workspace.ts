@@ -38,6 +38,7 @@ export type { Route, RouteReply } from './server/routing.ts';
 //   GET  /api/context, /api/state, /api/export   the scoped profile
 //   POST /api/round-up           whole-machine copy of a calculated profile
 //   POST /api/recalculate        Edit settings: recalculate the scoped profile in place, with a backup
+//   POST /api/restore-version    swap the scoped kept version back into the profile it was kept for
 //   POST /api/rank-alternates    hard-drive payoff ranking, stored on the scoped profile
 //   POST /api/update, /api/import   change or restore the scoped profile's progress
 export async function openWorkspace({
@@ -111,6 +112,7 @@ export async function openWorkspace({
   const scopedRoutes: Record<string, Handler<ScopedRequest>> = {
     'POST /api/round-up': profiles.roundUp,
     'POST /api/recalculate': profiles.recalculate,
+    'POST /api/restore-version': profiles.restoreVersion,
     'POST /api/rank-alternates': profiles.rankPayoff,
     'GET /api/context': profiles.profileContext,
     'GET /api/state': profiles.progressState,

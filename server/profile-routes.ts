@@ -1,13 +1,15 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
-// or restoring its progress, the whole-machine copy, Edit settings' recalculation in place and
-// the hard-drive payoff ranking.
+// or restoring its progress, the whole-machine copy, Edit settings' recalculation in place, the
+// restore of a version it kept and the hard-drive payoff ranking.
 import {
   checkBase,
   checkPlan,
   checkRecalculate,
+  checkRestore,
   checkRoundUp,
   currentPayoff,
   recalculatedProfile,
+  restoredVersions,
   roundUpSettings,
   wholeMachineProfile,
 } from '../public/state.ts';
@@ -109,6 +111,35 @@ export function profileRoutes({
       backupId,
       reviewCount: carried.reviewCount,
       carriedChecks: carried.carried,
+      workspace: currentSummary(user),
+    });
+  }
+  // "Restore this version" (#1071): the scoped profile is a version a recalculation in place kept
+  // (its backupOf link names body.into). Its plan, progress and payoff go back into that profile's
+  // place, which keeps its id and name, and the version they replace takes the scoped profile's
+  // place, named body.backupName and still linked (restoredVersions in public/state/restore.ts,
+  // shared with browser-api.ts). Nothing is deleted or added. body.planCreatedAt and
+  // body.backupPlanCreatedAt name the plans the user saw on the two profiles; a change meanwhile
+  // is refused (409). Both are read inside the commit, so ticks made meanwhile in another tab move
+  // with their version. Only the user starts it, from the kept version's card.
+  async function restoreVersion({ user, save, profile, body }: ScopedRequest) {
+    const input = await body();
+    checkRestore(save.profiles, profile, input);
+    const backupName = profileName(input.backupName);
+    await commit(draft => {
+      const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
+      const backup = draftSave?.profiles.find(p => p.id === profile.id);
+      if (!draftSave || !backup) fail('Profile not found.', 404);
+      const target = checkRestore(draftSave.profiles, backup, input);
+      const { restored, kept } = restoredVersions(target, backup, backupName);
+      draftSave.profiles = draftSave.profiles.map(p =>
+        p.id === target.id ? restored : p.id === backup.id ? kept : p,
+      );
+    });
+    return response({
+      saveId: save.id,
+      profileId: input.into,
+      backupId: profile.id,
       workspace: currentSummary(user),
     });
   }
@@ -227,6 +258,7 @@ export function profileRoutes({
   return {
     roundUp,
     recalculate,
+    restoreVersion,
     rankPayoff,
     profileContext,
     progressState,
