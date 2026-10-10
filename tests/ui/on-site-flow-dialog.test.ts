@@ -22,6 +22,7 @@ import {
 import { num } from '../../public/app/format.ts';
 import type { CalcFlowContext, FlowModel, FlowOutput } from '../../public/app/flow.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
+import { rowStepTitle } from '../../public/progression.ts';
 import { calcStage } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, $$, generatedWith, open, page } from './setup.ts';
@@ -429,6 +430,29 @@ const recordedBooks: {
   }[];
 } = JSON.parse(fs.readFileSync('tests/fixtures/on-site-books-2026-10-04.json', 'utf8'));
 
+// The recording names each delivery by the consumer's recipe alone ("Wire"). Since #964 a
+// delivery to a group's own line made on site is named as its build-plan step ("Wire for
+// Alpha", rowStepTitle) and every other delivery keeps its name: the recorded delivery is
+// renamed so, and everything else of it is compared as recorded.
+type RecordedOutput = [kind: string, label: string, ...rest: unknown[]];
+const renamed = (
+  dialog: RecordedDialog,
+  stage: StoredStage,
+  factoryGroups: FactoryGroups,
+): RecordedDialog => ({
+  ...dialog,
+  outputs: (dialog.outputs as RecordedOutput[]).map(([kind, label, ...rest]) => {
+    const consumer = stage.rows!.find(row => row.id === rest[2]);
+    return [
+      kind,
+      kind === 'consumer' && consumer
+        ? rowStepTitle({}, { checks: {}, factoryGroups }, consumer)
+        : label,
+      ...rest,
+    ];
+  }),
+});
+
 test('rows of plans whose groups were not edited after the recalculation keep exactly their flow (#918)', () => {
   assert.equal(recordedBooks.cases.length, 6);
   // The recording's numbers read as in en-US, as in the test above.
@@ -468,7 +492,7 @@ test('rows of plans whose groups were not edited after the recalculation keep ex
               notes: { ...flowNotes(row, outputs, context), split: preSplit(outputs) },
             }),
           ),
-          entry.dialog[row.id],
+          renamed(entry.dialog[row.id]!, entry.stage, entry.groups),
           `${entry.label}: ${row.id}`,
         );
         const split = splitMachines(row, outputs).filter(o => o.machines !== undefined);
