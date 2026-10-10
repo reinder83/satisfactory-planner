@@ -1358,10 +1358,13 @@ textarea::placeholder {
   gap: 6px;
   margin: -8px 0 18px;
 }
+/* A factory's name of one unbroken word wraps inside its button rather than running out of the
+   page (#986's names; the bar scrolls within itself only on a phone, where it does not wrap). */
 .jump-bar .btn {
   max-width: 100%;
   padding: 7px 11px;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 .jump-bar .count {
   color: var(--muted);
