@@ -20,6 +20,7 @@ import {
 } from '../public/app/recycle.ts';
 import { defaultFactoryGroups } from '../public/state/factory-groups.ts';
 import { calculate } from '../planner.ts';
+import { adaRemarks } from '../public/ada.ts';
 import type { AdviceWords } from '../public/app/recycle.ts';
 import type { CalcRow, FactoryGroups, StoredStage } from '../public/types/index.ts';
 
@@ -336,4 +337,49 @@ test('a phase counts its byproducts once per line and byproduct', () => {
   assert.ok(count > 5);
   assert.equal(byproductCount(plan.stages['4']), count);
   assert.equal(byproductCount({ feasible: false }), 0);
+});
+
+test("ADA's byproduct count, which includes a byproduct no line uses, says to route them, not recycle them", () => {
+  // Nitro Rocket Fuel's Compacted Coal: no line uses it, and it still counts.
+  const nitro = rowNamed('4', 'Alternate: Nitro Rocket Fuel');
+  assert.equal(
+    plain(adviceText(byproductAdvice(nitro, modelOf('4'), words))),
+    'Byproduct Compacted Coal 11.85/min. No line uses it: store it or send it to the AWESOME Sink.',
+  );
+  const count = byproductCount(plan.stages['4']);
+  assert.ok(count >= 1);
+  const line = adaRemarks({ view: 'factories', phaseLabel: 'Phase 4', byproducts: count }).find(
+    remark => remark.id === 'recycle-byproducts',
+  )!;
+  assert.match(line.text, new RegExp(`^${count} byproducts to route in Phase 4\. `));
+  assert.doesNotMatch(line.text, /recycle/);
+});
+
+test('the rest of an input names extraction and existing supply when the item has both', () => {
+  // A hand-made stage: the planner refuses existing supply of a raw resource, so its own plans
+  // never have both.
+  const both: StoredStage = {
+    feasible: true,
+    rows: [
+      row('fuel', { Oil: 10 }, { Fuel: 10, Resin: 5 }),
+      row('plastic', { Resin: 8 }, { Plastic: 8 }),
+    ],
+    raw: { Oil: 10, Resin: 2 },
+    supplied: { Resin: 1 },
+    delivery: { Fuel: { target: 100, rate: 10 }, Plastic: { target: 100, rate: 8 } },
+  };
+  const advice = (stage: StoredStage) =>
+    inputAdvice(stage.rows![1]!, recycleModel(stage, { groups: [], assignments: {} }), words).map(
+      line => plain(adviceSentence(line)),
+    );
+  assert.deepEqual(advice(both), [
+    '5 from the byproduct of fuel; the other 3 from extraction and existing supply.',
+  ]);
+  // With only one of them, as before.
+  assert.deepEqual(advice({ ...both, raw: { Oil: 10, Resin: 3 }, supplied: {} }), [
+    '5 from the byproduct of fuel; extract the other 3.',
+  ]);
+  assert.deepEqual(advice({ ...both, raw: { Oil: 10 }, supplied: { Resin: 3 } }), [
+    '5 from the byproduct of fuel; the other 3 from existing supply.',
+  ]);
 });

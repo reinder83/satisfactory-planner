@@ -14,6 +14,7 @@ import {
   type PhaseCarry,
 } from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem } from '../flow.ts';
+import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
 import { adviceText, lineAdvice, recycleModel } from '../recycle.ts';
 import type { AdviceLine, AdviceWords, RecycleModel } from '../recycle.ts';
@@ -190,11 +191,22 @@ export const rowAdvice = (
 ): AdviceLine[] => (snapshot ? lineAdvice(row, recycleModelOf(snapshot), recycleWords) : []);
 
 // The first sentence of a step for a factory group's own line made on site (#876), naming the
-// group; '' for any other row.
-const siteLineText = (row: CalcRow): string =>
-  row.onSite
-    ? `Made on site for ${siteGroupName(row)}: it feeds that factory's own lines first, and what they do not use goes to any other line that still needs it, then to the AWESOME Sink. `
-    : '';
+// group; '' for any other row. Only the outputs the plan was calculated to make on site for the
+// group (siteItems, as the Logistics books keep them) feed it first; when the line also makes
+// another, a byproduct such as the Water of "Aluminum Scrap for Group 1", the sentence names the
+// items, and that byproduct goes to the rest of the plan like any line's (#1001).
+function siteLineText(row: CalcRow): string {
+  if (!row.onSite) return '';
+  const outputs = Object.keys(row.outputs || {});
+  const kept = siteItems(factoryGroupsState(), row.onSite.group, calculated?.settings.onSite);
+  const own = outputs.filter(item => kept.includes(item)),
+    other = outputs.filter(item => !kept.includes(item));
+  const verb = (items: string[], one: string, more: string) => (items.length > 1 ? more : one);
+  const rest = ` that factory's own lines first, and what they do not use goes to any other line that still needs it, then to the AWESOME Sink. `;
+  return own.length && other.length
+    ? `Made on site for ${siteGroupName(row)}: its ${listNames(own)} ${verb(own, 'feeds', 'feed')}${rest}Its ${listNames(other)} ${verb(other, 'goes', 'go')} to the rest of the plan, like any line's byproduct. `
+    : `Made on site for ${siteGroupName(row)}: it feeds${rest}`;
+}
 
 // The first sentence of a step for a storage-only line (#1061), saying it is optional; '' for any
 // other row.
