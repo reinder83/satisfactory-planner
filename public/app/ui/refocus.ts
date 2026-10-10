@@ -149,11 +149,12 @@ export function focusSection(section: HTMLElement) {
 // link any more (removed, down to one factory, groups being edited), the heading takes it.
 // A build-plan step's "Open factory: <name> →" (#1047) aims the flow page it opens at the step's
 // line (aimFlowLine): its card's name link takes focus, brought into view, in place of the
-// heading.
+// heading. Leaving that flow page for the build plan, by Back, returns to that step's link the
+// same way, its step unfolded.
 export function focusOpenedPage(from = '') {
   const aim = takeFlowAim();
   if (!lost()) return;
-  const link = flowLinkOf(from) ?? aimedLine(aim);
+  const link = flowLinkOf(from) ?? openerLinkOf(from) ?? aimedLine(aim);
   if (!link) return focusHeading();
   link.focus({ preventScroll: true });
   link.scrollIntoView({ block: 'center' });
@@ -161,10 +162,13 @@ export function focusOpenedPage(from = '') {
 
 // The line a link to a factory's flow page asks that page to focus (#1047): { group, line }.
 // The next page change uses it or drops it, whatever page that is, and it counts only on that
-// group's flow page.
+// group's flow page. `step` is the build-plan step whose link it is: kept until another step's
+// link is followed, so leaving that group's flow page finds the link again (openerLinkOf).
 let flowAim: { group: string; line: string } | null = null;
-export function aimFlowLine(group: string, line: string) {
+let flowOpener: { group: string; step: string } | null = null;
+export function aimFlowLine(group: string, line: string, step: string) {
   flowAim = { group, line };
+  flowOpener = { group, step };
 }
 function takeFlowAim() {
   const aim = flowAim;
@@ -179,6 +183,29 @@ function aimedLine(aim: { group: string; line: string } | null) {
       `#main .gf-card[data-line="${CSS.escape(aim.line)}"] .rail-link`,
     ) ?? undefined
   );
+}
+
+// The "Open factory: <name> →" of the build-plan step that opened the flow page at `route`
+// (#1047), when the page shown has it, with the step and any folded group around it unfolded so
+// it can take focus.
+function openerLinkOf(route: string) {
+  const group = flowGroupOf(route);
+  if (group === null || flowOpener?.group !== group) return undefined;
+  const step = [...document.querySelectorAll<HTMLElement>('#main details[data-task]')].find(
+    details => details.dataset.task === flowOpener?.step,
+  );
+  const link = step?.querySelector<HTMLElement>(`[data-step-factory="${CSS.escape(group)}"]`);
+  if (link) unfoldAround(link);
+  return link ?? undefined;
+}
+
+// Opens every folded <details> around `el`: a step's own, and the Done group's for a step done.
+function unfoldAround(el: Element) {
+  let folded = el.closest('details');
+  while (folded) {
+    folded.open = true;
+    folded = folded.parentElement?.closest('details') ?? null;
+  }
 }
 
 // The "Build order →" link on the page shown that opens the flow page at `route`, if any.

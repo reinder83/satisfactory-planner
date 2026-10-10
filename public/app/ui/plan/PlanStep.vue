@@ -32,7 +32,8 @@ const props = withDefaults(
 );
 
 // "Open factory: <name> →" is a real link, so it opens in a new tab too; followed here, the flow
-// page it opens focuses this step's line (aimFlowLine in ui/refocus.ts).
+// page it opens focuses this step's line, and Back from it focuses this link again (aimFlowLine
+// in ui/refocus.ts).
 const splitId = computed(() => 'step-split-' + props.step.id);
 // The note of a line a delivered part leaves without work (#1062), which also describes the
 // step's checkbox.
@@ -51,7 +52,7 @@ function aimLine(event: MouseEvent) {
   const link = props.step.link;
   if (!link?.factory || event.button !== 0) return;
   if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-  aimFlowLine(link.factory.id, link.id);
+  aimFlowLine(link.factory.id, link.id, props.step.id);
 }
 
 // Ticking a step moves it between the unfinished steps and "Done (n)" (Checklist.vue, SP-42),

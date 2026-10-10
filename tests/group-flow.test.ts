@@ -10,7 +10,7 @@ import {
   laneOffset,
   LANE_METRICS,
 } from '../public/app/group-flow.ts';
-import type { FlowLink, GroupFlow } from '../public/app/group-flow.ts';
+import type { FlowLine, FlowLink, GroupFlow } from '../public/app/group-flow.ts';
 import { groupLinks, OUTSIDE, sourceOf } from '../public/app/group-links.ts';
 import { defaultFactoryGroups } from '../public/state/factory-groups.ts';
 import { calculate } from '../planner.ts';
@@ -260,6 +260,113 @@ test('the lane assignment is stable', () => {
   assert.deepEqual(assignLanes(first.lines), first.lanes);
   // Lanes depend on the rows only: every line placed again gives the same lanes.
   assert.deepEqual(assignLanes(structuredClone(first.lines)), first.lanes);
+});
+
+// Lines of one row each, for lanes alone: the trunk [lo, hi] is an output row on line lo that
+// feeds an input row on line hi, each trunk with an item of its own.
+function trunkLines(spans: [number, number][]): FlowLine[] {
+  const lines = Array.from(
+    { length: Math.max(...spans.flat()) + 1 },
+    (_, i): FlowLine => ({
+      id: `l${i}`,
+      no: i + 1,
+      recipe: `l${i}`,
+      name: `l${i}`,
+      machine: 'Constructor',
+      machines: 1,
+      lastClock: 100,
+      share: 1,
+      machinesHere: 1,
+      mw: 0,
+      inputs: [],
+      outputs: [],
+    }),
+  );
+  spans.forEach(([lo, hi], i) => {
+    const item = `item${i}`;
+    const link: FlowLink = {
+      item,
+      rate: 1,
+      belts: '',
+      from: { kind: 'line', id: `l${lo}` },
+      to: { kind: 'line', id: `l${hi}` },
+      loop: false,
+      self: false,
+    };
+    // lo and hi are below the lines' count.
+    lines[lo]!.outputs.push({ id: `out|l${lo}|${item}`, item, rate: 1, belts: '', links: [link] });
+    lines[hi]!.inputs.push({ id: `in|l${hi}|${item}`, item, rate: 1, belts: '', links: [link] });
+  });
+  return lines;
+}
+
+// The most lanes over one row down the cards, worked out from the rows' order, not with the
+// module's helpers; and whether two lanes that share a row share a lane.
+function laneCrowding(flow: Pick<GroupFlow, 'lines' | 'lanes'>) {
+  const rows = flow.lines.flatMap(line => [...line.inputs, ...line.outputs].map(r => r.id));
+  const spans = flow.lanes.map(lane => {
+    const at = [lane.from, ...lane.to].map(id => rows.indexOf(id));
+    return { lane: lane.lane, lo: Math.min(...at), hi: Math.max(...at) };
+  });
+  const most = Math.max(
+    0,
+    ...rows.map((_, at) => spans.filter(s => s.lo <= at && at <= s.hi).length),
+  );
+  const clash = spans.some((a, i) =>
+    spans.slice(i + 1).some(b => a.lane === b.lane && a.lo <= b.hi && b.lo <= a.hi),
+  );
+  return { most, clash };
+}
+
+test('a group needs no more lanes than the most trunks over one row (#899)', () => {
+  // Placed shortest first, the two short trunks (1-2, 5-6) took the inner lane, and the two
+  // long ones (0-4, 3-7) overlap each other and one short trunk each: three lanes where two do.
+  const lines = trunkLines([
+    [0, 4],
+    [1, 2],
+    [3, 7],
+    [5, 6],
+  ]);
+  const lanes = assignLanes(lines);
+  assert.deepEqual(
+    lanes.map(lane => [lane.from, lane.lane]),
+    [
+      ['out|l0|item0', 0],
+      ['out|l1|item1', 1],
+      ['out|l3|item2', 1],
+      ['out|l5|item3', 0],
+    ],
+  );
+  assert.deepEqual(laneCrowding({ lines, lanes }), { most: 2, clash: false });
+});
+
+test('on generated plans, every group gets the fewest lanes its trunks allow (#899)', () => {
+  // The iron works of the fixture plan's Phase 3 took 6 lanes where 5 do (#899).
+  const plan = calculate({});
+  const byDefault = defaultFactoryGroups(plan);
+  assert.equal(flowOf(plan.stages['3'], byDefault, 'fg-iron01').laneCount, 5);
+  let crowded = 0;
+  for (const generated of [plan, calculate({ recipes: 'all' })]) {
+    const factoryGroups = defaultFactoryGroups(generated);
+    const oneGroup: FactoryGroups = {
+      groups: [{ id: 'fg-all', name: 'Everything' }],
+      assignments: Object.fromEntries(
+        Object.keys(factoryGroups.assignments).map(id => [id, whole('fg-all')]),
+      ),
+    };
+    for (const [phase, stage] of Object.entries(generated.stages)) {
+      if (!stage.feasible) continue;
+      for (const setup of [factoryGroups, oneGroup])
+        for (const group of setup.groups) {
+          const flow = flowOf(stage, setup, group.id);
+          const { most, clash } = laneCrowding(flow);
+          assert.equal(clash, false, `Phase ${phase} ${group.id}: two lanes overlap on one lane`);
+          assert.equal(flow.laneCount, most, `Phase ${phase} ${group.id}: lanes`);
+          if (most > 2) crowded++;
+        }
+    }
+  }
+  assert.ok(crowded > 10, 'the plans have groups with crowded lanes');
 });
 
 test('the gutter is sized to the lanes needed, at an even step', () => {
