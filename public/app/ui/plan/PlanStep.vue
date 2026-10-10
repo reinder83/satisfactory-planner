@@ -22,6 +22,7 @@ import { removeStepBody } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import { listNames } from '../../../wording.ts';
 import StepIcon from './StepIcon.vue';
+import StepTable from './StepTable.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
 import { aimFlowLine, refocusAfterRemoval, refocusOn } from '../refocus.ts';
@@ -236,7 +237,8 @@ async function deletePersonal(event: Event) {
         }}</span
         ><span v-if="step.clocks" class="task-idle" data-step-clocks>{{ step.clocks }}</span>
       </summary>
-      <p>{{ step.body || 'Your own task for this phase.' }}</p>
+      <StepTable v-if="step.table" :table="step.table" />
+      <p v-else>{{ step.body || 'Your own task for this phase.' }}</p>
       <button
         v-if="lead"
         type="button"

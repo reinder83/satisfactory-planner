@@ -44,6 +44,7 @@ import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { minerWords } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
+import type { StepTable } from '../../step-table.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
 export interface PlanStepData {
@@ -53,6 +54,8 @@ export interface PlanStepData {
   // Optional, or done by its own condition (GuideTask in progression.ts, #1070).
   optional?: boolean;
   satisfied?: string;
+  // The body as a table (#1136, step-table.ts).
+  table?: StepTable;
 }
 
 // A step's inputs or outputs as "Heavy Oil Residue 46.6 m³/min, Iron Ore 30/min": each item

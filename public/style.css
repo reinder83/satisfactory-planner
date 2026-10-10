@@ -1087,6 +1087,95 @@ p {
   line-height: 1.65;
   text-wrap: pretty;
 }
+/* A step's body as a table (#1136, StepTable.vue): the mining step's resources, one row each,
+   with a total row. It scrolls inside its own box where it is wider than the step, and on a phone
+   each row stacks into one block, each cell under its column's name, so the page never scrolls
+   sideways. */
+.step-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.step-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.step-table th,
+.step-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line2);
+  overflow-wrap: normal;
+}
+.step-table thead th {
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom-color: var(--line);
+  white-space: nowrap;
+}
+.step-table tbody th {
+  font-weight: 600;
+  color: var(--bright);
+  white-space: nowrap;
+}
+.step-table tfoot th,
+.step-table tfoot td {
+  font-weight: 600;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+.step-table tbody tr:nth-child(even) {
+  background: var(--row);
+}
+@media (max-width: 480px) {
+  .step-table {
+    overflow-x: visible;
+  }
+  .step-table table,
+  .step-table tbody,
+  .step-table tfoot,
+  .step-table tr,
+  .step-table th,
+  .step-table td {
+    display: block;
+    width: auto;
+  }
+  .step-table thead {
+    display: none;
+  }
+  .step-table tr {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line2);
+  }
+  .step-table tbody tr:nth-child(even) {
+    background: none;
+  }
+  .step-table th,
+  .step-table td {
+    padding: 1px 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .step-table td::before {
+    content: attr(data-label) ': ';
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .step-table td.empty {
+    display: none;
+  }
+  .step-table tfoot tr {
+    border-bottom: 0;
+  }
+  .step-table tfoot th,
+  .step-table tfoot td {
+    border-top: 0;
+  }
+}
 .task:has(input:checked) summary {
   color: #74837b;
   text-decoration: line-through;
@@ -5508,6 +5597,17 @@ button.rail-tile:hover {
   @page {
     margin: 12mm 12mm 14mm;
   }
+  /* A step's table (#1136) prints whole, a row never split over two pages, the borders and
+     text in the print tokens and no row shading. */
+  .step-table {
+    overflow: visible;
+  }
+  .step-table tr {
+    break-inside: avoid;
+  }
+  .step-table tbody tr:nth-child(even) {
+    background: none;
+  }
   /* On paper the lanes would not line up with the printed cards, so the rows' own words
      ("from 01 Iron Ingot", "to 02, 03") carry the links, and the cards stay whole. */
   .gf-host {
@@ -5660,6 +5760,8 @@ button.rail-tile:hover {
   .breadcrumbs,
   .task.lead p,
   .task p,
+  .step-table thead th,
+  .step-table td::before,
   .task:has(input:checked) summary,
   .goal-card p,
   .profile-card p,

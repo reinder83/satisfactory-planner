@@ -10,19 +10,23 @@ import type {
 import { listNames, powerAmount, slug } from './wording.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
-import { miningBuildings, miningStepBody } from './mining.ts';
+import { miningBuildings, miningStep } from './mining.ts';
+import type { StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
 // can do without (#1070: research only a later phase needs, a storage-only line), which "Required
 // steps only" hides. `satisfied` is set while the step's own condition holds (the hard-drive step
 // with no recipe left to unlock, the delivery with every counter at its target): the build plan
-// then shows it done, says why, and writes no tick.
+// then shows it done, says why, and writes no tick. `table` (#1136, step-table.ts) is a step's
+// text as a table, which the build plan draws in place of `body`; `body` keeps the same words for
+// search, copying and step edits.
 export interface GuideTask {
   id: string;
   title: string;
   body: string;
   optional?: boolean;
   satisfied?: string;
+  table?: StepTable;
 }
 
 // The id prefix and name suffix of an amplified twin (amplified() in planner/recipes.ts, which a
@@ -334,14 +338,15 @@ function deliveryTask(
 }
 
 // The phase's mining step (#1065), on a plan with mining per phase: the miners and extractors
-// its draw needs, best nodes first (miningStepBody in mining.ts). Its key is `mining-<stage>`;
+// its draw needs, best nodes first, as text and as a table (miningStep in mining.ts, #1136). Its
+// key is `mining-<stage>`;
 // a plan without mining per phase has no such step, so its build plan is as it was.
 function miningTask(
   plan: Pick<StoredCalculatedPlan, 'stages'> & { settings?: StoredCalculatedPlan['settings'] },
   stage: StageKey,
 ): GuideTask[] {
-  const body = miningStepBody(plan.stages[stage], stage, plan.settings);
-  return body ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', body }] : [];
+  const step = miningStep(plan.stages[stage], stage, plan.settings);
+  return step ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', ...step }] : [];
 }
 
 // What phaseSteps reads of a profile's progress: its ticks, its factory groups' names, which

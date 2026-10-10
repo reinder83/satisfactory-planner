@@ -19,6 +19,7 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import type { MiningAdvice, MiningRun, MiningSettings } from './preferences/mining.ts';
+import type { StepTable } from './step-table.ts';
 
 // A number as the pages show one (num in app/format.ts): locale-formatted, at most 2 decimals.
 const miningNumber = (value: number) =>
@@ -259,12 +260,14 @@ export function overclockAdviceWords(saving: { now: number; overclocked: number 
 
 // The build plan's mining step for a stage (#1065), or null without mining per phase or with
 // nothing to mine: the phase's equipment, then each resource's nodes, and the Power Shards in all
-// (#1137). `settings` (the plan's) adds the advice to research Power Shards (overclockSaving).
-export function miningStepBody(
+// (#1137), as one text (`body`, which search, copying and step edits read) and as a table, one
+// row per resource with a total row (`table`, #1136). `settings` (the plan's) adds the advice to
+// research Power Shards (overclockSaving).
+export function miningStep(
   stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
   phase: string,
   settings?: MiningSettings,
-): string | null {
+): { body: string; table: StepTable } | null {
   const resources = stageMiningAdvice(stage);
   if (!stage?.mining || !resources.length) return null;
   const mining = stage.mining;
@@ -274,14 +277,94 @@ export function miningStepBody(
     ? ` and ${miningNumber(shards)} Power Shard${shards === 1 ? '' : 's'}`
     : '';
   const advice = overclockAdviceWords(overclockSaving(stage, Number(phase), settings));
-  return [
-    `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.`,
+  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.`;
+  const body = [
+    intro,
     ...resources.map(
       entry =>
         `${entry.resource} ${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min: ${entry.words.charAt(0).toLowerCase()}${entry.words.slice(1)}`,
     ),
     ...(advice ? [advice] : []),
   ].join(' ');
+  const count = (entry: ResourceMining) => ({
+    nodes: entry.advice.nodes + entry.advice.satellites,
+    machines: entry.advice.nodes + entry.advice.pressurizers,
+  });
+  const nodes = resources.reduce((sum, entry) => sum + count(entry).nodes, 0),
+    machines = resources.reduce((sum, entry) => sum + count(entry).machines, 0);
+  return {
+    body,
+    table: {
+      intro,
+      caption: `Phase ${phase}'s resource nodes`,
+      columns: ['Resource', 'Rate', 'Nodes', 'Machines', 'Shards', 'Power'],
+      rows: resources.map(entry => [
+        entry.resource,
+        `${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min`,
+        nodeCells(entry.advice.runs),
+        machineCells(entry, stage.mining!),
+        entry.advice.shards ? miningNumber(entry.advice.shards) : 'None',
+        powerAmount(entry.advice.mw),
+      ]),
+      total: [
+        'Total',
+        '',
+        `${miningNumber(nodes)} node${nodes === 1 ? '' : 's'}`,
+        `${miningNumber(machines)} machine${machines === 1 ? '' : 's'}`,
+        shards ? miningNumber(shards) : 'None',
+        powerAmount(total),
+      ],
+      ...(advice ? { after: advice } : {}),
+    },
+  };
+}
+// The mining step's text alone (miningStep).
+export const miningStepBody = (
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: string,
+  settings?: MiningSettings,
+): string | null => miningStep(stage, phase, settings)?.body ?? null;
+
+// A resource's nodes for the mining table: "8 pure, 9 normal" and "4 well satellites (2 pure, 2
+// normal)".
+function nodeCells(runs: MiningRun[]): string {
+  const counts = new Map<string, number>();
+  for (const run of runs.filter(run => !isWellKind(run.kind)))
+    counts.set(run.kind, (counts.get(run.kind) ?? 0) + run.full + (run.last === null ? 0 : 1));
+  const parts = [...counts].map(([kind, count]) => `${miningNumber(count)} ${kind}`);
+  const wells = runs.filter(run => isWellKind(run.kind));
+  const satellites = wells.reduce((sum, run) => sum + run.full, 0);
+  if (satellites)
+    parts.push(
+      `${miningNumber(satellites)} well satellite${satellites === 1 ? '' : 's'} (${wells.map(run => `${miningNumber(run.full)} ${run.kind.slice('well-'.length)}`).join(', ')})`,
+    );
+  return parts.join('; ');
+}
+// A resource's machines for the mining table: "Miner Mk.2: 4 at 200% and 1 at 181.98%", a
+// resource well's "about 1 Resource Well Pressurizer at 85%", a fluid's other clocks after it
+// ("At 100%: 16 at 100% and 1 at 20.44%"), and what the nodes cannot give.
+function machineCells(entry: ResourceMining, mining: StageMining): string {
+  const nodeRuns = entry.advice.runs.filter(run => !isWellKind(run.kind)),
+    wellRuns = entry.advice.runs.filter(run => isWellKind(run.kind));
+  const parts: string[] = [];
+  if (nodeRuns.length)
+    parts.push(`${nodeRuns[0]!.machine}: ${clockRunWords(nodeRuns, entry.fluid)}`);
+  if (wellRuns.length)
+    parts.push(
+      `about ${miningNumber(entry.advice.pressurizers)} Resource Well Pressurizer${entry.advice.pressurizers === 1 ? '' : 's'} at ${clockWords(wellRuns[0]!.clock, true)}`,
+    );
+  let text = parts.join('; ');
+  if (entry.fluid)
+    for (const at of fluidClocks(mining.miner.clock)) {
+      if (Math.abs(at - mining.miner.clock) < 1e-9) continue;
+      const option = miningAdvice(entry.rate, mining.sources[entry.resource]!, at);
+      const runs = option.runs.filter(run => !isWellKind(run.kind));
+      if (runs.length && !option.short)
+        text += `. At ${miningNumber(at * 100)}%: ${clockRunWords(runs, true)} (${powerAmount(option.mw)})`;
+    }
+  if (entry.advice.short)
+    text += `. ${miningNumber(entry.advice.short)}${entry.fluid ? ' m³' : ''}/min more than this phase's nodes give`;
+  return text;
 }
 
 // The buildings a stage's mining uses (#1065): its belt (for any line), its pipe (for a fluid
