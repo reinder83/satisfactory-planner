@@ -49,6 +49,7 @@ import {
   wantsStorage,
   storageRateFor,
   guidedQuestions,
+  guidedBudgetsQuestion,
   guidedHaveQuestion,
   guidedStandingQuestion,
   guidedTopupItems,
@@ -161,6 +162,7 @@ function ui() {
     wantsStorage,
     storageRateFor,
     guidedQuestions,
+    guidedBudgetsQuestion,
     guidedHaveQuestion,
     guidedStandingQuestion,
     guidedTopupItems,
@@ -484,6 +486,7 @@ test('every guided question reads as a question and names the step that owns it'
     guidedStandingQuestion('1'),
     guidedStandingQuestion('3'),
     guidedHaveQuestion('3'),
+    guidedBudgetsQuestion,
   ]) {
     assert.ok(question.title && question.lead, question.id + ' reads as a question');
     assert.ok(
@@ -494,8 +497,8 @@ test('every guided question reads as a question and names the step that owns it'
       question.step >= 1 && question.step <= 4,
       question.id + ' names the advanced step that owns it',
     );
-    // Two questions are inputs rather than a choice; the rest are picture cards.
-    if (question.kind === 'supply' || question.kind === 'have') {
+    // Three questions are inputs rather than a choice; the rest are picture cards.
+    if (question.kind) {
       assert.ok(!question.options, question.id);
       continue;
     }
@@ -518,7 +521,6 @@ test('every guided question reads as a question and names the step that owns it'
   // Every option's settings patch, applied on its own, is a plan the planner makes.
   for (const question of guidedQuestions)
     for (const option of question.options!) {
-      if (option.handoff) continue;
       assert.doesNotThrow(
         () => calculate({ phase: '3', limitsConfirmed: true, ...option.set }),
         question.id + '/' + option.value,

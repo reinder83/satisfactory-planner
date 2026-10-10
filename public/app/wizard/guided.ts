@@ -7,6 +7,7 @@
 // earlierDone, which Review's "What you already have" shares (#1068).
 import {
   GUIDED_TOPUP_RATE,
+  guidedBudgetsQuestion,
   guidedHaveQuestion,
   guidedQuestions,
   guidedStandingQuestion,
@@ -20,6 +21,7 @@ import { readSupply } from './supply.ts';
 import {
   calculateWizard,
   readAlternates,
+  readBudgets,
   readOwnedAlternates,
   readOwnedEquipment,
   readOwnedGenerators,
@@ -67,8 +69,9 @@ export const GUIDED_GLYPHS: Record<string, string> = {
 // the Review step's carry panel is the better instrument, so it is left out.
 // Order: the preferences.ts list (phase, goal, recipes, stock, exact, power), with the
 // tutorial question (Phase 1), or "What you already have" (#1068) and the "already producing"
-// question (later phases), inserted after phase for a new save. When wizard.guidedAsk is set
-// (the "What is different" screen), only those ids are kept. vuePage (ui/pages.ts)
+// question (later phases), inserted after phase for a new save, and the budgets screen after the
+// goal while it is maximum output (#1072). When wizard.guidedAsk is set (the "What is different"
+// screen), only those ids are kept, with the budgets screen following the goal. vuePage (ui/pages.ts)
 // and the screens compare guidedStep with this length to know when the questions
 // are finished; ada-panel.ts reads it too. A question worded for the start phase is asked as
 // that phase's (phased, #1072).
@@ -79,12 +82,18 @@ export function guidedFlow(): GuidedQuestion[] {
     list: GuidedQuestion[] = [];
   for (const question of guidedQuestions) {
     list.push(question.phased ? question.phased(phase) : question);
+    // Maximum output needs its budgets confirmed (#1072): asked here rather than on All settings
+    // step 4, so the questions after the goal follow as for any other goal.
+    if (question.id === 'goal' && wizardDraft.settings.goal === 'maximum')
+      list.push(guidedBudgetsQuestion);
     if (question.id !== 'phase' || wizardDraft.saveId) continue;
     // "What you already have" (#1068): only where there is something before the start phase.
     if (phase !== '1') list.push(guidedHaveQuestion(phase));
     list.push(guidedStandingQuestion(phase));
   }
-  return ask ? list.filter(q => ask.includes(q.id)) : list;
+  return ask
+    ? list.filter(q => ask.includes(q.id === guidedBudgetsQuestion.id ? 'goal' : q.id))
+    : list;
 }
 
 // The option value currently chosen for a question, derived from the settings
@@ -116,8 +125,9 @@ export function guidedBuiltKeys(wizardDraft: WizardDraft): string[] {
 // Copy the current guided screen into the draft. The mapping from answer to
 // settings is the chosen option's `set` object (preferences.ts), merged into
 // wizard.settings: the same fields All settings writes (phase, goal, recipes,
-// pureIngots, storage, collectables, wholeMachines, mainPower), with the spare power box and the
-// recipe picker of "I will choose them myself" read as All settings reads them (#1072). The
+// pureIngots, storage, collectables, wholeMachines, mainPower), with the spare power box, the
+// recipe picker of "I will choose them myself" and the budgets for maximum output read as All
+// settings reads them (#1072). The
 // tutorial answer is kept on the draft instead. Clears the preview, so Review must recalculate.
 // On the "What is different" screen the ticked topics are kept as guidedTopics,
 // so a redraw keeps them; only `topics` (leaving the screen) makes them
@@ -157,6 +167,8 @@ function readGuided(form: HTMLFormElement, topics: boolean) {
   }
   readAlternates(form, formData, settings);
   if (form.querySelector?.('[data-guided-have]')) readHave(form, formData, wizardDraft);
+  // The budget screen for maximum output (#1072), read as All settings step 4 reads its boxes.
+  if (form.querySelector?.('[data-guided-budgets]')) readBudgets(formData, settings);
   // A guided plan never raises the general construction rate: it is the single
   // most expensive control in the app and the per-item floors below do the same
   // job for a fortieth of the buildings.
@@ -188,8 +200,8 @@ function readHave(form: HTMLFormElement, formData: FormData, wizardDraft: Wizard
   readOwnedGenerators(form, formData, wizardDraft.settings);
 }
 
-// Go to question `target` (1-based): read the screen, then re-render, hand over
-// to All settings, or, past the last question, calculate and show Review.
+// Go to question `target` (1-based): read the screen, then re-render or, past the last
+// question, calculate and show Review.
 // Forward moves must pass the form's own validation first.
 export async function moveGuided(target: number) {
   const wizardDraft = wizard,
@@ -219,15 +231,8 @@ export async function moveGuided(target: number) {
     render();
     return;
   }
-  // A choice that only All settings can answer hands over rather than pretending
-  // to ask it here: confirming resource budgets before maximum output. (Picking recipes one by
-  // one is asked here since #1072, with the picker under the cards.)
-  const previous = flow[Math.min(wizardDraft.guidedStep - 1, flow.length - 1)];
-  const handoff = previous?.options?.find(o => o.value === guidedAnswer(previous))?.handoff;
-  if (handoff && target > wizardDraft.guidedStep) {
-    toAdvanced(handoff);
-    return;
-  }
+  // Every answer is asked here (#1072): picking recipes one by one with the picker under the
+  // cards, and the budgets maximum output needs on a screen of their own after the goal.
   if (target <= flow.length) {
     wizardDraft.guidedStep = target;
     render();
