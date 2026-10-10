@@ -555,6 +555,17 @@ async function workOnShown() {
           >
         </div>
         <div class="topbar-tools">
+          <!-- Before the track, so the track does not move under the pointer when it appears. -->
+          <button
+            v-if="frame.canPickPhase && frame.picker.elsewhere"
+            type="button"
+            class="btn work-on-phase"
+            :aria-disabled="committing || undefined"
+            data-work-on-phase
+            @click="workOnShown"
+          >
+            Work on {{ frame.phaseLabel }}
+          </button>
           <div
             class="phase-track"
             role="tablist"
@@ -605,16 +616,7 @@ async function workOnShown() {
                 {{ label }}
               </option>
             </select></label
-          ><button
-            v-if="frame.canPickPhase && frame.picker.elsewhere"
-            type="button"
-            class="btn work-on-phase"
-            :aria-disabled="committing || undefined"
-            data-work-on-phase
-            @click="workOnShown"
           >
-            Work on {{ frame.phaseLabel }}
-          </button>
           <div :class="['save-status', frame.notSaved ? 'is-not-saved' : '']">
             <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
             ><span class="save-label"
