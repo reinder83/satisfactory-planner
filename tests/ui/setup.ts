@@ -110,6 +110,19 @@ export function page() {
     '<div id="app"></div><div id="toast"></div><dialog id="detail"></dialog><dialog id="confirm"></dialog>';
 }
 
+// Puts public/style.css in the page's <head> (once; page() leaves the head alone), for a test
+// that checks what the stylesheet draws through getComputedStyle, such as a button's cursor.
+export function useStylesheet() {
+  if (document.getElementById('app-style')) return;
+  const style = document.createElement('style');
+  style.id = 'app-style';
+  style.textContent = fs.readFileSync('public/style.css', 'utf8');
+  document.head.append(style);
+}
+// The mouse cursor style.css gives an element: `default` for a button with nothing to do,
+// `wait` for a busy one, `pointer` for one that can be pressed (#948).
+export const cursorOf = (el: Element) => getComputedStyle(el).cursor;
+
 // Answers every in-app confirmation (#confirm, ui/confirm.ts) that opens from now on by
 // pressing its real Cancel or confirm button: `reply` is the answer, or a function of the
 // question's text that returns it. Returns the questions asked, in order. The dialog opens

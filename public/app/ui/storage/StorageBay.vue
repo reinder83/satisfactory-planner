@@ -98,7 +98,7 @@ async function saving(control: HTMLButtonElement, update: UpdateOp, done?: () =>
 
 // "Complete room X": tick every check of every named container in the bay in one write. The
 // button is busy while saving (app/busy.ts), and disabled afterwards while every container is
-// done (marked .unavailable, so it shows no wait cursor, and relabelled). Focus then goes to the
+// done (drawn without the wait cursor of a busy control, and relabelled). Focus then goes to the
 // next bay's Complete room that can still be pressed, else the previous one's, else this bay's
 // first container (#299).
 async function completeRoom(event: Event) {
@@ -362,7 +362,6 @@ async function addContainer(event: Event) {
             :data-bay-left="bay.id"
             :aria-label="'Move bay ' + bay.id + ' left'"
             title="Move left"
-            :class="{ unavailable: !shifting }"
             :aria-disabled="shifting || undefined"
             :disabled="!shifting && view.at === 0"
             @click="shiftBay($event, -1)"
@@ -373,7 +372,6 @@ async function addContainer(event: Event) {
             :data-bay-right="bay.id"
             :aria-label="'Move bay ' + bay.id + ' right'"
             title="Move right"
-            :class="{ unavailable: !shifting }"
             :aria-disabled="shifting || undefined"
             :disabled="!shifting && view.at === view.bays - 1"
             @click="shiftBay($event, 1)"
@@ -394,7 +392,7 @@ async function addContainer(event: Event) {
               {{ floor.label }}
             </option></select
           ><button
-            class="btn quiet unavailable"
+            class="btn quiet"
             :data-move-bay-go="bay.id"
             :aria-label="'Move bay ' + bay.id + (target ? ' to ' + target.label : '')"
             :disabled="!target"
@@ -412,7 +410,7 @@ async function addContainer(event: Event) {
           Hide bay
         </button>
         <button
-          class="btn quiet unavailable"
+          class="btn quiet"
           :data-complete-bay="bay.id"
           :disabled="!view.named || view.done === view.named"
           @click="completeRoom"

@@ -87,7 +87,7 @@ const {
       </button>
       <button
         type="button"
-        :class="['btn', bothTooLong ? 'unavailable' : '']"
+        class="btn"
         data-note-keep="both"
         :disabled="bothTooLong"
         :aria-describedby="bothTooLong ? id + '-both-long' : undefined"

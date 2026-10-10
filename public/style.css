@@ -105,20 +105,23 @@ summary {
 button {
   cursor: pointer;
 }
-/* A control busy with its save is aria-disabled rather than disabled, so it keeps focus
-   (app/busy.ts, #299); it looks the same as a disabled one. */
+/* A disabled button has nothing to do (a completed room, a floor that still has bays, a Save
+   with nothing left to save): dimmed, with a normal cursor (#948). A control busy with its save
+   is aria-disabled rather than disabled, so it keeps focus (app/busy.ts, #299): dimmed the same,
+   with the wait cursor. */
 button:disabled,
 button[aria-disabled='true'],
 input[aria-disabled='true'],
 select[aria-disabled='true'],
 textarea[aria-disabled='true'] {
-  cursor: wait;
+  cursor: default;
   opacity: 0.6;
 }
-/* A disabled button is waiting for a save, except one marked .unavailable: that one has
-   nothing to do (a completed room, a floor that still has bays) and keeps a normal cursor. */
-button.unavailable:disabled {
-  cursor: default;
+button[aria-disabled='true'],
+input[aria-disabled='true'],
+select[aria-disabled='true'],
+textarea[aria-disabled='true'] {
+  cursor: wait;
 }
 a {
   color: var(--accent);

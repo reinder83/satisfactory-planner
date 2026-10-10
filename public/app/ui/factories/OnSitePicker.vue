@@ -10,10 +10,9 @@
   changes the choice on this page; Save sends the whole list as one `factoryLocal` update
   (factoryGroups.local). That is the explicit action (#854, #856): nothing is saved while a
   keyboard user moves through the boxes.
-  Save is disabled while the choice is the saved one, marked .unavailable so it is drawn as having
-  nothing to do rather than as busy (style.css draws a bare disabled button with the wait cursor,
-  #939), and busy only while it saves (app/busy.ts); once saved it has nothing to do again, so
-  focus goes on to the first box (ui/refocus.ts). An item the group marks that it no longer uses
+  Save is disabled while the choice is the saved one, which style.css draws as having nothing to
+  do rather than as busy (#939, #948), and busy only while it saves (app/busy.ts); once saved it
+  has nothing to do again, so focus goes on to the first box (ui/refocus.ts). An item the group marks that it no longer uses
   stays listed, so it can be cleared. Saving never recalculates: the page then says the plan needs
   a recalculation and offers it (OnSiteRecalc.vue), at the top of the page, far above this group.
   So after a save the picker says "Saved." in a live region and, while the plan needs a
@@ -243,7 +242,6 @@ async function apply(event: Event) {
           :data-on-site-save="groupId"
           :aria-label="'Save made on site for ' + groupName"
           :aria-describedby="holding ? id + '-held' : undefined"
-          :class="{ unavailable: !changed }"
           :disabled="!changed"
           @click="apply"
         >
