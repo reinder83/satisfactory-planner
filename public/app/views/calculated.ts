@@ -41,6 +41,7 @@ import {
 } from '../owned-ticks.ts';
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
+import { perRedraw } from '../ui/bridge.ts';
 import { minerWords } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
@@ -74,22 +75,30 @@ const outputList = (row: CalcRow): string =>
 export const rowIcon = (row: CalcRow): string =>
   row.generationMW > 0 ? row.machine : Object.keys(row.outputs || {})[0] || '';
 
+// The session values the build plan's steps are worked out from: a save replaces the progress
+// state and opening a profile the plan, so the steps of a phase are worked out once per redraw
+// for them (perRedraw in ui/bridge.ts, #1060), however many components ask.
+const stepInputs = () => [calculated, state, progressionData];
+
 // The generated steps of the open calculated profile for phase `shownPhase` (the current phase
 // unless given), as phaseSteps in progression.ts lists them with the production steps put in
 // order by the profile's factory groups (groupedSteps in group-order.ts, #869). calcTasks below
 // and generatedTaskIds (tasks.ts) both read them, so the steps and their ids agree.
-export function orderedPhaseSteps(shownPhase: Phase = phase()): PhaseStep[] {
+export const orderedPhaseSteps = (shownPhase: Phase = phase()): PhaseStep[] =>
+  orderedStepsOf(shownPhase);
+const orderedStepsOf = perRedraw(stepInputs, (shownPhase: Phase): PhaseStep[] => {
   if (!calculated) return [];
   return groupedSteps(
     phaseSteps(calculated, state, progressionData, shownPhase),
     state.factoryGroups,
   );
-}
+});
 
 // The generated checklist of a calculated profile for phase `shownPhase` (the current phase
 // unless given), before the user's step edits and personal tasks (tasks.ts adds those): the
 // steps orderedPhaseSteps lists, with each production row's step described.
-export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
+export const calcTasks = (shownPhase: Phase = phase()): PlanStepData[] => calcTasksOf(shownPhase);
+const calcTasksOf = perRedraw(stepInputs, (shownPhase: Phase): PlanStepData[] => {
   // A page of the profile just left can be drawn once more; it then has no steps.
   if (!calculated) return [];
   // The stage of the phase shown, which need not be the current phase (#1022).
@@ -105,7 +114,7 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
         }
       : step,
   );
-}
+});
 
 // The opening sentence of a generator line's step where the player already has generators of its
 // building that the phase counts (#1068, settings.ownedGenerators, ownedBeyondKept in power.ts):
