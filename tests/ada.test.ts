@@ -460,12 +460,12 @@ test("ADA counts the phase's byproducts on the factories page, calmly, and point
     r => r.id === 'recycle-byproducts',
   )!;
   assert.equal(line.tone, 'calm');
-  assert.match(line.text, /^3 byproducts to recycle in Phase 3\. Each line's dialog says where/);
+  assert.match(line.text, /^3 byproducts to route in Phase 3\. Each line's dialog says where/);
   assert.match(line.text, /build plan's step says the same/);
   const one = adaRemarks(facts({ view: 'factories', byproducts: 1 })).find(
     r => r.id === 'recycle-byproducts',
   )!;
-  assert.match(one.text, /^1 byproduct to recycle/);
+  assert.match(one.text, /^1 byproduct to route/);
   assert.ok(!ids(facts({ view: 'factories', byproducts: 0 })).includes('recycle-byproducts'));
   assert.ok(!ids(facts({ view: 'factories' })).includes('recycle-byproducts'), 'absent means none');
 });
