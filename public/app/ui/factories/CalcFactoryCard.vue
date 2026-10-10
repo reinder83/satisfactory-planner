@@ -19,6 +19,7 @@ import { computed } from 'vue';
 import { itemRate, rateOfItem, rateUnit, unitGap } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
+import { rowTotal } from '../../group-order.ts';
 import { calculated, checked, factoryEditing, stage, state } from '../../session.ts';
 import { carriedCard, heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
 import {
@@ -153,6 +154,11 @@ const card = computed(() =>
         />Running</label
       >
     </footer>
-    <AssignEditor v-if="card.editing" :factory-key="row.id" :unit="card.rateUnit" />
+    <AssignEditor
+      v-if="card.editing"
+      :factory-key="row.id"
+      :unit="card.rateUnit"
+      :total="rowTotal(row)"
+    />
   </article>
 </template>
