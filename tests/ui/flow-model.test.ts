@@ -259,6 +259,30 @@ test('flowNotes splits the machines across deliveries, and says when the item is
   assert.equal(flowNotes(clocked, [], stage).clock, '@ 100% + 1 adjustable');
 });
 
+// A generator line of a plan made since #1064 runs whole generators at 100%, burning fuel only
+// for the power drawn, so its `equivalent` (the fuel burnt) is fractional while no generator is
+// underclocked: Machine setup says so (wholeGenerators, as machineSetup reads it), and so does
+// the flow card's bar (#1087 review). An older plan's generator line keeps its adjustable one.
+test('flowNotes gives a whole generator line no adjustable machine, as Machine setup does', () => {
+  const generator = {
+    ...row('power-fuel', { Fuel: 76 }, {}),
+    machine: 'Fuel Generator',
+    power: -250,
+    machines: 8,
+    equivalent: 7.6,
+    lastClock: 100,
+    generationMW: 1900,
+  };
+  const stage = context({ rows: [generator] });
+  assert.equal(flowNotes(generator, generatorOutputs(generator), stage).clock, '@ 100%');
+  const older = { ...generator, lastClock: 60 };
+  assert.equal(
+    flowNotes(older, generatorOutputs(older), stage).clock,
+    '@ 100% + 1 adjustable',
+    'a plan made before #1064 underclocks its last generator',
+  );
+});
+
 test('flowNotes gives no bank note when the power grid is the only destination (#560)', () => {
   const fuelPlant = { ...row('fuel-power', { Fuel: 96 }, {}), generationMW: 1250 };
   const stage = context({ rows: [fuelPlant] });

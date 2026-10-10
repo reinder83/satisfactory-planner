@@ -464,6 +464,13 @@ function siteParts(
   return { own, central };
 }
 
+// A generator line of a plan made since #1064: whole generators at 100% (its last one is not
+// underclocked, lastClock 100), which burn fuel only for the power drawn; its `equivalent` is the
+// fuel it burns. Older plans keep their underclocked last generator. Machine setup (machineSetup
+// in views/calculated.ts) and the flow card's bar (flowNotes) both read it.
+export const wholeGenerators = (row: CalcRow): boolean =>
+  row.power < 0 && !(row.lastClock < 100 - 1e-7);
+
 // A calculated row's machine equivalents: the planner's figure, else whole machines with the
 // last at lastClock, else 1. The floor keeps the per-machine rates finite.
 export const rowEquivalent = (row: CalcRow): number =>
@@ -927,7 +934,12 @@ export function flowNotes(
       splits.length > 1
         ? ` · split ≈ ${splits.map(o => machinesText(o.machines!)).join(' / ')} across the deliveries below`
         : '',
-    clock: row.machines - rowEquivalent(row) > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%',
+    // A whole-generator line (#1064) burns fuel for a fractional equivalent but underclocks no
+    // generator, as Machine setup says (#1087 review).
+    clock:
+      row.machines - rowEquivalent(row) > 1e-7 && !wholeGenerators(row)
+        ? '@ 100% + 1 adjustable'
+        : '@ 100%',
     bankNote: outputs.some(o => !o.noItem) ? bankNoteOf(row, context) : null,
   };
 }

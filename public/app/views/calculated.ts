@@ -13,7 +13,7 @@ import {
   phaseCarry,
   type PhaseCarry,
 } from '../handover.ts';
-import { FLUIDS, itemRate, rateOfItem } from '../flow.ts';
+import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
 import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
 import { adviceText, lineAdvice, recycleModel } from '../recycle.ts';
@@ -387,10 +387,8 @@ export function machineSetup(row: CalcRow) {
   return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
 }
 
-// A generator line of a plan made since #1064: whole generators at 100% (its last one is not
-// underclocked, lastClock 100), which burn fuel only for the power drawn; its `equivalent` is the
-// fuel it burns. Older plans keep their underclocked last generator.
-const wholeGenerators = (row: CalcRow) => row.power < 0 && !(row.lastClock < 100 - 1e-7);
+// A generator line of a plan made since #1064 (wholeGenerators in flow.ts): whole generators at
+// 100%, none adjustable.
 function generatorSetup(row: CalcRow) {
   const fullOutput = [
     `${num(-row.power)} MW`,
