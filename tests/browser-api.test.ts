@@ -115,11 +115,12 @@ test('preview and profile calculation forward the progress callback to the calcu
     body: JSON.stringify({ settings: { phase: '1', goal: 'minimal' } }),
     onProgress: phase => phases.push(phase),
   });
+  // Other settings than Review's, so it calculates (the reviewed plan is stored as it is, #1060).
   await api('/api/profiles', {
     body: JSON.stringify({
       saveName: 'Progress save',
       name: 'Progress',
-      settings: { phase: '1', goal: 'minimal' },
+      settings: { phase: '2', goal: 'minimal' },
     }),
     onProgress: phase => phases.push(phase),
   });

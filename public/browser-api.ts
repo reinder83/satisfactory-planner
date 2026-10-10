@@ -62,6 +62,7 @@ import type {
   WorkspaceSummary,
 } from './types/index.ts';
 import { profilePhasesCache } from './state.ts';
+import { reviewedPlans } from './reviewed-plans.ts';
 import type { Progression } from './types/index.ts';
 
 // What app/api.ts passes: fetch's options (a JSON string body and a plain headers object) and
@@ -189,11 +190,17 @@ export function createBrowserApi(
   async function workspaceSummary() {
     return summary(await store.transaction());
   }
-  // Wizard preview: calculate only, nothing stored.
-  function preview({ body, options }: RouteRequest) {
-    return calculator(body.settings, options.onProgress);
+  // The plans Review showed, for Create profile (#1060, reviewed-plans.ts).
+  const reviewed = reviewedPlans<CurrentCalculatedPlan>();
+  // Wizard preview: calculate only, nothing stored. Review's plan (not a live estimate,
+  // `?estimate=1`) is kept in memory for Create profile.
+  async function preview({ url, body, options }: RouteRequest) {
+    const plan = await calculator(body.settings, options.onProgress);
+    if (url.searchParams.get('estimate') !== '1') reviewed.keep('', body.settings, plan);
+    return plan;
   }
-  // Mirrors POST /api/profiles. Names are checked and the plan calculated first; the write
+  // Mirrors POST /api/profiles. Names are checked and the plan is the one Review showed for these
+  // exact settings (reviewedPlans), else calculated, first; the write
   // then re-finds the target save, applies the 50-save/30-profile limits and starts the state
   // from newProfileState, optionally carrying progress from body.carryFrom. Like the server,
   // it refuses kind 'original' (checkNewProfileKind): every new profile is calculated.
@@ -201,7 +208,8 @@ export function createBrowserApi(
     checkNewProfileKind(body.kind);
     const profileName = cleanName(body.name),
       saveName = body.saveId ? null : cleanName(body.saveName),
-      plan = await calculator(body.settings, options.onProgress),
+      plan =
+        reviewed.take('', body.settings) ?? (await calculator(body.settings, options.onProgress)),
       profileId = randomId();
     return store.transaction(data => {
       let save = data.saves.find(s => s.id === body.saveId);
