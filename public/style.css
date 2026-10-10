@@ -5282,6 +5282,14 @@ button.rail-tile:hover {
 .factory-card .assign-editor {
   margin-top: 12px;
 }
+/* On a phone the rate field and "+ Add to factory…" are 44px touch targets, as the ✕ and Add
+   beside them are (#960). Height only, so the 320px row keeps its widths. */
+@media (max-width: 720px) {
+  .assign-row input,
+  .assign-editor select {
+    min-height: 44px;
+  }
+}
 
 /* ── Made on site (#877) ───────────────────────────────── */
 /* A group's "Made on site" picker while groups are edited (OnSitePicker.vue): a box per item,
