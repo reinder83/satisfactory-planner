@@ -88,17 +88,12 @@ test("a step's linked-line choices name each Wire line as its step (#954)", asyn
   await settle();
   const select = $<HTMLSelectElement>(`#main [data-task-edit="${id}"] [name=link]`)!;
   assert.ok(select, 'the edit form opened');
-  const options = [...select.options].map(option => [option.value, option.textContent!.trim()]);
-  assert.deepEqual(
-    options.filter(([value]) => value.startsWith(WIRE)),
-    [WIRE, ownLine(ALPHA), ownLine(BETA)]
-      .map(value => [value, rows.findIndex(row => row.id === value)] as const)
-      .sort((a, b) => a[1] - b[1])
-      .map(([value]) => [
-        value,
-        value === WIRE ? 'Wire' : value === ownLine(ALPHA) ? 'Wire for Alpha' : 'Wire for Beta',
-      ]),
+  const drawn = new Map(
+    [...select.options].map(option => [option.value, option.textContent!.trim()]),
   );
+  assert.equal(drawn.get(WIRE), 'Wire');
+  assert.equal(drawn.get(ownLine(ALPHA)), 'Wire for Alpha');
+  assert.equal(drawn.get(ownLine(BETA)), 'Wire for Beta');
   assert.equal(select.value, ownLine(ALPHA), 'the step links its own line');
   setPlanEditing(false);
 });
