@@ -8,7 +8,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { calculate, settings } from '../planner.ts';
+import { calculate, catalog, settings } from '../planner.ts';
+import { createBrowserApi } from '../public/browser-api.ts';
+import { openBrowserStore } from '../public/browser-store.ts';
+import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
 import {
   OVERCLOCK_ADVICE_FROM,
   miningStepBody,
@@ -168,4 +171,31 @@ test('migration: plans before and with overclock load, import and export unchang
   const old = json(owned.stages['3']);
   delete old.mining!.water;
   assert.ok(miningStepBody(old, '3', owned.settings));
+});
+
+test('migration: the browser edition keeps plans before and with overclock across a reload', async () => {
+  const records = new Map<string, unknown>();
+  const open = () =>
+    createBrowserApi(
+      openBrowserStore(fakeIndexedDB(2, records), undefined, async () => {
+        throw Error('not needed');
+      }),
+      calculate,
+      catalog(),
+    );
+  const before = (
+    JSON.parse(
+      fs.readFileSync(new URL('./fixtures/plan-before-1065.json', import.meta.url), 'utf8'),
+    ) as { plan: StoredCalculatedPlan }
+  ).plan;
+  const plans = [before, json(calculate({ phase: '3', phaseMining: true, overclock: true }))];
+  let api = open();
+  for (const plan of plans)
+    await api('/api/import-saves', { body: JSON.stringify(exported(plan)) });
+  api = open();
+  const out = (await api('/api/export-saves')) as SaveExport;
+  assert.deepEqual(
+    out.saves.map(save => JSON.stringify(save.profiles[0]!.plan)),
+    plans.map(plan => JSON.stringify(plan)),
+  );
 });
