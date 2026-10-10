@@ -5,9 +5,9 @@
 // may say so.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculate } from '../planner.ts';
+import fs from 'node:fs';
 import { exactClocksKeep, sinkCaption, sinkCause } from '../public/app/sink-cause.ts';
-import type { CalcRow, StoredStage } from '../public/types/index.ts';
+import type { CalcRow, StoredCalculatedPlan, StoredStage } from '../public/types/index.ts';
 
 const FLUIDS = new Set(['Heavy Oil Residue', 'Crude Oil', 'Fuel', 'Water']);
 const fluid = (item: string) => FLUIDS.has(item);
@@ -85,13 +85,13 @@ test('a byproduct names the main product the phase uses', () => {
   });
 });
 
+// The issue's plan as it was stored before #1055 (Phase 3 on coal power, whole machines, recorded
+// on main f292a25d): a recalculation now burns its Petroleum Coke in Coal Generators
+// (tests/generator-fuels.test.ts), but the stored plan keeps its sink and its caption.
 test("the issue's plan: Phase 3 on coal power sinks all its Petroleum Coke to use up Heavy Oil Residue", () => {
-  const plan = calculate({
-    phase: '3',
-    wholeMachines: true,
-    mainPower: 'coal',
-    limitsConfirmed: true,
-  });
+  const plan: StoredCalculatedPlan = JSON.parse(
+    fs.readFileSync(new URL('./fixtures/coal-power-plan-2026-10-10.json', import.meta.url), 'utf8'),
+  );
   const stage = plan.stages['3'];
   const cokeLine = (stage.rows || []).find(row => row.id === 'Recipe_PetroleumCoke_C')!;
   assert.ok(cokeLine, 'a Petroleum Coke line');

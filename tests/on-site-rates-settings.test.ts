@@ -12,7 +12,10 @@
 // that case's rows were recorded again on it the same way; the other cases did not change.
 // #1086 (fluid lines at exact clocks, fuel that follows the load) changed the rows of all four
 // cases, and they were recorded once more the same way (the steps reproduced the #1063
-// recordings exactly on main first).
+// recordings exactly on main first). #1055 (Coal Generators burning Petroleum Coke and Compacted
+// Coal, Ionized Fuel power) changes the solve: the first #1038 case's Phase 5 makes its Plastic
+// with other lines, so its rows were recorded again the same way (main reproduced both first);
+// the other cases did not change.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
