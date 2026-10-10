@@ -7,7 +7,9 @@
   the queued writes have landed, so each card's tick count, phase and phase bar are current,
   including changes made in another tab; until the reply the last summary is shown. Each card's
   "Edit settings" (#1071) opens All settings on that profile's settings, to recalculate it in
-  place (startEdit in wizard/wizard.ts); "Try another profile" still adds a new one.
+  place (startEdit in wizard/wizard.ts); "Try another profile" still adds a new one. The card of
+  a version such a recalculation kept says which profile it was kept for, and its ⋯ menu offers
+  "Restore this version…" (restore below, app/restore-version.ts).
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -44,6 +46,12 @@ import BrowserNotice from '../BrowserNotice.vue';
 import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave, openProfile } from '../actions.ts';
+import {
+  postRestore,
+  restoreKeptName,
+  restoreQuestion,
+  restoredText,
+} from '../../restore-version.ts';
 import type { ProfileSummary, WorkspaceSummary } from '../../../types/index.ts';
 
 onMounted(async () => {
@@ -74,6 +82,10 @@ const page = computed(() =>
       profiles: save.profiles.map(profile => ({
         id: profile.id,
         name: profile.name,
+        // A version a recalculation in place (or a restore) kept (#1071): the profile it was kept
+        // for, which "Restore this version" swaps it back into, with the plans both show.
+        keptFor: save.profiles.find(p => p.id === profile.backupOf),
+        planCreatedAt: profile.planCreatedAt,
         open: save.id === currentSave.id && profile.id === currentProfile.id,
         editable: !!profile.settings,
         summary: profile.settings
@@ -139,7 +151,51 @@ const key = (action: string, save: SaveCard, profile: ProfileCard) =>
 // one of them runs, and says "Copying…" for Duplicate, since the menu has closed by then.
 const menuId = (save: SaveCard, profile: ProfileCard) => `profile-menu-${save.id}-${profile.id}`;
 const menuBusy = (save: SaveCard, profile: ProfileCard) =>
-  ['duplicate', 'share', 'remove'].some(action => busy.value === key(action, save, profile));
+  ['restore', 'duplicate', 'share', 'remove'].some(
+    action => busy.value === key(action, save, profile),
+  );
+
+// "Restore this version…" (#1071), on the card of a version a recalculation in place kept: asks
+// first, naming both profiles and the name the replaced version is kept under; then, when this
+// tab has one of the two open, runs the unsaved-notes check. The kept version's plan and progress
+// go back into the profile it was kept for, and the version they replace takes its card. The tab
+// reloads the open profile when it was one of them. A refusal is a toast; a 409 (a profile
+// changed meanwhile) also brings the list up to date.
+async function restore(save: SaveCard, profile: ProfileCard) {
+  const into = profile.keptFor;
+  if (!into || busy.value === key('restore', save, profile)) return;
+  const keptName = restoreKeptName(save.id, into.name);
+  if (!(await confirmAction(restoreQuestion(profile.name, into.name, keptName)))) return;
+  const involved = save.id === currentSave.id && [into.id, profile.id].includes(currentProfile.id);
+  if (involved && !(await allowSwitch())) return;
+  busy.value = key('restore', save, profile);
+  try {
+    await writeQueue;
+    const reply = await postRestore({
+      saveId: save.id,
+      backupId: profile.id,
+      into: into.id,
+      planCreatedAt: into.planCreatedAt ?? '',
+      backupPlanCreatedAt: profile.planCreatedAt ?? '',
+      backupName: keptName,
+    });
+    setWorkspace(reply.workspace);
+    if (involved) await loadContext(currentSave.id, currentProfile.id);
+    invalidate();
+    toast(restoredText(into.name, keptName));
+  } catch (error) {
+    toast((error as Error).message, true);
+    if ((error as { status?: number }).status === 409)
+      try {
+        setWorkspace(await request<WorkspaceSummary>('/api/workspace'));
+        invalidate();
+      } catch {
+        // The list on screen stays; the toast has said why nothing was restored.
+      }
+  } finally {
+    busy.value = '';
+  }
+}
 
 // "Duplicate": copy the profile with its progress and open the copy.
 async function duplicate(save: SaveCard, profile: ProfileCard) {
@@ -363,6 +419,9 @@ async function rename(
           :hook="{ 'data-rename-profile': profile.id, 'data-rename-profile-save': save.id }"
           :save="name => rename('profile', save, profile, name)"
         />
+        <p v-if="profile.keptFor" class="small muted" :data-kept-for="profile.id">
+          Kept version of “{{ profile.keptFor.name }}”
+        </p>
         <p v-if="profile.summary">{{ profile.summary }}</p>
         <p class="small">{{ profile.progress }}</p>
         <div
@@ -410,6 +469,19 @@ async function rename(
             :data-profile-menu-save="save.id"
           >
             <button
+              v-if="profile.keptFor"
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              class="btn"
+              :data-restore-version="profile.id"
+              :data-restore-save="save.id"
+              :aria-disabled="busy === key('restore', save, profile) || undefined"
+              @click="restore(save, profile)"
+            >
+              Restore this version…
+            </button>
+            <button
               type="button"
               role="menuitem"
               tabindex="-1"
@@ -452,10 +524,11 @@ async function rename(
   </section>
   <p class="small muted">
     Edit settings recalculates a profile in place, keeps its progress and keeps the current version
-    as a separate profile. Duplicate copies a profile with its progress so you can try changes
-    without touching the original. Share downloads a file with the plan, storage layout, factories
-    and step edits — without your checkmarks or notes — that anyone can import under Backup → Import
-    saves. Rename a save or profile with ✎ beside its name; renaming does not change progress.
-    Profiles keep a frozen calculation so later planner updates cannot silently change your targets.
+    as a separate profile; that version's ⋯ menu has Restore this version, which swaps it back.
+    Duplicate copies a profile with its progress so you can try changes without touching the
+    original. Share downloads a file with the plan, storage layout, factories and step edits —
+    without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a
+    save or profile with ✎ beside its name; renaming does not change progress. Profiles keep a
+    frozen calculation so later planner updates cannot silently change your targets.
   </p>
 </template>

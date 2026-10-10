@@ -50,7 +50,10 @@ const rowKeys = (context: ContextReply) =>
 function assertBackup(backup: StoredProfile, before: StoredProfile, name: string) {
   assert.equal(backup.name, name);
   assert.notEqual(backup.id, before.id);
-  assert.deepEqual({ ...backup, id: before.id, name: before.name }, before);
+  // Linked to the profile it was kept for, so it can be restored (#1071).
+  const { backupOf, ...copy } = backup;
+  assert.equal(backupOf, before.id, 'linked to the profile it was kept for');
+  assert.deepEqual({ ...copy, id: before.id, name: before.name }, before);
 }
 
 test('the Docker server recalculates a profile in place, carries its ticks and keeps the old version', async () => {

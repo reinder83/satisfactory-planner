@@ -65,8 +65,10 @@ export function saveRoutes({
       const source = draftSave?.profiles.find(p => p.id === profile.id);
       if (!draftSave || !source) fail('Profile not found.', 404);
       if (draftSave.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
+      // A copy is not a kept version (#1071): it leaves the source's backupOf link behind.
+      const { backupOf: _link, ...copy } = structuredClone(source);
       draftSave.profiles.push({
-        ...structuredClone(source),
+        ...copy,
         id: profileId,
         name: (source.name + ' · copy').slice(0, 80),
       });

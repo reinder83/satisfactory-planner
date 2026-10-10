@@ -71,7 +71,10 @@ const listed = (plan: StoredCalculatedPlan) =>
 // The previous version, kept as the backup: the stored profile as it was, under a new id and name.
 function assertBackup(backup: StoredProfile, before: StoredProfile, name: string) {
   assert.equal(backup.name, name);
-  assert.deepEqual({ ...backup, id: before.id, name: before.name }, before);
+  // Linked to the profile it was kept for, so it can be restored (#1071).
+  const { backupOf, ...copy } = backup;
+  assert.equal(backupOf, before.id, 'linked to the profile it was kept for');
+  assert.deepEqual({ ...copy, id: before.id, name: before.name }, before);
 }
 
 // What both editions must show after the recalculation in place.

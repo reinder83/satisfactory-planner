@@ -13,6 +13,7 @@
 // POST /api/import-saves       add transferred saves as new copies
 // POST /api/round-up           recalculate as whole machines into a new profile
 // POST /api/recalculate        Edit settings: recalculate a profile in place, with a backup
+// POST /api/restore-version    swap a kept version back into the profile it was kept for
 // POST /api/rank-alternates    hard-drive payoff ranking on the worker, stored on the profile
 // GET  /api/context, /api/state, /api/export   read the scoped profile
 // POST /api/select, /api/remove-profile, /api/rename, /api/update, /api/import
@@ -28,8 +29,11 @@ import {
   checkPlan,
   checkNewProfileKind,
   checkRecalculate,
+  checkRestore,
   checkRoundUp,
   recalculatedProfile,
+  restoredVersions,
+  restoreFields,
   currentPayoff,
   phaseProgress,
   roundUpSettings,
@@ -153,6 +157,7 @@ export function createBrowserApi(
         phases: progression
           ? cachedPhases(profile.id, profile.plan, profile.state, progression)
           : phaseProgress(profile.plan, profile.state.checks),
+        ...restoreFields(save.profiles, profile),
       })),
     })),
   });
@@ -249,8 +254,10 @@ export function createBrowserApi(
       const { save, profile } = scope(data, url, headers, body);
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
       const profileId = randomId();
+      // As on the server, a copy leaves the kept-version link behind (#1071).
+      const { backupOf: _link, ...copy } = structuredClone(profile);
       save.profiles.push({
-        ...structuredClone(profile),
+        ...copy,
         id: profileId,
         name: (profile.name + ' · copy').slice(0, 80),
       });
@@ -434,6 +441,23 @@ export function createBrowserApi(
       restoreProgress(profile.state, validateState(body.format ? body.state : body)),
     );
   }
+  // Mirrors POST /api/restore-version (#1071): the scoped profile is a kept version; it swaps
+  // places with the profile its link names (checkRestore and restoredVersions, shared with the
+  // server), inside this transaction, so ticks made meanwhile in another tab move with their
+  // version. A stale request is refused (409) and changes nothing.
+  function restoreVersion({ data, save, profile, body }: ScopedRequest) {
+    const target = checkRestore(save.profiles, profile, body);
+    const { restored, kept } = restoredVersions(target, profile, cleanName(body.backupName));
+    save.profiles = save.profiles.map(p =>
+      p.id === target.id ? restored : p.id === profile.id ? kept : p,
+    );
+    return {
+      saveId: save.id,
+      profileId: target.id,
+      backupId: profile.id,
+      workspace: summary(data),
+    };
+  }
   // Stores `next` as the profile's progress with the revision after its current one.
   function writeProgress(profile: StoredProfile, next: ProgressState) {
     // Every state this store wrote carries a revision (newProfileState, validateState).
@@ -465,6 +489,7 @@ export function createBrowserApi(
     '/api/select': selectProfile,
     '/api/remove-profile': removeProfile,
     '/api/rename': rename,
+    '/api/restore-version': restoreVersion,
     '/api/update': updateProgress,
     '/api/import': importProgress,
   };
