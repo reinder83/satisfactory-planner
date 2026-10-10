@@ -33,6 +33,17 @@ function someTicks(plan: StoredCalculatedPlan): Record<string, boolean> {
   return checks;
 }
 
+// `plan` with its first three lines of each phase marked amplified, with one, two and four
+// somersloops a machine (synthetic, for the step's somersloop sentence).
+function amplified(plan: StoredCalculatedPlan): StoredCalculatedPlan {
+  for (const snapshot of Object.values(plan.stages))
+    (snapshot.rows || []).slice(0, 3).forEach((row, i) => {
+      const slots = [1, 2, 4][i]!;
+      Object.assign(row, { amplified: true, slots, sloops: slots * row.machines });
+    });
+  return plan;
+}
+
 const sunk = read('on-site-sunk-central-2026-10-05.json');
 const cases: [string, StoredCalculatedPlan, Partial<ProgressState>][] = [
   ['first release plan', read('calculated-plan-2026-09-12.json'), {}],
@@ -51,6 +62,7 @@ const cases: [string, StoredCalculatedPlan, Partial<ProgressState>][] = [
     },
   ],
   ['plan guide (migrated handbook)', migratedPlan(), {}],
+  ['amplified lines', amplified(read('fuel-plan-2026-10-05.json')), {}],
 ];
 
 // A step's title, body and flags (optional, satisfied), as a short hash.
