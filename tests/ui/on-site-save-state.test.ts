@@ -1,7 +1,7 @@
 // The "Made on site" picker's Save in each state (#939): with nothing to save (before a box is
-// ticked, and after a successful save) it is disabled and marked .unavailable, which style.css
-// draws as having nothing to do rather than as busy (a bare disabled button gets the wait
-// cursor); only while its save is on its way is it busy (aria-disabled, app/busy.ts). After a
+// ticked, and after a successful save) it is disabled, which style.css draws as having nothing
+// to do rather than as busy (a normal cursor, not the wait cursor, #948); only while its save is
+// on its way is it busy (aria-disabled, app/busy.ts). After a
 // save the picker says so and, while the plan needs a recalculation, offers "Go to the
 // recalculation", which brings OnSiteRecalc.vue's notice into view and focuses its button.
 import assert from 'node:assert/strict';
@@ -9,7 +9,17 @@ import { nextTick } from 'vue';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { setFactoryEditing, setFactoryFilter, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, applyUpdate, generated, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  applyUpdate,
+  cursorOf,
+  generated,
+  go,
+  open,
+  page,
+  stubFetch,
+  useStylesheet,
+} from './setup.ts';
 import type { FactoryGroups, UpdateOp } from '../../public/types/index.ts';
 
 const MOTORS = 'fg-motors1';
@@ -37,20 +47,22 @@ const tick = (input: HTMLInputElement, on: boolean) => {
   input.checked = on;
   input.dispatchEvent(new Event('change', { bubbles: true }));
 };
-// Save's state in the words of the issue: unavailable (nothing to do), busy (saving), or ready.
+// Save's state in the words of the issue: unavailable (nothing to do), busy (saving), or ready,
+// with the cursor style.css draws it with.
 function look(button: HTMLButtonElement) {
   return {
     disabled: button.disabled,
-    unavailable: button.classList.contains('unavailable'),
+    cursor: cursorOf(button),
     busy: button.getAttribute('aria-disabled') === 'true',
   };
 }
-const NOTHING_TO_DO = { disabled: true, unavailable: true, busy: false };
-const READY = { disabled: false, unavailable: false, busy: false };
-const SAVING = { disabled: false, unavailable: false, busy: true };
+const NOTHING_TO_DO = { disabled: true, cursor: 'default', busy: false };
+const READY = { disabled: false, cursor: 'pointer', busy: false };
+const SAVING = { disabled: false, cursor: 'wait', busy: true };
 
 beforeEach(async () => {
   page();
+  useStylesheet();
   setQuery('');
   setFactoryFilter('all');
   go('factories');

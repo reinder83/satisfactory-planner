@@ -236,8 +236,8 @@ export async function refreshWorkspace(): Promise<boolean> {
   return true;
 }
 
-// Refreshes the sidebar save status ("Saving…" while a write is pending), which
-// ui/Shell.vue reads from `pending`.
+// Refreshes the sidebar save status ("Saving…" while a write is pending, "Note not saved"
+// while a notes box says so), which ui/Shell.vue reads from `pending` and notesNotSaved().
 export function saveIndicator() {
   invalidate();
 }
@@ -389,12 +389,15 @@ function stepsTaken() {
 // on its way, or refused); `unsent` is true when no write carries that text either (a write
 // failed, or nothing has sent it yet), so leaving would lose it. `conflict` is true while the
 // box asks which version to keep, because the note was changed elsewhere meanwhile (#1052).
+// `failed` is true while the box says "Not saved": its write failed, or it asks which version to
+// keep; the save status in the sidebar and top bar (ui/Shell.vue) then says so too.
 export type NoteBox = {
   el: () => Element | null | undefined;
   flush: () => void;
   unsaved: () => boolean;
   unsent: () => boolean;
   conflict?: () => boolean;
+  failed?: () => boolean;
 };
 export const noteBoxes = new Set<NoteBox>();
 const boxesIn = (root: ParentNode) =>
@@ -413,6 +416,11 @@ export function flushNotes(root: ParentNode = document) {
 // How many notes boxes on screen ask which version to keep (#1052), for ADA.
 export const noteConflicts = () =>
   [...noteBoxes].filter(box => box.el() && box.conflict?.()).length;
+
+// How many notes boxes on screen say "Not saved" (a failed write, or a version to choose), so
+// the save status never says "Saved" meanwhile (public/AGENTS.md: never show a successful save
+// after a failed write).
+export const notesNotSaved = () => [...noteBoxes].filter(box => box.el() && box.failed?.()).length;
 
 // Whether a notes box in `root` shows text that is not saved yet. Holds back refreshing the
 // page and closing the tab, and keeps the page when a session ends. `root` narrows the

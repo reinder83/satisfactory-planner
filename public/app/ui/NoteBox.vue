@@ -6,7 +6,8 @@
   and the status line ("Saving…", "Saved · 12:04", "Not saved — Retry"), announced politely.
   When the note was changed elsewhere while this box held other text (#1052), a notice under
   it shows the other version, read-only, and asks which to keep: "Keep mine", "Keep theirs"
-  or "Keep both". Nothing is saved until one is chosen.
+  or "Keep both". Nothing is saved until one is chosen. While the box says "Not saved", so does the
+  save status in the sidebar and top bar (ui/Shell.vue).
 -->
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
@@ -28,7 +29,11 @@ const {
   keepMine,
   keepTheirs,
   keepBoth,
-} = useNoteAutosave(() => props.noteKey, useTemplateRef<HTMLTextAreaElement>('box'));
+} = useNoteAutosave(
+  () => props.noteKey,
+  useTemplateRef<HTMLTextAreaElement>('box'),
+  useTemplateRef<HTMLElement>('notice'),
+);
 </script>
 
 <template>
@@ -61,6 +66,7 @@ const {
   </div>
   <div
     v-if="conflict !== null"
+    ref="notice"
     class="notice warn note-conflict"
     role="group"
     :aria-labelledby="id + '-conflict-title'"
@@ -87,7 +93,7 @@ const {
       </button>
       <button
         type="button"
-        :class="['btn', bothTooLong ? 'unavailable' : '']"
+        class="btn"
         data-note-keep="both"
         :disabled="bothTooLong"
         :aria-describedby="bothTooLong ? id + '-both-long' : undefined"

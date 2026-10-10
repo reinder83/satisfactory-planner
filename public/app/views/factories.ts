@@ -1,6 +1,6 @@
 // Factory groups: the profile's named groups and which factories belong to them, shared by
 // the factories page (ui/pages/CalculatedFactoriesPage.vue, with its parts in ui/factories/),
-// the group build-order dialog (factory-detail.ts) and ADA.
+// a group's flow page (ui/pages/GroupFlowPage.vue, its build order since #895) and ADA.
 import { itemRate } from '../flow.ts';
 import { num } from '../format.ts';
 import { rowShares } from '../group-links.ts';

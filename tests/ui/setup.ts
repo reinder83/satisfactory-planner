@@ -35,6 +35,9 @@ import type {
   WorkspaceSummary,
 } from '../../public/types/index.ts';
 
+// A stand-in for a link, a typed address or Back that adds no history entry (#991).
+export { followInPlace } from './browser-history.ts';
+
 // Vitest runs from the repository root. The retired handbook, as the server's migration reads
 // it (#397: public/plan.json, its released copy, is gone).
 export const handbook: Handbook = JSON.parse(
@@ -109,6 +112,19 @@ export function page() {
   document.body.innerHTML =
     '<div id="app"></div><div id="toast"></div><dialog id="detail"></dialog><dialog id="confirm"></dialog>';
 }
+
+// Puts public/style.css in the page's <head> (once; page() leaves the head alone), for a test
+// that checks what the stylesheet draws through getComputedStyle, such as a button's cursor.
+export function useStylesheet() {
+  if (document.getElementById('app-style')) return;
+  const style = document.createElement('style');
+  style.id = 'app-style';
+  style.textContent = fs.readFileSync('public/style.css', 'utf8');
+  document.head.append(style);
+}
+// The mouse cursor style.css gives an element: `default` for a button with nothing to do,
+// `wait` for a busy one, `pointer` for one that can be pressed (#948).
+export const cursorOf = (el: Element) => getComputedStyle(el).cursor;
 
 // Answers every in-app confirmation (#confirm, ui/confirm.ts) that opens from now on by
 // pressing its real Cancel or confirm button: `reply` is the answer, or a function of the

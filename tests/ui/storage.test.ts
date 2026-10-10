@@ -27,6 +27,7 @@ import {
   $$,
   applyUpdate,
   catalog,
+  cursorOf,
   evil,
   generated,
   go,
@@ -35,6 +36,7 @@ import {
   openMigrated,
   page,
   stubFetch,
+  useStylesheet,
 } from './setup.ts';
 import type { StorageEdits, UpdateOp } from '../../public/types/index.ts';
 
@@ -299,10 +301,8 @@ test('layout edits show custom floors, bays and assignments, escaped', async () 
     'not while it has bays',
   );
   assert.equal($('[data-remove-floor="cf-abcd12"]')!.textContent.trim(), 'Remove its bays first');
-  assert.ok(
-    $('[data-remove-floor="cf-abcd12"]')!.classList.contains('unavailable'),
-    'no wait cursor',
-  );
+  useStylesheet();
+  assert.equal(cursorOf($('[data-remove-floor="cf-abcd12"]')!), 'default', 'no wait cursor');
   assert.equal(
     $('[data-clear-slot="S01"]')!.getAttribute('aria-label'),
     `Clear container S01: ${evil}`,
@@ -491,8 +491,9 @@ test('Done and "Complete room" write the four checks of each container', async (
   await nextTick();
   const complete = bay.querySelector<HTMLButtonElement>('[data-complete-bay]')!;
   assert.equal(complete.disabled, true);
-  // Nothing is saving, so it is marked .unavailable (no wait cursor) and says it is done.
-  assert.ok(complete.classList.contains('unavailable'));
+  // Nothing is saving, so it shows no wait cursor (#948) and says it is done.
+  useStylesheet();
+  assert.equal(cursorOf(complete), 'default');
   assert.equal(complete.textContent.trim(), 'Room A completed ✓');
   assert.equal(
     bay.querySelector('.bay-actions .muted')!.textContent,

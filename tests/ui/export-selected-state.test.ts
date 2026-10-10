@@ -1,13 +1,13 @@
 // Backup's "Export selected" in each state (#943): with no save ticked it has nothing to do, so it
-// is disabled and marked .unavailable, which style.css draws as unavailable rather than as busy (a
-// bare disabled button gets the wait cursor); with a save ticked it is ready; and only while an
-// export runs is it busy (aria-disabled, app/busy.ts, #299), never .unavailable.
+// is disabled, which style.css draws as unavailable rather than as busy (a normal cursor, not the
+// wait cursor, #948); with a save ticked it is ready; and only while an export runs is it busy
+// (aria-disabled, app/busy.ts, #299), with the wait cursor.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, go, open, page } from './setup.ts';
+import { $, $$, cursorOf, go, open, page, useStylesheet } from './setup.ts';
 
 const exportButton = () => $<HTMLButtonElement>('[data-export-selected]')!;
 const boxes = () => $$<HTMLInputElement>('[data-choose-save]');
@@ -16,22 +16,23 @@ const tick = (input: HTMLInputElement, on: boolean) => {
   input.dispatchEvent(new Event('change'));
 };
 // The button's state in the words of the issue: unavailable (nothing chosen), busy (exporting),
-// or ready.
+// or ready, with the cursor style.css draws it with.
 function look(button: HTMLButtonElement) {
   return {
     disabled: button.disabled,
-    unavailable: button.classList.contains('unavailable'),
+    cursor: cursorOf(button),
     busy: button.getAttribute('aria-disabled') === 'true',
   };
 }
-const NOTHING_CHOSEN = { disabled: true, unavailable: true, busy: false };
-const READY = { disabled: false, unavailable: false, busy: false };
-const EXPORTING = { disabled: false, unavailable: false, busy: true };
+const NOTHING_CHOSEN = { disabled: true, cursor: 'default', busy: false };
+const READY = { disabled: false, cursor: 'pointer', busy: false };
+const EXPORTING = { disabled: false, cursor: 'wait', busy: true };
 
 beforeEach(async () => {
   URL.createObjectURL = () => 'blob:x';
   URL.revokeObjectURL = () => {};
   page();
+  useStylesheet();
   open({
     workspace: {
       saves: [
