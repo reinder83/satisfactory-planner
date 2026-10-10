@@ -134,7 +134,9 @@ const sortedItems = (uses: ReadonlyMap<string, OfferUse[]>, lined: boolean) =>
 // of their phases, items sorted within each part. The same items as onSiteOffers, and after
 // `here`'s, each item of `kept` (the marks saved or ticked) not offered, so it can be cleared, with
 // the heading's note (markNote): `RAW_NOTE` for a raw resource (#921) and for an item the group's
-// lines use that no recipe the planner copies makes (#1007), else `UNUSED_NOTE` (#951, #953).
+// lines use that no recipe the planner copies makes (#1007), `BYPRODUCT_NOTE` instead for such an
+// item the phase shown makes only as a central byproduct that its lines there take (Heavy Oil
+// Residue), else `UNUSED_NOTE` (#951, #953).
 export interface OnSitePickerOffers {
   here: OnSiteEntry[];
   elsewhere: OnSiteElsewhere[];
@@ -180,11 +182,18 @@ export function onSitePickerOffers(
   }
   const byItem = (a: OnSiteEntry, b: OnSiteEntry) => a.item.localeCompare(b.item);
   const unlined = sortedItems(uses, false);
+  const covered = byproductUses(shown ? plan.stages[shown] : undefined, groups, groupId).only;
   const stale = uniqueSorted([...kept])
     .filter(item => !uses.get(item)?.some(use => use.lined))
     .map(item => ({
       item,
-      note: !onSitePlannable(item) || unlined.includes(item) ? RAW_NOTE : UNUSED_NOTE,
+      note: !onSitePlannable(item)
+        ? RAW_NOTE
+        : unlined.includes(item)
+          ? covered.includes(item)
+            ? BYPRODUCT_NOTE
+            : RAW_NOTE
+          : UNUSED_NOTE,
     }));
   return {
     here: [...here.sort(byItem), ...ingredients.sort(byItem), ...stale],
@@ -338,6 +347,9 @@ export function onSiteRecalcSettings(
 // the group's lines uses now, and a raw resource, which the planner can never make on site (#921).
 export const UNUSED_NOTE = '(no line here uses it now)';
 export const RAW_NOTE = "(can't be made on site)";
+// The note on a mark that central lines' byproduct covers in the phase shown (markNote), in the
+// heading and on a kept box of the picker.
+export const BYPRODUCT_NOTE = '(a byproduct of central lines covers it)';
 
 // One item under a group's heading, or one box of its picker (onSitePickerOffers), with a note in
 // brackets, or '' for none.
@@ -376,6 +388,7 @@ export function onSiteSummaries(
       wanted: want?.[id]?.items || [],
       planned: planned[id] || [],
       dropped: stage?.onSiteDropped?.[id] || [],
+      byproducts: byproductUses(stage, groups, id),
     };
     out[id] = {
       made: lines.map(item => ({
@@ -393,31 +406,70 @@ export function onSiteSummaries(
 
 // What one group's marks come to: `used`, the items its lines use (the picker's offers),
 // `wanted`, the items a recalculation now would ask for (onSiteSettings), `planned`, the ones the
-// plan has a line for (onSitePlannedItems), and `dropped`, the ones the planner made centrally in the phase shown.
+// plan has a line for (onSitePlannedItems), `dropped`, the ones the planner made centrally in the
+// phase shown, and `byproducts`, the ones its lines there take that central lines make as a
+// byproduct (byproductUses).
 interface GroupMarks {
   used: readonly string[];
   wanted: readonly string[];
   planned: readonly string[];
   dropped: readonly string[];
+  byproducts: ByproductUses;
 }
 
 // Why a group's mark of `item` gives it no line in the phase shown: the picker's notes for a raw
 // resource and for an item none of its lines uses (so a recalculation would give it no line
 // either), the raw resource's note too for an item its lines use that no recipe the planner
-// copies for a group makes (a radioactive item, #933, or one the plan makes only as a byproduct,
-// such as Dark Matter Residue, #1012), "needs a recalculation" when the plan has
+// copies for a group makes (a radioactive item, #933), "needs a recalculation" when the plan has
 // no line for it (#938, #970), "made centrally in this phase" when the planner fell back to
 // central lines there, and otherwise "no line in this phase", as when the group uses the item only
-// in other phases, or when the central lines' byproduct of a fluid covers all the group uses there
-// and its line drops to nothing (siteFeeds in planner/on-site.ts, #1012), which a recalculation
-// would plan the same way, so the notice asks for none.
+// in other phases. When the group's lines use it in the phase shown and central lines there make
+// it as a byproduct that covers all of it, the mark reads BYPRODUCT_NOTE, the same in both ways
+// that happens (#1027 review): the phase makes it only as a byproduct (Heavy Oil Residue beside
+// Plastic and Rubber, which the planner never copies for a group, #1012), or the plan has a line
+// of it, but the central byproduct of a fluid feeds the group first and its line drops to nothing
+// (siteFeeds in planner/on-site.ts, Dark Matter Residue beside the Space Elevator parts), which a
+// recalculation would plan the same way, so the notice asks for none either way.
 function markNote(item: string, marks: GroupMarks): string {
   if (!onSitePlannable(item)) return RAW_NOTE;
   if (!marks.used.includes(item)) return UNUSED_NOTE;
-  if (!marks.wanted.includes(item)) return RAW_NOTE;
+  if (!marks.wanted.includes(item))
+    return marks.byproducts.only.includes(item) ? BYPRODUCT_NOTE : RAW_NOTE;
   if (!marks.planned.includes(item)) return '(needs a recalculation)';
   if (marks.dropped.includes(item)) return '(made centrally in this phase)';
-  return '(no line in this phase)';
+  return marks.byproducts.any.includes(item) ? BYPRODUCT_NOTE : '(no line in this phase)';
+}
+
+// The items group `groupId`'s rows in `stage` use, other than its lines made on site, that a
+// central line there (not a group's own) makes as a byproduct, an output after its first (#1012):
+// `any`, and `only`, the ones no line of the stage makes as its product (its first output).
+interface ByproductUses {
+  any: string[];
+  only: string[];
+}
+function byproductUses(
+  stage: StoredStage | undefined,
+  groups: PickerGroups,
+  groupId: string,
+): ByproductUses {
+  const rows = stage?.rows || [];
+  const used = new Set(
+    rows
+      .filter(row => !row.onSite && (rowPlaces(row, groups).get(groupId) || 0) > LINK_DUST)
+      .flatMap(row => Object.keys(row.inputs || {})),
+  );
+  const byproducts = (row: CalcRow) =>
+    Object.keys(row.outputs || {})
+      .slice(1)
+      .filter(item => (row.outputs[item] || 0) > LINK_DUST);
+  const products = new Set(rows.map(row => Object.keys(row.outputs || {})[0]));
+  const any = uniqueSorted(
+    rows
+      .filter(row => !row.onSite)
+      .flatMap(byproducts)
+      .filter(item => used.has(item)),
+  );
+  return { any, only: any.filter(item => !products.has(item)) };
 }
 
 // The items group `groupId`'s own lines make in `stage`, sorted: of each line's outputs, the ones
@@ -452,5 +504,8 @@ export function onSiteEntriesText(entries: readonly OnSiteEntry[]): string {
 
 // A note as it reads after two or more items (#978): "(no line here uses them now)". The picker
 // keeps the singular, since each of its notes follows one item.
-const UNUSED_NOTE_PLURAL = '(no line here uses them now)';
-const pluralNote = (note: string) => (note === UNUSED_NOTE ? UNUSED_NOTE_PLURAL : note);
+const PLURAL_NOTES: Record<string, string> = {
+  [UNUSED_NOTE]: '(no line here uses them now)',
+  [BYPRODUCT_NOTE]: '(a byproduct of central lines covers them)',
+};
+const pluralNote = (note: string) => PLURAL_NOTES[note] ?? note;

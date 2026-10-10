@@ -1370,10 +1370,13 @@ textarea::placeholder {
   gap: 6px;
   margin: -8px 0 18px;
 }
+/* A factory's name of one unbroken word wraps inside its button rather than running out of the
+   page (#986's names; the bar scrolls within itself only on a phone, where it does not wrap). */
 .jump-bar .btn {
   max-width: 100%;
   padding: 7px 11px;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 .jump-bar .count {
   color: var(--muted);
@@ -3742,6 +3745,12 @@ button.rail-tile:hover {
    has no such cell and is laid out as before. */
 .gf-text td.gf-cell-name {
   min-width: 14ch;
+  overflow-wrap: anywhere;
+}
+/* The table's ♻ advice (FlowTable.vue): a sentence, kept wide enough to read on a phone, where
+   the table scrolls inside its wrapper; a group's long name in it breaks inside the cell. */
+.gf-text td.gf-cell-advice {
+  min-width: 28ch;
   overflow-wrap: anywhere;
 }
 /* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,

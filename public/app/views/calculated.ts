@@ -16,7 +16,7 @@ import {
 import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
 import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
-import { adviceText, lineAdvice, recycleModel } from '../recycle.ts';
+import { adviceSentence, adviceText, lineAdvice, NO_COVER, recycleModel } from '../recycle.ts';
 import type { AdviceLine, AdviceWords, RecycleModel } from '../recycle.ts';
 import {
   calcStage,
@@ -184,11 +184,38 @@ const recycleWords: AdviceWords = {
 };
 
 // A line's byproduct advice (recycle.ts, #1022) in stage `snapshot`, the phase shown unless
-// given: where its byproducts go, then where the inputs a byproduct covers come from.
+// given: where its byproducts go, then where the inputs a byproduct covers come from. With
+// `place` (a group id), only the line's part in that group, as its flow page shows a split row.
 export const rowAdvice = (
   row: CalcRow,
   snapshot: StoredStage | undefined = calcStage(),
-): AdviceLine[] => (snapshot ? lineAdvice(row, recycleModelOf(snapshot), recycleWords) : []);
+  place?: string,
+): AdviceLine[] => (snapshot ? lineAdvice(row, recycleModelOf(snapshot), recycleWords, place) : []);
+
+// One ♻ line of a group's flow page: the advice for an output (`out`, a byproduct) or an input
+// (`in`) of the group's part of a line, as text, with the Water Extractors after the sentence.
+// `recycled` is false for Water no byproduct covers, which is not drawn as recycling.
+export interface FlowAdvice {
+  side: 'in' | 'out';
+  item: string;
+  lead: string;
+  text: string;
+  recycled: boolean;
+}
+
+// The ♻ lines of line `rowId` on group `place`'s flow page, in the phase shown: its card's lines
+// under the rows (ui/group-flow/FlowCard.vue) and the table's (FlowTable.vue). A row split over
+// several places gets its part in the group, not the whole line's advice.
+export function flowAdvice(rowId: string, place: string): FlowAdvice[] {
+  const row = calcStage()?.rows?.find(candidate => candidate.id === rowId);
+  return (row ? rowAdvice(row, calcStage(), place) : []).map(line => ({
+    side: line.kind === 'byproduct' ? 'out' : 'in',
+    item: line.item,
+    lead: line.lead,
+    text: [adviceSentence(line), line.extractors].filter(Boolean).join(' '),
+    recycled: line.parts[0] !== NO_COVER,
+  }));
+}
 
 // The first sentence of a step for a factory group's own line made on site (#876), naming the
 // group; '' for any other row. Only the outputs the plan was calculated to make on site for the

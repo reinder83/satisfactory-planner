@@ -8,7 +8,9 @@
   carries its id in the flow as data-row. An input row fed from outside the group and by no
   other line of it has a blue side bar instead of an arrow; one fed only by itself has neither.
   Under a byproduct's output row, and under an input row a byproduct covers, a ♻ line repeats
-  the factory dialog's advice for the whole line (rowAdvice, #1022) as text. Under an input row of
+  the factory dialog's advice (rowAdvice, #1022) as text, for the group's part of the line: a row
+  split over several groups gets only what its part here sends and takes (flowAdvice), not the
+  whole line's advice, and the table (FlowTable.vue) lists the same lines. Under an input row of
   extracted Water, the line's Water Extractors end that line (#1024), which has no ♻ when no
   byproduct covers any of it ("No byproduct covers it: extract all of it. Water Extractors …").
 -->
@@ -25,14 +27,18 @@ import {
   type FlowNames,
 } from '../../views/group-flow-page.ts';
 import { machineLine } from '../../views/factories.ts';
-import { rowAdvice } from '../../views/calculated.ts';
-import { adviceSentence, NO_COVER } from '../../recycle.ts';
-import { calcStage } from '../../session.ts';
+import { flowAdvice, type FlowAdvice } from '../../views/calculated.ts';
 import { legacy } from '../bridge.ts';
 import { power } from '../../wizard/fields.ts';
 import { factoryLink } from '../actions.ts';
 
-const props = defineProps<{ line: FlowLine; names: FlowNames; running: boolean; hot: boolean }>();
+const props = defineProps<{
+  line: FlowLine;
+  group: string;
+  names: FlowNames;
+  running: boolean;
+  hot: boolean;
+}>();
 
 const machines = computed(() => {
   const line = props.line;
@@ -45,23 +51,13 @@ const machines = computed(() => {
 const fromOutside = (row: FlowRow) =>
   row.links.some(link => link.from.kind === 'place') && !row.links.some(isLaneLink);
 const loops = (row: FlowRow) => row.links.some(link => link.loop);
-// The dialog's byproduct advice for this line as text, by item: for its byproducts (`out`) and
-// for its inputs a byproduct covers or that are extracted Water (`in`), with the Water
-// Extractors after the sentence. `recycled` is false for Water no byproduct covers, which is
-// not drawn as recycling.
-interface RowAdvice {
-  text: string;
-  recycled: boolean;
-}
+// The byproduct advice for the group's part of this line, by item: for its byproducts (`out`)
+// and for its inputs a byproduct covers or that are extracted Water (`in`).
 const advice = computed(() =>
   legacy(() => {
-    const byItem = { in: new Map<string, RowAdvice>(), out: new Map<string, RowAdvice>() };
-    const row = calcStage()?.rows?.find(candidate => candidate.id === props.line.id);
-    for (const line of row ? rowAdvice(row) : [])
-      byItem[line.kind === 'byproduct' ? 'out' : 'in'].set(line.item, {
-        text: [adviceSentence(line), line.extractors].filter(Boolean).join(' '),
-        recycled: line.parts[0] !== NO_COVER,
-      });
+    const byItem = { in: new Map<string, FlowAdvice>(), out: new Map<string, FlowAdvice>() };
+    for (const line of flowAdvice(props.line.id, props.group))
+      byItem[line.side].set(line.item, line);
     return byItem;
   }),
 );

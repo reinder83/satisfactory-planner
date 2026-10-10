@@ -153,7 +153,12 @@ test('the templates still draw the elements those rules name', () => {
       text,
     );
   }
-  assert.equal(table.match(/'gf-cell-name'/g)?.length, 3);
+  // And the line in the table of byproduct advice (#1033 polish).
+  assert.match(
+    table,
+    /<td :class="\{ 'gf-cell-name': hasLongWord\(entry\.line\.name\) \}">\s*\{\{ entry\.line\.name \}\}\s*<\/td>/,
+  );
+  assert.equal(table.match(/'gf-cell-name'/g)?.length, 4);
   // The notes naming a group follow the "Delivers" rows as their siblings.
   assert.match(
     diagram,
