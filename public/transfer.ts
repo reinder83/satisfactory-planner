@@ -1,4 +1,4 @@
-import { safeKey, shareState, validateState } from './state.ts';
+import { restoreTarget, safeKey, shareState, validateState } from './state.ts';
 import {
   migrateOriginalProfile,
   usableHandbook,
@@ -31,6 +31,7 @@ interface IncomingProfile {
     sources?: { url: string }[];
   };
   state: unknown;
+  backupOf?: unknown;
 }
 interface IncomingSave {
   id: unknown;
@@ -42,7 +43,9 @@ interface IncomingSave {
 // passwords or sessions. Written by /api/export-saves in server/save-routes.ts and
 // browser-api.ts and read back by their /api/import-saves, so saves move between editions.
 //   { format, version: 1, exportedAt, saves: [{ id, name, activeProfile, profiles: [
-//     { id, name, kind: 'calculated', plan, state }] }] }
+//     { id, name, kind: 'calculated', plan, state, backupOf? }] }] }
+// backupOf (#1071) is the id of the profile of the same save a profile is a kept version of; an
+// export from before it has none, and releases before it leave it out when they import.
 // An export from before the handbook was retired (#387) may also hold a profile of kind
 // 'original' with its own handbook instead of a plan; it is still read, and importableTransfer
 // converts it into a calculated profile. No export writes one any more.
@@ -185,6 +188,14 @@ function importedState(state: unknown) {
   }
 }
 type GuideShape = { id?: unknown; title?: unknown; body?: unknown };
+// Removes each profile's kept-version link (`backupOf`, #1071) that does not name another profile
+// of the same list: a profile removed or left out of the export, or a damaged value. Changes the
+// profiles in place.
+function keptLinks(profiles: { id: string; backupOf?: unknown }[]) {
+  for (const profile of profiles)
+    if (profile.backupOf !== undefined && !restoreTarget(profiles, profile))
+      delete profile.backupOf;
+}
 // Checks a parsed export and returns a clean copy of the same shape, without exportedAt.
 // Throws (invalid(): an Error with status 400) before anything is written. Each profile's progress goes through
 // validateState, so older state versions import and a state from a newer planner is refused
@@ -279,8 +290,12 @@ export function validateTransfer(data: unknown): Omit<ImportableSaveExport, 'exp
         plan,
         ...(handbook ? { handbook: handbook as Handbook } : {}),
         state: importedState(profile.state),
+        ...(typeof profile.backupOf === 'string' ? { backupOf: profile.backupOf } : {}),
       };
     });
+    // A kept-version link (#1071) survives only where it names another profile of this save; any
+    // other one is left out rather than refused, since it is no progress (keptLinks).
+    keptLinks(profiles);
     if (
       new Set(profiles.map(p => p.id)).size !== profiles.length ||
       !profiles.some(p => p.id === save.activeProfile)
@@ -363,7 +378,8 @@ type ExportedSave<S extends ExportableSave> = Omit<S, 'profiles'> & {
 // one request's query: the saves listed in `chosen`, then the one `saveId` names, then those
 // holding `profileId`, with only that profile; a save whose active profile is left out points at
 // its first one. A share runs every state through shareState, and a payoff ranking is always left
-// out, since it is derived and can be run again. Every other key is kept as it is, in its order.
+// out, since it is derived and can be run again, and so is a kept-version link (`backupOf`, #1071)
+// to a profile the export leaves out. Every other key is kept as it is, in its order.
 // An unknown id calls `notFound` with 'Save not found.' or 'Profile not found.', which must throw;
 // each edition reports it its own way. The saves are not changed, and the export shares their
 // plans and handbooks.
@@ -391,6 +407,12 @@ export function selectForExport<S extends ExportableSave>(
   }
   const exportProfile = ({ payoff: _derived, ...profile }: S['profiles'][number]) =>
     share ? { ...profile, state: shareState(profile.state) } : profile;
+  // A kept-version link (#1071) goes only where the profile it names goes too: one profile's
+  // export or share leaves it out.
+  const linked = (profiles: ExportedProfile<S>[]) => {
+    keptLinks(profiles);
+    return profiles;
+  };
   const exported = {
     format: transferFormat,
     version: 1 as const,
@@ -401,7 +423,7 @@ export function selectForExport<S extends ExportableSave>(
       const activeProfile = profiles.some(p => p.id === save.activeProfile)
         ? save.activeProfile
         : profiles[0]!.id;
-      return { ...save, activeProfile, profiles: profiles.map(exportProfile) };
+      return { ...save, activeProfile, profiles: linked(profiles.map(exportProfile)) };
     }),
   };
   const countsAsBackup = () =>
@@ -415,15 +437,25 @@ export function selectForExport<S extends ExportableSave>(
 // and never overwrites. Changes the saves in place and returns them; each edition then stores
 // them its own way.
 export function remapImportedIds<
-  S extends { id: string; activeProfile: string; profiles: { id: string }[] },
+  S extends { id: string; activeProfile: string; profiles: { id: string; backupOf?: string }[] },
 >(imported: { saves: S[] }, newId: () => string): S[] {
   for (const save of imported.saves) {
     const oldActive = save.activeProfile;
+    const renamed = new Map<string, string>();
     for (const profile of save.profiles) {
       const previous = profile.id;
       profile.id = newId();
+      renamed.set(previous, profile.id);
       if (previous === oldActive) save.activeProfile = profile.id;
     }
+    // A kept version's link (#1071) follows the profile it names to its new id; validateTransfer
+    // left only links to a profile of the same save.
+    for (const profile of save.profiles)
+      if (profile.backupOf !== undefined) {
+        const linked = renamed.get(profile.backupOf);
+        if (linked) profile.backupOf = linked;
+        else delete profile.backupOf;
+      }
     save.id = newId();
   }
   return imported.saves;

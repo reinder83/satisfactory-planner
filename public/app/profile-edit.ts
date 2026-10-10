@@ -4,7 +4,8 @@
 // · Oct 7" (defaultProfileName), so several profiles of one save no longer share the goal's
 // name. Only new profiles are named this way; a stored name is never changed. Edit settings
 // recalculates a profile in place and keeps its previous version as a profile named
-// "<name> (before edit, Oct 7, 2:05 PM)" (backupName). Review lists what the edit changes
+// "<name> (before edit, Oct 7, 2:05 PM)" (backupName), which "Restore this version" can swap back
+// (app/restore-version.ts). Review lists what the edit changes
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
 import { distributions, purities } from '../preferences.ts';
 import { ALLOWANCE_SETTING, powerView } from '../power.ts';
@@ -74,8 +75,14 @@ export function defaultProfileName(
 // The name the previous version of an edited profile is kept under: "<name> (before edit, Oct
 // 7, 2:05 PM)", the name cut so the whole fits in 80 characters. A second edit within the same
 // minute, whose backup would get a name one of `taken` (the save's profile names) has, is
-// numbered: "<name> (before edit 2, Oct 7, 2:05 PM)".
-export function backupName(name: string, date = new Date(), taken: readonly string[] = []): string {
+// numbered: "<name> (before edit 2, Oct 7, 2:05 PM)". The version a restore replaces is kept the
+// same way with `reason` 'restore': "<name> (before restore, Oct 7, 2:05 PM)".
+export function backupName(
+  name: string,
+  date = new Date(),
+  taken: readonly string[] = [],
+  reason: 'edit' | 'restore' = 'edit',
+): string {
   const when = date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -83,7 +90,7 @@ export function backupName(name: string, date = new Date(), taken: readonly stri
     minute: '2-digit',
   });
   for (let count = 1; ; count++) {
-    const suffix = ` (before edit${count > 1 ? ' ' + count : ''}, ${when})`;
+    const suffix = ` (before ${reason}${count > 1 ? ' ' + count : ''}, ${when})`;
     const named = name.slice(0, Math.max(1, NAME_LIMIT - suffix.length)).trimEnd() + suffix;
     if (!taken.includes(named)) return named;
   }

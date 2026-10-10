@@ -55,6 +55,7 @@ const SHARED = [
   'state/factory-groups.ts',
   'state/items.ts',
   'state/mutate.ts',
+  'state/restore.ts',
   'state/summary.ts',
   'state/validate.ts',
 ];

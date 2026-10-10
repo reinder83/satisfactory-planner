@@ -37,6 +37,8 @@
 //                            in place (recalculatedProfile, checkRecalculate)
 //   state/summary.ts         phaseProgress, planStepIds, profilePhases, profilePhasesCache and
 //                            currentPayoff
+//   state/restore.ts         Restore this version (#1071): the kept-version link (restoreTarget),
+//                            its refusals (checkRestore) and the swap (restoredVersions)
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 //   state/items.ts           ITEM_NAMES, every item name the game data has held
 export {
@@ -89,5 +91,15 @@ export {
   profilePhases,
   profilePhasesCache,
 } from './state/summary.ts';
+export {
+  checkRestore,
+  notAKeptVersion,
+  restoredVersions,
+  restoreNeedsCalculated,
+  restoreFields,
+  restoreStale,
+  restoreTarget,
+  restoreTargetGone,
+} from './state/restore.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
 export { ITEM_NAMES } from './state/items.ts';

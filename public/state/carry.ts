@@ -526,7 +526,8 @@ export function checkPlan(
 // revision moves past the previous one, so a whole-value write from a tab that still shows the
 // previous version is refused (checkBase). The previous version is kept whole as `backup`: a
 // copy of the stored profile (plan, progress, payoff ranking) under `backupId` and `backupName`,
-// which the callers add right after it. Nothing is deleted. Limits and selection stay with the
+// which the callers add right after it, linked to the profile (`backupOf`, so "Restore this
+// version" can swap it back, restore.ts). Nothing is deleted. Limits and selection stay with the
 // callers.
 //
 // Unlike a new profile, the user goes on in this very profile (#1112), so it also keeps the phase
@@ -554,8 +555,13 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
   state.revision = (previous.state.revision ?? 0) + 1;
   return {
-    profile: started.profile,
-    backup: { ...structuredClone(previous), id: backupId, name: backupName },
+    // A profile that is itself a kept version keeps its link (restore.ts): it stays the version
+    // kept for that profile, now recalculated.
+    profile: {
+      ...started.profile,
+      ...(previous.backupOf === undefined ? {} : { backupOf: previous.backupOf }),
+    },
+    backup: { ...structuredClone(previous), id: backupId, name: backupName, backupOf: previous.id },
     reviewCount: started.reviewCount,
     carried: Object.values(state.checks).filter(Boolean).length,
   };
