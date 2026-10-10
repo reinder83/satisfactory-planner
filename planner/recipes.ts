@@ -242,6 +242,12 @@ export function nuclearPeriod(pool: ChainRecipe[], demand: ItemRates = {}): numb
 // with a waste strategy, plutonium and ficsonium plants in Phase 5 when recycling. Phase 1 has no
 // generators: biomass burners are hand-fed and stay out of the model. Then `mainPower` narrows
 // the list from Phase 3 on; 'auto' leaves the choice to the solver.
+// The other fuels the game's generators burn come last (#1055), so the lines before them keep
+// their order in the model: Coal Generators burning Compacted Coal from Phase 2 and Petroleum Coke
+// from Phase 3, and Fuel Generators burning Ionized Fuel from Phase 5. A fuel the phase's pool
+// cannot make (Compacted Coal without its MAM research, before Rocket Fuel's byproduct) leaves its
+// line unused. A generator row's `phase` is its building's, as Rocket Fuel's is. Row ids are
+// progress keys (`calc-<phase>-power-coal`): a new fuel gets a new id, never an existing one.
 export function generators(config: CurrentSettings, phase: number): PoolRecipe[] {
   const result: PoolRecipe[] = [];
   if (phase >= 2)
@@ -298,20 +304,48 @@ export function generators(config: CurrentSettings, phase: number): PoolRecipe[]
         },
       );
   }
+  if (phase >= 2)
+    for (const name of ['Compacted Coal', ...(phase >= 3 ? ['Petroleum Coke'] : [])])
+      result.push({
+        id: 'power-' + slug(name),
+        name: name + ' power',
+        machine: 'Coal Generator',
+        phase: 2,
+        power: -75,
+        // 75 MW is 4,500 MJ per minute, divided by the fuel's energy per item, as Coal's 15/min.
+        inputs: { [name]: 4500 / DATA.items[name]!.energy, Water: 45 },
+        outputs: {},
+      });
+  if (phase >= 5)
+    result.push({
+      id: 'power-ionized-fuel',
+      name: 'Ionized Fuel power',
+      machine: 'Fuel Generator',
+      phase: 3,
+      power: -250,
+      inputs: { 'Ionized Fuel': 15000 / DATA.items['Ionized Fuel']!.energy },
+      outputs: {},
+    });
   // Nuclear plants (present only with a waste strategy) are kept under every preference. The
-  // others keep one fuel: coal, 'fuel', rocket fuel from Phase 4 for the rocket options, and
-  // turbofuel otherwise, which is also the Phase 3 bridge for 'nuclear' before plants unlock.
+  // others keep their fuels: coal every Coal Generator line (Coal, Compacted Coal and Petroleum
+  // Coke), 'fuel' Fuel and, in Phase 5, Ionized Fuel, rocket fuel from Phase 4 for the rocket
+  // options, and turbofuel otherwise, which is also the Phase 3 bridge for 'nuclear' before
+  // plants unlock.
   const preferred = config.mainPower || 'auto';
   if (preferred === 'auto' || phase < 3) return result;
   if (preferred === 'coal')
-    return result.filter(r => r.id === 'power-coal' || r.machine === 'Nuclear Power Plant');
+    return result.filter(
+      r => r.machine === 'Coal Generator' || r.machine === 'Nuclear Power Plant',
+    );
   if (preferred === 'nuclear' && phase >= 4)
     return result.filter(r => r.machine === 'Nuclear Power Plant');
-  const fuel =
+  const fuels =
     preferred === 'fuel'
-      ? 'Fuel'
+      ? ['Fuel', 'Ionized Fuel']
       : preferred.startsWith('rocket') && phase >= 4
-        ? 'Rocket Fuel'
-        : 'Turbofuel';
-  return result.filter(r => r.machine === 'Nuclear Power Plant' || r.inputs[fuel]);
+        ? ['Rocket Fuel']
+        : ['Turbofuel'];
+  return result.filter(
+    r => r.machine === 'Nuclear Power Plant' || fuels.some(fuel => r.inputs[fuel]),
+  );
 }

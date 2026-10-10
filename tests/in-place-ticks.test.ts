@@ -42,13 +42,14 @@ const SETTINGS = {
 };
 const EDITED = { ...SETTINGS, goal: 'balanced', augmenters: 0 };
 // Ticked before the edit: steps the edited plan still lists, the augmenter step it drops, and
-// world records the carry always kept.
+// world records the carry always kept. (Phase 4's retirement step went with #1055, whose generator
+// fuels change the solve: the edited plan's Phase 3 now makes its Plastic without the Residual
+// Plastic line Phase 4 retired, so only Phase 3 has a retirement step.)
 const KEPT = [
   'space-elevator',
   'mining-1',
   'mining-3',
   'retire-3',
-  'retire-4',
   'sloop-hand-fed',
   'deliver-1',
   'deliver-3',

@@ -415,7 +415,10 @@ export function machineSetup(row: CalcRow) {
 }
 
 // A generator line of a plan made since #1064 (wholeGenerators in flow.ts): whole generators at
-// 100%, none adjustable.
+// 100%, none adjustable. A Coal Generator line burning a fuel other lines make (Petroleum Coke,
+// Compacted Coal, #1055) also says to give it an overflow to the sink: the generators burn only
+// for the power drawn, and the rest would back up the lines making it (for Petroleum Coke, the
+// Plastic and Rubber lines whose Heavy Oil Residue it uses up).
 function generatorSetup(row: CalcRow) {
   const fullOutput = [
     `${num(-row.power)} MW`,
@@ -424,7 +427,7 @@ function generatorSetup(row: CalcRow) {
     ),
   ].join(' · ');
   return {
-    summary: `${row.machines} ${row.machine} total: all at 100%; they burn fuel only for the power drawn.`,
+    summary: `${row.machines} ${row.machine} total: all at 100%; they burn fuel only for the power drawn.${madeFuelOverflow(row)}`,
     whole: row.machines,
     partial: false,
     fullOutput,
@@ -433,6 +436,15 @@ function generatorSetup(row: CalcRow) {
     easy: null as EasySetup | null,
   };
 }
+
+// The overflow sentence of a generator line burning Petroleum Coke or Compacted Coal, after a
+// space; '' for any other line.
+const madeFuelOverflow = (row: CalcRow): string => {
+  const fuel = ['Petroleum Coke', 'Compacted Coal'].find(item => row.inputs?.[item]);
+  return fuel
+    ? ` Give the ${fuel} belt an overflow to the AWESOME Sink, so the lines making it never back up.`
+    : '';
+};
 
 // The easier rounded setting the factory dialog offers (ui/detail/CalcFactoryDialog.vue), and
 // the build-plan step points to (calcTasks): none for a nuclear or waste line, or when the
