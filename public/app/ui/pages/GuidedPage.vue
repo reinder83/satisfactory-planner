@@ -3,7 +3,8 @@
   short illustrated sequence that writes the same settings object the five steps write. For a
   save that already has profiles it first asks what is different (ui/guided/GuidedTopics.vue);
   otherwise the question at guidedStep, as picture cards (GuidedCards.vue), the rate rows of
-  the "already producing" question (ui/wizard/SupplyRows.vue), the hours for a timed goal and
+  the "already producing" question (ui/wizard/SupplyRows.vue), "What you already have"
+  (ui/guided/GuidedHave.vue, #1068), the hours for a timed goal and
   the top-up chips on the stock question, the recipe picker for "I will choose them myself" and
   the spare power box on the power question. "All settings →" lands on the step that owns the
   question, keeping every answer. The flow, readers and moves are in wizard/guided.ts: every
@@ -26,6 +27,7 @@ import BrowserNotice from '../BrowserNotice.vue';
 import InputField from '../form/InputField.vue';
 import NameField from '../form/NameField.vue';
 import GuidedCards from '../guided/GuidedCards.vue';
+import GuidedHave from '../guided/GuidedHave.vue';
 import GuidedTopics from '../guided/GuidedTopics.vue';
 import GuidedTopup from '../guided/GuidedTopup.vue';
 import PageHeader from '../PageHeader.vue';
@@ -175,6 +177,7 @@ async function submit(event: Event) {
         }}</StepHeading>
         <p>{{ page.question.lead }}</p>
         <SupplyRows v-if="page.question.kind === 'supply'" />
+        <GuidedHave v-else-if="page.question.kind === 'have'" />
         <GuidedCards v-else :question="page.question" />
         <AltPicker v-if="page.picking" />
         <div v-if="page.timed" class="form-grid guided-follow">

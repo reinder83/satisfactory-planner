@@ -305,6 +305,7 @@ function adaFacts(): AdaFacts {
     guidedStep: wizard?.guidedStep || 0,
     guidedTotal: wizard ? guidedFlow().length : 0,
     tutorialDone: wizard?.tutorial === 'done',
+    guidedHave: wizard?.mode === 'guided' && guidedFlow()[wizard.guidedStep - 1]?.kind === 'have',
     ownedAlternates: wizard?.ownedAlternates?.length ?? 0,
     earlierDone:
       wizard?.earlierDone && wizard.preview
