@@ -13,6 +13,7 @@ import {
   storageRateFor,
 } from '../public/preferences.ts';
 import { extractionEquipment } from '../public/power.ts';
+import { amplifiesIn } from '../public/somersloops.ts';
 import { solve, type LpModel } from '../optimizer.ts';
 import type {
   CurrentSettings,
@@ -102,7 +103,8 @@ import {
 export function run(config: CurrentSettings, phase: number, options: RunOptions = {}): RunResult {
   const context = phaseContext(config, phase, options);
   // The inner calls of the two-step fit pass `recipeIds`, so they skip it and plan the phase.
-  if ((config.wholeMachines || config.amplifySloops > 0) && !context.recipeIds)
+  // context.config, since a phase before the Production Amplifier research has no budget.
+  if ((context.config.wholeMachines || context.config.amplifySloops > 0) && !context.recipeIds)
     return twoStepFit(context);
   const pool = phasePool(context);
   const demands = phaseDemands(context, reachableItems(context, pool));
@@ -125,7 +127,9 @@ export interface PhaseContext extends Required<RunOptions> {
   power: PhasePower;
   mining: StageMining | null;
 }
-// run()'s options with their defaults filled in, and the phase's power figures.
+// run()'s options with their defaults filled in, and the phase's power figures. A phase before the
+// MAM's Production Amplifier research (AMPLIFIER_PHASE, #1056) is planned with no amplification
+// budget, exactly as without one: no amplified twins, and no fit that could drop them.
 export const phaseContext = (
   config: CurrentSettings,
   phase: number,
@@ -143,7 +147,10 @@ export const phaseContext = (
     storageLeftOut = stockedFromSurplus(config),
   }: RunOptions,
 ): PhaseContext => ({
-  config,
+  config:
+    config.amplifySloops > 0 && !amplifiesIn(config, phase)
+      ? { ...config, amplifySloops: 0 }
+      : config,
   phase,
   maximum,
   conversion,
