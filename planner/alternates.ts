@@ -10,14 +10,14 @@ import type {
 import { DATA, STANDARD_ALTERNATES } from './data.ts';
 import { turbofuelRecipes } from '../public/preferences.ts';
 import { fail, settings } from './settings.ts';
-import { pureNames } from './recipes.ts';
+import { pureNames, standardAlternateIn } from './recipes.ts';
 import { calculate } from './calculate.ts';
 
 // Hard-drive payoff (#67): for each alternate recipe the profile does not allow yet, calculate
 // the plan again with it allowed and compare one phase with the profile's own plan. `input` is
 // the profile's settings (normalised by settings() like calculate's). Candidates are the
 // alternates available by `phase` that the recipe setting leaves out: every one for 'standard'
-// (the alternates it already has, STANDARD_ALTERNATES, aside), the unticked ones for 'custom',
+// (the STANDARD_ALTERNATES its pool holds aside), the unticked ones for 'custom',
 // none for 'all'; the pure ingot alternates are skipped while `pureIngots` brings them in anyway.
 // Alternates no hard drive buys are never candidates (NO_HARD_DRIVE below). Each trial runs
 // under recipes: 'custom' with the owned list plus the candidate, so nothing else changes.
@@ -27,7 +27,7 @@ import { calculate } from './calculate.ts';
 // forwards as progress so its timeout restarts per phase, as for a calculation (#633).
 // The alternates the game unlocks with neither a hard drive nor research that costs one (#1044):
 // Polyester Fabric's MAM research and Distilled Silica's milestone. The MAM research for Turbofuel
-// and Compacted Coal costs a Hard Drive each, so a custom profile without them still ranks them.
+// and Compacted Coal costs a Hard Drive each, so a profile with the MAM recipes off still ranks them.
 const NO_HARD_DRIVE = STANDARD_ALTERNATES.filter(id => !turbofuelRecipes.includes(id));
 export function rankAlternates(
   input: unknown,
@@ -45,11 +45,15 @@ export function rankAlternates(
 ): AlternateRanking {
   const started = Date.now();
   const config = settings(input);
+  // The alternates the game unlocks without a hard drive count as allowed where the pool holds
+  // them (standardAlternateIn: the MAM recipes by their own setting, #1058), so a trial under
+  // 'custom' plans with exactly the base plan's pool and the candidate.
+  const held = STANDARD_ALTERNATES.filter(id => standardAlternateIn(config, id));
   const owned =
     config.recipes === 'custom'
-      ? config.alternateRecipes
+      ? [...new Set([...config.alternateRecipes, ...held])]
       : config.recipes === 'standard'
-        ? STANDARD_ALTERNATES
+        ? held
         : null;
   const phaseNumber = Number(phase);
   const candidates = owned
