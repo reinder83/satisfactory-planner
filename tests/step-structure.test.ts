@@ -132,3 +132,55 @@ test('the generator step gives its lines as a table: machines, what this phase a
   assert.match(five.table!.rows[0]![2]!, /^\d+ built in Phase 4, so add \d+/);
   assert.match(tableText(five.table), /Generator line Machines This phase Fuel/);
 });
+
+test('"Power available now" with spare power gives the power balance as a table', () => {
+  const plan = calculate({
+    phase: '4',
+    availablePowerGW: 2,
+    augmenters: 2,
+    phaseMining: true,
+    wholeMachines: true,
+  }) as StoredCalculatedPlan;
+  const step = steps(plan, '5').find(found => found.id === 'startup-5-power-review')!;
+  const table = step.table!;
+  assert.deepEqual(table.columns, ['Power', 'Supplies', 'Needs', 'Details']);
+  assert.deepEqual(
+    table.rows.map(row => row[0]),
+    [
+      'Spare power',
+      'Augmenters',
+      'Production lines',
+      'Miners and extractors',
+      'Trains, drones and pumps',
+      'New generators',
+    ],
+  );
+  const cell = (name: string, column: number) => table.rows.find(row => row[0] === name)![column]!;
+  // Each figure is the body's.
+  assert.ok(step.body.startsWith(`You have ${cell('Spare power', 1)} of spare power available`));
+  assert.ok(step.body.includes(`your 2 augmenters add ${cell('Augmenters', 1)}`));
+  assert.ok(step.body.includes(`${cell('Production lines', 2)} for production lines`));
+  assert.ok(step.body.includes(`${cell('Miners and extractors', 2)} for miners and extractors`));
+  assert.ok(step.body.includes(`${cell('Trains, drones and pumps', 2)} at 20% for trains`));
+  assert.ok(step.body.includes(`which provides ${cell('New generators', 1)}`));
+  assert.ok(step.body.includes(cell('New generators', 3)), 'the generator lines are the body’s');
+  assert.equal(table.total![0], 'Total');
+  assert.ok(step.body.includes(`(${table.total![2]} in all`));
+  assert.ok(step.body.includes(`, ${table.total![3]}.`), 'what is left, and why');
+  assert.ok(step.body.endsWith(table.after!));
+  assert.match(table.after!, /^Unlock Petroleum Power first\./);
+  assert.match(table.after!, /Water Extractors/);
+  assert.match(table.intro, /This phase needs [\d.,]+ GW more: build its .* power\.$/);
+  // Without spare power or augmenters the step stays text: it advises unlocks, not a balance.
+  const plain = steps(latePlan(), '4').find(found => found.id === 'startup-4-power-review')!;
+  assert.equal(plain.table, undefined);
+});
+
+test('spare power that covers the phase: the balance says nothing needs building', () => {
+  const plan = calculate({ phase: '3', availablePowerGW: 30 }) as StoredCalculatedPlan;
+  const step = steps(plan, '3').find(found => found.id === 'startup-3-power-review')!;
+  const table = step.table!;
+  assert.match(table.intro, /, which covers this phase's [\d.,]+ [MG]W: nothing needs building/);
+  assert.match(table.total![3]!, /^[\d.,]+ GW spare/);
+  assert.ok(step.body.startsWith('You have 30 GW of spare power available, which covers'));
+});

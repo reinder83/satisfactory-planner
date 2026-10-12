@@ -879,18 +879,20 @@ function unlockedPower({ byName, unlocked }: GuideContext): UnlockedPower {
 // The generators the player already has (settings.ownedGenerators, #1068) are named in both: how
 // many of the phase's generators they are and how many are left to build, and those of a building
 // the phase does not fuel, which it does not count (ownedPowerText). Last, which option of Water
-// Extractors its power counts (#1142).
+// Extractors its power counts (#1142). With spare power, the phase's power balance is also a table
+// (#1136, powerBalance): what supplies it and what it needs, part by part.
 function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideTask {
   const figures = phasePower(context);
+  const tail = unfueledOwnedText(context, figures) + waterPowerText(context, figures);
+  const existing = figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2;
   return {
     id: 'startup-' + context.stage + '-power-review',
     title: 'Power available now',
     body:
-      (figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
+      (existing
         ? existingPowerText(context, figures, unlocked)
-        : unlockText(context, figures, unlocked) + ownedCountText(figures)) +
-      unfueledOwnedText(context, figures) +
-      waterPowerText(context, figures),
+        : unlockText(context, figures, unlocked) + ownedCountText(figures)) + tail,
+    ...(existing ? { table: powerBalance(context, figures, unlocked, tail) } : {}),
   };
 }
 
@@ -1078,23 +1080,9 @@ function existingPowerText(
   figures: PhasePowerFigures,
   unlocked: UnlockedPower,
 ): string {
-  const { requiredMW, existingMW, augmenters, augmenterMW, generators } = figures;
-  // What the phase has before any new generation: the spare power, and what the augmenters add.
-  const haveMW = existingMW + augmenterMW;
-  const yours = `your ${augmenters === 1 ? 'augmenter adds' : formatNumber(augmenters) + ' augmenters add'} ${powerAmount(augmenterMW)}`;
-  const have =
-    augmenterMW <= 0.01
-      ? `You have ${powerAmount(existingMW)} of spare power available`
-      : existingMW <= 0.01
-        ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
-        : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
+  const { requiredMW, augmenterMW, generators } = figures;
+  const { haveMW, have, unlockFirst, check } = existingPowerWords(figures, unlocked);
   const allowance = figures.need.words;
-  const unlock = missingUnlocks(generators, unlocked);
-  const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
-  const check =
-    (figures.need.peak ? ' ' + figures.need.peak : '') +
-    ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it with Edit settings for more margin.` +
-    ' Before connecting the next factory, check the actual load against what your grid supplies.';
   if (requiredMW - haveMW <= 0.01)
     return (
       `${have}, which ${augmenterMW > 0.01 ? 'cover' : 'covers'} this phase's ${powerAmount(requiredMW)} (${allowance}): ` +
@@ -1107,6 +1095,118 @@ function existingPowerText(
   if (!generators.length)
     return `${more}, and its plan builds no generators for it: see the power headroom on the Resources page.${check}`;
   return `${more}: build ${newGeneration(plan, figures, false)}.${unlockFirst}${check}`;
+}
+
+// The pieces existingPowerText and powerBalance share: what the phase has before any new
+// generation (the spare power and what the augmenters add) in MW and in words, the unlocks to
+// tick first, and the closing checks (the peak note, the allowance's setting, the load check).
+function existingPowerWords(figures: PhasePowerFigures, unlocked: UnlockedPower) {
+  const { existingMW, augmenters, augmenterMW, generators } = figures;
+  const yours = `your ${augmenters === 1 ? 'augmenter adds' : formatNumber(augmenters) + ' augmenters add'} ${powerAmount(augmenterMW)}`;
+  const have =
+    augmenterMW <= 0.01
+      ? `You have ${powerAmount(existingMW)} of spare power available`
+      : existingMW <= 0.01
+        ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
+        : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
+  const unlock = missingUnlocks(generators, unlocked);
+  return {
+    haveMW: existingMW + augmenterMW,
+    have,
+    unlockFirst: unlock.length ? ` Unlock ${listNames(unlock)} first.` : '',
+    check:
+      (figures.need.peak ? ' ' + figures.need.peak : '') +
+      ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it with Edit settings for more margin.` +
+      ' Before connecting the next factory, check the actual load against what your grid supplies.',
+  };
+}
+
+// The names of Power needed's parts in the power balance (#1136), by NeedPart key (power.ts).
+const NEED_NAMES: Record<string, string> = {
+  load: 'Production lines',
+  extraction: 'Miners and extractors',
+  peak: 'Production lines',
+  utility: 'Trains, drones and pumps',
+};
+
+// "Power available now" with spare power as a table (#1136): the phase's power balance, one row
+// per supply (the spare power, the augmenters, the new generators) and per part of what it needs,
+// a total row with what is left over, the opening sentence above it and the checks under it. The
+// same figures and words as existingPowerText, which stays the step's body.
+function powerBalance(
+  { plan }: GuideContext,
+  figures: PhasePowerFigures,
+  unlocked: UnlockedPower,
+  tail: string,
+): StepTable {
+  const { requiredMW, existingMW, augmenters, augmenterMW, newMW, leftMW, generators } = figures;
+  const { haveMW, have, unlockFirst, check } = existingPowerWords(figures, unlocked);
+  const covered = requiredMW - haveMW <= 0.01;
+  const sources = listNames(plannedSources(generators));
+  const intro = covered
+    ? `${have}, which ${augmenterMW > 0.01 ? 'cover' : 'covers'} this phase's ${powerAmount(requiredMW)}: ` +
+      (generators.length
+        ? `nothing needs building for that. The plan still builds its ${sources} power.`
+        : 'nothing needs building for power in this phase.')
+    : `${have}. This phase needs ${powerAmount(requiredMW - haveMW)} more` +
+      (generators.length
+        ? `: build its ${sources} power.`
+        : ', and its plan builds no generators for it: see the power headroom on the Resources page.');
+  const rows: string[][] = [];
+  if (existingMW > 0.01) rows.push(['Spare power', powerAmount(existingMW), '', '']);
+  if (augmenterMW > 0.01)
+    rows.push([
+      'Augmenters',
+      powerAmount(augmenterMW),
+      '',
+      `${formatNumber(augmenters)} Alien Power Augmenter${augmenters === 1 ? '' : 's'}`,
+    ]);
+  for (const part of figures.need.parts)
+    rows.push([
+      NEED_NAMES[part.key] ?? part.key,
+      '',
+      powerAmount(part.mw),
+      part.key === 'utility'
+        ? `${figures.need.percent}%, ${figures.need.setting} in Preferences`
+        : part.key === 'peak'
+          ? 'At their whole-machine peak'
+          : '',
+    ]);
+  // Where the spare power covers the phase, all the new generation is left over, and its row says
+  // why, as the body does; otherwise the total does, for what is left.
+  if (generators.length) {
+    const lines = generators.map(
+      row => `${formatNumber(row.machines)} × ${row.name} (${row.machine})`,
+    );
+    rows.push([
+      'New generators',
+      powerAmount(newMW),
+      '',
+      listNames(lines) +
+        keptText(figures) +
+        (covered ? `, which adds ${powerAmount(newMW)}${spareCause(plan, figures, newMW)}` : ''),
+    ]);
+  }
+  const cause = covered ? '' : spareCause(plan, figures, leftMW);
+  const left =
+    leftMW > 0.01
+      ? `${powerAmount(leftMW)} spare${cause}`
+      : leftMW < -0.01
+        ? `${powerAmount(-leftMW)} short of the need: see the power headroom on the Resources page`
+        : '';
+  return {
+    intro,
+    columns: ['Power', 'Supplies', 'Needs', 'Details'],
+    rows,
+    total: [
+      'Total',
+      powerAmount(haveMW + (generators.length ? newMW : 0)),
+      powerAmount(requiredMW),
+      left,
+    ],
+    after: (unlockFirst + check + tail).trim(),
+    caption: "This phase's power: what supplies it and what it needs",
+  };
 }
 
 // The generation the phase's lines add, highest source first, with what is left over once the
