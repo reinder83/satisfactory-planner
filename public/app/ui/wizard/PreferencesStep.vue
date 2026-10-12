@@ -1,7 +1,8 @@
 <!--
   All settings step 2, preferences: recipes, ingots, SAM, power and drone fuel, nuclear,
   storage and refill rates, somersloops and augmenters, then the somersloop ledger, the
-  per-item storage rates, for custom recipe access the alternate recipe picker, and the
+  per-item storage rates, the MAM recipes box (MamRecipes, #1058, under every recipe access),
+  for custom recipe access the alternate recipe picker, and the
   alternates you already own (OwnedAlternates, #1068, under every recipe access). Recipe
   access, preferred power, the ingot choice, drone fuel and nuclear change what the step shows,
   so WizardPage reads the step and redraws when they change. A rate that only means something
