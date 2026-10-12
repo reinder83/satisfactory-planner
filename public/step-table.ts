@@ -18,6 +18,19 @@ export interface StepTable {
   caption: string;
 }
 
+// A step's body as a list (#1136, the audit): where a table does not fit, one line per item, such
+// as a production line's byproduct advice, one paragraph per byproduct or input. The build plan
+// draws it in place of the body (ui/plan/StepList.vue): `intro` above it, the items as a list and
+// `after` under it. Worked out from the plan like a table, never stored, and replaced by an edited
+// body in the same way.
+export interface StepList {
+  intro: string;
+  items: string[];
+  after?: string;
+  // The list's accessible name, for its aria-label.
+  label: string;
+}
+
 // Every word a table shows, column names included, for the step search: a step matches what its
 // table says even where its body words it differently ("Machines", "Shards"). '' without one.
 export const tableText = (table: StepTable | undefined): string =>
@@ -26,3 +39,7 @@ export const tableText = (table: StepTable | undefined): string =>
         .flat()
         .join(' ')
     : '';
+
+// Every word a list shows, for the step search. '' without one.
+export const listText = (list: StepList | undefined): string =>
+  list ? [list.intro, ...list.items, list.after ?? ''].join(' ') : '';

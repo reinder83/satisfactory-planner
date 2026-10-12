@@ -11,15 +11,15 @@ import { listNames, powerAmount, slug } from './wording.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
-import type { StepTable } from './step-table.ts';
+import type { StepList, StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
 // can do without (#1070: research only a later phase needs, a storage-only line), which "Required
 // steps only" hides. `satisfied` is set while the step's own condition holds (the hard-drive step
 // with no recipe left to unlock, the delivery with every counter at its target): the build plan
-// then shows it done, says why, and writes no tick. `table` (#1136, step-table.ts) is a step's
-// text as a table, which the build plan draws in place of `body`; `body` keeps the same words for
-// search, copying and step edits.
+// then shows it done, says why, and writes no tick. `table` and `list` (#1136, step-table.ts) are
+// a step's text as a table or a list, which the build plan draws in place of `body`; `body` keeps
+// the same words for search, copying and step edits.
 export interface GuideTask {
   id: string;
   title: string;
@@ -27,6 +27,7 @@ export interface GuideTask {
   optional?: boolean;
   satisfied?: string;
   table?: StepTable;
+  list?: StepList;
 }
 
 // The id prefix and name suffix of an amplified twin (amplified() in planner/recipes.ts, which a
@@ -67,6 +68,8 @@ export interface GuideContext {
   sources: (item: string) => { row: CalcRow; running: boolean }[];
   // A milestone's cost, each item with where it can come from.
   funding: (entry: ProgressionEntry) => string;
+  // The same cost as rows of its step's table (#1136): each item, its amount and its supply.
+  costRows: (entry: ProgressionEntry) => string[][];
 }
 
 // The power unlocks the user has ticked. Without spare existing power in the settings the power
@@ -548,8 +551,17 @@ export function guideContext(
       Object.entries(entry.cost)
         .map(([item, quantity]) => `${formatNumber(quantity)} ${item}: ${status(item)}`)
         .join('; '),
+    costRows: entry =>
+      Object.entries(entry.cost).map(([item, quantity]) => [
+        item,
+        formatNumber(quantity),
+        capital(status(item)),
+      ]),
   };
 }
+
+// A sentence's words with a capital first letter, for a table cell.
+const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Milestones this phase needs: those unlocking a recipe or machine its rows use, a fixed set
 // of basics, and phase-specific power and logistics unlocks, each with its prerequisites.
@@ -698,12 +710,13 @@ function optionalResearch(
       phases = neededIn.get(id) ?? [];
     if (!entry?.mam || phases.includes(stage)) return task;
     const later = phases.find(phase => phase > stage);
+    const note = `Optional in this phase: none of its lines needs it${later ? `; Phase ${later}’s lines do` : ''}. Research it now if the materials are at hand, or later. `;
     return {
       ...task,
       title: task.title + ' (optional)',
-      body:
-        `Optional in this phase: none of its lines needs it${later ? `; Phase ${later}’s lines do` : ''}. Research it now if the materials are at hand, or later. ` +
-        task.body,
+      body: note + task.body,
+      // Its cost table (#1136) says so too, above the cost.
+      ...(task.table ? { table: { ...task.table, intro: note + task.table.intro } } : {}),
       optional: true,
     };
   });
@@ -732,7 +745,7 @@ function prerequisitesFirst(milestones: ProgressionEntry[]): ProgressionEntry[] 
 // out: they come from hard drives (hardDriveTasks). Prerequisites come before dependents;
 // among otherwise independent unlocks, costs with running supply come first.
 export function milestoneTasks(context: GuideContext, required: ProgressionEntry[]): GuideTask[] {
-  const { data, stage, sources, funding } = context;
+  const { data, stage, sources, funding, costRows } = context;
   const milestones = required.filter(entry => !entry.alternate && researchable(entry, data, stage));
   const readiness = (entry: ProgressionEntry) =>
     Object.keys(entry.cost).filter(item => sources(item).some(source => source.running)).length /
@@ -744,14 +757,32 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
       readiness(second) - readiness(first) ||
       first.name.localeCompare(second.name),
   );
-  return prerequisitesFirst(milestones).map(
-    (entry): GuideTask => ({
+  return prerequisitesFirst(milestones).map((entry): GuideTask => {
+    const title = `${entry.mam ? 'MAM' : 'Tier ' + entry.tier}: ${entry.name}`;
+    const lead = `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${listedNames(entry.requires, data, 'Prerequisites')}Cost (base game; adjust if your milestone-cost settings differ):`;
+    const rows = costRows(entry);
+    return {
       id: 'unlock-' + entry.id,
-      title: `${entry.mam ? 'MAM' : 'Tier ' + entry.tier}: ${entry.name}`,
-      body: `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${listedNames(entry.requires, data, 'Prerequisites')}Cost (base game; adjust if your milestone-cost settings differ): ${funding(entry) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
-    }),
-  );
+      title,
+      body: `${lead} ${funding(entry) || 'No item cost listed'}. ${CHECKMARKS}`,
+      // The cost as a table (#1136): one row per item with its amount and supply.
+      ...(rows.length
+        ? {
+            table: {
+              intro: lead,
+              columns: ['Item', 'Amount', 'Supply'],
+              rows,
+              after: CHECKMARKS,
+              caption: `Cost of ${title}`,
+            },
+          }
+        : {}),
+    };
+  });
 }
+
+// The last sentence of a milestone step.
+const CHECKMARKS = 'Production checkmarks do not confirm inventory or spare capacity.';
 
 // One hard-drive step plus one unlock step per alternate recipe this phase's rows use first: an
 // alternate an earlier planned phase (the start phase on) already uses is listed there and not
