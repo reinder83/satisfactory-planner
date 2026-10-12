@@ -107,9 +107,11 @@ const overclock = ref(!!draft().settings.overclock);
       data-water-overclock
       :checked="!!draft().settings.waterOverclock"
     /><span
-      >Overclock Water Extractors too<br /><small class="muted"
-        >Off: they plan at 100%, since you can always build more of them. On: up to the miners'
-        clock, with Power Shards.</small
+      >Suggest overclocked Water Extractors<br /><small class="muted"
+        >The build plan always shows both ways to build them: at 100%, and overclocked up to 250%
+        with Power Shards. This only picks the one it suggests first and counts in the power total.
+        Off: 100%, since you can always build more of them. On: overclocked, once you can
+        overclock.</small
       ></span
     ></label
   >

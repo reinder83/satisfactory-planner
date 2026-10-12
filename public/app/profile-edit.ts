@@ -188,7 +188,8 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
   ['ownedMiner', 'Miners you already have', value => (value ? `Miner Mk.${value}` : 'None')],
   ['ownedBelt', 'Belts you already have', value => (value ? `Mk.${value} belts` : 'None')],
   ['overclock', 'I can overclock', onOff],
-  ['waterOverclock', 'Overclock Water Extractors', onOff],
+  // Which Water Extractor option the plan suggests (#1142); both are always shown.
+  ['waterOverclock', 'Suggested Water Extractors', value => (value ? 'Overclocked' : 'At 100%')],
   [
     'ownedAlternates',
     'Alternates you already own',
