@@ -15,7 +15,9 @@
 // recordings exactly on main first). #1055 (Coal Generators burning Petroleum Coke and Compacted
 // Coal, Ionized Fuel power) changes the solve: the first #1038 case's Phase 5 makes its Plastic
 // with other lines, so its rows were recorded again the same way (main reproduced both first);
-// the other cases did not change.
+// the other cases did not change. #1056 (amplification waits for the Production Amplifier
+// research in Phase 3) drops both #1038 cases' amplified lines in Phases 1 and 2, so their rows
+// were recorded again the same way (main reproduced both first; Phases 3 to 5 did not change).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
