@@ -1508,15 +1508,27 @@ function generatorStep(
       ? 'Build'
       : 'Expand';
   const sources = [...new Set(generators.map(generatorSource))];
-  const lines = generators.map(row => generatorLine(row, builtBefore(row), previous, rows));
+  const parts = generators.map(row => generatorParts(row, builtBefore(row), previous, rows));
   const prerequisites = sources
     .map(source =>
       source === 'coal' ? coalPrerequisites(generators) : SOURCE_PREREQUISITES[source],
     )
     .filter(Boolean);
+  const own = 'Each line has its own step in this phase with its machines and output.';
+  const after = `${unburnedText(unburned)} ${prerequisites.join(' ')} ${closingAdvice(verb, previous)}`;
+  const title = `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`;
   return {
-    title: `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`,
-    body: `Phase ${stage}'s plan generates power with ${lines.join('; ')}. Each line has its own step in this phase with its machines and output.${unburnedText(unburned)} ${prerequisites.join(' ')} ${closingAdvice(verb, previous)}`,
+    title,
+    body: `Phase ${stage}'s plan generates power with ${parts.map(part => part.text).join('; ')}. ${own}${after}`,
+    // The generator lines as a table (#1136): each line's machines, what this phase adds to the
+    // previous phase's line, and the fuel it burns with the lines that make it.
+    table: {
+      intro: `Phase ${stage}'s plan generates power with these lines. ${own}`,
+      columns: ['Generator line', 'Machines', 'This phase', 'Fuel'],
+      rows: parts.map(part => part.cells),
+      after: after.trim(),
+      caption: `${title}: generator lines`,
+    },
   };
 }
 
@@ -1545,13 +1557,15 @@ function closingAdvice(verb: string, previous: number): string {
 }
 
 // One generator line in the step's text: its count and name as its build step shows them, what
-// it adds to the previous phase's line, and the fuel it burns with the lines that make it.
-function generatorLine(
+// it adds to the previous phase's line, and the fuel it burns with the lines that make it; and the
+// same as a row of the step's table (#1136): the line, its machines, what this phase adds and the
+// fuel.
+function generatorParts(
   row: CalcRow,
   builtBefore: number,
   previous: number,
   rows: CalcRow[],
-): string {
+): { text: string; cells: string[] } {
   const fuel = generatorFuel(row);
   const makers = rows
     .filter(maker => !isGenerator(maker) && maker.outputs[fuel])
@@ -1564,8 +1578,12 @@ function generatorLine(
   const from = makers.length
     ? ` from the ${listNames(makers)} step${makers.length > 1 ? 's' : ''}`
     : '';
-  const burns = fuel ? `, burning ${formatNumber(row.inputs[fuel])} ${fuel}/min${from}` : '';
-  return `${formatNumber(row.machines)} × ${row.name} (${row.machine}), ${added}${burns}`;
+  const burned = fuel ? `${formatNumber(row.inputs[fuel])} ${fuel}/min${from}` : '';
+  const machines = `${formatNumber(row.machines)} × ${row.machine}`;
+  return {
+    text: `${formatNumber(row.machines)} × ${row.name} (${row.machine}), ${added}${burned ? ', burning ' + burned : ''}`,
+    cells: [row.name, machines, capital(added), burned],
+  };
 }
 
 // The MAM node the Alien Power Augmenters need, by its name in progression.json

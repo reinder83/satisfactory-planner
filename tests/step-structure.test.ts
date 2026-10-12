@@ -99,3 +99,36 @@ test('a plan stored before the tables gets them, worked out from its stored stag
   }
   assert.equal(listText(undefined), '');
 });
+
+test('the generator step gives its lines as a table: machines, what this phase adds, fuel', () => {
+  for (const phase of ['4', '5']) {
+    const plan = latePlan(),
+      step = steps(plan, phase).find(found => found.id === 'preferred-power-' + phase)!;
+    const generators = plan.stages[phase as '4' | '5'].rows!.filter(row => row.generationMW > 0);
+    const table = step.table!;
+    assert.deepEqual(table.columns, ['Generator line', 'Machines', 'This phase', 'Fuel']);
+    assert.deepEqual(
+      table.rows.map(row => row[0]),
+      generators.map(row => row.name),
+    );
+    for (const [name, machines, added, fuel] of table.rows) {
+      const [count, machine] = machines!.split(' × ');
+      assert.ok(
+        step.body.includes(
+          `${count} × ${name} (${machine}), ${added!.charAt(0).toLowerCase() + added!.slice(1)}`,
+        ),
+      );
+      assert.ok(step.body.includes(`burning ${fuel}`), fuel);
+    }
+    assert.match(
+      table.intro,
+      new RegExp(`^Phase ${phase}'s plan generates power with these lines`),
+    );
+    assert.ok(step.body.endsWith(table.after!));
+    assert.ok(step.body.includes(table.intro.replace(/^.*these lines\. /, '')));
+  }
+  // Phase 5 adds to the Phase 4 line.
+  const five = steps(latePlan(), '5').find(found => found.id === 'preferred-power-5')!;
+  assert.match(five.table!.rows[0]![2]!, /^\d+ built in Phase 4, so add \d+/);
+  assert.match(tableText(five.table), /Generator line Machines This phase Fuel/);
+});

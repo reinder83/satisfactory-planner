@@ -130,3 +130,22 @@ test('a plan stored before the tables shows its milestone costs as tables', () =
   );
   assert.ok(step, 'a stored plan’s milestone step draws its table');
 });
+
+test('the generator step shows its lines as a table', async () => {
+  show('5');
+  const table = tableOf('preferred-power-5')!;
+  assert.ok(table, 'the generator step has a table');
+  assert.deepEqual(table.columns, ['Generator line', 'Machines', 'This phase', 'Fuel']);
+  assert.equal(table.rows[0]![0], 'Rocket Fuel power');
+  assert.match(table.rows[0]![1]!, /^[\d,]+ × Fuel Generator$/);
+  assert.match(table.rows[0]![2]!, /^[\d,]+ built in Phase 4, so add [\d,]+$/);
+  assert.match(table.rows[0]![3]!, /Rocket Fuel\/min from the Rocket Fuel step$/);
+  assert.match(table.after, /Keep the previous plant online until the replacement is stable\.$/);
+  // "Generator line" is only the table's; "Blender access" is the body's.
+  assert.ok(await found('preferred-power-5', 'generator line'));
+  assert.ok(await found('preferred-power-5', 'blender access'));
+});
+
+test('an edited generator step shows the edited words and keeps its tick', () => {
+  editedShowsWords('preferred-power-5', '5');
+});
