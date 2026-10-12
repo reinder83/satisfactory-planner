@@ -1158,7 +1158,8 @@ p {
     background: none;
   }
   .step-table th,
-  .step-table td {
+  .step-table td,
+  .step-table tbody th {
     padding: 1px 0;
     border: 0;
     white-space: normal;

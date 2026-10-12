@@ -1730,28 +1730,22 @@ function endgameTasks(context: GuideContext): GuideTask[] {
 }
 
 // The augmenter step as a table (#1136): the fueled and the unfueled augmenters, each with their
-// count, Somersloops (10 each), Alien Power Matrix (5/min each, fueled only), grid boost (30% fed,
-// 10% not) and own power (500 MW each), and a total row; the research and build sentence above it
+// count, Somersloops (10 each), fuel (5 Alien Power Matrix/min each, fueled only), the grid boost
+// (30% fed, 10% not) and its own power (500 MW each), and a total row; the research and build sentence above it
 // and the advice under it, in the body's words.
 function augmenterTable(count: number, fueled: number, build: string, grid: string): StepTable {
   const row = (name: string, n: number, fed: boolean) => [
     name,
     formatNumber(n),
     formatNumber(10 * n),
-    fed ? `${formatNumber(5 * n)}/min` : 'None',
+    fed ? `${formatNumber(5 * n)} Alien Power Matrix/min` : 'None',
     fed ? '30%' : '10%',
     powerAmount(500 * n),
   ];
   return {
     intro: `${build}.`,
-    columns: [
-      'Augmenters',
-      'Count',
-      'Somersloops',
-      'Alien Power Matrix',
-      'Grid boost',
-      'Generates',
-    ],
+    // Short column names, so the six columns fit the plan column at 1280 px.
+    columns: ['Augmenters', 'Count', 'Somersloops', 'Fuel', 'Boost', 'Power'],
     rows: [
       ...(fueled ? [row('Fueled', fueled, true)] : []),
       ...(count > fueled ? [row('Unfueled', count - fueled, false)] : []),
@@ -1760,7 +1754,7 @@ function augmenterTable(count: number, fueled: number, build: string, grid: stri
       'Total',
       formatNumber(count),
       formatNumber(10 * count),
-      fueled ? `${formatNumber(5 * fueled)}/min` : 'None',
+      fueled ? `${formatNumber(5 * fueled)} Alien Power Matrix/min` : 'None',
       '',
       powerAmount(500 * count),
     ],

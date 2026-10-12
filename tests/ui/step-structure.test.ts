@@ -207,11 +207,11 @@ test('the augmenter step shows fueled and unfueled augmenters as a table', async
   assert.ok(table, 'the augmenter step has a table');
   assert.match(table.intro, /^Research Power Augmenter in the MAM .*, then build 3 Augmenters\.$/);
   assert.deepEqual(table.rows, [
-    ['Fueled', '1', '10', '5/min', '30%', '500 MW'],
+    ['Fueled', '1', '10', '5 Alien Power Matrix/min', '30%', '500 MW'],
     ['Unfueled', '2', '20', 'None', '10%', '1,000 MW'],
   ]);
-  assert.deepEqual(table.total, ['Total', '3', '30', '5/min', '', '1.5 GW']);
-  assert.ok(await foundOnlyInStructure('alien-power-augmenter', 'grid boost'));
+  assert.deepEqual(table.total, ['Total', '3', '30', '5 Alien Power Matrix/min', '', '1.5 GW']);
+  assert.ok(await foundOnlyInStructure('alien-power-augmenter', 'boost power'));
   assert.ok(await found('alien-power-augmenter', 'not recoverable'));
 });
 

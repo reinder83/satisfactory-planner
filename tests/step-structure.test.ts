@@ -188,17 +188,16 @@ test('spare power that covers the phase: the balance says nothing needs building
 test('the augmenter step gives fueled and unfueled augmenters as a table with a total', () => {
   const step = steps(latePlan(), '5').find(found => found.id === 'alien-power-augmenter')!;
   const table = step.table!;
-  assert.deepEqual(table.columns, [
-    'Augmenters',
-    'Count',
-    'Somersloops',
-    'Alien Power Matrix',
-    'Grid boost',
-    'Generates',
+  assert.deepEqual(table.columns, ['Augmenters', 'Count', 'Somersloops', 'Fuel', 'Boost', 'Power']);
+  assert.deepEqual(table.rows[0]!.slice(0, 5), [
+    'Fueled',
+    '1',
+    '10',
+    '5 Alien Power Matrix/min',
+    '30%',
   ]);
-  assert.deepEqual(table.rows[0]!.slice(0, 5), ['Fueled', '1', '10', '5/min', '30%']);
   assert.deepEqual(table.rows[1]!.slice(0, 5), ['Unfueled', '2', '20', 'None', '10%']);
-  assert.deepEqual(table.total!.slice(0, 4), ['Total', '3', '30', '5/min']);
+  assert.deepEqual(table.total!.slice(0, 4), ['Total', '3', '30', '5 Alien Power Matrix/min']);
   // The body's figures: 10 Somersloops each, 30 in total, 5 Alien Power Matrix/min for the one fed.
   assert.match(step.body, /at 10 Somersloops each — 30 in total/);
   assert.match(step.body, /Feed 1 of them 5 Alien Power Matrix\/min in total/);
