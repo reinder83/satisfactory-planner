@@ -141,8 +141,9 @@ export interface CurrentSettings {
   // 250%, capped by a node's belt or pipe (phaseClock in public/preferences/mining.ts). Absent
   // unless chosen, and from every plan made before it, which plan 100% in Phases 1–3 as before.
   overclock?: true;
-  // Water Extractors run at the phase's clock rather than 100% (#1137, All settings step 4).
-  // Absent unless chosen: 100%.
+  // The plan suggests Water Extractors at the phase's clock rather than 100%, and its power counts
+  // them so (#1137, All settings step 4, "Suggest overclocked Water Extractors"). Both options are
+  // always advised (#1142, waterChoice in public/mining.ts). Absent unless chosen: 100%.
   waterOverclock?: true;
   // The alternate recipes the player already owns (#1068, All settings step 2): recipe ids, sorted.
   // recipePool adds each to every phase from the one it becomes available in, whatever `recipes`
@@ -397,8 +398,9 @@ export interface MiningSource {
 // builds, its budget per raw resource and the node kinds behind each (none for Water).
 export interface StageMining {
   miner: { mark: number; clock: number };
-  // The clock its Water Extractors run at (#1137): 1, or the phase's clock with
-  // settings.waterOverclock. Absent from stages stored before it, which used the miner's clock.
+  // The clock its Water Extractors are counted at, the suggested option (#1137, #1142): 1, or the
+  // phase's clock with settings.waterOverclock. Absent from stages stored before it, which used
+  // the miner's clock.
   water?: number;
   belt: { mark: string; cap: number };
   pipe: { mark: string; cap: number };

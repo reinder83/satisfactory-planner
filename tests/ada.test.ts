@@ -488,7 +488,7 @@ test("ADA says how much Water the phase extracts and points at the lines' extrac
   assert.equal(line.tone, 'calm');
   assert.match(
     line.text,
-    /^Phase 3 extracts 1,234.5 m³ of Water a minute. Each line that takes it says how many Water Extractors to build, at 100% or with Power Shards/,
+    /^Phase 3 extracts 1,234.5 m³ of Water a minute. Each line that takes it says how many Water Extractors to build both ways, at 100% \(suggested\) or overclocked with Power Shards/,
   );
   assert.ok(!ids(facts({ view: 'factories' })).includes('water-extractors'), 'absent means none');
 });

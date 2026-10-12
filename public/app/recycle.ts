@@ -26,10 +26,11 @@
 // part sends and takes, at that part's rates, with the other places named as seen from the group.
 //
 // It reads only its arguments (no session), so the pages pass the stage of the phase they show.
-import { num, plural } from './format.ts';
+import { num } from './format.ts';
 import { nearestFraction, roundedParts, sensibleDecimals } from './apportion.ts';
-import { EXTRACTOR_MIN_RATE, waterExtractors } from '../preferences.ts';
-import { power } from './wizard/fields.ts';
+import { EXTRACTOR_MIN_RATE } from '../preferences.ts';
+import { waterExtractorWords } from '../mining.ts';
+import type { WaterChoice } from '../mining.ts';
 import { homeGroup, LINK_DUST, rowPlaces, UNGROUPED } from './group-order.ts';
 import { groupLinks, isSource, itemBooks, OUTSIDE, placeName } from './group-links.ts';
 import { placeLinks } from './group-flow.ts';
@@ -55,6 +56,9 @@ export interface RecycleModel {
   stage: StoredStage;
   groups: FactoryGroups;
   transfers: RecycleTransfer[];
+  // The phase's Water Extractor options (waterChoice in public/mining.ts, #1142): which one is
+  // suggested and whether Power Shards are researched. Absent: both counted, 100% suggested.
+  water?: WaterChoice;
 }
 
 // A line's byproducts: its outputs after the first, its main product (primaryOutput in
@@ -86,10 +90,12 @@ export const feeds = (
 // Every line-level transfer of the phase (RecycleModel), from each place's links: a link between
 // two lines of a place as it is, a link between a line and a source or destination as it is, and
 // a link between two places shared out over the lines that send into it and take from it.
+// `water` is the phase's Water Extractor options (waterChoice in public/mining.ts, #1142).
 export function recycleModel(
   stage: StoredStage,
   groups: FactoryGroups,
   planned?: OnSiteSettings,
+  water?: WaterChoice,
 ): RecycleModel {
   const phase: PhaseBooks = {
     books: itemBooks(stage, groups, planned),
@@ -125,7 +131,7 @@ export function recycleModel(
       } else transfers.push({ item: link.item, rate: link.rate, from, to });
     }
   for (const entry of crossing.values()) transfers.push(...crossingTransfers(entry));
-  return { stage, groups, transfers };
+  return { stage, groups, transfers, ...(water ? { water } : {}) };
 }
 
 // One item's link from one place to another, as the lines' parts of it: `out` and `outRates`
@@ -414,7 +420,7 @@ export function inputAdvice(
           : lines.length
             ? [...parts, rest]
             : [NO_COVER],
-        ...(water ? { extractors: extractorAdvice(extracted) } : {}),
+        ...(water ? { extractors: extractorAdvice(extracted, model.water) } : {}),
       },
     ];
   });
@@ -425,29 +431,18 @@ const WATER = 'Water';
 // The sentence for extracted Water no line gives this one.
 export const NO_COVER = 'No byproduct covers it: extract all of it.';
 
-// One of the two ways to build a line's extractors (ExtractorOption in preferences/extraction.ts).
-type ExtractorOption = NonNullable<ReturnType<typeof waterExtractors>>['plain'];
-
-// An option's extractors as the player sets them: "2 at 100% + 1 at 15.03%".
-const extractorRuns = (option: ExtractorOption): string =>
-  option.runs.map(run => `${run.count} at ${num(run.clock)}%`).join(' + ');
-
-// The Water Extractors for `rate` m³/min of Water, in the owner's two options (#1024): "Water
-// Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power
-// Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." One extractor at 100% or less
-// is the same either way, so it is one option. The clocks are written to 0.01% and add up to the
+// The Water Extractors for `rate` m³/min of Water, both options with the suggested one first
+// (#1024, #1142; waterExtractorWords in public/mining.ts, which every page shares): "Water
+// Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or overclocked
+// up to 250%: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." `choice` is the phase's
+// (waterChoice: which one its power counts, and whether Power Shards are researched yet); without
+// it, both are counted and 100% is suggested. The clocks are written to 0.01% and add up to the
 // rate rounded down to what such clocks make (settableRate in preferences/extraction.ts), so the
 // extractors never make more than the line takes, and less than 0.012 m³/min less.
-export function extractorAdvice(rate: number): string {
-  const options = waterExtractors(rate);
-  if (!options)
-    return `That is less than one Water Extractor gives at its lowest clock (1%, ${num(EXTRACTOR_MIN_RATE)} m³/min): take it from another Water line's extractors.`;
-  const { plain, sharded } = options;
-  if (extractorRuns(plain) === extractorRuns(sharded))
-    return `Water Extractors: ${extractorRuns(plain)} (${power(plain.mw)}); no Power Shards needed.`;
+export function extractorAdvice(rate: number, choice?: WaterChoice): string {
   return (
-    `Water Extractors at 100%: ${extractorRuns(plain)} (${plural(plain.extractors, 'extractor')}, ${power(plain.mw)}). ` +
-    `Or up to 250% with Power Shards: ${extractorRuns(sharded)} (${plural(sharded.extractors, 'extractor')}, ${plural(sharded.shards, 'Power Shard')}, ${power(sharded.mw)}).`
+    waterExtractorWords(rate, choice) ||
+    `That is less than one Water Extractor gives at its lowest clock (1%, ${num(EXTRACTOR_MIN_RATE)} m³/min): take it from another Water line's extractors.`
   );
 }
 

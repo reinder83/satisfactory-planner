@@ -26,7 +26,7 @@
 // its whole generators give. Since #1086 a plan's fuel then follows the clocked need, within one
 // generator, while still covering it (planner/load.ts): generators burn fuel only for the power
 // drawn, and fuel made beyond that backs its chain up in the game.
-import { DEFAULT_EXTRACTION, extractionMWPerUnit } from './preferences.ts';
+import { DEFAULT_EXTRACTION, extractionMWPerUnit, waterClock } from './preferences.ts';
 import { listNames, localeNumber, powerAmount } from './wording.ts';
 import type {
   CalcRow,
@@ -308,9 +308,13 @@ function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSetting
         key: 'extraction',
         label: 'Miners and extractors',
         mw: grid.extractionMW,
-        // With mining per phase (#1065), the phase's miner on the nodes its draw taps.
+        // With mining per phase (#1065), the phase's miner on the nodes its draw taps, and its
+        // Water Extractors at their own clock, the suggested option (#1137, #1142).
         caption: stage.mining
-          ? `Miner Mk.${grid.extractionAt.mark} at ${Math.round(grid.extractionAt.clock * 100)}% on the nodes this phase taps, best first, the last one slower; oil, water and resource-well extractors at the same clock`
+          ? `Miner Mk.${grid.extractionAt.mark} at ${Math.round(grid.extractionAt.clock * 100)}% on the nodes this phase taps, best first, the last one slower; oil and resource-well extractors at the same clock` +
+            (aboveDust(grid.extraction?.Water ?? 0)
+              ? `; Water Extractors at ${Math.round(waterClock(stage.mining) * 100)}%, the suggested option`
+              : '')
           : `Miner Mk.${grid.extractionAt.mark} at ${Math.round(grid.extractionAt.clock * 100)}% on normal nodes; oil, water and resource-well extractors at the same clock`,
       },
     ],

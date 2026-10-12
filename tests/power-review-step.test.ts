@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { milestonePhase, phaseSteps } from '../public/progression.ts';
 import { calculate } from '../planner.ts';
+import { waterPowerWords } from '../public/mining.ts';
 import type {
   CalcRow,
   Progression,
@@ -216,7 +217,9 @@ test('a calculated plan: "needs X more", the new generation and the spare from w
   assert.equal(
     review(plan, { ...OIL, [COAL]: true }, '4').body,
     `You have 44.43 GW of spare power available. This phase needs ${gw(requiredMW - 44425)} more (${gw(requiredMW)} in all: ${parts(grid)}): build its nuclear power, ${uranium.machines} × Uranium power (Nuclear Power Plant), which provides ${gw(grid.generationMW)}, ${gw(spare)} spare from building whole plants. Unlock Nuclear Power first.${peak(grid, 'Particle Accelerators')}` +
-      CHECK,
+      CHECK +
+      // Last, the Water Extractor option the power counts (#1142).
+      waterPowerWords(stage, 4, plan.settings),
   );
   // Phase 3 runs on the spare power alone.
   assert.match(
@@ -267,7 +270,8 @@ test('a calculated Phase 5 that recycles: the spare from the waste chain period'
     body.endsWith(
       ' Nuclear Power first.' +
         peak(grid, 'Converters, Particle Accelerators and Quantum Encoders') +
-        CHECK,
+        CHECK +
+        waterPowerWords(stage, 5, plan.settings),
     ),
     body,
   );
@@ -479,7 +483,8 @@ test('Phase 5 with augmenters that, with the spare power, cover the phase: nothi
   assert.equal(
     review(plan, {}, '5').body,
     `You have 20 GW of spare power available, and your 10 augmenters add 50 GW, which cover this phase's ${gw(grid.needMW)} (${parts(grid)}): nothing needs building for power in this phase.${peak(grid, 'Converters, Particle Accelerators and Quantum Encoders')}` +
-      CHECK,
+      CHECK +
+      waterPowerWords(stage, 5, plan.settings),
   );
 });
 

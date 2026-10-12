@@ -143,17 +143,18 @@ test('the power advice counts them, and says where a phase does not', () => {
     plain = calculate({ phase: '2' });
   assert.match(
     step(four, '2', 'startup-2-power-review'),
-    / You already have 4 of the 6 Coal Generators this phase's lines need, so build 2 more\.$/,
+    // Then, last, the Water Extractor option the power counts (#1142).
+    / You already have 4 of the 6 Coal Generators this phase's lines need, so build 2 more\.( This phase's power counts its Water Extractors [^]+)?$/,
   );
   assert.match(
     step(eight, '2', 'startup-2-power-review'),
-    / You already have 8 Coal Generators, enough for the 6 this phase's lines need, so build none\.$/,
+    / You already have 8 Coal Generators, enough for the 6 this phase's lines need, so build none\.( This phase's power counts its Water Extractors [^]+)?$/,
   );
   assert.doesNotMatch(step(plain, '2', 'startup-2-power-review'), /already have/);
   // Phase 3 burns no coal: the owned Coal Generators are not counted, and it says how to keep them.
   assert.match(
     step(eight, '3', 'startup-3-power-review'),
-    / This phase builds no Coal Generators, so the 8 you already have are not counted: to keep them running, leave their fuel out of the budgets and enter their 600 MW as Spare existing power in Edit settings\.$/,
+    / This phase builds no Coal Generators, so the 8 you already have are not counted: to keep them running, leave their fuel out of the budgets and enter their 600 MW as Spare existing power in Edit settings\.( This phase's power counts its Water Extractors [^]+)?$/,
   );
   // The biomass burner bank counts the burners: 13 for Phase 2's 371.5 MW.
   assert.match(
