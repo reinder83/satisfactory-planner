@@ -474,6 +474,7 @@ test('Phase 5 with augmenters that, with the spare power, cover the phase: nothi
     phase: '3',
     availablePowerGW: 20,
     installedPowerGW: 40,
+    somersloops: 100,
     augmenters: 10,
   });
   const { stage, grid, newMW, augmenterMW } = augmenterFigures(plan);
@@ -493,6 +494,7 @@ test('Phase 5 with augmenters and new generation: the parts add up to the plan',
     phase: '3',
     availablePowerGW: 10,
     installedPowerGW: 10,
+    somersloops: 40,
     augmenters: 4,
   });
   const { grid, newMW, spareMW, augmenterMW } = augmenterFigures(plan);
@@ -518,7 +520,13 @@ test('Phase 5 with augmenters and new generation: the parts add up to the plan',
 });
 
 test('Phase 5 with augmenters and no spare power: the augmenters are named on their own', () => {
-  const plan = calculate({ phase: '3', availablePowerGW: 0, installedPowerGW: 10, augmenters: 4 });
+  const plan = calculate({
+    phase: '3',
+    availablePowerGW: 0,
+    installedPowerGW: 10,
+    somersloops: 40,
+    augmenters: 4,
+  });
   const { augmenterMW } = augmenterFigures(plan);
   assert.ok(augmenterMW > 0);
   assert.ok(

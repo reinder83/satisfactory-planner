@@ -291,7 +291,7 @@ test('a profile with augmenters lists the MAM nodes its augmenter step asks for'
     );
   for (const start of ['1', '3', '5'])
     for (const fueledAugmenters of [0, 1]) {
-      const plan = calculate({ phase: start, augmenters: 2, fueledAugmenters });
+      const plan = calculate({ phase: start, somersloops: 20, augmenters: 2, fueledAugmenters });
       const step = phaseSteps(plan, { checks: {} }, data, '5').find(
         s => s.id === 'alien-power-augmenter',
       )!;

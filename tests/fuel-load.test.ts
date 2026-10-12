@@ -113,7 +113,10 @@ const PROFILES: [string, object][] = [
     '5 GW spare, whole, Phase 3',
     { phase: '3', availablePowerGW: 5, installedPowerGW: 5, wholeMachines: true },
   ],
-  ['4 augmenters, whole, Phase 5', { phase: '5', augmenters: 4, wholeMachines: true }],
+  [
+    '4 augmenters, whole, Phase 5',
+    { phase: '5', somersloops: 40, augmenters: 4, wholeMachines: true },
+  ],
   ['minimal, whole, Phase 3', { phase: '3', goal: 'minimal', wholeMachines: true }],
   ['minimal, exact, Phase 3', { phase: '3', goal: 'minimal' }],
   ['twice the costs, whole, Phase 3', { phase: '3', multiplier: 2, wholeMachines: true }],
