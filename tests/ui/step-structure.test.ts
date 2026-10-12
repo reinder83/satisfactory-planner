@@ -217,3 +217,23 @@ test('the augmenter step shows fueled and unfueled augmenters as a table', async
 test('an edited augmenter step shows the edited words and keeps its tick', () => {
   editedShowsWords('alien-power-augmenter', '5');
 });
+
+test('the retire step shows the retired lines as a table', async () => {
+  show('5');
+  const table = tableOf('retire-5')!;
+  assert.ok(table, 'the retire step has a table');
+  assert.match(
+    table.intro,
+    /^Phase 5 does not run (this line|these \d+ lines), all last needed in Phase 4\./,
+  );
+  assert.deepEqual(table.columns, ['Line', 'Machine', 'Machines']);
+  assert.ok(table.rows.length >= 1);
+  assert.match(table.rows[0]![2]!, /^\d+$/);
+  assert.match(table.after, /^Commission and prove the replacement chain first/);
+  assert.ok(await foundOnlyInStructure('retire-5', 'machines'));
+  assert.ok(await found('retire-5', 'dismantle or repurpose'));
+});
+
+test('an edited retire step shows the edited words and keeps its tick', () => {
+  editedShowsWords('retire-5', '5');
+});

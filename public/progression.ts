@@ -1910,11 +1910,23 @@ export function retireTasks({ plan, stage }: GuideContext): GuideTask[] {
     listed = all.slice(0, 10),
     rest = all.length - listed.length;
   if (!listed.length) return [];
+  const budgets = 'Its resource and power budgets do not include them.';
+  const advice =
+    'Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.';
   return [
     {
       id: 'retire-' + stage,
       title: 'Retire the lines this phase no longer uses',
-      body: `Phase ${stage} does not run ${listed.map(retiredLineText).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`,
+      body: `Phase ${stage} does not run ${listed.map(retiredLineText).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. ${budgets} ${advice}`,
+      // The retired lines as a table (#1136): every one of them, the body's ten and the rest, each
+      // with its machine and how many, most machines first, as the body lists them.
+      table: {
+        intro: `Phase ${stage} does not run ${all.length === 1 ? 'this line' : 'these ' + formatNumber(all.length) + ' lines'}, all last needed in Phase ${previous}. ${budgets}`,
+        columns: ['Line', 'Machine', 'Machines'],
+        rows: all.map(line => [line.name, line.machine, formatNumber(line.machines)]),
+        after: advice,
+        caption: `Lines Phase ${stage} retires`,
+      },
     },
   ];
 }

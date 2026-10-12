@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { calculate } from '../planner.ts';
-import { phaseSteps, type PhaseStep } from '../public/progression.ts';
+import { phaseSteps, retiredLines, type PhaseStep } from '../public/progression.ts';
 import { listText, tableText } from '../public/step-table.ts';
 import type { Progression, StoredCalculatedPlan } from '../public/types/index.ts';
 
@@ -214,4 +214,40 @@ test('the augmenter step gives fueled and unfueled augmenters as a table with a 
   );
   assert.equal(plain.table!.total![3], 'None');
   assert.ok(plain.body.endsWith(plain.table!.after!.replace(/^.*island\. /, '')));
+});
+
+test('the retire step gives every retired line as a table: line, machine and how many', () => {
+  const plan = calculate({
+    phase: '1',
+    recipes: 'all',
+    goal: 'timed',
+    hours: 10,
+    multiplier: 5,
+  }) as StoredCalculatedPlan;
+  let longer = 0;
+  for (const phase of ['2', '3', '4', '5']) {
+    const step = steps(plan, phase).find(found => found.id === 'retire-' + phase);
+    const lines = retiredLines(plan, Number(phase));
+    if (!lines.length) {
+      assert.equal(step, undefined);
+      continue;
+    }
+    const table = step!.table!;
+    assert.deepEqual(table.columns, ['Line', 'Machine', 'Machines']);
+    assert.equal(table.rows.length, lines.length, 'every line, also past the body’s ten');
+    table.rows.forEach(([name, machine, machines], i) => {
+      assert.equal(name, lines[i]!.name);
+      if (i < 10) assert.ok(step!.body.includes(`${machines} × ${name} (${machine})`));
+    });
+    if (lines.length > 10) {
+      longer++;
+      assert.match(step!.body, / and \d+ more lines?, all last needed/);
+    }
+    assert.equal(
+      table.intro,
+      `Phase ${phase} does not run ${lines.length === 1 ? 'this line' : `these ${lines.length} lines`}, all last needed in Phase ${Number(phase) - 1}. Its resource and power budgets do not include them.`,
+    );
+    assert.ok(step!.body.endsWith(table.after!));
+  }
+  assert.ok(longer, 'a phase retires more than ten lines');
 });
