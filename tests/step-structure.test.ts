@@ -184,3 +184,34 @@ test('spare power that covers the phase: the balance says nothing needs building
   assert.match(table.total![3]!, /^[\d.,]+ GW spare/);
   assert.ok(step.body.startsWith('You have 30 GW of spare power available, which covers'));
 });
+
+test('the augmenter step gives fueled and unfueled augmenters as a table with a total', () => {
+  const step = steps(latePlan(), '5').find(found => found.id === 'alien-power-augmenter')!;
+  const table = step.table!;
+  assert.deepEqual(table.columns, [
+    'Augmenters',
+    'Count',
+    'Somersloops',
+    'Alien Power Matrix',
+    'Grid boost',
+    'Generates',
+  ]);
+  assert.deepEqual(table.rows[0]!.slice(0, 5), ['Fueled', '1', '10', '5/min', '30%']);
+  assert.deepEqual(table.rows[1]!.slice(0, 5), ['Unfueled', '2', '20', 'None', '10%']);
+  assert.deepEqual(table.total!.slice(0, 4), ['Total', '3', '30', '5/min']);
+  // The body's figures: 10 Somersloops each, 30 in total, 5 Alien Power Matrix/min for the one fed.
+  assert.match(step.body, /at 10 Somersloops each — 30 in total/);
+  assert.match(step.body, /Feed 1 of them 5 Alien Power Matrix\/min in total/);
+  assert.ok(step.body.startsWith(table.intro.slice(0, -1)));
+  assert.match(table.after!, /^The Somersloops are not recoverable\. Each one generates 500 MW/);
+  assert.match(table.after!, /An augmenter that runs dry falls back to 10%\.$/);
+  // None fueled: one row, and the advice on feeding one.
+  const unfed = calculate({ phase: '5', augmenters: 2 }) as StoredCalculatedPlan;
+  const plain = steps(unfed, '5').find(found => found.id === 'alien-power-augmenter')!;
+  assert.deepEqual(
+    plain.table!.rows.map(row => row[0]),
+    ['Unfueled'],
+  );
+  assert.equal(plain.table!.total![3], 'None');
+  assert.ok(plain.body.endsWith(plain.table!.after!.replace(/^.*island\. /, '')));
+});

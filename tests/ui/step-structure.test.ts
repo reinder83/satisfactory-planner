@@ -199,3 +199,21 @@ test('"Power available now" with spare power shows the power balance as a table'
 test('an edited power step shows the edited words and keeps its tick', () => {
   editedShowsWords('startup-5-power-review', '5', sparePlan());
 });
+
+test('the augmenter step shows fueled and unfueled augmenters as a table', async () => {
+  show('5');
+  const table = tableOf('alien-power-augmenter')!;
+  assert.ok(table, 'the augmenter step has a table');
+  assert.match(table.intro, /^Research Power Augmenter in the MAM .*, then build 3 Augmenters\.$/);
+  assert.deepEqual(table.rows, [
+    ['Fueled', '1', '10', '5/min', '30%', '500 MW'],
+    ['Unfueled', '2', '20', 'None', '10%', '1,000 MW'],
+  ]);
+  assert.deepEqual(table.total, ['Total', '3', '30', '5/min', '', '1.5 GW']);
+  assert.ok(await foundOnlyInStructure('alien-power-augmenter', 'grid boost'));
+  assert.ok(await found('alien-power-augmenter', 'not recoverable'));
+});
+
+test('an edited augmenter step shows the edited words and keeps its tick', () => {
+  editedShowsWords('alien-power-augmenter', '5');
+});

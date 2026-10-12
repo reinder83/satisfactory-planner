@@ -1717,13 +1717,60 @@ function endgameTasks(context: GuideContext): GuideTask[] {
   const count = plan.settings.augmenters ?? 0;
   if (count > 0) {
     const fueled = plan.settings.fueledAugmenters || 0;
+    const build = `${augmenterResearch(context)}, then build ${count} Augmenter${count > 1 ? 's' : ''}`;
+    const grid = `Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island.`;
     tasks.push({
       id: 'alien-power-augmenter',
       title: `Build ${count} Alien Power Augmenter${count > 1 ? 's' : ''}`,
-      body: `${augmenterResearch(context)}, then build ${count} Augmenter${count > 1 ? 's' : ''} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
+      body: `${build} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. ${grid} ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
+      table: augmenterTable(count, fueled, build, grid),
     });
   }
   return tasks;
+}
+
+// The augmenter step as a table (#1136): the fueled and the unfueled augmenters, each with their
+// count, Somersloops (10 each), Alien Power Matrix (5/min each, fueled only), grid boost (30% fed,
+// 10% not) and own power (500 MW each), and a total row; the research and build sentence above it
+// and the advice under it, in the body's words.
+function augmenterTable(count: number, fueled: number, build: string, grid: string): StepTable {
+  const row = (name: string, n: number, fed: boolean) => [
+    name,
+    formatNumber(n),
+    formatNumber(10 * n),
+    fed ? `${formatNumber(5 * n)}/min` : 'None',
+    fed ? '30%' : '10%',
+    powerAmount(500 * n),
+  ];
+  return {
+    intro: `${build}.`,
+    columns: [
+      'Augmenters',
+      'Count',
+      'Somersloops',
+      'Alien Power Matrix',
+      'Grid boost',
+      'Generates',
+    ],
+    rows: [
+      ...(fueled ? [row('Fueled', fueled, true)] : []),
+      ...(count > fueled ? [row('Unfueled', count - fueled, false)] : []),
+    ],
+    total: [
+      'Total',
+      formatNumber(count),
+      formatNumber(10 * count),
+      fueled ? `${formatNumber(5 * fueled)}/min` : 'None',
+      '',
+      powerAmount(500 * count),
+    ],
+    after:
+      `The Somersloops are not recoverable. ${grid} ` +
+      (fueled
+        ? "The fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%."
+        : 'Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'),
+    caption: 'Alien Power Augmenters: Somersloops, fuel, boost and power',
+  };
 }
 
 // The somersloops reserved for hand-fed constructors, shown only in the profile's starting phase.
