@@ -203,15 +203,15 @@ test('the extractor advice: both options with extractors, shards and MW; one whe
   const plain = (text: string) => text.replace(/ /g, ' ');
   assert.equal(
     plain(extractorAdvice(258.04)),
-    'Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).',
+    'Water Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or overclocked up to 250%: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).',
   );
   assert.equal(
     plain(extractorAdvice(700)),
-    'Water Extractors at 100%: 5 at 100% + 1 at 83.33% (6 extractors, 115.72 MW). Or up to 250% with Power Shards: 2 at 250% + 1 at 83.33% (3 extractors, 6 Power Shards, 150.03 MW).',
+    'Water Extractors at 100% (suggested): 5 at 100% + 1 at 83.33% (6 extractors, 115.72 MW). Or overclocked up to 250%: 2 at 250% + 1 at 83.33% (3 extractors, 6 Power Shards, 150.03 MW).',
   );
   assert.equal(
     plain(extractorAdvice(121.2)),
-    'Water Extractors at 100%: 1 at 100% + 1 at 1% (2 extractors, 20.05 MW). Or up to 250% with Power Shards: 1 at 101% (1 extractor, 1 Power Shard, 20.26 MW).',
+    'Water Extractors at 100% (suggested): 1 at 100% + 1 at 1% (2 extractors, 20.05 MW). Or overclocked up to 250%: 1 at 101% (1 extractor, 1 Power Shard, 20.26 MW).',
   );
   assert.equal(
     plain(extractorAdvice(7.49)),
@@ -263,7 +263,7 @@ test('only the Water no byproduct covers is extracted, and counted in extractors
   assert.match(plainText(adviceSentence(solution)), /; extract the other 257\.87 m³\.$/);
   assert.equal(
     plainText(solution.extractors!),
-    'Water Extractors at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW). Or up to 250% with Power Shards: 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW).',
+    'Water Extractors at 100% (suggested): 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW). Or overclocked up to 250%: 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW).',
   );
   assert.notEqual(solution.extractors, extractorAdvice(381.55), 'not the whole input');
   // Its own byproduct covers most of Distilled Silica's (a milestone recipe, named without
@@ -276,7 +276,7 @@ test('only the Water no byproduct covers is extracted, and counted in extractors
   // Phase 5's Alumina Solution needs two shard-boosted extractors.
   assert.match(
     plainText(waterOf(alternates, '5', 'Alumina Solution')!.extractors!),
-    /Or up to 250% with Power Shards: 1 at 250% \+ 1 at 239\.42% \(2 extractors, 6 Power Shards, [\d.]+ MW\)\.$/,
+    /Or overclocked up to 250%: 1 at 250% \+ 1 at 239\.42% \(2 extractors, 6 Power Shards, [\d.]+ MW\)\.$/,
   );
 });
 
@@ -290,12 +290,12 @@ test('Water no byproduct covers is extracted in full, coal generators included',
   const concrete = waterOf(alternates, '4', 'Alternate: Wet Concrete')!;
   assert.equal(
     plainText(adviceText([concrete])),
-    'Water 253.75 m³/min. No byproduct covers it: extract all of it. Water Extractors at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW). Or up to 250% with Power Shards: 1 at 211.46% (1 extractor, 3 Power Shards, 53.82 MW).',
+    'Water 253.75 m³/min. No byproduct covers it: extract all of it. Water Extractors at 100% (suggested): 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW). Or overclocked up to 250%: 1 at 211.46% (1 extractor, 3 Power Shards, 53.82 MW).',
   );
   const coal = waterOf(standard, '2', 'Coal power')!;
   assert.equal(
     plainText(adviceText([coal])),
-    'Water 232.31 m³/min. No byproduct covers it: extract all of it. Water Extractors at 100%: 1 at 100% + 1 at 93.59% (2 extractors, 38.32 MW). Or up to 250% with Power Shards: 1 at 193.59% (1 extractor, 2 Power Shards, 47.89 MW).',
+    'Water 232.31 m³/min. No byproduct covers it: extract all of it. Water Extractors at 100% (suggested): 1 at 100% + 1 at 93.59% (2 extractors, 38.32 MW). Or overclocked up to 250%: 1 at 193.59% (1 extractor, 2 Power Shards, 47.89 MW).',
   );
   // A line taking no Water gets no Water paragraph.
   assert.equal(waterOf(alternates, '4', 'Aluminum Scrap'), undefined);
