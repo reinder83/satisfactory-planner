@@ -11,15 +11,15 @@ import { listNames, powerAmount, slug } from './wording.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
-import type { StepTable } from './step-table.ts';
+import type { StepList, StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
 // can do without (#1070: research only a later phase needs, a storage-only line), which "Required
 // steps only" hides. `satisfied` is set while the step's own condition holds (the hard-drive step
 // with no recipe left to unlock, the delivery with every counter at its target): the build plan
-// then shows it done, says why, and writes no tick. `table` (#1136, step-table.ts) is a step's
-// text as a table, which the build plan draws in place of `body`; `body` keeps the same words for
-// search, copying and step edits.
+// then shows it done, says why, and writes no tick. `table` and `list` (#1136, step-table.ts) are
+// a step's text as a table or a list, which the build plan draws in place of `body`; `body` keeps
+// the same words for search, copying and step edits.
 export interface GuideTask {
   id: string;
   title: string;
@@ -27,6 +27,7 @@ export interface GuideTask {
   optional?: boolean;
   satisfied?: string;
   table?: StepTable;
+  list?: StepList;
 }
 
 // The id prefix and name suffix of an amplified twin (amplified() in planner/recipes.ts, which a
@@ -67,6 +68,8 @@ export interface GuideContext {
   sources: (item: string) => { row: CalcRow; running: boolean }[];
   // A milestone's cost, each item with where it can come from.
   funding: (entry: ProgressionEntry) => string;
+  // The same cost as rows of its step's table (#1136): each item, its amount and its supply.
+  costRows: (entry: ProgressionEntry) => string[][];
 }
 
 // The power unlocks the user has ticked. Without spare existing power in the settings the power
@@ -548,8 +551,17 @@ export function guideContext(
       Object.entries(entry.cost)
         .map(([item, quantity]) => `${formatNumber(quantity)} ${item}: ${status(item)}`)
         .join('; '),
+    costRows: entry =>
+      Object.entries(entry.cost).map(([item, quantity]) => [
+        item,
+        formatNumber(quantity),
+        capital(status(item)),
+      ]),
   };
 }
+
+// A sentence's words with a capital first letter, for a table cell.
+const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Milestones this phase needs: those unlocking a recipe or machine its rows use, a fixed set
 // of basics, and phase-specific power and logistics unlocks, each with its prerequisites.
@@ -698,12 +710,13 @@ function optionalResearch(
       phases = neededIn.get(id) ?? [];
     if (!entry?.mam || phases.includes(stage)) return task;
     const later = phases.find(phase => phase > stage);
+    const note = `Optional in this phase: none of its lines needs it${later ? `; Phase ${later}’s lines do` : ''}. Research it now if the materials are at hand, or later. `;
     return {
       ...task,
       title: task.title + ' (optional)',
-      body:
-        `Optional in this phase: none of its lines needs it${later ? `; Phase ${later}’s lines do` : ''}. Research it now if the materials are at hand, or later. ` +
-        task.body,
+      body: note + task.body,
+      // Its cost table (#1136) says so too, above the cost.
+      ...(task.table ? { table: { ...task.table, intro: note + task.table.intro } } : {}),
       optional: true,
     };
   });
@@ -732,7 +745,7 @@ function prerequisitesFirst(milestones: ProgressionEntry[]): ProgressionEntry[] 
 // out: they come from hard drives (hardDriveTasks). Prerequisites come before dependents;
 // among otherwise independent unlocks, costs with running supply come first.
 export function milestoneTasks(context: GuideContext, required: ProgressionEntry[]): GuideTask[] {
-  const { data, stage, sources, funding } = context;
+  const { data, stage, sources, funding, costRows } = context;
   const milestones = required.filter(entry => !entry.alternate && researchable(entry, data, stage));
   const readiness = (entry: ProgressionEntry) =>
     Object.keys(entry.cost).filter(item => sources(item).some(source => source.running)).length /
@@ -744,14 +757,32 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
       readiness(second) - readiness(first) ||
       first.name.localeCompare(second.name),
   );
-  return prerequisitesFirst(milestones).map(
-    (entry): GuideTask => ({
+  return prerequisitesFirst(milestones).map((entry): GuideTask => {
+    const title = `${entry.mam ? 'MAM' : 'Tier ' + entry.tier}: ${entry.name}`;
+    const lead = `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${listedNames(entry.requires, data, 'Prerequisites')}Cost (base game; adjust if your milestone-cost settings differ):`;
+    const rows = costRows(entry);
+    return {
       id: 'unlock-' + entry.id,
-      title: `${entry.mam ? 'MAM' : 'Tier ' + entry.tier}: ${entry.name}`,
-      body: `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${listedNames(entry.requires, data, 'Prerequisites')}Cost (base game; adjust if your milestone-cost settings differ): ${funding(entry) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
-    }),
-  );
+      title,
+      body: `${lead} ${funding(entry) || 'No item cost listed'}. ${CHECKMARKS}`,
+      // The cost as a table (#1136): one row per item with its amount and supply.
+      ...(rows.length
+        ? {
+            table: {
+              intro: lead,
+              columns: ['Item', 'Amount', 'Supply'],
+              rows,
+              after: CHECKMARKS,
+              caption: `Cost of ${title}`,
+            },
+          }
+        : {}),
+    };
+  });
 }
+
+// The last sentence of a milestone step.
+const CHECKMARKS = 'Production checkmarks do not confirm inventory or spare capacity.';
 
 // One hard-drive step plus one unlock step per alternate recipe this phase's rows use first: an
 // alternate an earlier planned phase (the start phase on) already uses is listed there and not
@@ -848,18 +879,20 @@ function unlockedPower({ byName, unlocked }: GuideContext): UnlockedPower {
 // The generators the player already has (settings.ownedGenerators, #1068) are named in both: how
 // many of the phase's generators they are and how many are left to build, and those of a building
 // the phase does not fuel, which it does not count (ownedPowerText). Last, which option of Water
-// Extractors its power counts (#1142).
+// Extractors its power counts (#1142). With spare power, the phase's power balance is also a table
+// (#1136, powerBalance): what supplies it and what it needs, part by part.
 function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideTask {
   const figures = phasePower(context);
+  const tail = unfueledOwnedText(context, figures) + waterPowerText(context, figures);
+  const existing = figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2;
   return {
     id: 'startup-' + context.stage + '-power-review',
     title: 'Power available now',
     body:
-      (figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
+      (existing
         ? existingPowerText(context, figures, unlocked)
-        : unlockText(context, figures, unlocked) + ownedCountText(figures)) +
-      unfueledOwnedText(context, figures) +
-      waterPowerText(context, figures),
+        : unlockText(context, figures, unlocked) + ownedCountText(figures)) + tail,
+    ...(existing ? { table: powerBalance(context, figures, unlocked, tail) } : {}),
   };
 }
 
@@ -1047,23 +1080,9 @@ function existingPowerText(
   figures: PhasePowerFigures,
   unlocked: UnlockedPower,
 ): string {
-  const { requiredMW, existingMW, augmenters, augmenterMW, generators } = figures;
-  // What the phase has before any new generation: the spare power, and what the augmenters add.
-  const haveMW = existingMW + augmenterMW;
-  const yours = `your ${augmenters === 1 ? 'augmenter adds' : formatNumber(augmenters) + ' augmenters add'} ${powerAmount(augmenterMW)}`;
-  const have =
-    augmenterMW <= 0.01
-      ? `You have ${powerAmount(existingMW)} of spare power available`
-      : existingMW <= 0.01
-        ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
-        : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
+  const { requiredMW, augmenterMW, generators } = figures;
+  const { haveMW, have, unlockFirst, check } = existingPowerWords(figures, unlocked);
   const allowance = figures.need.words;
-  const unlock = missingUnlocks(generators, unlocked);
-  const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
-  const check =
-    (figures.need.peak ? ' ' + figures.need.peak : '') +
-    ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it with Edit settings for more margin.` +
-    ' Before connecting the next factory, check the actual load against what your grid supplies.';
   if (requiredMW - haveMW <= 0.01)
     return (
       `${have}, which ${augmenterMW > 0.01 ? 'cover' : 'covers'} this phase's ${powerAmount(requiredMW)} (${allowance}): ` +
@@ -1076,6 +1095,118 @@ function existingPowerText(
   if (!generators.length)
     return `${more}, and its plan builds no generators for it: see the power headroom on the Resources page.${check}`;
   return `${more}: build ${newGeneration(plan, figures, false)}.${unlockFirst}${check}`;
+}
+
+// The pieces existingPowerText and powerBalance share: what the phase has before any new
+// generation (the spare power and what the augmenters add) in MW and in words, the unlocks to
+// tick first, and the closing checks (the peak note, the allowance's setting, the load check).
+function existingPowerWords(figures: PhasePowerFigures, unlocked: UnlockedPower) {
+  const { existingMW, augmenters, augmenterMW, generators } = figures;
+  const yours = `your ${augmenters === 1 ? 'augmenter adds' : formatNumber(augmenters) + ' augmenters add'} ${powerAmount(augmenterMW)}`;
+  const have =
+    augmenterMW <= 0.01
+      ? `You have ${powerAmount(existingMW)} of spare power available`
+      : existingMW <= 0.01
+        ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
+        : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
+  const unlock = missingUnlocks(generators, unlocked);
+  return {
+    haveMW: existingMW + augmenterMW,
+    have,
+    unlockFirst: unlock.length ? ` Unlock ${listNames(unlock)} first.` : '',
+    check:
+      (figures.need.peak ? ' ' + figures.need.peak : '') +
+      ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it with Edit settings for more margin.` +
+      ' Before connecting the next factory, check the actual load against what your grid supplies.',
+  };
+}
+
+// The names of Power needed's parts in the power balance (#1136), by NeedPart key (power.ts).
+const NEED_NAMES: Record<string, string> = {
+  load: 'Production lines',
+  extraction: 'Miners and extractors',
+  peak: 'Production lines',
+  utility: 'Trains, drones and pumps',
+};
+
+// "Power available now" with spare power as a table (#1136): the phase's power balance, one row
+// per supply (the spare power, the augmenters, the new generators) and per part of what it needs,
+// a total row with what is left over, the opening sentence above it and the checks under it. The
+// same figures and words as existingPowerText, which stays the step's body.
+function powerBalance(
+  { plan }: GuideContext,
+  figures: PhasePowerFigures,
+  unlocked: UnlockedPower,
+  tail: string,
+): StepTable {
+  const { requiredMW, existingMW, augmenters, augmenterMW, newMW, leftMW, generators } = figures;
+  const { haveMW, have, unlockFirst, check } = existingPowerWords(figures, unlocked);
+  const covered = requiredMW - haveMW <= 0.01;
+  const sources = listNames(plannedSources(generators));
+  const intro = covered
+    ? `${have}, which ${augmenterMW > 0.01 ? 'cover' : 'covers'} this phase's ${powerAmount(requiredMW)}: ` +
+      (generators.length
+        ? `nothing needs building for that. The plan still builds its ${sources} power.`
+        : 'nothing needs building for power in this phase.')
+    : `${have}. This phase needs ${powerAmount(requiredMW - haveMW)} more` +
+      (generators.length
+        ? `: build its ${sources} power.`
+        : ', and its plan builds no generators for it: see the power headroom on the Resources page.');
+  const rows: string[][] = [];
+  if (existingMW > 0.01) rows.push(['Spare power', powerAmount(existingMW), '', '']);
+  if (augmenterMW > 0.01)
+    rows.push([
+      'Augmenters',
+      powerAmount(augmenterMW),
+      '',
+      `${formatNumber(augmenters)} Alien Power Augmenter${augmenters === 1 ? '' : 's'}`,
+    ]);
+  for (const part of figures.need.parts)
+    rows.push([
+      NEED_NAMES[part.key] ?? part.key,
+      '',
+      powerAmount(part.mw),
+      part.key === 'utility'
+        ? `${figures.need.percent}%, ${figures.need.setting} in Preferences`
+        : part.key === 'peak'
+          ? 'At their whole-machine peak'
+          : '',
+    ]);
+  // Where the spare power covers the phase, all the new generation is left over, and its row says
+  // why, as the body does; otherwise the total does, for what is left.
+  if (generators.length) {
+    const lines = generators.map(
+      row => `${formatNumber(row.machines)} × ${row.name} (${row.machine})`,
+    );
+    rows.push([
+      'New generators',
+      powerAmount(newMW),
+      '',
+      listNames(lines) +
+        keptText(figures) +
+        (covered ? `, which adds ${powerAmount(newMW)}${spareCause(plan, figures, newMW)}` : ''),
+    ]);
+  }
+  const cause = covered ? '' : spareCause(plan, figures, leftMW);
+  const left =
+    leftMW > 0.01
+      ? `${powerAmount(leftMW)} spare${cause}`
+      : leftMW < -0.01
+        ? `${powerAmount(-leftMW)} short of the need: see the power headroom on the Resources page`
+        : '';
+  return {
+    intro,
+    columns: ['Power', 'Supplies', 'Needs', 'Details'],
+    rows,
+    total: [
+      'Total',
+      powerAmount(haveMW + (generators.length ? newMW : 0)),
+      powerAmount(requiredMW),
+      left,
+    ],
+    after: (unlockFirst + check + tail).trim(),
+    caption: "This phase's power: what supplies it and what it needs",
+  };
 }
 
 // The generation the phase's lines add, highest source first, with what is left over once the
@@ -1466,7 +1597,7 @@ function generatorStep(
   { plan, stage, rows, stageOf }: GuideContext,
   generators: CalcRow[],
   unburned: UnburnedFuel | null,
-): Pick<GuideTask, 'title' | 'body'> {
+): Pick<GuideTask, 'title' | 'body' | 'table'> {
   const previous = stage - 1 >= Number(plan.settings.phase || 1) ? stage - 1 : 0;
   const builtBefore = (row: CalcRow) =>
     (previous && stageOf(previous)?.rows?.find(earlier => earlier.id === row.id)?.machines) || 0;
@@ -1477,15 +1608,27 @@ function generatorStep(
       ? 'Build'
       : 'Expand';
   const sources = [...new Set(generators.map(generatorSource))];
-  const lines = generators.map(row => generatorLine(row, builtBefore(row), previous, rows));
+  const parts = generators.map(row => generatorParts(row, builtBefore(row), previous, rows));
   const prerequisites = sources
     .map(source =>
       source === 'coal' ? coalPrerequisites(generators) : SOURCE_PREREQUISITES[source],
     )
     .filter(Boolean);
+  const own = 'Each line has its own step in this phase with its machines and output.';
+  const after = `${unburnedText(unburned)} ${prerequisites.join(' ')} ${closingAdvice(verb, previous)}`;
+  const title = `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`;
   return {
-    title: `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`,
-    body: `Phase ${stage}'s plan generates power with ${lines.join('; ')}. Each line has its own step in this phase with its machines and output.${unburnedText(unburned)} ${prerequisites.join(' ')} ${closingAdvice(verb, previous)}`,
+    title,
+    body: `Phase ${stage}'s plan generates power with ${parts.map(part => part.text).join('; ')}. ${own}${after}`,
+    // The generator lines as a table (#1136): each line's machines, what this phase adds to the
+    // previous phase's line, and the fuel it burns with the lines that make it.
+    table: {
+      intro: `Phase ${stage}'s plan generates power with these lines. ${own}`,
+      columns: ['Generator line', 'Machines', 'This phase', 'Fuel'],
+      rows: parts.map(part => part.cells),
+      after: after.trim(),
+      caption: `${title}: generator lines`,
+    },
   };
 }
 
@@ -1514,13 +1657,15 @@ function closingAdvice(verb: string, previous: number): string {
 }
 
 // One generator line in the step's text: its count and name as its build step shows them, what
-// it adds to the previous phase's line, and the fuel it burns with the lines that make it.
-function generatorLine(
+// it adds to the previous phase's line, and the fuel it burns with the lines that make it; and the
+// same as a row of the step's table (#1136): the line, its machines, what this phase adds and the
+// fuel.
+function generatorParts(
   row: CalcRow,
   builtBefore: number,
   previous: number,
   rows: CalcRow[],
-): string {
+): { text: string; cells: string[] } {
   const fuel = generatorFuel(row);
   const makers = rows
     .filter(maker => !isGenerator(maker) && maker.outputs[fuel])
@@ -1533,8 +1678,12 @@ function generatorLine(
   const from = makers.length
     ? ` from the ${listNames(makers)} step${makers.length > 1 ? 's' : ''}`
     : '';
-  const burns = fuel ? `, burning ${formatNumber(row.inputs[fuel])} ${fuel}/min${from}` : '';
-  return `${formatNumber(row.machines)} × ${row.name} (${row.machine}), ${added}${burns}`;
+  const burned = fuel ? `${formatNumber(row.inputs[fuel])} ${fuel}/min${from}` : '';
+  const machines = `${formatNumber(row.machines)} × ${row.machine}`;
+  return {
+    text: `${formatNumber(row.machines)} × ${row.name} (${row.machine}), ${added}${burned ? ', burning ' + burned : ''}`,
+    cells: [row.name, machines, capital(added), burned],
+  };
 }
 
 // The MAM node the Alien Power Augmenters need, by its name in progression.json
@@ -1568,13 +1717,54 @@ function endgameTasks(context: GuideContext): GuideTask[] {
   const count = plan.settings.augmenters ?? 0;
   if (count > 0) {
     const fueled = plan.settings.fueledAugmenters || 0;
+    const build = `${augmenterResearch(context)}, then build ${count} Augmenter${count > 1 ? 's' : ''}`;
+    const grid = `Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island.`;
     tasks.push({
       id: 'alien-power-augmenter',
       title: `Build ${count} Alien Power Augmenter${count > 1 ? 's' : ''}`,
-      body: `${augmenterResearch(context)}, then build ${count} Augmenter${count > 1 ? 's' : ''} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
+      body: `${build} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. ${grid} ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
+      table: augmenterTable(count, fueled, build, grid),
     });
   }
   return tasks;
+}
+
+// The augmenter step as a table (#1136): the fueled and the unfueled augmenters, each with their
+// count, Somersloops (10 each), fuel (5 Alien Power Matrix/min each, fueled only), the grid boost
+// (30% fed, 10% not) and its own power (500 MW each), and a total row; the research and build sentence above it
+// and the advice under it, in the body's words.
+function augmenterTable(count: number, fueled: number, build: string, grid: string): StepTable {
+  const row = (name: string, n: number, fed: boolean) => [
+    name,
+    formatNumber(n),
+    formatNumber(10 * n),
+    fed ? `${formatNumber(5 * n)} Alien Power Matrix/min` : 'None',
+    fed ? '30%' : '10%',
+    powerAmount(500 * n),
+  ];
+  return {
+    intro: `${build}.`,
+    // Short column names, so the six columns fit the plan column at 1280 px.
+    columns: ['Augmenters', 'Count', 'Somersloops', 'Fuel', 'Boost', 'Power'],
+    rows: [
+      ...(fueled ? [row('Fueled', fueled, true)] : []),
+      ...(count > fueled ? [row('Unfueled', count - fueled, false)] : []),
+    ],
+    total: [
+      'Total',
+      formatNumber(count),
+      formatNumber(10 * count),
+      fueled ? `${formatNumber(5 * fueled)} Alien Power Matrix/min` : 'None',
+      '',
+      powerAmount(500 * count),
+    ],
+    after:
+      `The Somersloops are not recoverable. ${grid} ` +
+      (fueled
+        ? "The fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%."
+        : 'Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'),
+    caption: 'Alien Power Augmenters: Somersloops, fuel, boost and power',
+  };
 }
 
 // The somersloops reserved for hand-fed constructors, shown only in the profile's starting phase.
@@ -1588,12 +1778,26 @@ function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
     biofuel:
       'a Constructor making Solid Biofuel from biomass, doubling what each trip of gathered leaves and wood is worth',
   };
-  const picked = reserved.map(id => labels[id]).filter(Boolean);
+  const picked = reserved.map(id => labels[id]).filter((label): label is string => !!label);
+  const reserve = `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''}`;
+  const after =
+    'Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.';
   return [
     {
       id: 'sloop-hand-fed',
       title: 'Park somersloops in the hand-fed constructors',
-      body: `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''} for ${picked.join('; ')}. Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.`,
+      body: `${reserve} for ${picked.join('; ')}. ${after}`,
+      // Two or three constructors as a list (#1136), one line each.
+      ...(picked.length > 1
+        ? {
+            list: {
+              intro: `${reserve}, one for each:`,
+              items: picked.map(label => capital(label) + '.'),
+              after,
+              label: 'The hand-fed constructors',
+            },
+          }
+        : {}),
     },
   ];
 }
@@ -1714,11 +1918,23 @@ export function retireTasks({ plan, stage }: GuideContext): GuideTask[] {
     listed = all.slice(0, 10),
     rest = all.length - listed.length;
   if (!listed.length) return [];
+  const budgets = 'Its resource and power budgets do not include them.';
+  const advice =
+    'Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.';
   return [
     {
       id: 'retire-' + stage,
       title: 'Retire the lines this phase no longer uses',
-      body: `Phase ${stage} does not run ${listed.map(retiredLineText).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`,
+      body: `Phase ${stage} does not run ${listed.map(retiredLineText).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. ${budgets} ${advice}`,
+      // The retired lines as a table (#1136): every one of them, the body's ten and the rest, each
+      // with its machine and how many, most machines first, as the body lists them.
+      table: {
+        intro: `Phase ${stage} does not run ${all.length === 1 ? 'this line' : 'these ' + formatNumber(all.length) + ' lines'}, all last needed in Phase ${previous}. ${budgets}`,
+        columns: ['Line', 'Machine', 'Machines'],
+        rows: all.map(line => [line.name, line.machine, formatNumber(line.machines)]),
+        after: advice,
+        caption: `Lines Phase ${stage} retires`,
+      },
     },
   ];
 }

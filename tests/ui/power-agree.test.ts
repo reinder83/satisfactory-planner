@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import { afterAll, beforeAll, beforeEach, test } from 'vitest';
 import { setWizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { planTasks } from '../../public/app/tasks.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { powerView } from '../../public/power.ts';
 import { carryOptions } from '../../public/state.ts';
@@ -31,6 +32,14 @@ afterAll(() => {
 });
 beforeEach(() => page());
 
+// The lead step's own words (#1136): its body, which search and copying use. "Power available
+// now" with spare power draws them as a table (the power balance), so they are read from the step.
+const leadBody = () =>
+  planTasks().find(
+    step =>
+      step.id === $('#main [data-open-steps] > .task.lead details')?.getAttribute('data-task'),
+  )?.body;
+
 const plain = (text: string | null | undefined) => (text || '').replace(/[\s  ]+/g, ' ').trim();
 
 // What each page says about `phase` of `plan`.
@@ -52,7 +61,7 @@ function buildPlan(plan: StoredCalculatedPlan, phase: Phase) {
   return {
     summary: plain($('[data-plan-summary] [data-summary="power"]')?.textContent),
     notice: plain($('#main [data-power-short]')?.textContent),
-    lead: plain($('#main [data-open-steps] > .task.lead details > p')?.textContent),
+    lead: plain(leadBody()),
   };
 }
 function reviewCells(plan: StoredCalculatedPlan) {

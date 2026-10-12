@@ -28,7 +28,7 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in table.rows" :key="row[0]" data-step-table-row>
+        <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex" data-step-table-row>
           <template v-for="(cell, index) in row" :key="index">
             <th v-if="index === 0" scope="row">{{ cell }}</th>
             <td v-else :data-label="table.columns[index]" :class="cellClass(cell)">{{ cell }}</td>
