@@ -179,7 +179,7 @@ test('the mining step’s table has a Water row with both options; its totals ad
     assert.deepEqual(water, [
       'Water',
       '258.04 m³/min',
-      'None: any open water',
+      'Open water',
       `Water Extractor ${first}. ${other}`,
       shards,
       power,

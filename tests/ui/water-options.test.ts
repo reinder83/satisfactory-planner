@@ -134,7 +134,7 @@ test('the build plan: a Water row in "Tap the resource nodes", and the power ste
     assert.ok(water, 'a Water row');
     const cells = [...water.querySelectorAll('td')].map(cell => plain(cell.textContent));
     assert.match(cells[0]!, /^[\d,.]+ m³\/min$/);
-    assert.equal(cells[1], 'None: any open water');
+    assert.equal(cells[1], 'Open water');
     assert.match(cells[2]!, first);
     assert.match(cells[2]!, second);
     assert.match(
@@ -181,7 +181,7 @@ test('the setting only picks the suggested option, and is read as before', () =>
   const label = plain(box.closest('label')?.textContent);
   assert.match(label, /^Suggest overclocked Water Extractors/);
   assert.match(label, /always shows both ways to build them: at 100%, and overclocked up to 250%/);
-  assert.match(label, /only picks the one it suggests first and counts in the power total/);
+  assert.match(label, /only picks the one suggested first and counted in the power total/);
   box.checked = true;
   readWizard($<HTMLFormElement>('#wizard-form')!);
   assert.equal(wizard!.settings.waterOverclock, true);

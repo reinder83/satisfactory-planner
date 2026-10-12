@@ -369,7 +369,7 @@ function waterRow(
     cells: [
       'Water',
       `${miningNumber(rate)} m³/min`,
-      'None: any open water',
+      'Open water',
       machines,
       first.option.shards ? miningNumber(first.option.shards) : 'None',
       powerAmount(first.option.mw),

@@ -109,9 +109,8 @@ const overclock = ref(!!draft().settings.overclock);
     /><span
       >Suggest overclocked Water Extractors<br /><small class="muted"
         >The build plan always shows both ways to build them: at 100%, and overclocked up to 250%
-        with Power Shards. This only picks the one it suggests first and counts in the power total.
-        Off: 100%, since you can always build more of them. On: overclocked, once you can
-        overclock.</small
+        with Power Shards. This only picks the one suggested first and counted in the power total:
+        100% when off, overclocked when on (once you can overclock).</small
       ></span
     ></label
   >
