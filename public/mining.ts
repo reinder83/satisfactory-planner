@@ -278,12 +278,13 @@ export function waterChoice(
 // Where to research Power Shards, as the mining step's advice says it (#1137).
 const SHARD_RESEARCH =
   'research Power Shards in the MAM (Blue Power Slugs, then Overclock Production)';
-// The choice when nothing says otherwise: both options counted, 100% suggested.
-const BOTH_AT_100: WaterChoice = {
+// The choice when nothing says otherwise: both options counted, 100% suggested. A function, so
+// nothing imported is read while the modules load (the interface tests bundle them in one script).
+const bothAt100 = (): WaterChoice => ({
   overclock: OVERCLOCK,
   suggestOverclocked: false,
   shards: 'count',
-};
+});
 
 // The two options for `rate` m³/min of Water, the suggested one first: each its name ("at 100%",
 // "overclocked up to 250%") and its extractors (extractorOption), or for the overclocked one the
@@ -294,7 +295,7 @@ export interface WaterOptions {
   second: { name: string; option: ExtractorOption } | { name: string; research: string } | null;
   same: boolean;
 }
-export function waterOptions(rate: number, choice: WaterChoice = BOTH_AT_100): WaterOptions | null {
+export function waterOptions(rate: number, choice: WaterChoice = bothAt100()): WaterOptions | null {
   if (!(rate >= EXTRACTOR_MIN_RATE - 1e-6)) return null;
   const plain = extractorOption(rate, 100),
     sharded = extractorOption(rate, Math.min(choice.overclock * 100, WATER_EXTRACTOR.maxClock));
