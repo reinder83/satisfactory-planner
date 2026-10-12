@@ -28,7 +28,7 @@ import {
 } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
-import { tableText, type StepTable } from '../step-table.ts';
+import { listText, tableText, type StepList, type StepTable } from '../step-table.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
 // personal tasks have no body. A generated step may be `optional` ("Required steps only" hides it)
@@ -39,8 +39,10 @@ export interface Step {
   body?: string;
   optional?: boolean;
   satisfied?: string;
-  // The body as a table (#1136, step-table.ts), drawn in its place; absent once the body is edited.
+  // The body as a table or a list (#1136, step-table.ts), drawn in its place; absent once the body
+  // is edited.
   table?: StepTable;
+  list?: StepList;
 }
 
 // The production line a step links to (taskLink): its "Production line ↗" button opens the
@@ -104,10 +106,14 @@ export function taskEditsState(): TaskEdits {
 }
 
 // A step with the user's edited title and body in place of the generated ones, where edited. An
-// edited body replaces the generated table too (#1136): the user's words are shown as written.
+// edited body replaces the generated table or list too (#1136): the user's words are shown as
+// written.
 function withEditedWording(t: Step, edits: TaskEdits): Step {
   const edited = { ...t, title: edits.titles[t.id] || t.title, body: edits.bodies[t.id] || t.body };
-  if (edits.bodies[t.id]) delete edited.table;
+  if (edits.bodies[t.id]) {
+    delete edited.table;
+    delete edited.list;
+  }
   return edited;
 }
 
@@ -428,7 +434,8 @@ export function filteredPlanTasks(steps: Step[]): Step[] {
       (!hideDone || !stepDone(step)) &&
       (!requiredOnly || !step.optional) &&
       (!search ||
-        (step.title + ' ' + (step.body || '') + ' ' + tableText(step.table))
+        [step.title, step.body || '', tableText(step.table), listText(step.list)]
+          .join(' ')
           .toLowerCase()
           .includes(search)),
   );
