@@ -59,7 +59,7 @@ import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
-import { minerWords, stageMiningAdvice } from '../mining.ts';
+import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
 import { OWNED_GENERATORS, phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 
@@ -160,10 +160,18 @@ function onSiteDroppedFacts(
   return { items: listNames(items), groups: listNames(groups) };
 }
 
-// The Water the open phase extracts (#1024), written as the pages write a rate; none without.
-function waterFacts(): Pick<AdaFacts, 'waterExtracted'> {
-  const water = calcStage()?.raw?.Water ?? 0;
-  return water > 0 ? { waterExtracted: num(water) } : {};
+// The Water the open phase extracts (#1024), written as the pages write a rate, and its Water
+// Extractor options (#1142, waterChoice); none without.
+function waterFacts(): Pick<AdaFacts, 'waterExtracted' | 'waterChoice'> {
+  const snapshot = calcStage(),
+    water = snapshot?.raw?.Water ?? 0;
+  if (!(water > 0)) return {};
+  const { suggestOverclocked, shards } = waterChoice(
+    snapshot,
+    Number(stage()),
+    calculated?.settings,
+  );
+  return { waterExtracted: num(water), waterChoice: { suggestOverclocked, shards } };
 }
 
 // The handover from the phase before (#1069), as each factory's Handover on the Factories page

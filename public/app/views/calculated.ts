@@ -42,7 +42,7 @@ import {
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
-import { minerWords } from '../../mining.ts';
+import { minerWords, waterChoice } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 import type { StepTable } from '../../step-table.ts';
@@ -184,7 +184,8 @@ function recycleStepText(row: CalcRow, snapshot: StoredStage | undefined): strin
 
 // The recycling model (recycleModel in recycle.ts) of `snapshot`, a stage of the open plan, for
 // the profile's factory groups. The build plan, a group's flow page and the factory dialog ask
-// for it once per line, so it is worked out once per stage, groups and plan.
+// for it once per line, so it is worked out once per stage, groups and plan. Its Water Extractor
+// options follow the stage's phase and the plan's settings (waterChoice, #1142).
 let recycleCache:
   | { snapshot: StoredStage; groups: string; plan: unknown; model: RecycleModel }
   | undefined;
@@ -194,7 +195,16 @@ function recycleModelOf(snapshot: StoredStage): RecycleModel {
   const cache = recycleCache;
   if (cache?.snapshot === snapshot && cache.groups === key && cache.plan === calculated)
     return cache.model;
-  const model = recycleModel(snapshot, groups, calculated?.settings.onSite);
+  // The phase the stage is, for its Water Extractor options (#1142).
+  const phase = Object.entries(calculated?.stages ?? {}).find(
+    ([, stage]) => stage === snapshot,
+  )?.[0];
+  const model = recycleModel(
+    snapshot,
+    groups,
+    calculated?.settings.onSite,
+    waterChoice(snapshot, Number(phase ?? 0), calculated?.settings),
+  );
   recycleCache = { snapshot, groups: key, plan: calculated, model };
   return model;
 }

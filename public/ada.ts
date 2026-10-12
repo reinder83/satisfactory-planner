@@ -100,6 +100,10 @@ export interface AdaFacts {
   // The Water the open phase extracts, m³/min as the pages write it (the stage's raw Water,
   // #1024), absent for none; each line taking it says how many Water Extractors to build.
   waterExtracted?: string;
+  // The phase's Water Extractor options (#1142, waterChoice in mining.ts): whether the plan
+  // suggests them overclocked, and whether the overclocked option has a count, the advice to
+  // research Power Shards, or is not given yet (before the MAM). Absent: both, 100% suggested.
+  waterChoice?: { suggestOverclocked: boolean; shards: 'count' | 'research' | 'none' };
   // The handover from the phase before (#1069, handoverLines in app/handover.ts): that phase, the
   // lines it marked running that this phase builds again, and how many of those get machines
   // added or switched off or a clock changed; absent where nothing is handed over or none is kept.
@@ -213,6 +217,18 @@ const names = (items: string[], max = 3) =>
     ? items.join(', ')
     : `${items.slice(0, max).join(', ')} and ${items.length - max} more`;
 const share = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 100);
+// What each line taking Water says about its Water Extractors (#1142): both options, the
+// suggested one first, or 100% with the research advice, or 100% alone before the MAM.
+function waterOptionsWords(choice: AdaFacts['waterChoice']): string {
+  const lead = 'Each line that takes it says how many Water Extractors to build';
+  const exact = 'the clocks adding up to exactly what it needs.';
+  if (choice?.shards === 'none') return `${lead} at 100%, with ${exact}`;
+  if (choice?.shards === 'research')
+    return `${lead} at 100%, with ${exact} Overclocked, fewer would do: that takes Power Shards from the MAM.`;
+  return choice?.suggestOverclocked
+    ? `${lead} both ways, overclocked with Power Shards (suggested) or at 100%, each with ${exact} Your pick.`
+    : `${lead} both ways, at 100% (suggested) or overclocked with Power Shards, each with ${exact} Your pick.`;
+}
 
 // Ordered most useful first: the panel opens on the first line that applies and
 // cycles through the rest. `tone` only colors the panel.
@@ -538,7 +554,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => !!facts.waterExtracted,
     text: facts =>
-      `${facts.phaseLabel} extracts ${facts.waterExtracted} m³ of Water a minute. Each line that takes it says how many Water Extractors to build, at 100% or with Power Shards, with the clocks adding up to exactly what it needs. A full pipe stops the pumps, and I would rather it did not.`,
+      `${facts.phaseLabel} extracts ${facts.waterExtracted} m³ of Water a minute. ${waterOptionsWords(facts.waterChoice)} A full pipe stops the pumps, and I would rather it did not.`,
   },
   {
     id: 'phase-mining',

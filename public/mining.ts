@@ -3,12 +3,19 @@
 // arithmetic is in preferences/mining.ts; this reads a stored stage's `mining` (absent from plans
 // made without mining per phase, which these helpers then leave alone).
 import {
+  DEFAULT_EXTRACTION,
+  EXTRACTOR_MIN_RATE,
   EXTRACTOR_OPTIONS,
+  OVERCLOCK,
+  PHASE_CLOCK,
+  WATER_EXTRACTOR,
+  extractorOption,
   isWellKind,
   miningAdvice,
   phaseBelt,
   phaseMiner,
   phaseMining,
+  waterClock,
 } from './preferences.ts';
 import { listNames, localeNumber, powerAmount } from './wording.ts';
 import type {
@@ -19,6 +26,7 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import type { MiningAdvice, MiningRun, MiningSettings } from './preferences/mining.ts';
+import type { ExtractorOption } from './preferences/extraction.ts';
 import type { StepTable } from './step-table.ts';
 
 // A number as the pages show one (num in app/format.ts): locale-formatted, at most 2 decimals.
@@ -225,6 +233,189 @@ export function stageMiningAdvice(
   return out;
 }
 
+// --- Water Extractors: both options, one suggested (#1142) ---
+//
+// Every advice for Water Extractors gives both ways to build them (#1024): at 100%, and
+// overclocked with Power Shards up to 250% (one extractor's 300 m³/min, which a Mk.1 pipe still
+// carries), each with the last one underclocked to the exact remainder, never rounded up. The
+// user picks; the plan only suggests one, first: the one its power counts (waterClock, which
+// settings.waterOverclock sets, #1137; a stage stored before that counts its miner's clock, and a
+// plan without mining per phase its survey's clock, else 250%). So a stored plan suggests what
+// its numbers were calculated with until the user recalculates. Before Power Shards are
+// researched (no settings.overclock, and Phases 1–3 of a plan with mining per phase) the
+// overclocked option is the advice to research them instead of a count, once the MAM is usable
+// (OVERCLOCK_ADVICE_FROM); before that only the 100% option is given.
+export interface WaterChoice {
+  // The overclocked option's clock (1 = 100%): the counted clock when that is above 100%, else
+  // OVERCLOCK.
+  overclock: number;
+  // Whether the power counts the overclocked option, which is then suggested first.
+  suggestOverclocked: boolean;
+  // What the overclocked option gives: its extractors and Power Shards (`count`), the advice to
+  // research Power Shards (`research`), or nothing (`none`, before the MAM).
+  shards: 'count' | 'research' | 'none';
+}
+// The Water Extractor options of a stage in `phase` of a plan with `settings`.
+export function waterChoice(
+  stage: Pick<StoredStage, 'mining'> | undefined,
+  phase: number,
+  settings?: Pick<MiningSettings, 'overclock' | 'extraction'>,
+): WaterChoice {
+  const counted = stage?.mining
+    ? waterClock(stage.mining)
+    : (settings?.extraction?.clock ?? DEFAULT_EXTRACTION.clock);
+  const overclocked = counted > 1 + 1e-9;
+  const canOverclock =
+    overclocked ||
+    !!settings?.overclock ||
+    (stage?.mining ? (PHASE_CLOCK[phase] ?? 1) > 1 : phase >= OVERCLOCK_ADVICE_FROM);
+  return {
+    overclock: overclocked ? counted : OVERCLOCK,
+    suggestOverclocked: overclocked,
+    shards: canOverclock ? 'count' : phase >= OVERCLOCK_ADVICE_FROM ? 'research' : 'none',
+  };
+}
+// Where to research Power Shards, as the mining step's advice says it (#1137).
+const SHARD_RESEARCH =
+  'research Power Shards in the MAM (Blue Power Slugs, then Overclock Production)';
+// The choice when nothing says otherwise: both options counted, 100% suggested.
+const BOTH_AT_100: WaterChoice = {
+  overclock: OVERCLOCK,
+  suggestOverclocked: false,
+  shards: 'count',
+};
+
+// The two options for `rate` m³/min of Water, the suggested one first: each its name ("at 100%",
+// "overclocked up to 250%") and its extractors (extractorOption), or for the overclocked one the
+// research advice. `same` when both are the same extractors (one at 100% or less), and null for
+// less Water than one extractor gives at its lowest clock.
+export interface WaterOptions {
+  first: { name: string; option: ExtractorOption };
+  second: { name: string; option: ExtractorOption } | { name: string; research: string } | null;
+  same: boolean;
+}
+export function waterOptions(rate: number, choice: WaterChoice = BOTH_AT_100): WaterOptions | null {
+  if (!(rate >= EXTRACTOR_MIN_RATE - 1e-6)) return null;
+  const plain = extractorOption(rate, 100),
+    sharded = extractorOption(rate, Math.min(choice.overclock * 100, WATER_EXTRACTOR.maxClock));
+  if (!plain || !sharded) return null;
+  const atFull = { name: 'at 100%', option: plain };
+  const overName = `overclocked up to ${miningNumber(choice.overclock * 100)}%`;
+  const same = plain.extractors <= 1 && runWords(plain) === runWords(sharded);
+  if (choice.shards === 'none') return { first: atFull, second: null, same };
+  if (choice.shards === 'research')
+    return {
+      first: atFull,
+      second: { name: overName, research: `with fewer extractors: ${SHARD_RESEARCH} first` },
+      same,
+    };
+  const over = { name: overName, option: sharded };
+  return choice.suggestOverclocked
+    ? { first: over, second: atFull, same }
+    : { first: atFull, second: over, same };
+}
+// An option's extractors as the player sets them: "2 at 100% + 1 at 15.03%".
+const runWords = (option: ExtractorOption): string =>
+  option.runs.map(run => `${miningNumber(run.count)} at ${miningNumber(run.clock)}%`).join(' + ');
+const extractorCount = (count: number) =>
+  `${miningNumber(count)} extractor${count === 1 ? '' : 's'}`;
+// "overclocked …" as a sentence's start: "Overclocked …".
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+const shardCount = (count: number) => `${miningNumber(count)} Power Shard${count === 1 ? '' : 's'}`;
+// An option's extractors, shards and MW: "2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW)".
+const optionWords = (option: ExtractorOption): string =>
+  `${runWords(option)} (${[extractorCount(option.extractors), ...(option.shards ? [shardCount(option.shards)] : []), powerAmount(option.mw)].join(', ')})`;
+// One of the options in words: "at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors,
+// 41.63 MW)", or "overclocked up to 250%, with fewer extractors: research Power Shards …".
+const optionPart = (part: NonNullable<WaterOptions['second']>, suggested: boolean): string =>
+  'research' in part
+    ? `${part.name}, ${part.research}`
+    : `${part.name}${suggested ? ' (suggested)' : ''}: ${optionWords(part.option)}`;
+
+// The Water Extractors for `rate` m³/min of Water, as a line's advice gives them (#1024, #1142):
+// "Water Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or
+// overclocked up to 250%: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." The suggested
+// option first; one extractor at 100% or less is the same either way, so it is one option. ''
+// for less Water than one extractor gives at its lowest clock.
+export function waterExtractorWords(rate: number, choice?: WaterChoice): string {
+  const options = waterOptions(rate, choice);
+  if (!options) return '';
+  if (options.same)
+    return `Water Extractors: ${runWords(options.first.option)} (${powerAmount(options.first.option.mw)}); no Power Shards needed.`;
+  if (!options.second) return `Water Extractors ${optionPart(options.first, false)}.`;
+  return `Water Extractors ${optionPart(options.first, true)}. Or ${optionPart(options.second, false)}.`;
+}
+
+// The Water row of the mining step's table (#1142): what the phase extracts in all, its
+// extractors in the suggested option with the other option after them, and the suggested
+// option's Power Shards and MW, which the step's total adds. Null without Water to extract.
+function waterRow(
+  stage: Pick<StoredStage, 'mining' | 'raw'>,
+  choice: WaterChoice,
+): { cells: string[]; words: string; machines: number; shards: number; mw: number } | null {
+  const rate = stage.raw?.Water ?? 0;
+  const options = waterOptions(rate, choice);
+  if (!options) return null;
+  const { first, second } = options;
+  const machines = options.same
+    ? `Water Extractor: ${runWords(first.option)}`
+    : `Water Extractor ${first.name}${second ? ' (suggested)' : ''}: ${runWords(first.option)}` +
+      (!second
+        ? ''
+        : 'research' in second
+          ? `. ${capital(second.name)}, ${second.research}`
+          : `. ${capital(second.name)}: ${optionWords(second.option)}`);
+  return {
+    cells: [
+      'Water',
+      `${miningNumber(rate)} m³/min`,
+      'None: any open water',
+      machines,
+      first.option.shards ? miningNumber(first.option.shards) : 'None',
+      powerAmount(first.option.mw),
+    ],
+    words: `Water ${miningNumber(rate)} m³/min: ${waterExtractorWords(rate, choice)}`,
+    machines: first.option.extractors,
+    shards: first.option.shards,
+    mw: first.option.mw,
+  };
+}
+// Under the mining table when it has a Water row: the counts are for all of the phase's Water
+// together, and each line that takes it gives its own.
+export const WATER_ROW_NOTE =
+  "The Water row counts all of this phase's Water together; each production line that takes Water says how many extractors it needs on its own.";
+
+// What the power step says about the phase's Water Extractors (#1142): which option its power
+// counts, the suggested one, with that MW (the grid's, as Power needed counts it), and the other
+// option's extractors, Power Shards and MW, or the research advice. '' without extracted Water or
+// a grid.
+export function waterPowerWords(
+  stage: Pick<StoredStage, 'mining' | 'raw' | 'grid'> | undefined,
+  phase: number,
+  settings?: Pick<MiningSettings, 'overclock' | 'extraction'>,
+): string {
+  const mw = stage?.grid?.extraction?.Water;
+  const rate = stage?.raw?.Water ?? 0;
+  const choice = waterChoice(stage, phase, settings);
+  const options = waterOptions(rate, choice);
+  if (!options || !(mw && mw > 0)) return '';
+  const { first, second } = options;
+  const counted = `This phase's power counts its Water Extractors ${first.name}`;
+  // "2 extractors drawing 30.72 MW", "1 extractor and 2 Power Shards, drawing 41.26 MW".
+  const takes = (option: ExtractorOption, drawn: number) =>
+    option.shards
+      ? `${extractorCount(option.extractors)} and ${shardCount(option.shards)}, drawing ${powerAmount(drawn)}`
+      : `${extractorCount(option.extractors)} drawing ${powerAmount(drawn)}`;
+  if (options.same || !second) return ` ${counted}: ${takes(first.option, mw)}.`;
+  if ('research' in second)
+    return ` ${counted}, the suggested option: ${takes(first.option, mw)}. ${capital(second.name)}, ${second.research}.`;
+  // The other option's MW at the power model's rate per m³ (waterMWPerUnit): its clock's share.
+  const clockOf = (option: ExtractorOption) => (option.full > 100 ? choice.overclock : 1);
+  const otherMW =
+    mw * (clockOf(second.option) / clockOf(first.option)) ** (WATER_EXTRACTOR.exponent - 1);
+  return ` ${counted}, the suggested option: ${takes(first.option, mw)}. ${capital(second.name)} instead, they would take ${takes(second.option, otherMW)}.`;
+}
+
 // The first phase in which the MAM's Power Shards research is worth advising (#1137): before it
 // the player cannot use the MAM yet, so the step says nothing about overclocking.
 export const OVERCLOCK_ADVICE_FROM = 2;
@@ -258,8 +449,9 @@ export function overclockAdviceWords(saving: { now: number; overclocked: number 
 }
 
 // The build plan's mining step for a stage (#1065), or null without mining per phase or with
-// nothing to mine: the phase's equipment, then each resource's nodes, and the Power Shards in all
-// (#1137), as one text (`body`, which search, copying and step edits read) and as a table, one
+// nothing to mine: the phase's equipment, then each resource's nodes, its Water Extractors in both
+// options with the suggested one counted (#1142, waterRow), and the Power Shards in all (#1137),
+// as one text (`body`, which search, copying and step edits read) and as a table, one
 // row per resource with a total row (`table`, #1136). `settings` (the plan's) adds the advice to
 // research Power Shards (overclockSaving).
 export function miningStep(
@@ -270,8 +462,10 @@ export function miningStep(
   const resources = stageMiningAdvice(stage);
   if (!stage?.mining || !resources.length) return null;
   const mining = stage.mining;
-  const total = resources.reduce((sum, entry) => sum + entry.advice.mw, 0),
-    shards = resources.reduce((sum, entry) => sum + entry.advice.shards, 0);
+  // The phase's Water Extractors, the suggested option counted in the totals (#1142).
+  const water = waterRow(stage, waterChoice(stage, Number(phase), settings));
+  const total = resources.reduce((sum, entry) => sum + entry.advice.mw, water?.mw ?? 0),
+    shards = resources.reduce((sum, entry) => sum + entry.advice.shards, water?.shards ?? 0);
   const shardWords = shards
     ? ` and ${miningNumber(shards)} Power Shard${shards === 1 ? '' : 's'}`
     : '';
@@ -283,6 +477,7 @@ export function miningStep(
       entry =>
         `${entry.resource} ${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min: ${entry.words.charAt(0).toLowerCase()}${entry.words.slice(1)}`,
     ),
+    ...(water ? [water.words] : []),
     ...(advice ? [advice] : []),
   ].join(' ');
   const count = (entry: ResourceMining) => ({
@@ -290,21 +485,25 @@ export function miningStep(
     machines: entry.advice.nodes + entry.advice.pressurizers,
   });
   const nodes = resources.reduce((sum, entry) => sum + count(entry).nodes, 0),
-    machines = resources.reduce((sum, entry) => sum + count(entry).machines, 0);
+    machines = resources.reduce((sum, entry) => sum + count(entry).machines, water?.machines ?? 0);
+  const after = [...(advice ? [advice] : []), ...(water ? [WATER_ROW_NOTE] : [])].join(' ');
   return {
     body,
     table: {
       intro,
       caption: `Phase ${phase}'s resource nodes`,
       columns: ['Resource', 'Rate', 'Nodes', 'Machines', 'Shards', 'Power'],
-      rows: resources.map(entry => [
-        entry.resource,
-        `${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min`,
-        nodeCells(entry.advice.runs),
-        machineCells(entry, stage.mining!),
-        entry.advice.shards ? miningNumber(entry.advice.shards) : 'None',
-        powerAmount(entry.advice.mw),
-      ]),
+      rows: [
+        ...resources.map(entry => [
+          entry.resource,
+          `${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min`,
+          nodeCells(entry.advice.runs),
+          machineCells(entry, stage.mining!),
+          entry.advice.shards ? miningNumber(entry.advice.shards) : 'None',
+          powerAmount(entry.advice.mw),
+        ]),
+        ...(water ? [water.cells] : []),
+      ],
       total: [
         'Total',
         '',
@@ -313,7 +512,7 @@ export function miningStep(
         shards ? miningNumber(shards) : 'None',
         powerAmount(total),
       ],
-      ...(advice ? { after: advice } : {}),
+      ...(after ? { after } : {}),
     },
   };
 }
