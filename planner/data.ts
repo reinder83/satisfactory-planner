@@ -8,7 +8,8 @@ import fs from 'node:fs';
 import { rawResources, turbofuelRecipes } from '../public/preferences.ts';
 import type { ItemRates, RecipeData } from '../public/types/index.ts';
 
-// Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
+// Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available (no
+// earlier than its inputs, its machine's unlock and its own unlock, #1057; recipe-phases.test.ts),
 // machine, per-minute `inputs`/`outputs` for one machine at 100%, and `power` in MW per machine.
 // `items`: fluid, radioactive, `energy` (MJ per item or m³, used for fuel generators) and `sink`
 // (AWESOME Sink points; 0 means the sink refuses it). Recipe ids become row ids and progress keys.
