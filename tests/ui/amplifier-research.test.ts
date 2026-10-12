@@ -53,7 +53,7 @@ test('Phase 3’s build plan lists the research, and an amplified line says when
   const research = step(STEP);
   assert.ok(research, 'the research step is listed');
   assert.match(words(research), /MAM: Production Amplifier/);
-  const amplified = plan.stages['3']!.rows.find(row => row.amplified)!;
+  const amplified = (plan.stages['3']!.rows || []).find(row => row.amplified)!;
   assert.match(
     words(step(`calc-3-${amplified.id}`)),
     /Machines take somersloops once the MAM research Production Amplifier is done, from Phase 3 on\./,
@@ -61,7 +61,7 @@ test('Phase 3’s build plan lists the research, and an amplified line says when
   // Phase 2 has no amplified lines and no research step.
   await show(plan, '2');
   assert.equal(step(STEP), undefined);
-  assert.equal(plan.stages['2']!.rows.filter(row => row.amplified).length, 0);
+  assert.equal((plan.stages['2']!.rows || []).filter(row => row.amplified).length, 0);
   assert.equal($('[data-amp-early]'), null, 'a plan calculated now has no warning');
 });
 
@@ -86,7 +86,7 @@ test('a stored plan amplified before the research keeps its numbers, with a warn
   // Its Phase 2 lines are still there, each with its own step.
   const plan = stored();
   await show(plan, '2');
-  const twin = plan.stages['2']!.rows.find(row => row.amplified)!;
+  const twin = (plan.stages['2']!.rows || []).find(row => row.amplified)!;
   assert.ok(step(`calc-2-${twin.id}`), 'the amplified Phase 2 line keeps its step');
 });
 
