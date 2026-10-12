@@ -131,22 +131,36 @@ test('the ledger refuses combinations it cannot mean', () => {
   assert.throws(() => settings({ availablePowerGW: 20, installedPowerGW: 5 }), /installed/i);
   assert.throws(() => settings({ augmenters: 11 }), /number from 0 to 10/);
   assert.throws(() => settings({ somersloops: 200 }), /number from 0 to 106/);
-  assert.deepEqual(settings({ sloopReserved: ['shards', 'nonsense', 'shards'] }).sloopReserved, [
-    'shards',
-  ]);
+  assert.deepEqual(
+    settings({ somersloops: 1, sloopReserved: ['shards', 'nonsense', 'shards'] }).sloopReserved,
+    ['shards'],
+  );
 });
 
-test('committing more somersloops than the save holds is reported, not silently accepted', () => {
-  const plan = calculate({
+// The budget is a hard limit (#1059): a plan that commits more somersloops than the save holds is
+// refused before anything is calculated, with what it commits and what to change; one that fits,
+// to the last somersloop, is calculated and warns about nothing.
+test('committing more somersloops than the save holds is refused, not silently accepted', () => {
+  assert.throws(
+    () =>
+      calculate({
+        ...base,
+        somersloops: 12,
+        augmenters: 1,
+        sloopReserved: ['shards', 'dna', 'biofuel'],
+      }),
+    (error: Error & { status?: number }) =>
+      error.status === 400 &&
+      error.message ===
+        'This plan commits 13 somersloops (10 for 1 Alien Power Augmenter and 3 parked in hand-fed lines), but only 12 are available to spend. Raise “Somersloops available to spend”, or commit fewer: build fewer augmenters, park fewer in hand-fed lines or lower the amplification budget (All settings, step 2).',
+  );
+  const exact = calculate({
     ...base,
-    somersloops: 12,
+    somersloops: 13,
     augmenters: 1,
     sloopReserved: ['shards', 'dna', 'biofuel'],
   });
-  assert.ok(plan.warnings.some(w => /commits 13 somersloops/.test(w)));
-  assert.ok(
-    !calculate({ ...base, somersloops: 20, augmenters: 1 }).warnings.some(w => /commits/.test(w)),
-  );
+  assert.ok(!exact.warnings.some(w => /commits/.test(w)), 'all 13 of 13 fit');
 });
 
 const amplifiedRows = (stage: CurrentStage) => (stage.rows || []).filter(r => r.amplified);

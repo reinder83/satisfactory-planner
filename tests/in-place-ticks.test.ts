@@ -37,6 +37,7 @@ const SETTINGS = {
   phase: '1',
   goal: 'minimal',
   phaseMining: true,
+  somersloops: 21,
   augmenters: 2,
   sloopReserved: ['shards'],
 };

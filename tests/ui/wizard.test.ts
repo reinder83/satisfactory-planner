@@ -573,10 +573,13 @@ test('the somersloop ledger totals what the plan commits', () => {
   );
   assert.equal($$('input[name=sloop]').length, 3);
   assert.ok($<HTMLInputElement>('input[name=sloop][value=shards]')!.checked);
-  assert.match(main(), /Committed: 11 of 104 available\./);
+  assert.match(
+    main(),
+    /Committed: 11 of 104 available \(10 for 1 Alien Power Augmenter and 1 parked in hand-fed lines\)\./,
+  );
   assert.match(main(), /adds 5 Alien Power Matrix\/min/, 'the fuel rate is derived');
   wizardAt(2, {}, { somersloops: 5, augmenters: 1 });
-  assert.match(main(), /More than you have\./);
+  assert.match(main(), /That is 5 more than you have, so Review will not calculate this plan/);
 });
 
 test('storage rates: two group rates, per-item overrides and live placeholders', async () => {

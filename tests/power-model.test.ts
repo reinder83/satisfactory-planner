@@ -125,7 +125,14 @@ const PROFILES: [string, Record<string, unknown>][] = [
   ['spare power', { phase: '3', availablePowerGW: 2, installedPowerGW: 2 }],
   [
     'augmenters',
-    { phase: '4', availablePowerGW: 3, installedPowerGW: 5, augmenters: 2, fueledAugmenters: 1 },
+    {
+      phase: '4',
+      availablePowerGW: 3,
+      installedPowerGW: 5,
+      somersloops: 20,
+      augmenters: 2,
+      fueledAugmenters: 1,
+    },
   ],
   ['nuclear recycling', { phase: '4', nuclear: 'recycle', wholeMachines: true }],
   ['half the consumption', { phase: '3', powerFactor: 0.5, utilityPercent: 35 }],

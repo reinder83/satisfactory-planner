@@ -26,21 +26,15 @@ interface FinishedPlan {
 type WarningGroup = (plan: FinishedPlan) => string[];
 export const planWarnings = (config: CurrentSettings, stages: PhaseStages) =>
   WARNING_GROUPS.flatMap(group => group({ config, stages }));
-// Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
-// amplification budget. Warned about, never enforced: the plan is still calculated.
+// The augmenters' power. Committing more somersloops than the budget is refused by settings()
+// (#1059, public/somersloops.ts), so a plan calculated now never commits more than it has; plans
+// stored before keep the warning they were calculated with, and their pages add a notice
+// (ui/plan/SloopOverCommit.vue).
 function somersloopWarnings({ config }: FinishedPlan): string[] {
-  if (!config.augmenters && !config.amplifySloops) return [];
-  const warnings: string[] = [];
-  const committed = 10 * config.augmenters + config.sloopReserved.length + config.amplifySloops;
-  if (config.augmenters)
-    warnings.push(
-      `${config.augmenters} Alien Power Augmenter${config.augmenters > 1 ? 's' : ''}: ${500 * config.augmenters} MW of generation, plus a ${Math.round((0.1 * (config.augmenters - config.fueledAugmenters) + 0.3 * config.fueledAugmenters) * 100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`,
-    );
-  if (config.somersloops && committed > config.somersloops)
-    warnings.push(
-      `This plan commits ${committed} somersloops — 10 per augmenter${config.sloopReserved.length ? `, ${config.sloopReserved.length} reserved for hand-fed lines` : ''}${config.amplifySloops ? `, ${config.amplifySloops} for production amplification` : ''} — but ${config.somersloops} are recorded as available. Collect more, or build fewer augmenters.`,
-    );
-  return warnings;
+  if (!config.augmenters) return [];
+  return [
+    `${config.augmenters} Alien Power Augmenter${config.augmenters > 1 ? 's' : ''}: ${500 * config.augmenters} MW of generation, plus a ${Math.round((0.1 * (config.augmenters - config.fueledAugmenters) + 0.3 * config.fueledAugmenters) * 100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`,
+  ];
 }
 // Amplification: the busiest phase's somersloop use, and phases whose fit fell back.
 function amplificationWarnings({ config, stages }: FinishedPlan): string[] {

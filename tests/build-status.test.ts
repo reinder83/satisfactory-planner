@@ -161,7 +161,7 @@ test('power is measured as the planner balances it, and Phase 1 is never flagged
 test('no fully built stage is flagged short of power, whatever the power settings (#188)', () => {
   for (const settings of [
     {},
-    { augmenters: 4, fueledAugmenters: 2 },
+    { somersloops: 40, augmenters: 4, fueledAugmenters: 2 },
     { somersloops: 20, amplifySloops: 10 },
     { powerFactor: 2 },
     { utilityPercent: 50 },

@@ -71,7 +71,7 @@ const PROFILES: [string, object][] = [
   ['maximum output', { wholeMachines: true, goal: 'maximum', limitsConfirmed: true }],
   ['double cost, from Phase 3', { wholeMachines: true, phase: '3', multiplier: 2 }],
   ['existing Smart Plating', { wholeMachines: true, existingSupply: { 'Smart Plating': 1.5 } }],
-  ['amplified, from Phase 4', { phase: '4', amplifySloops: 40, recipes: 'all' }],
+  ['amplified, from Phase 4', { phase: '4', somersloops: 40, amplifySloops: 40, recipes: 'all' }],
 ];
 for (const [name, settings] of PROFILES)
   test(`no elevator part goes to the sink while the elevator needs it: ${name}`, () => {

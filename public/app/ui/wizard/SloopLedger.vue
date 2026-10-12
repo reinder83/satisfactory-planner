@@ -1,33 +1,89 @@
 <!--
-  The somersloop ledger on All settings step 2, drawn from the settings as last read, so its
-  totals refresh on the next redraw rather than as you type. Each augmenter costs 10 sloops.
-  Augmenters and their fuel change the calculation; the hand-fed lines do not (their inputs
-  are gathered, never belted), so their checkboxes (name="sloop", read back by readWizard as
-  settings.sloopReserved) only reserve sloops and add steps.
+  The somersloop ledger on All settings step 2. Each augmenter costs 10 sloops. Augmenters and
+  their fuel change the calculation; the hand-fed lines do not (their inputs are gathered, never
+  belted), so their checkboxes (name="sloop", read back by readWizard as settings.sloopReserved)
+  only reserve sloops and add steps.
+
+  It follows the step's fields as they are typed (#1059): the somersloops available, the
+  augmenters, the fueled ones, the amplification budget and the hand-fed boxes are read from the
+  form on every input and change, not written to the draft (readWizard does that when the step
+  is left, as before), so a box being cleared to type a new number is never filled back in.
+  Until a field is touched it shows the draft. The budget is a hard limit (public/somersloops.ts):
+  a commitment beyond it turns the ledger into a warning, and Review is refused until it fits.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
+import { sloopCommitment, sloopPartsWords, type SloopSettings } from '../../../somersloops.ts';
+
+// The ledger's fields as the form holds them now, once one has been touched.
+type Typed = Required<Pick<SloopSettings, 'somersloops' | 'augmenters' | 'amplifySloops'>> & {
+  fueledAugmenters: number;
+  sloopReserved: string[];
+};
+const typed = ref<Typed | null>(null);
+const ledger = ref<HTMLElement | null>(null);
+let form: HTMLFormElement | null = null;
+
+// A number box as a count: empty or not a number reads as 0, as the ledger has nothing else.
+const field = (name: string) => {
+  const value = Number((form?.elements.namedItem(name) as HTMLInputElement | null)?.value ?? '');
+  return Number.isFinite(value) ? value : 0;
+};
+function follow() {
+  if (!form) return;
+  typed.value = {
+    somersloops: field('somersloops'),
+    augmenters: field('augmenters'),
+    fueledAugmenters: field('fueledAugmenters'),
+    amplifySloops: field('amplifySloops'),
+    sloopReserved: [...form.querySelectorAll<HTMLInputElement>('input[name=sloop]:checked')].map(
+      box => box.value,
+    ),
+  };
+}
+onMounted(() => {
+  form = ledger.value?.closest('form') ?? null;
+  form?.addEventListener('input', follow);
+  form?.addEventListener('change', follow);
+});
+onBeforeUnmount(() => {
+  form?.removeEventListener('input', follow);
+  form?.removeEventListener('change', follow);
+  form = null;
+});
 
 const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
     const settings = wizard.settings,
       reserved: string[] = settings.sloopReserved || [];
-    const augmenters = settings.augmenters || 0,
-      fueled = settings.fueledAugmenters || 0;
+    const now = typed.value ?? {
+      somersloops: settings.somersloops || 0,
+      augmenters: settings.augmenters || 0,
+      fueledAugmenters: settings.fueledAugmenters || 0,
+      amplifySloops: settings.amplifySloops || 0,
+      sloopReserved: reserved,
+    };
+    const commitment = sloopCommitment(now);
+    const augmenters = commitment.augmenters,
+      fueled = Math.min(Math.max(0, Math.floor(now.fueledAugmenters)), augmenters);
     return {
       augmenters,
       fueled,
-      sloops: 10 * augmenters,
+      sloops: num(commitment.augmenterSloops),
       mw: num(500 * augmenters),
       boost: Math.round((0.1 * (augmenters - fueled) + 0.3 * fueled) * 100),
       matrix: num(5 * fueled),
-      committed: 10 * augmenters + reserved.length + (settings.amplifySloops || 0),
-      have: settings.somersloops || 0,
-      amplify: settings.amplifySloops || 0,
+      committed: num(commitment.committed),
+      parts: commitment.committed ? sloopPartsWords(commitment) : '',
+      have: num(commitment.available),
+      over: commitment.over,
+      overText: num(commitment.over),
+      amplify: commitment.amplify,
+      // The boxes start as the draft has them; the browser keeps what is ticked since.
       uses: (workspace.catalog.sloopUses || []).map(([id, label]) => ({
         id,
         label,
@@ -40,7 +96,7 @@ const view = computed(() =>
 
 <template>
   <template v-if="view">
-    <div class="notice info">
+    <div ref="ledger" class="notice" :class="view.over ? 'warn' : 'info'" data-sloop-ledger>
       <b>Somersloop ledger.</b>
       <template v-if="view.augmenters"
         >{{ view.augmenters }} augmenter{{ view.augmenters > 1 ? 's' : '' }} cost
@@ -52,9 +108,13 @@ const view = computed(() =>
             : 'Unfueled augmenters need no Alien Power Matrix.'
         }}</template
       ><template v-else>Enter augmenters to include their power in Phase 5.</template> Committed:
-      <b>{{ view.committed }}</b> of {{ view.have }} available.<template
-        v-if="view.committed > view.have"
-        >{{ ' ' }}<span class="warn">More than you have.</span></template
+      <b data-sloop-committed>{{ view.committed }}</b> of
+      <span data-sloop-available>{{ view.have }}</span> available<template v-if="view.parts">
+        ({{ view.parts }})</template
+      >.<template v-if="view.over"
+        >{{ ' ' }}<b>That is {{ view.overText }} more than you have</b>, so Review will not
+        calculate this plan: raise the somersloops available, or build fewer augmenters, park fewer
+        in hand-fed lines or lower the amplification budget.</template
       >
     </div>
     <p v-if="view.amplify" class="small muted">

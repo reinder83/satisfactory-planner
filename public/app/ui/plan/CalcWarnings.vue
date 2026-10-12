@@ -3,8 +3,9 @@
   phase: the infeasible-draft warning with its options (draftFixes in views/calculated.ts), and
   the power the phase still needs with what that phase can build for it (headroomAdvice, #331),
   from the one power model every page reads (powerView in public/power.ts, #1064). A plan made
-  before #1064 keeps its own wording: extra headroom for whole buildings. It draws nothing
-  without a calculated profile.
+  before #1064 keeps its own wording: extra headroom for whole buildings. Then a stored plan that
+  commits more somersloops than it has (SloopOverCommit, #1059). It draws nothing without a
+  calculated profile.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -13,6 +14,7 @@ import { draftFixes, draftHeading, headroomAdvice } from '../../views/calculated
 import { power } from '../../wizard/fields.ts';
 import { powerView } from '../../../power.ts';
 import { legacy } from '../bridge.ts';
+import SloopOverCommit from './SloopOverCommit.vue';
 
 const notices = computed(() =>
   legacy(() => {
@@ -56,4 +58,5 @@ const notices = computed(() =>
     >
     {{ notices.advice }}
   </div>
+  <SloopOverCommit />
 </template>
