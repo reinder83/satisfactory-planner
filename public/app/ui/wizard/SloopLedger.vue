@@ -10,13 +10,21 @@
   is left, as before), so a box being cleared to type a new number is never filled back in.
   Until a field is touched it shows the draft. The budget is a hard limit (public/somersloops.ts):
   a commitment beyond it turns the ledger into a warning, and Review is refused until it fits.
+  With an amplification budget it says from which phase amplification is planned: the phase of
+  the MAM's Production Amplifier research (AMPLIFIER_PHASE, #1056).
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
-import { sloopCommitment, sloopPartsWords, type SloopSettings } from '../../../somersloops.ts';
+import {
+  AMPLIFIER_PHASE,
+  AMPLIFIER_RESEARCH,
+  sloopCommitment,
+  sloopPartsWords,
+  type SloopSettings,
+} from '../../../somersloops.ts';
 
 // The ledger's fields as the form holds them now, once one has been touched.
 type Typed = Required<Pick<SloopSettings, 'somersloops' | 'augmenters' | 'amplifySloops'>> & {
@@ -122,6 +130,11 @@ const view = computed(() =>
       own machines. An amplified machine keeps its inputs, doubles its output and draws four times
       the power, so it trades power for ore and buildings. The budget applies to each phase's plan
       rather than adding up across phases, because every phase is a self-contained steady state.
+      <span data-amp-from
+        >Amplification starts in Phase {{ AMPLIFIER_PHASE }}: machines take somersloops only after
+        the MAM research {{ AMPLIFIER_RESEARCH }}, which needs SAM Fluctuators and Circuit Boards,
+        so earlier phases are planned without it.</span
+      >
     </p>
     <p v-else class="small muted">
       Production amplification is off. Somersloops in your production lines cut ore and buildings,
