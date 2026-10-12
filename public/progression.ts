@@ -8,10 +8,10 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import { listNames, powerAmount, slug } from './wording.ts';
+import { AMPLIFIER_RESEARCH } from './somersloops.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
-import { AMPLIFIER_RESEARCH } from './somersloops.ts';
 import type { StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
