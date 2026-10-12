@@ -259,7 +259,7 @@ function overclockWords(config: CurrentSettings): string {
   const cap = 'never more than their belt or pipe carries';
   if (config.overclock || Number(config.phase) >= 4)
     return `Miners and oil extractors run overclocked with Power Shards, up to 250% and ${cap}.`;
-  return `Until you can overclock, miners and oil extractors run at 100% in Phases 1–3, and from Phase 2 the build plan says how many miners researching Power Shards in the MAM (Blue Power Slugs, then Overclock Production) would save; tick “I can overclock” under what you already have once you can. From Phase 4 they run overclocked up to 250%, ${cap}.`;
+  return `Until you can overclock, miners and oil extractors run at 100% in Phases 1–3, and from Phase 2 the build plan says how many miners researching Power Shards in the MAM (Blue Power Slugs, then Overclock Production) would save; once you can, turn on “I can overclock” with Edit settings. From Phase 4 they run overclocked up to 250%, ${cap}.`;
 }
 // What every plan assumes about unlocks and power.
 function assumptionWarnings({ config }: FinishedPlan): string[] {

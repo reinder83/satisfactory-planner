@@ -121,8 +121,8 @@ test('a step table that scrolls sideways can be focused and is named; one that f
     assert.equal(box.getAttribute('role'), 'region');
     assert.match(box.getAttribute('aria-label')!, /\(scrolls sideways\)$/);
   } finally {
-    delete (proto as unknown as Record<string, unknown>).scrollWidth;
-    delete (proto as unknown as Record<string, unknown>).clientWidth;
+    Reflect.deleteProperty(proto, 'scrollWidth');
+    Reflect.deleteProperty(proto, 'clientWidth');
     if (scrollWidth) Object.defineProperty(Element.prototype, 'scrollWidth', scrollWidth);
     if (clientWidth) Object.defineProperty(Element.prototype, 'clientWidth', clientWidth);
   }
