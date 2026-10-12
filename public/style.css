@@ -3557,6 +3557,16 @@ button.rail-tile:hover {
 }
 /* "Alternates you already own" on step 2 (#1068): the alternate picker's frame, folded. Its own
    classes: readAlternates reads the custom picker by .alt-list. */
+/* The MAM recipes box (#1058, MamRecipes.vue), a panel like the pickers beside it. */
+.mam-recipes {
+  margin: 16px 0 0;
+  padding: 10px 13px;
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+}
+.mam-recipes > p {
+  margin: 6px 0 0;
+}
 .owned-alt-picker {
   margin: 16px 0 0;
   border: 1px solid var(--line2);
