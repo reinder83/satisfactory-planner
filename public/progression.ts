@@ -1785,11 +1785,25 @@ function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
       'a Constructor making Solid Biofuel from biomass, doubling what each trip of gathered leaves and wood is worth',
   };
   const picked = reserved.map(id => labels[id]).filter(Boolean);
+  const reserve = `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''}`;
+  const after =
+    'Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.';
   return [
     {
       id: 'sloop-hand-fed',
       title: 'Park somersloops in the hand-fed constructors',
-      body: `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''} for ${picked.join('; ')}. Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.`,
+      body: `${reserve} for ${picked.join('; ')}. ${after}`,
+      // Two or three constructors as a list (#1136), one line each.
+      ...(picked.length > 1
+        ? {
+            list: {
+              intro: `${reserve}, one for each:`,
+              items: picked.map(label => capital(label) + '.'),
+              after,
+              label: 'The hand-fed constructors',
+            },
+          }
+        : {}),
     },
   ];
 }

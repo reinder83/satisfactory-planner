@@ -251,3 +251,21 @@ test('the retire step gives every retired line as a table: line, machine and how
   }
   assert.ok(longer, 'a phase retires more than ten lines');
 });
+
+test('two or more hand-fed constructors are a list, one line each; one stays a sentence', () => {
+  const step = steps(latePlan(), '4').find(found => found.id === 'sloop-hand-fed')!;
+  const list = step.list!;
+  assert.equal(list.intro, 'Reserve 2 Somersloops, one for each:');
+  assert.equal(list.items.length, 2);
+  for (const item of list.items) {
+    assert.match(item, /^A Constructor .*\.$/);
+    assert.ok(step.body.includes(item.charAt(0).toLowerCase() + item.slice(1, -1)), item);
+  }
+  assert.ok(step.body.startsWith('Reserve 2 Somersloops for a Constructor'));
+  assert.ok(step.body.endsWith(list.after!));
+  assert.match(listText(list), /one for each/);
+  const one = calculate({ phase: '3', sloopReserved: ['biofuel'] }) as StoredCalculatedPlan;
+  const single = steps(one, '3').find(found => found.id === 'sloop-hand-fed')!;
+  assert.equal(single.list, undefined, 'one constructor stays a sentence');
+  assert.match(single.body, /^Reserve 1 Somersloop for a Constructor making Solid Biofuel/);
+});

@@ -301,3 +301,19 @@ test('plans stored before the lists show their byproduct advice as lists', () =>
     assert.ok($('[data-step-list]'), name + ': a production line lists its byproduct advice');
   }
 });
+
+test('the hand-fed constructors are a list, one line each', async () => {
+  show('4');
+  const list = listOf('sloop-hand-fed')!;
+  assert.ok(list, 'the somersloop step has a list');
+  assert.equal(list.intro, 'Reserve 2 Somersloops, one for each:');
+  assert.equal(list.items.length, 2);
+  assert.match(list.items[1]!, /^A Constructor making Power Shards from power slugs/);
+  assert.match(list.after, /^Insert the Somersloop in the Constructor/);
+  assert.equal(list.label, 'The hand-fed constructors');
+  assert.ok(await foundOnlyInStructure('sloop-hand-fed', 'one for each'));
+});
+
+test('an edited somersloop step shows the edited words and keeps its tick', () => {
+  editedShowsWords('sloop-hand-fed');
+});
