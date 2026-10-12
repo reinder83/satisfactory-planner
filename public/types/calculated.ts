@@ -181,6 +181,19 @@ export interface CurrentSettings {
   limits: ItemRates;
   alternateRecipes: string[];
   preferredRecipes: string[];
+  // The MAM recipes (#1058, All settings step 2's "MAM recipes" box): Turbofuel, Compacted Coal
+  // and Polyester Fabric (MAM_RECIPES in planner/data.ts), whatever `recipes` says, from the phase
+  // each becomes available. `false` leaves them out (a turbofuel power route still keeps Turbofuel
+  // and Compacted Coal). Absent from every plan made before it: then 'standard' and 'all' plan
+  // with them and 'custom' only with the ones picked, as before (mamRecipesOn in
+  // planner/recipes.ts), and Distilled Silica too is in a 'custom' plan only when picked.
+  mamRecipes?: boolean;
+  // The picks Planner's choice made (#1058) and the user left as they were, a subset of
+  // `alternateRecipes`, sorted: recipes still to hunt, so a new profile's "Treat this plan's
+  // alternate recipes as unlocked" leaves their unlock steps open (pickedRecipeUnlocks in
+  // public/state/carry.ts). The planner does not read it. Absent unless Planner's choice made
+  // some, and from every plan made before it, whose picks all count as owned, as before.
+  plannerPicks?: string[];
 }
 
 // Per phase, the row ids of the production lines to run at exact clocks (#1066): in settings the
