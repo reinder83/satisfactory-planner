@@ -1093,7 +1093,9 @@ p {
 /* A step's body as a table (#1136, StepTable.vue): the mining step's resources, one row each,
    with a total row. Where the step is 480px wide or less (a phone, or a narrow plan column) each
    row stacks into one block, each cell under its column's name, so the page never scrolls
-   sideways; wider, the table scrolls inside its own box if it must. */
+   sideways. Wider, the cells are tight and a row's name may wrap between words, so a ten-row
+   Phase 4 mining table fits a 530px step at 1280 (#1020); a table that still does not fit scrolls
+   inside its own box, which then takes keyboard focus (StepTable.vue). */
 .step-table table {
   width: 100%;
   border-collapse: collapse;
@@ -1110,7 +1112,7 @@ p {
 .step-table td {
   text-align: left;
   vertical-align: top;
-  padding: 5px 8px;
+  padding: 5px 6px;
   border-bottom: 1px solid var(--line2);
   overflow-wrap: normal;
 }
@@ -1123,7 +1125,10 @@ p {
 .step-table tbody th {
   font-weight: 600;
   color: var(--bright);
-  white-space: nowrap;
+}
+.step-table:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
 }
 .step-table tfoot th,
 .step-table tfoot td {

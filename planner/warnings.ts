@@ -248,8 +248,18 @@ function miningWarnings({ config }: FinishedPlan): string[] {
   if (!config.phaseMining) return [];
   const belts = ownedBeltsWords(Number(config.phase), config.ownedBelt);
   return [
-    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner, config.overclock)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
+    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner, config.overclock)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. ${overclockWords(config)} The entered budgets are the most any phase draws.`,
   ];
+}
+// How the plan overclocks its miners and oil extractors (#1137, phaseMiner in
+// public/preferences/mining.ts): with Power Shards ("I can overclock", settings.overclock) up to
+// 250% in every phase, else at 100% in Phases 1–3 with the build plan's research advice and up to
+// 250% from Phase 4; never more than a node's belt or pipe carries, nor a node survey's clock.
+function overclockWords(config: CurrentSettings): string {
+  const cap = 'never more than their belt or pipe carries';
+  if (config.overclock || Number(config.phase) >= 4)
+    return `Miners and oil extractors run overclocked with Power Shards, up to 250% and ${cap}.`;
+  return `Until you can overclock, miners and oil extractors run at 100% in Phases 1–3, and from Phase 2 the build plan says how many miners researching Power Shards in the MAM (Blue Power Slugs, then Overclock Production) would save; once you can, turn on “I can overclock” with Edit settings. From Phase 4 they run overclocked up to 250%, ${cap}.`;
 }
 // What every plan assumes about unlocks and power.
 function assumptionWarnings({ config }: FinishedPlan): string[] {

@@ -56,7 +56,7 @@ const choiceAt = (phase: number, extra: { overclock?: boolean; waterOverclock?: 
   waterChoice(stageAt(phase, extra), phase, extra);
 
 const PLAIN = '2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW)';
-const SHARDED = '1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)';
+const SHARDED = '1 overclocked at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)';
 const RESEARCH =
   'research Power Shards in the MAM (Blue Power Slugs, then Overclock Production) first';
 
@@ -99,15 +99,15 @@ test('which option is suggested, and what the overclocked one gives, per phase a
 test('a line’s advice gives both options, the suggested one first, and never hides one', () => {
   assert.equal(
     plain(waterExtractorWords(258.04, choiceAt(4))),
-    `Water Extractors at 100% (suggested): ${PLAIN}. Or overclocked up to 250%: ${SHARDED}.`,
+    `Water Extractors at 100% (suggested): ${PLAIN}. Or ${SHARDED}.`,
   );
   assert.equal(
     plain(waterExtractorWords(258.04, choiceAt(4, { waterOverclock: true }))),
-    `Water Extractors overclocked up to 250% (suggested): ${SHARDED}. Or at 100%: ${PLAIN}.`,
+    `Water Extractors (suggested): ${SHARDED}. Or at 100%: ${PLAIN}.`,
   );
   assert.equal(
     plain(waterExtractorWords(258.04, choiceAt(3))),
-    `Water Extractors at 100% (suggested): ${PLAIN}. Or overclocked up to 250%, with fewer extractors: ${RESEARCH}.`,
+    `Water Extractors at 100% (suggested): ${PLAIN}. Or overclocked, with fewer extractors: ${RESEARCH}.`,
   );
   assert.equal(
     plain(waterExtractorWords(258.04, choiceAt(1))),
@@ -158,16 +158,10 @@ test('Water is never rounded up, in either option, whichever is suggested (prope
 
 test('the mining step’s table has a Water row with both options; its totals add the suggested one', () => {
   for (const [extra, first, other, shards, power] of [
-    [
-      {},
-      `at 100% (suggested): 2 at 100% + 1 at 15.03%`,
-      `Overclocked up to 250%: ${SHARDED}`,
-      'None',
-      '41.63 MW',
-    ],
+    [{}, `at 100% (suggested): 2 at 100% + 1 at 15.03%`, `Or ${SHARDED}`, 'None', '41.63 MW'],
     [
       { waterOverclock: true },
-      `overclocked up to 250% (suggested): 1 at 215.03%`,
+      `(suggested): 1 overclocked at 215.03%`,
       `At 100%: ${PLAIN}`,
       '3',
       '55.03 MW',
@@ -195,7 +189,7 @@ test('the mining step’s table has a Water row with both options; its totals ad
   // Before Power Shards (Phase 3): the 100% option and the research advice, no shards.
   const early = miningStep(stageAt(3), '3', { limits })!;
   assert.deepEqual(early.table.rows.at(-1)!.slice(3).map(plain), [
-    `Water Extractor at 100% (suggested): 2 at 100% + 1 at 15.03%. Overclocked up to 250%, with fewer extractors: ${RESEARCH}`,
+    `Water Extractor at 100% (suggested): 2 at 100% + 1 at 15.03%. Overclocked, with fewer extractors: ${RESEARCH}`,
     'None',
     '41.63 MW',
   ]);
@@ -237,16 +231,16 @@ test('the power step says which option it counts, and the other one', () => {
     plain(waterPowerWords(plan.stages[String(phase) as '4'], phase, plan.settings));
   assert.match(
     words(phase4, 4),
-    /^ This phase's power counts its Water Extractors at 100%, the suggested option: \d+ extractors drawing [\d.]+ MW\. Overclocked up to 250% instead, they would take \d+ extractors? and \d+ Power Shards?, drawing [\d.]+ MW\.$/,
+    /^ This phase's power counts its Water Extractors at 100%, the suggested option: \d+ extractors drawing [\d.]+ MW\. Overclocked instead, they would take \d+ extractors? and \d+ Power Shards?, drawing [\d.]+ MW\.$/,
   );
   assert.match(
     words(phase4Over, 4),
-    /^ This phase's power counts its Water Extractors overclocked up to 250%, the suggested option: \d+ extractors? and \d+ Power Shards?, drawing [\d.]+ MW\. At 100% instead, they would take \d+ extractors drawing [\d.]+ MW\.$/,
+    /^ This phase's power counts its Water Extractors overclocked, the suggested option: \d+ extractors? and \d+ Power Shards?, drawing [\d.]+ MW\. At 100% instead, they would take \d+ extractors drawing [\d.]+ MW\.$/,
   );
   assert.match(
     words(phase2, 2),
     new RegExp(
-      `the suggested option: \\d+ extractors? drawing [\\d.]+ MW\\. Overclocked up to 250%, with fewer extractors: ${RESEARCH.replace(/[()]/g, '\\$&')}\\.$`,
+      `the suggested option: \\d+ extractors? drawing [\\d.]+ MW\\. Overclocked, with fewer extractors: ${RESEARCH.replace(/[()]/g, '\\$&')}\\.$`,
     ),
   );
   // The step itself ends with it.
@@ -286,15 +280,15 @@ const lineWater = (plan: StoredCalculatedPlan, phase: '2' | '4') => {
 test('a production line’s advice on a plan: both options, the suggested one first', () => {
   assert.match(
     lineWater(phase4, '4'),
-    /^Water Extractors at 100% \(suggested\): .+\. Or overclocked up to 250%: .+Power Shard.+\.$/,
+    /^Water Extractors at 100% \(suggested\): .+\. Or \d+ overclocked at .+Power Shard.+\.$/,
   );
   assert.match(
     lineWater(phase4Over, '4'),
-    /^Water Extractors overclocked up to 250% \(suggested\): .+Power Shard.+\. Or at 100%: .+\.$/,
+    /^Water Extractors \(suggested\): \d+ overclocked at .+Power Shard.+\. Or at 100%: .+\.$/,
   );
   assert.match(
     lineWater(phase2, '2'),
-    /^Water Extractors at 100% \(suggested\): .+\. Or overclocked up to 250%, with fewer extractors: research Power Shards .+ first\.$/,
+    /^Water Extractors at 100% \(suggested\): .+\. Or overclocked, with fewer extractors: research Power Shards .+ first\.$/,
   );
 });
 
@@ -362,7 +356,7 @@ test('a stored plan keeps its numbers and suggests what it was calculated with (
   assert.equal(waterChoice(stage, 4, old.settings).suggestOverclocked, true);
   assert.match(
     miningStep(stage, '4', old.settings)!.table.rows.at(-1)![3]!,
-    /overclocked up to 250% \(suggested\)/,
+    /^Water Extractor \(suggested\): \d+ overclocked at /,
   );
   assert.equal(JSON.stringify(stage.grid), grid, 'reading it changes nothing');
   for (const plan of [old, phase4, phase4Over]) {

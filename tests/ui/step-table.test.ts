@@ -101,3 +101,37 @@ test('an edited mining step shows the edited words instead of the table, and kee
   assert.equal(plain(step.querySelector('p')?.textContent), 'My own mining notes.');
   assert.equal($$<HTMLInputElement>('[data-check="mining-3"]')[0]!.checked, true);
 });
+
+// #1020: a table wider than its step scrolls inside its own box, which then takes keyboard focus
+// under the table's caption; one that fits takes none. happy-dom lays nothing out, so the widths
+// are set by hand.
+test('a step table that scrolls sideways can be focused and is named; one that fits is not', async () => {
+  const proto = HTMLElement.prototype;
+  const scrollWidth = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollWidth');
+  const clientWidth = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth');
+  try {
+    Object.defineProperty(proto, 'scrollWidth', { configurable: true, get: () => 556 });
+    Object.defineProperty(proto, 'clientWidth', { configurable: true, get: () => 530 });
+    open({ calculated: structuredClone(mined), phase: '3' });
+    go('plan');
+    render();
+    await nextTick();
+    const box = $('[data-task="mining-3"] [data-step-table]')!;
+    assert.equal(box.getAttribute('tabindex'), '0');
+    assert.equal(box.getAttribute('role'), 'region');
+    assert.match(box.getAttribute('aria-label')!, /\(scrolls sideways\)$/);
+  } finally {
+    Reflect.deleteProperty(proto, 'scrollWidth');
+    Reflect.deleteProperty(proto, 'clientWidth');
+    if (scrollWidth) Object.defineProperty(Element.prototype, 'scrollWidth', scrollWidth);
+    if (clientWidth) Object.defineProperty(Element.prototype, 'clientWidth', clientWidth);
+  }
+  page();
+  open({ calculated: structuredClone(mined), phase: '3' });
+  go('plan');
+  render();
+  await nextTick();
+  const box = $('[data-task="mining-3"] [data-step-table]')!;
+  assert.equal(box.getAttribute('tabindex'), null, 'a table that fits is no tab stop');
+  assert.equal(box.getAttribute('role'), null);
+});
