@@ -35,7 +35,7 @@ export const helpText: Record<string, string> = {
   installedPowerMW:
     'Total generation already installed, spare or not. An Alien Power Augmenter multiplies the whole grid’s base production, and the spare figure above is only part of that, so the multiplier is calculated from this number. Leave it equal to the spare figure if you would rather understate the boost.',
   somersloops:
-    'How many Somersloops you have available to spend on this save, after MAM research. The world holds 106; one goes to Alien Technology analysis and one to unlocking the Augmenter.',
+    'How many Somersloops you have available to spend on this save, after MAM research. The world holds 106; one goes to Alien Technology analysis and one to unlocking the Augmenter. Augmenters, hand-fed lines and production amplification together can commit no more than this.',
   augmenters:
     'Alien Power Augmenters to include in Phase 5. Each costs 10 Somersloops permanently, generates 500 MW and adds a multiplier to the grid’s base production: 10% unfueled, 30% fueled.',
   fueledAugmenters:
