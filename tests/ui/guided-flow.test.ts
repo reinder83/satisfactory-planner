@@ -119,7 +119,7 @@ test('the guided goal names are the Goals step’s', () => {
 });
 
 test('"I will choose them myself" picks the recipes on its own screen and goes on', async () => {
-  question('recipes', '3', { recipes: 'standard' });
+  question('recipes', '3', { recipes: 'standard', mamRecipes: true });
   assert.equal($('.alt-list'), null);
   assert.equal(
     $('input[name="guided:recipes"][value=custom]')!
@@ -131,6 +131,9 @@ test('"I will choose them myself" picks the recipes on its own screen and goes o
   await change('input[name="guided:recipes"][value=custom]', true);
   assert.equal(wizard!.settings.recipes, 'custom');
   assert.ok($('#wizard-form.guided-panel .alt-list'), 'the picker under the cards');
+  // The MAM recipes box comes with it (#1058), ticked for a new plan.
+  const mam = $<HTMLInputElement>('#wizard-form.guided-panel [data-mam-recipes] input')!;
+  assert.ok(mam.checked);
   const box = $<HTMLInputElement>('.alt-list input[name=alt]')!;
   box.checked = true;
   const step = wizard!.guidedStep;
@@ -138,6 +141,7 @@ test('"I will choose them myself" picks the recipes on its own screen and goes o
   assert.equal(wizard!.mode, 'guided', 'the questions go on');
   assert.equal(wizard!.guidedStep, step + 1);
   assert.deepEqual(wizard!.settings.alternateRecipes, [box.value], 'the pick is kept');
+  assert.equal(wizard!.settings.mamRecipes, true);
 });
 
 test('the power question writes the main power and the spare power', async () => {

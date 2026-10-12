@@ -508,12 +508,12 @@ test('the wizard shows calculation progress and options when the calculation tim
 });
 
 // The alternate picker itself: tests/ui/wizard.test.ts.
-test('Planner’s choice collects the alternates a plan uses', () => {
+test('Planner’s choice collects the hard-drive alternates a plan uses', () => {
   const context = ui();
   assert.equal(
     vm.runInContext('JSON.stringify(alternatesUsed(generated))', context),
-    '["Recipe_Alternate_EnrichedCoal_C","Recipe_Alternate_Turbofuel_C"]',
-    'a standard plan uses no hard-drive alternates, but its turbofuel power chain still needs the MAM picks',
+    '[]',
+    'a standard plan uses no hard-drive alternates; its MAM recipes are no picks (#1058)',
   );
   assert.equal(
     vm.runInContext(
@@ -528,8 +528,16 @@ test('Planner’s choice collects the alternates a plan uses', () => {
       `JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'Recipe_Alternate_Turbofuel_C',alternate:false},{id:'y'}]}}}))`,
       context,
     ),
-    '["Recipe_Alternate_Turbofuel_C"]',
-    'MAM recipes count as used alternates even though plans mark them standard',
+    '[]',
+    'MAM recipes have their own box, so they are no picks (#1058)',
+  );
+  // Only the phases the plan builds count: the ones before its start phase are milestone-only.
+  assert.equal(
+    vm.runInContext(
+      `JSON.stringify(alternatesUsed({settings:{phase:'3'},stages:{2:{rows:[{id:'x',alternate:true}]},3:{rows:[{id:'w',alternate:true}]}}}))`,
+      context,
+    ),
+    '["w"]',
   );
   // An amplified twin and a group's own line pick their recipe, which the planner accepts (#901).
   assert.equal(
@@ -537,7 +545,7 @@ test('Planner’s choice collects the alternates a plan uses', () => {
       `JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'amp:x',alternate:true},{id:'amp:Recipe_Alternate_Turbofuel_C',alternate:false},{id:'z:fg-alpha1',alternate:true,onSite:{group:'fg-alpha1',recipe:'z'}}]}}}))`,
       context,
     ),
-    '["Recipe_Alternate_Turbofuel_C","x","z"]',
+    '["x","z"]',
     'amplified and on-site lines count as their recipe',
   );
 });

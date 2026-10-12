@@ -79,7 +79,7 @@ export const carryOptions: [key: string, label: string, description: string][] =
   [
     'picked',
     'Treat this plan’s alternate recipes as unlocked',
-    'Ticks the unlock step for every alternate recipe you picked, including the ones your ingot and power preferences require.',
+    'Ticks the unlock step for every alternate recipe you ticked yourself, including the ones your ingot and power preferences require. Planner’s choice picks stay on the hard-drive hunt.',
   ],
 ];
 // The checklist key prefixes each world-shaped carry option copies as they are. The other
@@ -122,12 +122,15 @@ const planRows = (plan: RowsPlan | null | undefined): Map<string, CalcRow> => {
 // Hand-picking alternates states which recipes you own: the recipes ticked in
 // the picker plus the ones a pure-ingot or power preference locks in for you,
 // which reach the plan as alternate rows rather than as picks. A row's recipe is recipeIdOf's, so
-// an amplified twin or a group's own line ticks its recipe's step (#901).
+// an amplified twin or a group's own line ticks its recipe's step (#901). The picks Planner's
+// choice made (settings.plannerPicks, #1058) are recipes to hunt, not owned: they are left out,
+// so their hard-drive steps stay open. A plan made before it has none, and all its picks count.
 export function pickedRecipeUnlocks(plan: RowsPlan | null | undefined): string[] {
   if (plan?.settings?.recipes !== 'custom') return [];
+  const hunting = new Set(plan.settings.plannerPicks || []);
   const ids = new Set(plan.settings.alternateRecipes || []);
   for (const row of planRows(plan).values()) if (row.alternate) ids.add(recipeIdOf(row));
-  return [...ids].filter(id => safeKey('recipe-unlock-' + id));
+  return [...ids].filter(id => !hunting.has(id) && safeKey('recipe-unlock-' + id));
 }
 // What a new profile may be told is already standing in the world. The guided
 // start asks this for a save you are not beginning from scratch: a production
