@@ -313,6 +313,9 @@ export interface FuelVerdict {
   hoursUnfueled: number | null;
   matrixRate: number;
   worthIt: boolean;
+  // What the fuel adds to Phase 5's grid (#1059): the extra 20% per fueled augmenter on the base
+  // production. Absent from verdicts calculated before it.
+  gainMW?: number;
 }
 
 // A phase planned with exact clocks, beside its whole-machine plan (#1066): its buildings, the

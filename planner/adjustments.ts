@@ -164,11 +164,21 @@ function solveUnfueled(config: CurrentSettings): RunResult {
   return !result.feasible && config.sam !== 'avoid' ? attempt(true) : result;
 }
 // `fuelVerdict` (rendered by public/app/ui/wizard/FuelVerdict.vue) compares the
-// fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
+// fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum
+// (`worthIt`). `gainMW` is what the fuel itself adds to Phase 5's grid (#1059): the multiplier's
+// extra 20% per fueled augmenter on the base production it multiplies (the plan's generators at
+// 100%, the installed generation and the augmenters' own 500 MW each, phasePower in model.ts),
+// which Review weighs against the demand the fuel adds (requiredMW less requiredMWUnfueled), in
+// the same unit and phase.
 function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResult) {
   const count = (stage: Partial<StageResult>) =>
     (stage.rows || []).reduce((total, row) => total + row.machines, 0);
+  const baseMW =
+    fueled.grid.generationMW / (1 + fueled.boost) +
+    config.installedPowerGW * 1000 +
+    500 * config.augmenters;
   return {
+    gainMW: 0.2 * config.fueledAugmenters * baseMW,
     unfueledFeasible: !!unfueled.feasible,
     buildings: count(fueled),
     buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,

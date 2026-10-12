@@ -59,7 +59,8 @@ function draftPlan(): CurrentCalculatedPlan {
   draft.stages['3']!.additionalHeadroomMW = 120;
   return draft;
 }
-const verdict = (worthIt: boolean): FuelVerdict => ({
+// The fuel adds 1,000 MW against 500 MW of demand when it pays, 200 MW when it does not (#1059).
+const verdict = (pays: boolean): FuelVerdict => ({
   unfueledFeasible: true,
   buildings: 120,
   buildingsUnfueled: 100,
@@ -70,7 +71,8 @@ const verdict = (worthIt: boolean): FuelVerdict => ({
   hours: 10,
   hoursUnfueled: 10,
   matrixRate: 5,
-  worthIt,
+  worthIt: pays,
+  gainMW: pays ? 1000 : 200,
 });
 
 // The tone each notice was drawn in, by a phrase of its text.
@@ -186,8 +188,8 @@ test('the wizard draws its notices in their tones, the fuel verdict by its answe
       render();
       all.push(...tones());
     }
-  assert.equal(toneOf(all, /pays off\./), 'info');
-  assert.equal(toneOf(all, /costs more than it returns/), 'warn');
+  assert.equal(toneOf(all, /returns more power than it costs\./), 'info');
+  assert.equal(toneOf(all, /costs more power than it returns/), 'warn');
   assert.equal(toneOf(all, /^Phase 3:/), 'warn', 'an infeasible phase on Review');
   assert.equal(toneOf(all, /SAM conversion controls/), 'info');
 });
