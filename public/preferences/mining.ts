@@ -11,8 +11,10 @@
 // (owner's choice on #1096), and up to 250% in every phase once the player can overclock
 // (settings.overclock, #1137: the MAM's Power Shards research, or "I can overclock"); a node's
 // belt or pipe still caps each machine. A node survey's miner and clock cap each phase's (never
-// raise it). Water Extractors run at 100% unless settings.waterOverclock asks for the phase's
-// clock (#1137); a stage stored before it has no `water` and used its miner's clock.
+// raise it). Water Extractors are counted at 100% unless settings.waterOverclock suggests the
+// phase's clock (#1137); a stage stored before it has no `water` and used its miner's clock.
+// Their advice always gives both options, the counted one suggested (waterChoice in
+// public/mining.ts, #1142).
 // A miner or belt the player already has (settings.ownedMiner, settings.ownedBelt, #1068) raises
 // each phase's to it (phaseMiner, phaseBelt).
 // One node gives its yield at that miner and clock, never more than the belt or pipe it feeds
@@ -145,7 +147,8 @@ export interface MiningSettings {
   // The player can overclock (#1137: the MAM's Power Shards research ticked, or "I can overclock"
   // in "What you already have"): every phase's clock is OVERCLOCK. Absent unless chosen.
   overclock?: boolean;
-  // Water Extractors run at the phase's clock instead of 100% (#1137). Absent unless chosen.
+  // Water Extractors are suggested and counted at the phase's clock instead of 100% (#1137,
+  // #1142: both options are always advised). Absent unless chosen.
   waterOverclock?: boolean;
 }
 

@@ -511,7 +511,8 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
     readOwnedEquipment(data, settings);
-    // Water Extractors overclocked (#1137): kept only with phaseMining on, absent otherwise.
+    // "Suggest overclocked Water Extractors" (#1137, #1142): kept only with phaseMining on, absent
+    // otherwise.
     if (settings.phaseMining && data.has('waterOverclock')) settings.waterOverclock = true;
     else delete settings.waterOverclock;
   }

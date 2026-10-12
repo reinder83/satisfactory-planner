@@ -10,7 +10,7 @@ import type {
 import { listNames, powerAmount, slug } from './wording.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
-import { miningBuildings, miningStep } from './mining.ts';
+import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
 import type { StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
@@ -847,7 +847,8 @@ function unlockedPower({ byName, unlocked }: GuideContext): UnlockedPower {
 // Without, and in Phase 1's biomass start, it follows the ticked power unlocks, as it always has.
 // The generators the player already has (settings.ownedGenerators, #1068) are named in both: how
 // many of the phase's generators they are and how many are left to build, and those of a building
-// the phase does not fuel, which it does not count (ownedPowerText).
+// the phase does not fuel, which it does not count (ownedPowerText). Last, which option of Water
+// Extractors its power counts (#1142).
 function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideTask {
   const figures = phasePower(context);
   return {
@@ -857,8 +858,15 @@ function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideT
       (figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
         ? existingPowerText(context, figures, unlocked)
         : unlockText(context, figures, unlocked) + ownedCountText(figures)) +
-      unfueledOwnedText(context, figures),
+      unfueledOwnedText(context, figures) +
+      waterPowerText(context, figures),
   };
+}
+
+// Which Water Extractor option the phase's power counts, the suggested one, and the other one
+// (#1142, waterPowerWords in mining.ts), on a plan whose power is modelled; '' otherwise.
+function waterPowerText({ plan, stage, stageOf }: GuideContext, { modelled }: PhasePowerFigures) {
+  return modelled ? waterPowerWords(stageOf(stage), stage, plan.settings) : '';
 }
 
 // The generators the player already has that this phase counts (#1068), where "Power available

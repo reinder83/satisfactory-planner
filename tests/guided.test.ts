@@ -77,6 +77,13 @@ import {
   uniformPurities,
   richShape,
   waterExtractors,
+  DEFAULT_EXTRACTION,
+  EXTRACTOR_MIN_RATE,
+  OVERCLOCK,
+  PHASE_CLOCK,
+  WATER_EXTRACTOR,
+  extractorOption,
+  waterClock,
   BELT_MARKS,
   MINER_MARKS,
   PIPE_MARKS,
@@ -190,6 +197,14 @@ function ui() {
     richShape,
     // ADA's Water count (#1024), for a plan whose phase extracts Water.
     waterExtractors,
+    // The Water Extractor options of mining.ts (#1142).
+    DEFAULT_EXTRACTION,
+    EXTRACTOR_MIN_RATE,
+    OVERCLOCK,
+    PHASE_CLOCK,
+    WATER_EXTRACTOR,
+    extractorOption,
+    waterClock,
     // The belt and pipe marks (flow.ts) and the mining per phase (mining.ts, #1065).
     BELT_MARKS,
     // The miner marks, which the ticks keep current (owned-ticks.ts, #1068).
