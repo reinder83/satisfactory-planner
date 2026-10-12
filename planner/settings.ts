@@ -482,5 +482,20 @@ export function settings(input: unknown = {}): CurrentSettings {
         ),
       ].sort()
     : [];
+  // The MAM recipes (#1058): kept only as a boolean, so settings without it, and every plan
+  // stored before it, plan the recipe pool they always did (mamRecipesOn in recipes.ts).
+  if (typeof input.mamRecipes === 'boolean') config.mamRecipes = input.mamRecipes;
+  // Planner's choice's picks (#1058): only picks, sorted, and absent when none, so settings
+  // without it count every pick as owned, as before. The planner does not read it.
+  const plannerPicks = Array.isArray(input.plannerPicks)
+    ? [
+        ...new Set(
+          input.plannerPicks.filter(
+            (id): id is string => typeof id === 'string' && config.alternateRecipes.includes(id),
+          ),
+        ),
+      ].sort()
+    : [];
+  if (plannerPicks.length) config.plannerPicks = plannerPicks;
   return config;
 }

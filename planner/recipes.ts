@@ -3,7 +3,8 @@
 // Re-exported by ../planner.ts.
 import type { CurrentSettings, ItemRates, Recipe } from '../public/types/index.ts';
 import type { PoolRecipe } from './types.ts';
-import { DATA, RAW, STANDARD_ALTERNATES } from './data.ts';
+import { DATA, MAM_RECIPES, RAW, STANDARD_ALTERNATES, powerNeedsTurbofuel } from './data.ts';
+import { turbofuelRecipes } from '../public/preferences.ts';
 
 export const pureNames = [
   'Alternate: Pure Iron Ingot',
@@ -24,6 +25,29 @@ const slug = (name: string) =>
 // same way (rowTotal in public/app/group-order.ts, onSiteCopyable in public/app/on-site.ts).
 export const primaryOutput = (recipe: Pick<Recipe, 'outputs'>): string | undefined =>
   Object.keys(recipe.outputs)[0];
+// Whether the MAM recipes (MAM_RECIPES in data.ts) are on (#1058): the plan's own `mamRecipes`
+// box, which the wizard sets for every plan it calculates. A plan made before it has none: then
+// 'standard' and 'all' planned with them and 'custom' only with the ones picked, which this keeps.
+export const mamRecipesOn = (config: Pick<CurrentSettings, 'mamRecipes' | 'recipes'>): boolean =>
+  config.mamRecipes ?? config.recipes !== 'custom';
+// Whether the pool holds an alternate the game unlocks without a hard drive (STANDARD_ALTERNATES
+// in data.ts), from the phase it becomes available in:
+// - one the player owns (#1068) or picked under 'custom', always;
+// - a MAM recipe while the MAM recipes are on, and Turbofuel and Compacted Coal also while the
+//   main power burns turbofuel (powerNeedsTurbofuel), which settings() already picks for 'custom';
+// - Distilled Silica, whose Tier 7 milestone every plan that far needs, always, except in a
+//   'custom' plan made before #1058 (no `mamRecipes`), which kept it to the picks.
+// So 'custom' with nothing picked plans what 'standard' plans (#1058).
+export function standardAlternateIn(config: CurrentSettings, id: string): boolean {
+  if ((config.ownedAlternates || []).includes(id)) return true;
+  if (config.recipes === 'custom' && config.alternateRecipes.includes(id)) return true;
+  if (MAM_RECIPES.includes(id))
+    return (
+      mamRecipesOn(config) ||
+      (turbofuelRecipes.includes(id) && powerNeedsTurbofuel(config.mainPower))
+    );
+  return config.recipes !== 'custom' || config.mamRecipes !== undefined;
+}
 // The recipes a phase may choose from, before power generators are added (generators() below).
 // `config` is normalised settings, `phase` a number 1 to 5, and `conversion` whether the Phase 5
 // Converter recipes that make raw resources (SAM-based ore conversion) are allowed. Returns
@@ -31,8 +55,8 @@ export const primaryOutput = (recipe: Pick<Recipe, 'outputs'>): string | undefin
 // (STANDARD_ALTERNATES in data.ts: the MAM recipes and Distilled Silica's milestone, #1044)
 // relabelled as standard. Used only by `run`.
 // The filters, in order:
-// 1. Those alternates are always in, except under 'custom' where they must be selected; the map
-//    then relabels them as standard recipes, so their rows get no hard-drive step.
+// 1. Those alternates are in as standardAlternateIn says (the MAM recipes by their own setting,
+//    #1058); the map then relabels them as standard recipes, so their rows get no hard-drive step.
 // 2. Available by this phase, and standard, or allowed by the recipe setting, or one of the
 //    pure ingot alternates when `pureIngots` is on.
 // 3. With `pureIngots`, from Phase 3 the pure alternates replace every other recipe for the four
@@ -49,11 +73,7 @@ export function recipePool(config: CurrentSettings, phase: number, conversion: b
   const owned = config.ownedAlternates || [];
   return DATA.recipes
     .filter(
-      recipe =>
-        !STANDARD_ALTERNATES.includes(recipe.id) ||
-        config.recipes !== 'custom' ||
-        config.alternateRecipes.includes(recipe.id) ||
-        owned.includes(recipe.id),
+      recipe => !STANDARD_ALTERNATES.includes(recipe.id) || standardAlternateIn(config, recipe.id),
     )
     .map(recipe =>
       STANDARD_ALTERNATES.includes(recipe.id)

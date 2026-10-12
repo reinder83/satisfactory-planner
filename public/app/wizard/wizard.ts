@@ -40,6 +40,7 @@ import { render } from '../shell.ts';
 import { confirmAction } from '../ui/confirm.ts';
 import { extractionOf } from './extraction.ts';
 import { guidedBuiltKeys, guidedFlow } from './guided.ts';
+import { mamRecipesShown } from './recipes.ts';
 import { readSupply } from './supply.ts';
 import type {
   ContextReply,
@@ -225,11 +226,14 @@ export function profileNameOf(wizardDraft: WizardDraft): string {
 
 // The settings a new draft starts from. A new profile for an existing save starts from a
 // copy of its active profile's settings (the workspace summary exposes plan.settings); anything
-// else from freshSettings.
+// else from freshSettings. A profile made before the MAM recipes box (#1058) gives the new one
+// the box as that plan used it (mamRecipesShown), so a later change of Recipe access keeps it.
 function startingSettings(existing: SaveSummary | undefined): WizardSettings {
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
   const previous: WizardSettings | undefined = selected?.settings;
-  return previous ? structuredClone(previous) : freshSettings();
+  return previous
+    ? { ...structuredClone(previous), mamRecipes: mamRecipesShown(previous) }
+    : freshSettings();
 }
 
 // A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and both
@@ -259,6 +263,9 @@ function freshSettings(): WizardSettings {
     // Mining and belts per phase (#1065): a new plan's budgets follow each phase's miners and
     // belts. A draft from an existing profile keeps that profile's choice (absent: off).
     phaseMining: true,
+    // The MAM recipes (#1058), on whatever Recipe access says; a guided start that never shows
+    // their box keeps them on.
+    mamRecipes: true,
   };
   settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
   return settings;
@@ -440,9 +447,12 @@ function readSloops(form: HTMLFormElement, data: FormData, settings: WizardSetti
     settings.sloopReserved = data.getAll('sloop').map(String) as WizardSettings['sloopReserved'];
 }
 
-// The recipe picker's ticked alternates, and the starred ones among them, when it is on screen:
-// All settings step 2, and the guided recipes question's "I will choose them myself" (#1072).
+// The recipe picker's ticked alternates, the starred ones among them and the ones Planner's
+// choice ticked and the user left as they were (#1058, settings.plannerPicks, absent when none),
+// when it is on screen: All settings step 2, and the guided recipes question's "I will choose
+// them myself" (#1072). The MAM recipes box beside it is read here too (readMamRecipes).
 export function readAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+  readMamRecipes(form, data, settings);
   if (!form.querySelector('.alt-list')) return;
   const alternates = data.getAll('alt').map(String);
   settings.alternateRecipes = alternates;
@@ -450,6 +460,19 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
     .getAll('altpref')
     .map(String)
     .filter(id => alternates.includes(id));
+  const planner = data
+    .getAll('altplanner')
+    .map(String)
+    .filter(id => alternates.includes(id));
+  if (planner.length) settings.plannerPicks = planner;
+  else delete settings.plannerPicks;
+}
+
+// The MAM recipes box (#1058, ui/wizard/MamRecipes.vue), when it is on screen: ticked is
+// settings.mamRecipes true, unticked false. Every plan the wizard calculates with it on screen
+// therefore has the field; a plan made before it has none (mamRecipesOn in planner/recipes.ts).
+function readMamRecipes(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+  if (form.querySelector('[data-mam-recipes]')) settings.mamRecipes = data.has('mamRecipes');
 }
 
 // "Alternates you already own" on All settings step 2 (#1068, ui/wizard/OwnedAlternates.vue),

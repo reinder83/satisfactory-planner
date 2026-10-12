@@ -20,8 +20,10 @@ export const DATA: RecipeData = JSON.parse(
 export const ENGINE = '2.0.0';
 // Alternates the game unlocks without a hard drive, which recipePool therefore treats as standard
 // recipes from the phase their unlock is available (the recipe's `phase`), relabelled without
-// "Alternate: ", so their lines get no hard-drive step but the unlock's milestone step. Under
-// 'custom' recipes they are opt-in like any alternate. The catalog marks them for the picker.
+// "Alternate: ", so their lines get no hard-drive step but the unlock's milestone step. The MAM
+// recipes follow their own setting (`mamRecipes`, #1058) whatever the recipe access, and the
+// milestone recipes are in every plan (standardAlternateIn in recipes.ts has the rule for plans
+// made before it). The catalog marks them, so the alternate picker leaves them out.
 // - MAM_RECIPES come from MAM research: Turbofuel and Compacted Coal (Enriched Coal; settings()
 //   adds those two itself when the power preference needs turbofuel, turbofuelRecipes in
 //   public/preferences/fuels.ts) and Polyester Fabric (Synthetic Polyester Fabric, #1044).
