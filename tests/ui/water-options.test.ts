@@ -69,14 +69,14 @@ test("a production line's dialog gives both options, the suggested one first", (
   openCalculatedFactory(waterLine(plain100, '4', 'Alumina Solution').id);
   assert.match(
     dialogExtractors(),
-    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or overclocked up to 250%: 1 at [\d.]+% \(1 extractor, 1 Power Shard, [\d.]+ MW\)\.$/,
+    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or 1 overclocked at [\d.]+% \(1 extractor, 1 Power Shard, [\d.]+ MW\)\.$/,
   );
   page();
   openPlan(overclocked, '4');
   openCalculatedFactory(waterLine(overclocked, '4', 'Alumina Solution').id);
   assert.match(
     dialogExtractors(),
-    /^Water Extractors overclocked up to 250% \(suggested\): 1 at [\d.]+% \(1 extractor, 1 Power Shard, [\d.]+ MW\)\. Or at 100%: 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\.$/,
+    /^Water Extractors \(suggested\): 1 overclocked at [\d.]+% \(1 extractor, 1 Power Shard, [\d.]+ MW\)\. Or at 100%: 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\.$/,
   );
 });
 
@@ -85,7 +85,7 @@ test('before Power Shards the overclocked option is the research advice', () => 
   openCalculatedFactory(waterLine(early, '2', 'Coal power').id);
   assert.match(
     dialogExtractors(),
-    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or overclocked up to 250%, with fewer extractors: research Power Shards in the MAM \(Blue Power Slugs, then Overclock Production\) first\.$/,
+    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or overclocked, with fewer extractors: research Power Shards in the MAM \(Blue Power Slugs, then Overclock Production\) first\.$/,
   );
 });
 
@@ -105,7 +105,7 @@ test("a factory's flow page gives both options under the line", async () => {
     .find(text => text.includes('Water Extractors'));
   assert.match(
     advice ?? '',
-    /Water Extractors overclocked up to 250% \(suggested\): .+\. Or at 100%: .+\.$/,
+    /Water Extractors \(suggested\): \d+ overclocked at .+\. Or at 100%: .+\.$/,
   );
 });
 
@@ -114,11 +114,11 @@ test('the build plan: a Water row in "Tap the resource nodes", and the power ste
     [
       plain100,
       /^Water Extractor at 100% \(suggested\): /,
-      /\. Overclocked up to 250%: .+Power Shard/,
+      /\. Or \d+ overclocked at .+Power Shard/,
     ],
     [
       overclocked,
-      /^Water Extractor overclocked up to 250% \(suggested\): /,
+      /^Water Extractor \(suggested\): \d+ overclocked at /,
       /\. At 100%: .+ extractors/,
     ],
   ] as const) {
@@ -145,8 +145,8 @@ test('the build plan: a Water row in "Tap the resource nodes", and the power ste
     assert.match(
       power,
       plan === overclocked
-        ? /This phase's power counts its Water Extractors overclocked up to 250%, the suggested option: .+\. At 100% instead, they would take .+\./
-        : /This phase's power counts its Water Extractors at 100%, the suggested option: .+\. Overclocked up to 250% instead, they would take .+\./,
+        ? /This phase's power counts its Water Extractors overclocked, the suggested option: .+\. At 100% instead, they would take .+\./
+        : /This phase's power counts its Water Extractors at 100%, the suggested option: .+\. Overclocked instead, they would take .+\./,
     );
   }
 });

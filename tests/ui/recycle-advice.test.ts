@@ -118,7 +118,7 @@ test("a receiving line's dialog counts the Water Extractors for the Water no byp
   // For the 257.87 m³ extracted, not the 381.55 the line takes, on a line of its own.
   assert.equal(
     extractors(water),
-    'Water Extractors overclocked up to 250% (suggested): 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW). Or at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW).',
+    'Water Extractors (suggested): 1 overclocked at 214.89% (1 extractor, 3 Power Shards, 54.98 MW). Or at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW).',
   );
   assert.equal(water!.querySelector('[data-extractors]')!.previousElementSibling?.tagName, 'BR');
   assert.equal(document.querySelector('x-evil'), null);
@@ -137,7 +137,7 @@ test('a line taking Water no byproduct covers is told to extract all of it, with
   );
   assert.equal(
     extractors(water),
-    'Water Extractors overclocked up to 250% (suggested): 1 at 211.46% (1 extractor, 3 Power Shards, 53.82 MW). Or at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW).',
+    'Water Extractors (suggested): 1 overclocked at 211.46% (1 extractor, 3 Power Shards, 53.82 MW). Or at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW).',
   );
   assert.equal(notice.querySelectorAll('button.recycle-link').length, 0, 'no line to link to');
 });
@@ -166,7 +166,7 @@ test("a coal generator's dialog counts the Water Extractors for its Water (#1024
   );
   assert.equal(
     extractors(water),
-    'Water Extractors overclocked up to 250% (suggested): 1 at 193.59% (1 extractor, 2 Power Shards, 47.89 MW). Or at 100%: 1 at 100% + 1 at 93.59% (2 extractors, 38.32 MW).',
+    'Water Extractors (suggested): 1 overclocked at 193.59% (1 extractor, 2 Power Shards, 47.89 MW). Or at 100%: 1 at 100% + 1 at 93.59% (2 extractors, 38.32 MW).',
   );
 });
 
@@ -186,11 +186,11 @@ test('a build-plan step carries the advice of the phase it is in, not of the pha
   // Alumina Solution extracts more Water in Phase 5, and its step there says so (#1024).
   assert.match(
     stepOf('4', 'Alumina Solution').replace(/ /g, ' '),
-    /; extract the other 257\.87 m³\. Water Extractors overclocked up to 250% \(suggested\): 1 at 214\.89% \(1 extractor, 3 Power Shards, 54\.98 MW\)\. Or at 100%: 2 at 100% \+ 1 at 14\.89% \(3 extractors, 41\.61 MW\)\.$/,
+    /; extract the other 257\.87 m³\. Water Extractors \(suggested\): 1 overclocked at 214\.89% \(1 extractor, 3 Power Shards, 54\.98 MW\)\. Or at 100%: 2 at 100% \+ 1 at 14\.89% \(3 extractors, 41\.61 MW\)\.$/,
   );
   assert.match(
     stepOf('5', 'Alumina Solution').replace(/ /g, ' '),
-    /; extract the other 587\.31 m³\. Water Extractors overclocked up to 250% \(suggested\): 1 at 250% \+ 1 at 239\.42% \(2 extractors, 6 Power Shards, [\d.]+ MW\)\. Or at 100%: 4 at 100% \+ 1 at 89\.42% \(5 extractors, [\d.]+ MW\)\.$/,
+    /; extract the other 587\.31 m³\. Water Extractors \(suggested\): 1 overclocked at 250% and 1 at 239\.42% \(2 extractors, 6 Power Shards, [\d.]+ MW\)\. Or at 100%: 4 at 100% \+ 1 at 89\.42% \(5 extractors, [\d.]+ MW\)\.$/,
   );
   assert.match(
     stepOf('3', 'Fuel').replace(/ /g, ' '),
@@ -203,17 +203,34 @@ test('the build plan shows the advice in the step, and a step the user rewrote k
   openPlan('4');
   await nextTick();
   const step = $(`[data-check="calc-4-${scrap}"]`)!.closest('.task')!;
+  // A step's body (its plain text, which search and copying use) with the page's spacing.
+  const body = (id: string) => {
+    const words = document.createElement('p');
+    words.textContent = planTasks().find(task => task.id === id)!.body!;
+    return plainText(words);
+  };
   assert.match(
-    text(step.querySelector('p')),
+    body(`calc-4-${scrap}`),
     /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\. Byproduct Water 116\.18 m³\/min: send all of it back to Alumina Solution, which feeds this line\.$/,
   );
-  // A line taking Water no byproduct covers (#1024).
-  const concrete = $(`[data-check="calc-4-${rowId('4', 'Alternate: Wet Concrete')}"]`)!.closest(
-    '.task',
-  )!;
+  // The step draws the advice as a list (#1136): the line's text, then a paragraph per byproduct.
   assert.match(
-    plainText(concrete.querySelector('p')),
-    /Outputs: Concrete [\d.,]+\/min\. Water 253\.75 m³\/min\. No byproduct covers it: extract all of it\. Water Extractors overclocked up to 250% \(suggested\): 1 at 211\.46% \(1 extractor, 3 Power Shards, 53\.82 MW\)\. Or at 100%: 2 at 100% \+ 1 at 11\.46% \(3 extractors, 41\.14 MW\)\.$/,
+    text(step.querySelector('[data-step-list] p')),
+    /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\.$/,
+  );
+  assert.deepEqual([...step.querySelectorAll('[data-step-list-item]')].map(text), [
+    'Byproduct Water 116.18 m³/min: send all of it back to Alumina Solution, which feeds this line.',
+  ]);
+  // A line taking Water no byproduct covers (#1024).
+  const wet = `calc-4-${rowId('4', 'Alternate: Wet Concrete')}`;
+  const concrete = $(`[data-check="${wet}"]`)!.closest('.task')!;
+  assert.match(
+    body(wet),
+    /Outputs: Concrete [\d.,]+\/min\. Water 253\.75 m³\/min\. No byproduct covers it: extract all of it\. Water Extractors \(suggested\): 1 overclocked at 211\.46% \(1 extractor, 3 Power Shards, 53\.82 MW\)\. Or at 100%: 2 at 100% \+ 1 at 11\.46% \(3 extractors, 41\.14 MW\)\.$/,
+  );
+  assert.match(
+    plainText(concrete.querySelector('[data-step-list-item]')),
+    /^Water 253\.75 m³\/min\. No byproduct covers it: extract all of it\. Water Extractors \(suggested\): 1 overclocked at 211\.46% \(1 extractor, 3 Power Shards, 53\.82 MW\)\. Or at 100%: 2 at 100% \+ 1 at 11\.46% \(3 extractors, 41\.14 MW\)\.$/,
   );
   page();
   openPlan('4', { bodies: { [`calc-4-${scrap}`]: 'My own words.' } });
@@ -246,7 +263,7 @@ test("a group's flow page has the advice under the rows it concerns, and its lan
   // The line's Water Extractors end its ♻ line (#1024).
   assert.equal(
     plainText(solutionWater.querySelector('.gf-advice')),
-    `♻ 116.18 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in ${evil}; extract the other 257.87 m³. Water Extractors overclocked up to 250% (suggested): 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW). Or at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW).`,
+    `♻ 116.18 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in ${evil}; extract the other 257.87 m³. Water Extractors (suggested): 1 overclocked at 214.89% (1 extractor, 3 Power Shards, 54.98 MW). Or at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW).`,
   );
   // A row the advice does not concern has no ♻ line: the line's main product.
   assert.equal(
@@ -277,7 +294,7 @@ test("a line card on a group's flow page counts its own Water Extractors, with n
   const water = $(`#main .gf-card[data-line="${concrete}"] .gf-in[data-row$="|Water"] .gf-advice`);
   assert.equal(
     plainText(water),
-    'No byproduct covers it: extract all of it. Water Extractors overclocked up to 250% (suggested): 1 at 211.46% (1 extractor, 3 Power Shards, 53.82 MW). Or at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW).',
+    'No byproduct covers it: extract all of it. Water Extractors (suggested): 1 overclocked at 211.46% (1 extractor, 3 Power Shards, 53.82 MW). Or at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW).',
   );
   assert.equal(water!.getAttribute('data-advice'), 'input');
   assert.ok(text($('#main')).includes(evil), 'the group is named, as text');

@@ -78,6 +78,7 @@ const list = computed(() =>
         title: task.title,
         body: task.body,
         table: task.table,
+        list: task.list,
         done: checked(task.id),
         idle: idle.get(task.id),
         satisfied: satisfied.get(task.id),

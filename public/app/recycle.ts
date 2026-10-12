@@ -1,6 +1,6 @@
 // Byproduct recycling advice (#1022): where each byproduct of a calculated phase goes, line by
 // line, and where an input a byproduct covers gets it from, worded for the factory dialog
-// (ui/detail/RecycleAdvice.vue), the build plan's step (rowStepBody in views/calculated.ts) and a
+// (ui/detail/RecycleAdvice.vue), the build plan's step (rowStep in views/calculated.ts) and a
 // group's flow page (ui/group-flow/FlowCard.vue).
 //
 // Nothing here decides how an item is shared out: it follows each place's links as a group's flow
@@ -433,8 +433,8 @@ export const NO_COVER = 'No byproduct covers it: extract all of it.';
 
 // The Water Extractors for `rate` m³/min of Water, both options with the suggested one first
 // (#1024, #1142; waterExtractorWords in public/mining.ts, which every page shares): "Water
-// Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or overclocked
-// up to 250%: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." `choice` is the phase's
+// Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or 1
+// overclocked at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." `choice` is the phase's
 // (waterChoice: which one its power counts, and whether Power Shards are researched yet); without
 // it, both are counted and 100% is suggested. The clocks are written to 0.01% and add up to the
 // rate rounded down to what such clocks make (settableRate in preferences/extraction.ts), so the
@@ -581,25 +581,26 @@ function shareText(share: number): string {
 export const adviceSentence = (line: AdviceLine): string =>
   line.parts.map(part => (typeof part === 'string' ? part : part.text)).join('');
 
-// The advice as the build plan's step writes it (rowStepBody), after "Outputs: …":
+// The advice as the build plan's step writes it (rowStep), after "Outputs: …":
 // "Byproduct Water 116.27 m³/min: send all of it back to Alumina Solution, which feeds this line.
 // Water 381.81 m³/min: 116.27 m³ recycled from Aluminum Scrap; extract the other 258.04 m³." The
 // sentence for a byproduct no line uses has a colon of its own, so it follows its lead after a
 // full stop: "Byproduct Compacted Coal 10.4/min. No line uses it: …", as does Water no byproduct
 // covers ("Water 253.75 m³/min. No byproduct covers it: …"). The Water Extractors follow their
 // paragraph's sentence (#1024).
-export const adviceText = (lines: AdviceLine[]): string =>
-  lines
-    .map(line => {
-      const lead = (line.kind === 'byproduct' ? 'Byproduct ' : '') + line.lead;
-      const sentence = adviceSentence(line);
-      const text =
-        sentence === NO_LINE || sentence === NO_COVER
-          ? `${lead}. ${sentence}`
-          : `${lead}: ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}`;
-      return line.extractors ? `${text} ${line.extractors}` : text;
-    })
-    .join(' ');
+export const adviceText = (lines: AdviceLine[]): string => lines.map(adviceLineText).join(' ');
+
+// One paragraph of adviceText: what the build plan's step lists as one item of its byproduct
+// advice (#1136, the step's list in views/calculated.ts).
+export function adviceLineText(line: AdviceLine): string {
+  const lead = (line.kind === 'byproduct' ? 'Byproduct ' : '') + line.lead;
+  const sentence = adviceSentence(line);
+  const text =
+    sentence === NO_LINE || sentence === NO_COVER
+      ? `${lead}. ${sentence}`
+      : `${lead}: ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}`;
+  return line.extractors ? `${text} ${line.extractors}` : text;
+}
 
 // Every paragraph of a line's advice: its byproducts, then the inputs a byproduct covers. With
 // `place`, for the line's part in that place only (a group's flow page shows a split row's part).
