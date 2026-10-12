@@ -16,6 +16,7 @@ import {
 import { needsFrozenMapping, restoreProgress } from '../public/handbook-migration.ts';
 import type { FrozenMapping } from '../public/handbook-migration.ts';
 import { calculate, rankAlternates } from '../planner.ts';
+import { reviewedReplacement } from '../public/reviewed-plans.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { frozenMapping } from './persistence.ts';
@@ -37,6 +38,7 @@ export function profileRoutes({
   validateState,
   mutate,
   rankBudgetMs,
+  reviewed,
 }: WorkspaceContext) {
   // Adds a whole-machine version of a calculated profile as a new profile in the same
   // save; the original profile is untouched. Its progress is copied, and a ticked
@@ -66,7 +68,8 @@ export function profileRoutes({
       201,
     );
   }
-  // Edit settings, "Recalculate in place" (#1071): calculates body.settings, then replaces the
+  // Edit settings, "Recalculate in place" (#1071): stores the plan Review showed for body.settings
+  // (reviewedReplacement, #1138), else calculates them, then replaces the
   // scoped profile's plan, name and progress (recalculatedProfile in public/state/carry.ts,
   // shared with browser-api.ts: its progress carried from itself with the carry picks body.carry,
   // like a new profile carried from it, plus the phase worked on and the ticks of the steps the
@@ -81,7 +84,9 @@ export function profileRoutes({
     const title = profileName(input.name),
       backupName = profileName(input.backupName);
     limits.throttle(req);
-    const plan = calculate(input.settings),
+    const plan =
+        reviewedReplacement(reviewed, user.id, input.settings, input.planCreatedAt) ??
+        calculate(input.settings),
       backupId = randomId();
     let carried = { reviewCount: 0, carried: 0 };
     await commit(draft => {

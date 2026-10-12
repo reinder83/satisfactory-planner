@@ -62,7 +62,7 @@ import type {
   WorkspaceSummary,
 } from './types/index.ts';
 import { profilePhasesCache } from './state.ts';
-import { reviewedPlans } from './reviewed-plans.ts';
+import { reviewedPlans, reviewedReplacement } from './reviewed-plans.ts';
 import type { Progression } from './types/index.ts';
 
 // What app/api.ts passes: fetch's options (a JSON string body and a plain headers object) and
@@ -190,10 +190,11 @@ export function createBrowserApi(
   async function workspaceSummary() {
     return summary(await store.transaction());
   }
-  // The plans Review showed, for Create profile (#1060, reviewed-plans.ts).
+  // The plans Review showed, for Create profile and Recalculate in place (#1060, #1138,
+  // reviewed-plans.ts).
   const reviewed = reviewedPlans<CurrentCalculatedPlan>();
   // Wizard preview: calculate only, nothing stored. Review's plan (not a live estimate,
-  // `?estimate=1`) is kept in memory for Create profile.
+  // `?estimate=1`) is kept in memory for Create profile and Recalculate in place.
   async function preview({ url, body, options }: RouteRequest) {
     const plan = await calculator(body.settings, options.onProgress);
     if (url.searchParams.get('estimate') !== '1') reviewed.keep('', body.settings, plan);
@@ -320,7 +321,8 @@ export function createBrowserApi(
       return { saveId: save.id, profileId, reviewCount, workspace: summary(data) };
     });
   }
-  // Mirrors POST /api/recalculate (#1071): read, calculate body.settings outside any transaction,
+  // Mirrors POST /api/recalculate (#1071): read, take the plan Review showed for body.settings
+  // (reviewedReplacement, #1138) or calculate them outside any transaction,
   // then replace the scoped profile's plan, name and progress (recalculatedProfile, shared with
   // the server) and keep its previous version whole as a profile of its own right after it. The
   // previous version is read again inside the transaction, so ticks made meanwhile in another tab
@@ -330,7 +332,9 @@ export function createBrowserApi(
     checkRecalculate(before.profile, body.planCreatedAt, 0);
     const name = cleanName(body.name),
       backupName = cleanName(body.backupName),
-      plan = await calculator(body.settings, options.onProgress),
+      plan =
+        reviewedReplacement(reviewed, '', body.settings, body.planCreatedAt) ??
+        (await calculator(body.settings, options.onProgress)),
       backupId = randomId();
     return store.transaction(data => {
       const { save, profile } = scope(data, url, headers);
