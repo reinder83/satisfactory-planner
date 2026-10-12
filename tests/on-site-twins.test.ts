@@ -92,16 +92,25 @@ function routesOf(
 
 test("the issue's example: each group's own lines make exactly what the books give it (#904)", () => {
   const { plan, phases } = recalculated(rotation());
-  // Phase 2 of the recalculated plan has only the amplified Reinforced Iron Plate line, which
-  // only Beta holds; Alpha holds the unamplified one.
-  const phase2 = plan.stages['2'];
-  assert.ok(row(phase2, amp(PLATE)), 'amplified line');
-  assert.equal(row(phase2, PLATE), undefined, 'no unamplified line');
-  // Beta's Screws line used to make 132.5 of the 162.5 its rows use, and Alpha's 30 that none of
-  // its rows use: Alpha's frozen share of the unamplified line was borrowed by the amplified one.
-  const books = itemBooks(phase2, rotation());
-  assert.deepEqual(books.local['Screws']?.get(BETA), { made: 162.5, asked: 162.5 });
-  assert.equal(books.local['Screws']?.get(ALPHA), undefined, 'Alpha has no Screws line');
+  // Phase 5 of the recalculated plan has only the amplified Reinforced Iron Plate line, which
+  // only Beta holds; Alpha holds the unamplified one. (The issue's example was Phase 2, until
+  // amplification waited for the Production Amplifier research in Phase 3, #1056.)
+  const phase5 = plan.stages['5'];
+  assert.ok(row(phase5, amp(PLATE)), 'amplified line');
+  assert.equal(row(phase5, PLATE), undefined, 'no unamplified line');
+  // In the issue, Beta's Screws line made 132.5 of the 162.5 its rows used, and Alpha's 30 that
+  // none of its rows used: Alpha's frozen share of the unamplified line was borrowed by the
+  // amplified one. Each group's line makes what its own rows ask (Alpha's for its Heavy Modular
+  // Frame line).
+  const books = itemBooks(phase5, rotation());
+  for (const group of [ALPHA, BETA]) {
+    const screws = books.local['Screws']?.get(group);
+    assert.ok(
+      screws && Math.abs(screws.made - screws.asked) < 1e-6,
+      `${group}: ${JSON.stringify(screws)}`,
+    );
+  }
+  assert.equal(Math.round(books.local['Screws']!.get(BETA)!.asked * 10) / 10, 517.5);
   const problems: string[] = [];
   const left = { count: 0 };
   for (const [phase, stage] of phases)
@@ -297,9 +306,12 @@ const builtParts = (plan: CurrentCalculatedPlan, phase: StageKey, stage: StoredS
 // #1086's fuel lines changed them again: seeds 325, 513 and 553 are added (4, 4 and 3 such parts
 // built), among the most on its plans. (Seed 171, with 4, ends Phase 3 on a plan whose fixed-rate
 // part was not measured at its own totals, the case listed on #1038.)
+// #1056 changed them again: amplification waits for the Production Amplifier research, so the
+// starts in Phases 1 and 2 have no twins there. Seeds 163, 292, 202 and 101 are added (4, 3, 3 and
+// 3 such parts built), the most on its plans.
 const SETTLE_SEEDS = [118, 135, 223, 311, 345, 397, 420, 455, 476, 489, 531, 571, 590];
 const IF_BUILT_SEEDS = [
-  44, 115, 152, 247, 346, 421, 504, 530, 596, 65, 84, 199, 316, 325, 513, 553,
+  44, 115, 152, 247, 346, 421, 504, 530, 596, 65, 84, 199, 316, 325, 513, 553, 163, 292, 202, 101,
 ];
 const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS, ...IF_BUILT_SEEDS];
 
