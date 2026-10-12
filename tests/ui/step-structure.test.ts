@@ -100,6 +100,7 @@ async function foundBy(stepId: string, words: string) {
 }
 // The step with an edited body: the edited words, no table or list, the tick kept.
 function editedShowsWords(stepId: string, phase: '4' | '5' = '4', plan = late) {
+  page();
   show(phase, plan, {
     checks: { [stepId]: true },
     taskEdits: {
@@ -236,4 +237,67 @@ test('the retire step shows the retired lines as a table', async () => {
 
 test('an edited retire step shows the edited words and keeps its tick', () => {
   editedShowsWords('retire-5', '5');
+});
+
+// The list of a step as text: the intro, the items and the line after them.
+const listOf = (stepId: string) => {
+  const list = $(`[data-task="${stepId}"]`)?.querySelector('[data-step-list]');
+  if (!list) return null;
+  return {
+    intro: plain(list.querySelector('p')?.textContent),
+    items: [...list.querySelectorAll('[data-step-list-item]')].map(item => plain(item.textContent)),
+    after: plain(list.querySelector('[data-step-list-after]')?.textContent),
+    label: list.querySelector('ul')?.getAttribute('aria-label'),
+  };
+};
+
+test('a production line with byproduct advice lists each byproduct and input on its own line', async () => {
+  show('4');
+  const steps = planTasks();
+  const advised = steps.filter(step => step.list);
+  assert.ok(advised.length >= 2, 'several lines have byproduct advice');
+  for (const step of steps.filter(step => step.id.startsWith('calc-4-') && !step.list))
+    assert.doesNotMatch(step.body!, /Byproduct |recycled from|No byproduct covers it/, step.id);
+  const step = advised.find(found =>
+    found.list!.items.some(item => item.startsWith('Byproduct ')),
+  )!;
+  assert.ok(step.id.startsWith('calc-4-'), 'a production line’s step');
+  // The body is the intro and the items, in order: the list adds no words of its own.
+  assert.equal(step.body, [step.list!.intro, ...step.list!.items].join(' '));
+  assert.match(step.list!.intro, /Inputs: .*\. Outputs: .*\.$/);
+  const drawn = listOf(step.id)!;
+  assert.ok(drawn, 'the list is drawn');
+  assert.equal(drawn.intro, plain(step.list!.intro));
+  assert.deepEqual(drawn.items, step.list!.items.map(plain));
+  assert.equal(drawn.label, step.title + ': byproducts and inputs');
+  assert.equal($(`[data-task="${step.id}"]`)!.querySelector(':scope > p'), null);
+  // The search finds the step by an item's words, which are its body's.
+  const words = step.list!.items[0]!.split(':')[0]!.toLowerCase();
+  assert.ok(await found(step.id, words));
+});
+
+test('an edited production line step shows the edited words, not the list', () => {
+  show('4');
+  const id = planTasks().find(step => step.list)!.id;
+  editedShowsWords(id);
+});
+
+test('a line without byproducts stays one paragraph', () => {
+  show('4');
+  const plainStep = planTasks().find(step => step.id.startsWith('calc-4-') && !step.list)!;
+  const details = $(`[data-task="${plainStep.id}"]`)!;
+  assert.equal(details.querySelector('[data-step-list], [data-step-table]'), null);
+  assert.equal(plain(details.querySelector('p')?.textContent), plain(plainStep.body));
+});
+
+test('plans stored before the lists show their byproduct advice as lists', () => {
+  for (const [name, phase] of [
+    ['fuel-plan-2026-10-05.json', '5'],
+    ['plan-before-1065.json', '4'],
+  ] as const) {
+    page();
+    const stored = read(name);
+    show(phase, stored.plan ?? stored);
+    assert.ok($('[data-step-list]'), name + ': a production line lists its byproduct advice');
+  }
 });
