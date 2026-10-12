@@ -287,8 +287,9 @@ const bothAt100 = (): WaterChoice => ({
 });
 
 // The two options for `rate` m³/min of Water, the suggested one first: each its name ("at 100%",
-// "overclocked up to 250%") and its extractors (extractorOption), or for the overclocked one the
-// research advice. `same` when both are the same extractors (one at 100% or less), and null for
+// "overclocked", OVERCLOCKED) and its extractors (extractorOption), or for the overclocked one the
+// research advice. The overclocked option's name gives no ceiling (#1020, owner 2026-10-12): its
+// words say what is built, "2 overclocked at 250% and 1 at 40%"; the 250% limit is help text. `same` when both are the same extractors (one at 100% or less), and null for
 // less Water than one extractor gives at its lowest clock.
 export interface WaterOptions {
   first: { name: string; option: ExtractorOption };
@@ -301,7 +302,7 @@ export function waterOptions(rate: number, choice: WaterChoice = bothAt100()): W
     sharded = extractorOption(rate, Math.min(choice.overclock * 100, WATER_EXTRACTOR.maxClock));
   if (!plain || !sharded) return null;
   const atFull = { name: 'at 100%', option: plain };
-  const overName = `overclocked up to ${miningNumber(choice.overclock * 100)}%`;
+  const overName = OVERCLOCKED;
   const same = plain.extractors <= 1 && runWords(plain) === runWords(sharded);
   if (choice.shards === 'none') return { first: atFull, second: null, same };
   if (choice.shards === 'research')
@@ -315,27 +316,45 @@ export function waterOptions(rate: number, choice: WaterChoice = bothAt100()): W
     ? { first: over, second: atFull, same }
     : { first: atFull, second: over, same };
 }
-// An option's extractors as the player sets them: "2 at 100% + 1 at 15.03%".
-const runWords = (option: ExtractorOption): string =>
-  option.runs.map(run => `${miningNumber(run.count)} at ${miningNumber(run.clock)}%`).join(' + ');
+// The overclocked option's name.
+const OVERCLOCKED = 'overclocked';
+// An option's extractors as the player sets them: "2 at 100% + 1 at 15.03%". The overclocked
+// option's (`over`) say so on the first run above 100%: "1 overclocked at 136.52%", "2 overclocked
+// at 250% and 1 at 40%".
+const runWords = (option: ExtractorOption, over = false): string =>
+  over
+    ? option.runs
+        .map(
+          (run, i) =>
+            `${miningNumber(run.count)} ${i === 0 && run.clock > 100 ? 'overclocked ' : ''}at ${miningNumber(run.clock)}%`,
+        )
+        .join(' and ')
+    : option.runs
+        .map(run => `${miningNumber(run.count)} at ${miningNumber(run.clock)}%`)
+        .join(' + ');
 const extractorCount = (count: number) =>
   `${miningNumber(count)} extractor${count === 1 ? '' : 's'}`;
 // "overclocked …" as a sentence's start: "Overclocked …".
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const shardCount = (count: number) => `${miningNumber(count)} Power Shard${count === 1 ? '' : 's'}`;
-// An option's extractors, shards and MW: "2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW)".
-const optionWords = (option: ExtractorOption): string =>
-  `${runWords(option)} (${[extractorCount(option.extractors), ...(option.shards ? [shardCount(option.shards)] : []), powerAmount(option.mw)].join(', ')})`;
-// One of the options in words: "at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors,
-// 41.63 MW)", or "overclocked up to 250%, with fewer extractors: research Power Shards …".
+// An option's extractors, shards and MW: "2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW)",
+// "1 overclocked at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)".
+const optionWords = (option: ExtractorOption, over = false): string =>
+  `${runWords(option, over)} (${[extractorCount(option.extractors), ...(option.shards ? [shardCount(option.shards)] : []), powerAmount(option.mw)].join(', ')})`;
+// One of the options in words, after "Water Extractors" or "Or": "at 100% (suggested): 2 at 100% +
+// 1 at 15.03% (3 extractors, 41.63 MW)", "(suggested): 1 overclocked at 215.03% (1 extractor, 3
+// Power Shards, 55.03 MW)", "2 overclocked at 250% and 1 at 40% (…)", or "overclocked, with fewer
+// extractors: research Power Shards …".
 const optionPart = (part: NonNullable<WaterOptions['second']>, suggested: boolean): string =>
   'research' in part
     ? `${part.name}, ${part.research}`
-    : `${part.name}${suggested ? ' (suggested)' : ''}: ${optionWords(part.option)}`;
+    : part.name === OVERCLOCKED
+      ? `${suggested ? '(suggested): ' : ''}${optionWords(part.option, true)}`
+      : `${part.name}${suggested ? ' (suggested)' : ''}: ${optionWords(part.option)}`;
 
 // The Water Extractors for `rate` m³/min of Water, as a line's advice gives them (#1024, #1142):
-// "Water Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or
-// overclocked up to 250%: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." The suggested
+// "Water Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or 1
+// overclocked at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." The suggested
 // option first; one extractor at 100% or less is the same either way, so it is one option. ''
 // for less Water than one extractor gives at its lowest clock.
 export function waterExtractorWords(rate: number, choice?: WaterChoice): string {
@@ -358,14 +377,17 @@ function waterRow(
   const options = waterOptions(rate, choice);
   if (!options) return null;
   const { first, second } = options;
+  const firstOver = first.name === OVERCLOCKED;
   const machines = options.same
     ? `Water Extractor: ${runWords(first.option)}`
-    : `Water Extractor ${first.name}${second ? ' (suggested)' : ''}: ${runWords(first.option)}` +
+    : `Water Extractor${firstOver ? '' : ' ' + first.name}${second ? ' (suggested)' : ''}: ${runWords(first.option, firstOver)}` +
       (!second
         ? ''
         : 'research' in second
           ? `. ${capital(second.name)}, ${second.research}`
-          : `. ${capital(second.name)}: ${optionWords(second.option)}`);
+          : second.name === OVERCLOCKED
+            ? `. Or ${optionWords(second.option, true)}`
+            : `. ${capital(second.name)}: ${optionWords(second.option)}`);
   return {
     cells: [
       'Water',

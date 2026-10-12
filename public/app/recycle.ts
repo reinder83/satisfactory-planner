@@ -433,8 +433,8 @@ export const NO_COVER = 'No byproduct covers it: extract all of it.';
 
 // The Water Extractors for `rate` m³/min of Water, both options with the suggested one first
 // (#1024, #1142; waterExtractorWords in public/mining.ts, which every page shares): "Water
-// Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or overclocked
-// up to 250%: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." `choice` is the phase's
+// Extractors at 100% (suggested): 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or 1
+// overclocked at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." `choice` is the phase's
 // (waterChoice: which one its power counts, and whether Power Shards are researched yet); without
 // it, both are counted and 100% is suggested. The clocks are written to 0.01% and add up to the
 // rate rounded down to what such clocks make (settableRate in preferences/extraction.ts), so the
