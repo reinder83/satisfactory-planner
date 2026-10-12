@@ -3,6 +3,7 @@
 // and looks up one handler per endpoint in their tables.
 import type { IncomingMessage } from 'node:http';
 import type {
+  CurrentCalculatedPlan,
   ProgressState,
   StoredUser,
   UpdateOp,
@@ -10,6 +11,7 @@ import type {
 } from '../public/types/index.ts';
 import type { Commit, Profile, Save, Workspace } from './persistence.ts';
 import type { Limits } from './limits.ts';
+import type { ReviewedPlans } from '../public/reviewed-plans.ts';
 
 // A request body: parsed JSON whose fields are not checked yet.
 export type Body = Record<string, unknown>;
@@ -66,4 +68,7 @@ export interface WorkspaceContext {
   validateState: (state: unknown) => ProgressState;
   mutate: (state: ProgressState, update: UpdateOp) => ProgressState;
   rankBudgetMs: number;
+  // The plans Review showed, per user, for Create profile and Recalculate in place (#1060, #1138,
+  // public/reviewed-plans.ts).
+  reviewed: ReviewedPlans<CurrentCalculatedPlan>;
 }

@@ -9,8 +9,6 @@ import {
 } from '../public/transfer.ts';
 import { calculatedProfile, checkNewProfileKind, renameOfferFields } from '../public/state.ts';
 import { calculate } from '../planner.ts';
-import { reviewedPlans } from '../public/reviewed-plans.ts';
-import type { CurrentCalculatedPlan } from '../public/types/index.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { migrationData, type Save } from './persistence.ts';
@@ -30,9 +28,8 @@ export function saveRoutes({
   currentSummary,
   scope,
   scopeNamed,
+  reviewed,
 }: WorkspaceContext) {
-  // The plans Review showed, per user, for Create profile (#1060, public/reviewed-plans.ts).
-  const reviewed = reviewedPlans<CurrentCalculatedPlan>();
   // Full-save export (public/transfer.ts format) of the user's saves, scoped by the query as
   // selectForExport describes; share=1 strips progress with shareState. Each save keeps the shape
   // this route has always written: no userId, and a profile's plan null when it has none.
@@ -120,7 +117,8 @@ export function saveRoutes({
   // Runs the calculator for the wizard without storing anything; throttled because a
   // solve is expensive. A live estimate (`?estimate=1`) counts against its own allowance and
   // solving-time budget (limits.ts). Both checks run before the body is read. Review's plan (not
-  // an estimate) is kept in memory for Create profile (reviewedPlans, #1060).
+  // an estimate) is kept in memory for Create profile and Recalculate in place (reviewedPlans,
+  // #1060, #1138).
   async function preview({ req, url, user, body }: UserRequest) {
     const budget = url.searchParams.get('estimate') === '1' ? limits.estimateBudget(req) : null;
     if (budget) limits.throttleEstimate(req);
