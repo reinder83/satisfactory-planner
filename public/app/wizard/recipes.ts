@@ -17,16 +17,20 @@ import type { StoredCalculatedPlan, StoredSettings } from '../../types/index.ts'
 // Each row counts as its recipe (recipeIdOf): an amplified twin ('amp:<recipe>') or a group's own
 // line ('<recipe>:<group>') picks the recipe, never its row id, which the planner would drop (#901).
 export const alternatesUsed = (plan: StoredCalculatedPlan | null | undefined): string[] => {
-  const picks = new Set(
-    (workspace?.catalog?.alternates || []).filter(a => !a.mam && !a.milestone).map(a => a.id),
-  );
-  const start = Number(plan?.settings.phase || 1);
+  const catalog = workspace?.catalog?.alternates || [];
+  const picks = new Set(catalog.filter(a => !a.mam && !a.milestone).map(a => a.id)),
+    noPicks = new Set(catalog.filter(a => a.mam || a.milestone).map(a => a.id));
+  const start = Number(plan?.settings?.phase || 1);
   return [
     ...new Set(
       Object.entries(plan?.stages || {})
-        .filter(([phase]) => Number(phase) >= start)
-        .flatMap(([, snapshot]) => (snapshot.rows || []).map(r => recipeIdOf(r)))
-        .filter(id => picks.has(id)),
+        .filter(([phase]) => !(Number(phase) < start))
+        .flatMap(([, snapshot]) =>
+          (snapshot.rows || [])
+            .filter(r => r.alternate || picks.has(recipeIdOf(r)))
+            .map(r => recipeIdOf(r)),
+        )
+        .filter(id => !noPicks.has(id)),
     ),
   ].sort();
 };

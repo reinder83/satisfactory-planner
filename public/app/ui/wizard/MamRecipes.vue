@@ -44,10 +44,9 @@ watch(
         data-mam-recipes-box
         @change="on = ($event.target as HTMLInputElement).checked"
       /><span
-        ><b>Use the MAM recipes once researched</b
-        ><small class="muted">
-          · Turbofuel, Compacted Coal and Polyester Fabric come from MAM research, not hard drives,
-          whatever Recipe access says.</small
+        ><b>Use the MAM recipes once researched</b><br /><small class="muted"
+          >Turbofuel, Compacted Coal and Polyester Fabric come from MAM research, not hard drives,
+          so the plan may use them whatever Recipe access says.</small
         ></span
       ></label
     >

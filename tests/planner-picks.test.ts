@@ -20,7 +20,6 @@ import { initialState, pickedRecipeUnlocks } from '../public/state.ts';
 import type {
   BrowserWorkspace,
   Catalog,
-  CurrentCalculatedPlan,
   Progression,
   SaveExport,
   StoredCalculatedPlan,
@@ -106,10 +105,6 @@ function hunt(plan: StoredCalculatedPlan, checks: Record<string, boolean>) {
   };
 }
 type Post = (route: string, body: unknown, headers?: Record<string, string>) => Promise<any>;
-interface Made {
-  plan: CurrentCalculatedPlan;
-  state: { checks: Record<string, boolean> };
-}
 async function carried(post: Post, read: () => Promise<SaveExport>, settings: object) {
   const name = 'World ' + Math.random();
   await post('/api/import-saves', exported(name));
@@ -121,10 +116,8 @@ async function carried(post: Post, read: () => Promise<SaveExport>, settings: ob
     { 'X-Save-Id': save.id, 'X-Profile-Id': source },
   );
   const all = await read();
-  const made = all.saves
-    .find(x => x.id === save.id)!
-    .profiles.find(p => p.name === 'Picked') as unknown as Made;
-  return hunt(made.plan, made.state.checks);
+  const made = all.saves.find(x => x.id === save.id)!.profiles.find(p => p.name === 'Picked')!;
+  return hunt(made.plan!, made.state.checks as Record<string, boolean>);
 }
 
 test("#1058: the Docker edition keeps the hunt for Planner's choice picks", async () => {
