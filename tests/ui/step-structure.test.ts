@@ -35,6 +35,7 @@ beforeEach(() => {
   late ??= generatedWith({
     phase: '4',
     mainPower: 'rocket',
+    somersloops: 32,
     augmenters: 3,
     fueledAugmenters: 1,
     phaseMining: true,
@@ -173,6 +174,7 @@ const sparePlan = () =>
   (spare ??= generatedWith({
     phase: '4',
     availablePowerGW: 2,
+    somersloops: 20,
     augmenters: 2,
     phaseMining: true,
     wholeMachines: true,

@@ -28,6 +28,7 @@ const latePlan = () =>
   (late ??= calculate({
     phase: '4',
     mainPower: 'rocket',
+    somersloops: 32,
     augmenters: 3,
     fueledAugmenters: 1,
     phaseMining: true,
@@ -137,6 +138,7 @@ test('"Power available now" with spare power gives the power balance as a table'
   const plan = calculate({
     phase: '4',
     availablePowerGW: 2,
+    somersloops: 20,
     augmenters: 2,
     phaseMining: true,
     wholeMachines: true,
@@ -205,7 +207,7 @@ test('the augmenter step gives fueled and unfueled augmenters as a table with a 
   assert.match(table.after!, /^The Somersloops are not recoverable\. Each one generates 500 MW/);
   assert.match(table.after!, /An augmenter that runs dry falls back to 10%\.$/);
   // None fueled: one row, and the advice on feeding one.
-  const unfed = calculate({ phase: '5', augmenters: 2 }) as StoredCalculatedPlan;
+  const unfed = calculate({ phase: '5', somersloops: 20, augmenters: 2 }) as StoredCalculatedPlan;
   const plain = steps(unfed, '5').find(found => found.id === 'alien-power-augmenter')!;
   assert.deepEqual(
     plain.table!.rows.map(row => row[0]),
@@ -263,7 +265,11 @@ test('two or more hand-fed constructors are a list, one line each; one stays a s
   assert.ok(step.body.startsWith('Reserve 2 Somersloops for a Constructor'));
   assert.ok(step.body.endsWith(list.after!));
   assert.match(listText(list), /one for each/);
-  const one = calculate({ phase: '3', sloopReserved: ['biofuel'] }) as StoredCalculatedPlan;
+  const one = calculate({
+    phase: '3',
+    somersloops: 1,
+    sloopReserved: ['biofuel'],
+  }) as StoredCalculatedPlan;
   const single = steps(one, '3').find(found => found.id === 'sloop-hand-fed')!;
   assert.equal(single.list, undefined, 'one constructor stays a sentence');
   assert.match(single.body, /^Reserve 1 Somersloop for a Constructor making Solid Biofuel/);
