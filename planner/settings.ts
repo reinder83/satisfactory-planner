@@ -30,6 +30,7 @@ import type {
   StorageChoice,
 } from '../public/types/index.ts';
 import { DATA, powerNeedsTurbofuel, ALT_IDS, RAW } from './data.ts';
+import { sloopCommitment, sloopRefusal } from '../public/somersloops.ts';
 
 // An untrusted object: a record whose fields are not checked yet.
 type Raw = Record<string, unknown>;
@@ -445,6 +446,12 @@ export function settings(input: unknown = {}): CurrentSettings {
     fail('Plutonium drone fuel requires a nuclear power and waste-processing strategy.');
   if (config.fueledAugmenters > config.augmenters)
     fail('More fueled Alien Power Augmenters than augmenters.');
+  // The somersloop budget is a hard limit (#1059): a plan whose augmenters, hand-fed uses and
+  // amplification budget need more somersloops than the save has would rest on buildings that
+  // cannot be built, so it is refused rather than clamped, and the user chooses what to give up.
+  // A stored plan is never checked again: it keeps its numbers, and its pages say what it commits.
+  const sloops = sloopCommitment(config);
+  if (sloops.over > 0) fail(sloopRefusal(sloops));
   if (config.installedPowerGW < config.availablePowerGW)
     fail('Total installed generation cannot be less than the spare part of it.');
   // Budgets the profile did not enter default to what its map preset gives (resourceDefaults in
