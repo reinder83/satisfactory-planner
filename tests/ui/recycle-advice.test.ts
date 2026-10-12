@@ -203,17 +203,34 @@ test('the build plan shows the advice in the step, and a step the user rewrote k
   openPlan('4');
   await nextTick();
   const step = $(`[data-check="calc-4-${scrap}"]`)!.closest('.task')!;
+  // A step's body (its plain text, which search and copying use) with the page's spacing.
+  const body = (id: string) => {
+    const words = document.createElement('p');
+    words.textContent = planTasks().find(task => task.id === id)!.body!;
+    return plainText(words);
+  };
   assert.match(
-    text(step.querySelector('p')),
+    body(`calc-4-${scrap}`),
     /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\. Byproduct Water 116\.18 m³\/min: send all of it back to Alumina Solution, which feeds this line\.$/,
   );
-  // A line taking Water no byproduct covers (#1024).
-  const concrete = $(`[data-check="calc-4-${rowId('4', 'Alternate: Wet Concrete')}"]`)!.closest(
-    '.task',
-  )!;
+  // The step draws the advice as a list (#1136): the line's text, then a paragraph per byproduct.
   assert.match(
-    plainText(concrete.querySelector('p')),
+    text(step.querySelector('[data-step-list] p')),
+    /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\.$/,
+  );
+  assert.deepEqual([...step.querySelectorAll('[data-step-list-item]')].map(text), [
+    'Byproduct Water 116.18 m³/min: send all of it back to Alumina Solution, which feeds this line.',
+  ]);
+  // A line taking Water no byproduct covers (#1024).
+  const wet = `calc-4-${rowId('4', 'Alternate: Wet Concrete')}`;
+  const concrete = $(`[data-check="${wet}"]`)!.closest('.task')!;
+  assert.match(
+    body(wet),
     /Outputs: Concrete [\d.,]+\/min\. Water 253\.75 m³\/min\. No byproduct covers it: extract all of it\. Water Extractors overclocked up to 250% \(suggested\): 1 at 211\.46% \(1 extractor, 3 Power Shards, 53\.82 MW\)\. Or at 100%: 2 at 100% \+ 1 at 11\.46% \(3 extractors, 41\.14 MW\)\.$/,
+  );
+  assert.match(
+    plainText(concrete.querySelector('[data-step-list-item]')),
+    /^Water 253\.75 m³\/min\. No byproduct covers it: extract all of it\. Water Extractors overclocked up to 250% \(suggested\): 1 at 211\.46% \(1 extractor, 3 Power Shards, 53\.82 MW\)\. Or at 100%: 2 at 100% \+ 1 at 11\.46% \(3 extractors, 41\.14 MW\)\.$/,
   );
   page();
   openPlan('4', { bodies: { [`calc-4-${scrap}`]: 'My own words.' } });

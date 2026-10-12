@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, beforeEach, test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
+import { planTasks } from '../../public/app/tasks.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { powerView } from '../../public/power.ts';
 import { $, generated, generatedWith, open, page } from './setup.ts';
@@ -25,6 +26,14 @@ afterAll(() => {
   Number.prototype.toLocaleString = toLocale;
 });
 beforeEach(() => page());
+
+// The lead step's own words (#1136): its body, which search and copying use. "Power available
+// now" with spare power draws them as a table (the power balance), so they are read from the step.
+const leadBody = () =>
+  planTasks().find(
+    step =>
+      step.id === $('#main [data-open-steps] > .task.lead details')?.getAttribute('data-task'),
+  )?.body;
 
 const close = (actual: number, expected: number, what: string) =>
   assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual} is not ${expected}`);
@@ -53,8 +62,9 @@ test('the summary gives the power the phase has for what it needs, spare power i
   // The lead step is "Power available now", and it starts from the spare power.
   const lead = $('#main [data-open-steps] > .task.lead')!;
   assert.equal(lead.querySelector('summary')!.textContent, 'Power available now');
+  assert.ok(lead.querySelector('[data-step-table]'), 'it draws the power balance');
   assert.match(
-    lead.querySelector('details > p')!.textContent!,
+    leadBody()!,
     /^You have 44\.43 GW of spare power available, which covers this phase's /,
   );
 }, 60000);
@@ -139,7 +149,7 @@ test("a stored plan's summary, bar and power step split the augmenters' boost al
   close(part('boost').mw, augmenters, 'and the augmenters their own part');
   close(part('spare').mw, 1000, 'the spare power');
   close(view.availableMW, stage.availableMW, 'the total is as stored');
-  const step = $('[data-task="startup-3-power-review"] p')!.textContent!;
+  const step = planTasks().find(task => task.id === 'startup-3-power-review')!.body!;
   assert.match(step, new RegExp(`your 4 augmenters add ${escaped(power(augmenters))}`));
   assert.match(step, new RegExp(`which (provides|adds) ${escaped(power(boosted))}`));
 });

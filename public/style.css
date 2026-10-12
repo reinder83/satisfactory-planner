@@ -1158,7 +1158,8 @@ p {
     background: none;
   }
   .step-table th,
-  .step-table td {
+  .step-table td,
+  .step-table tbody th {
     padding: 1px 0;
     border: 0;
     white-space: normal;
@@ -1182,6 +1183,22 @@ p {
   .step-table tfoot td {
     border-top: 0;
   }
+}
+/* A step's body as a list (#1136, StepList.vue): a production line's byproduct advice, one
+   paragraph per byproduct or input, or the hand-fed constructors. Long words wrap, so a phone
+   never scrolls sideways. */
+.step-list ul {
+  margin: 8px 0 4px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.step-list li {
+  overflow-wrap: anywhere;
+}
+.step-list li + li {
+  margin-top: 5px;
 }
 .task:has(input:checked) summary {
   color: #74837b;
@@ -5619,7 +5636,8 @@ button.rail-tile:hover {
   .step-table {
     overflow: visible;
   }
-  .step-table tr {
+  .step-table tr,
+  .step-list li {
     break-inside: avoid;
   }
   .step-table tbody tr:nth-child(even) {

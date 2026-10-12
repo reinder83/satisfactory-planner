@@ -16,7 +16,7 @@ import {
 import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
 import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
-import { adviceSentence, adviceText, lineAdvice, NO_COVER, recycleModel } from '../recycle.ts';
+import { adviceLineText, adviceSentence, lineAdvice, NO_COVER, recycleModel } from '../recycle.ts';
 import type { AdviceLine, AdviceWords, RecycleModel } from '../recycle.ts';
 import {
   calcStage,
@@ -45,7 +45,7 @@ import { perRedraw } from '../per-redraw.ts';
 import { minerWords, waterChoice } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
-import type { StepTable } from '../../step-table.ts';
+import type { StepList, StepTable } from '../../step-table.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
 export interface PlanStepData {
@@ -55,8 +55,9 @@ export interface PlanStepData {
   // Optional, or done by its own condition (GuideTask in progression.ts, #1070).
   optional?: boolean;
   satisfied?: string;
-  // The body as a table (#1136, step-table.ts).
+  // The body as a table or a list (#1136, step-table.ts).
   table?: StepTable;
+  list?: StepList;
 }
 
 // A step's inputs or outputs as "Heavy Oil Residue 46.6 m³/min, Iron Ore 30/min": each item
@@ -107,17 +108,30 @@ const calcTasksOf = perRedraw(stepInputs, (shownPhase: Phase): PlanStepData[] =>
   // The stage of the phase shown, which need not be the current phase (#1022).
   const snapshot = calculated.stages[shownPhase === 'post' ? '5' : shownPhase];
   return orderedPhaseSteps(shownPhase).map(({ row, ...step }) =>
-    row
-      ? {
-          ...step,
-          body:
-            carriedStepText(row, shownPhase) +
-            ownedGeneratorsText(row, snapshot) +
-            rowStepBody(row, snapshot),
-        }
-      : step,
+    row ? { ...step, ...rowStep(row, snapshot, shownPhase, step.title) } : step,
   );
 });
+
+// A production row's build-plan step text: what already runs and the generators the player has,
+// then its machines, inputs and outputs (rowLineText), then the factory dialog's byproduct advice in
+// `snapshot`, the stage of the phase the step is in (#1022). With advice, the same words as a list
+// (#1136): the text before the advice above it, and each paragraph of the advice (one byproduct or
+// input, adviceLineText in recycle.ts) as an item, as the dialog shows them.
+function rowStep(
+  row: CalcRow,
+  snapshot: StoredStage | undefined,
+  shownPhase: Phase,
+  title: string,
+): Pick<PlanStepData, 'body' | 'list'> {
+  const lead =
+    carriedStepText(row, shownPhase) + ownedGeneratorsText(row, snapshot) + rowLineText(row);
+  const advice = rowAdvice(row, snapshot).map(adviceLineText);
+  if (!advice.length) return { body: lead };
+  return {
+    body: lead + ' ' + advice.join(' '),
+    list: { intro: lead, items: advice, label: `${title}: byproducts and inputs` },
+  };
+}
 
 // The opening sentence of a generator line's step where the player already has generators of its
 // building that the phase counts (#1068, settings.ownedGenerators, ownedBeyondKept in power.ts):
@@ -155,15 +169,13 @@ function carriedStepText(row: CalcRow, shownPhase: Phase): string {
   return carried ? carriedText(carried, row) : '';
 }
 
-// A production row's build-plan step text: its machines, inputs and outputs, with the pointer
-// to an easier rounded option only where the dialog shows one (#379), then the factory dialog's
-// byproduct advice in `snapshot`, the stage of the phase the step is in (#1022). The machine
-// setup is worked out once per row (#1060).
-const rowStepBody = (row: CalcRow, snapshot: StoredStage | undefined): string =>
+// A production row's machines, inputs and outputs in its build-plan step (rowStep), with the
+// pointer to an easier rounded option only where the dialog shows one (#379). The machine setup is
+// worked out once per row (#1060).
+const rowLineText = (row: CalcRow): string =>
   siteLineText(row) +
   stockLineText(row) +
-  `${setupText(machineSetup(row))} ${sloopText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
-  recycleStepText(row, snapshot);
+  `${setupText(machineSetup(row))} ${sloopText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
 
 // A step's machines (machineSetup): the summary, then the adjustable machine's clock and output
 // with the pointer to an easier rounded option, or what each machine makes.
@@ -175,12 +187,6 @@ const sloopText = (row: CalcRow): string =>
   row.amplified
     ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. `
     : '';
-
-// A step's byproduct advice (adviceText in recycle.ts) after a space, or '' for none.
-function recycleStepText(row: CalcRow, snapshot: StoredStage | undefined): string {
-  const text = adviceText(rowAdvice(row, snapshot));
-  return text ? ' ' + text : '';
-}
 
 // The recycling model (recycleModel in recycle.ts) of `snapshot`, a stage of the open plan, for
 // the profile's factory groups. The build plan, a group's flow page and the factory dialog ask
