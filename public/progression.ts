@@ -1597,7 +1597,7 @@ function generatorStep(
   { plan, stage, rows, stageOf }: GuideContext,
   generators: CalcRow[],
   unburned: UnburnedFuel | null,
-): Pick<GuideTask, 'title' | 'body'> {
+): Pick<GuideTask, 'title' | 'body' | 'table'> {
   const previous = stage - 1 >= Number(plan.settings.phase || 1) ? stage - 1 : 0;
   const builtBefore = (row: CalcRow) =>
     (previous && stageOf(previous)?.rows?.find(earlier => earlier.id === row.id)?.machines) || 0;
@@ -1778,7 +1778,7 @@ function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
     biofuel:
       'a Constructor making Solid Biofuel from biomass, doubling what each trip of gathered leaves and wood is worth',
   };
-  const picked = reserved.map(id => labels[id]).filter(Boolean);
+  const picked = reserved.map(id => labels[id]).filter((label): label is string => !!label);
   const reserve = `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''}`;
   const after =
     'Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.';

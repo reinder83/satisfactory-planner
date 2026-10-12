@@ -149,7 +149,7 @@ test("a stored plan's summary, bar and power step split the augmenters' boost al
   close(part('boost').mw, augmenters, 'and the augmenters their own part');
   close(part('spare').mw, 1000, 'the spare power');
   close(view.availableMW, stage.availableMW, 'the total is as stored');
-  const step = planTasks().find(task => task.id === 'startup-3-power-review')!.body;
+  const step = planTasks().find(task => task.id === 'startup-3-power-review')!.body!;
   assert.match(step, new RegExp(`your 4 augmenters add ${escaped(power(augmenters))}`));
   assert.match(step, new RegExp(`which (provides|adds) ${escaped(power(boosted))}`));
 });
