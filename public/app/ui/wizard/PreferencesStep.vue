@@ -17,6 +17,7 @@ import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
 import AltPicker from './AltPicker.vue';
+import MamRecipes from './MamRecipes.vue';
 import OwnedAlternates from './OwnedAlternates.vue';
 import SloopLedger from './SloopLedger.vue';
 import StorageRates from './StorageRates.vue';
@@ -194,7 +195,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
       required
     />
   </div>
-  <SloopLedger /><StorageRates /><AltPicker
+  <SloopLedger /><StorageRates /><MamRecipes /><AltPicker
     v-if="settings.recipes === 'custom'"
   /><OwnedAlternates />
   <div class="notice info">

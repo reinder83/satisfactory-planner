@@ -17,6 +17,7 @@ import { calculate, catalog, rankAlternates, settings } from '../planner.ts';
 import { mamRecipesOn, recipePool, standardAlternateIn } from '../planner/recipes.ts';
 import { MAM_RECIPES } from '../planner/data.ts';
 import { initialState, validateState } from '../public/state.ts';
+import { settingsChanges } from '../public/app/profile-edit.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
 import { loadWorkspace } from '../server/persistence.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
@@ -220,4 +221,22 @@ test('migration: the browser edition keeps both plans unchanged across a reload'
     out.saves.map(save => JSON.stringify(save.profiles[0]!.plan)),
     plans.map(plan => JSON.stringify(plan)),
   );
+});
+
+test('#1058: Review names a change of the MAM recipes, a plan made before the box included', () => {
+  const change = (before: object, after: object) =>
+    settingsChanges(settings(before), settings(after), []).changes.filter(
+      entry => entry.label === 'MAM recipes',
+    );
+  // A Standard plan from before the box planned with them: ticked is no change.
+  assert.deepEqual(change({}, { mamRecipes: true }), []);
+  assert.deepEqual(change({}, { mamRecipes: false }), [
+    { label: 'MAM recipes', before: 'On', after: 'Off' },
+  ]);
+  // A custom plan from before it only with the ones it picked.
+  const custom = { recipes: 'custom', alternateRecipes: PICKS };
+  assert.deepEqual(change(custom, { ...custom, mamRecipes: true }), [
+    { label: 'MAM recipes', before: 'Only the ones picked', after: 'On' },
+  ]);
+  assert.deepEqual(change({ mamRecipes: true }, { mamRecipes: true, recipes: 'custom' }), []);
 });

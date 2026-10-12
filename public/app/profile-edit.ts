@@ -207,6 +207,15 @@ const ABSENT_IS_NONE = new Set([
   'ownedAlternates',
   'ownedGenerators',
 ]);
+// The MAM recipes box (#1058) in words, as the planner reads it (mamRecipesOn in
+// planner/recipes.ts): a plan made before the box has none, and planned with them under Standard
+// and All, and under custom only with the ones picked.
+const mamWords = (settings: NameSettings): string =>
+  typeof settings.mamRecipes === 'boolean'
+    ? onOff(settings.mamRecipes)
+    : settings.recipes === 'custom'
+      ? 'Only the ones picked'
+      : 'On';
 // Such a setting's value, with every way of saying none or off as null.
 function noneAsNull(value: unknown): unknown {
   if (value === undefined || value === null || value === false) return null;
@@ -258,8 +267,12 @@ export function settingsChanges(
       before: words(before[key]),
       after: words(after[key]),
     })),
+    // Absent means what the plan did before the box (#1058), so a plan without it is compared too.
+    ...(mamWords(before) !== mamWords(after)
+      ? [{ label: 'MAM recipes', before: mamWords(before), after: mamWords(after) }]
+      : []),
   ];
-  const named = new Set(['goal', ...SETTING_LABELS.map(([key]) => key)]);
+  const named = new Set(['goal', 'mamRecipes', ...SETTING_LABELS.map(([key]) => key)]);
   const others = Object.keys(after).filter(key => !named.has(key) && changed(key)).length;
   return { changes, others };
 }

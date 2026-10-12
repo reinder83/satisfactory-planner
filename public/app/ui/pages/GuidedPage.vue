@@ -37,6 +37,7 @@ import SupplyRows from '../wizard/SupplyRows.vue';
 import StepHeading from '../form/StepHeading.vue';
 import { focusNewStep } from '../refocus.ts';
 import AltPicker from '../wizard/AltPicker.vue';
+import MamRecipes from '../wizard/MamRecipes.vue';
 import ReviewStep from '../wizard/ReviewStep.vue';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { createProfile, submitLabel, wizardError } from '../../wizard/wizard.ts';
@@ -182,7 +183,7 @@ async function submit(event: Event) {
         <GuidedHave v-else-if="page.question.kind === 'have'" />
         <GuidedBudgets v-else-if="page.question.kind === 'budgets'" />
         <GuidedCards v-else :question="page.question" />
-        <AltPicker v-if="page.picking" />
+        <template v-if="page.picking"><MamRecipes /><AltPicker /></template>
         <div v-if="page.timed" class="form-grid guided-follow">
           <InputField
             label="Hours per phase"
