@@ -93,8 +93,8 @@ const port = (listener: http.Server) => (listener.address() as AddressInfo).port
 const base = 'http://127.0.0.1:' + port(server) + '/satisfactory-planner/';
 
 // The performance budget (#1060), on a phone-wide page (390 px) with Phase 5 of a maximum-output
-// plan, its largest: Create profile stores the plan Review showed without calculating again,
-// and a tick and a key in the step search stay inside budgets far above what they take now
+// plan, its largest: Create profile, and Edit settings' Recalculate in place (#1138), store the
+// plan Review showed without calculating again, and a tick and a key in the step search stay inside budgets far above what they take now
 // (about 50 ms and 15 ms on a desktop; before #1060 about 1 s and 0.25 s, four times that with
 // a phone's CPU), so a slower runner does not fail them.
 const TICK_BUDGET_MS = 1500;
@@ -130,10 +130,12 @@ async function checkPerformance(browser: import('playwright').Browser) {
       (a, b) => a - b,
     );
     const search = await searchTimes(page);
+    const inPlace = await reviewedInPlace(page, calculations);
     console.log(
       `Performance (390 px, Phase 5 of maximum output): Create profile ${createMs} ms, no calculation; ` +
         `tick ${ticks.map(Math.round).join('/')} ms; search keys ${search.keys.map(Math.round).join('/')} ms, ` +
-        `results ${Math.round(search.results)} ms after the last key`,
+        `results ${Math.round(search.results)} ms after the last key; Edit settings: Review ${inPlace.reviewMs} ms, ` +
+        `Recalculate in place ${inPlace.recalculateMs} ms, no calculation`,
     );
     assert.ok(ticks[1]! < TICK_BUDGET_MS, `a tick takes ${ticks[1]} ms`);
     assert.ok(Math.max(...search.keys) < SEARCH_KEY_BUDGET_MS, `search keys ${search.keys} ms`);
@@ -142,6 +144,31 @@ async function checkPerformance(browser: import('playwright').Browser) {
   } finally {
     await context.close();
   }
+}
+// Edit settings → Review → Recalculate in place (#1138) on the open profile: Review calculates the
+// plan once, and the recalculation stores it without calculating again. How long each took.
+async function reviewedInPlace(page: Page, calculations: () => Promise<number | undefined>) {
+  await page.goto(base + '#profiles');
+  await page.locator('[data-edit-profile]').first().click();
+  const review = page.locator('[data-wizard-step="5"]');
+  await review.waitFor();
+  const before = (await calculations()) ?? 0;
+  let started = Date.now();
+  await review.click();
+  const recalculate = page.getByRole('button', { name: 'Recalculate in place', exact: true });
+  await recalculate.waitFor({ timeout: 180000 });
+  const reviewMs = Date.now() - started;
+  assert.equal(await calculations(), before + 1, 'Review calculated the plan');
+  started = Date.now();
+  await recalculate.click();
+  await page.getByText('Recalculated in place.').first().waitFor({ timeout: 180000 });
+  const recalculateMs = Date.now() - started;
+  assert.equal(
+    await calculations(),
+    before + 1,
+    'Recalculate in place stores the plan Review showed',
+  );
+  return { reviewMs, recalculateMs };
 }
 // A new browser save on All settings with maximum output from Phase 1, its budgets confirmed,
 // calculated up to Review.

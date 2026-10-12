@@ -7,6 +7,7 @@ import { response } from './server/routing.ts';
 import { accountRoutes } from './server/account-routes.ts';
 import { saveRoutes } from './server/save-routes.ts';
 import { profileRoutes } from './server/profile-routes.ts';
+import { reviewedPlans } from './public/reviewed-plans.ts';
 import type {
   Body,
   Handler,
@@ -16,7 +17,12 @@ import type {
   UserRequest,
   WorkspaceContext,
 } from './server/routing.ts';
-import type { ProgressState, StoredUser, UpdateOp } from './public/types/index.ts';
+import type {
+  CurrentCalculatedPlan,
+  ProgressState,
+  StoredUser,
+  UpdateOp,
+} from './public/types/index.ts';
 
 export type { Route, RouteReply } from './server/routing.ts';
 
@@ -85,6 +91,7 @@ export async function openWorkspace({
     validateState,
     mutate,
     rankBudgetMs,
+    reviewed: reviewedPlans<CurrentCalculatedPlan>(),
   };
   const accounts = accountRoutes(context),
     saves = saveRoutes(context),
