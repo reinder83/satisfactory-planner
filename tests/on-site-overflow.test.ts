@@ -76,9 +76,21 @@ const BEFORE_1063_OWN: Record<string, number> = { '3': 6, '4': 13, '5': 19 };
 // whose 19 machines make 1,710 for the 1,700 Alpha's lines take, 9.
 const LEFT: Record<string, number> = { '3': 69, '4': 69, '5': 9 };
 
+// The phases a recalculation routes. Phase 4 did too until #1057 made the Diamond alternates
+// Phase 5 recipes (Matter Conversion, Tier 9): the stored plan's storage stocks 1 Diamond/min there
+// with an Oil-Based Diamonds line, and without it the plan with no route builds fewer machines than
+// the routed one, so withOverflow keeps it (below).
+const ROUTED: StageKey[] = ['3', '5'];
+
 test("a recalculation lets Alpha's excess meet the central demand: no central line, fewer machines", () => {
   const plan = recalculation();
-  for (const phase of PHASES) {
+  const four = plan.stages['4'];
+  assert.equal(recorded.plan.stages['4'].storage?.Diamonds, 1);
+  assert.equal(four.storage?.Diamonds, undefined, 'no Diamonds before Phase 5');
+  assert.equal(four.onSiteOverflow, undefined, 'Phase 4 keeps the plan without the route');
+  assert.equal(row(four, FUSED)?.machines, 1);
+  assert.ok(buildings(four) < buildings(recorded.plan.stages['4']));
+  for (const phase of ROUTED) {
     const before = recorded.plan.stages[phase],
       stage = plan.stages[phase];
     assert.equal(row(stage, FUSED), undefined, `Phase ${phase}: no central Fused Quickwire line`);
@@ -102,8 +114,9 @@ test("a recalculation lets Alpha's excess meet the central demand: no central li
     );
     assert.equal(routed.count, 1);
   }
-  // The profile assumptions say so, per phase.
-  for (const phase of PHASES)
+  // The profile assumptions say so, per phase routed.
+  assert.ok(!plan.warnings.some(w => w.startsWith('Phase 4: a central line')));
+  for (const phase of ROUTED)
     assert.ok(
       plan.warnings.includes(
         `Phase ${phase}: a central line would have sent almost all the Quickwire it made to the AWESOME Sink, so the own lines of Alpha also give the rest of the plan what they make beyond the factory's needs, and fewer central machines are built.`,
@@ -111,12 +124,35 @@ test("a recalculation lets Alpha's excess meet the central demand: no central li
       `Phase ${phase}'s warning`,
     );
   assert.equal(recorded.plan.warnings.filter(w => w.includes('almost all')).length, 0);
-  // The other phases have no line made on site and are planned exactly as before.
-  for (const phase of ['1', '2'] as StageKey[])
+  // The other phases are planned as before, except that since #1057
+  // their storage no longer stocks what the game makes only later: Steel Pipe and Portable Miner
+  // (Iron Pipe and Automated Miner, Phase 2) and Empty Canister (the canister alternates, Phase
+  // 3). So they build those lines no more, and fewer machines for their inputs.
+  const later: Record<string, string[]> = {
+    '1': ['Empty Canister', 'Portable Miner', 'Steel Pipe'],
+    '2': ['Empty Canister'],
+  };
+  for (const phase of ['1', '2'] as StageKey[]) {
+    const stage = plan.stages[phase],
+      before = recorded.plan.stages[phase];
     assert.deepEqual(
-      rowsOf(plan.stages[phase]).map(line => [line.id, line.machines]),
-      rowsOf(recorded.plan.stages[phase]).map(line => [line.id, line.machines]),
+      Object.keys(before.storage ?? {})
+        .filter(item => !(item in (stage.storage ?? {})))
+        .sort(),
+      later[phase],
     );
+    assert.deepEqual(
+      Object.fromEntries(Object.entries(stage.storage ?? {})),
+      Object.fromEntries(
+        Object.entries(before.storage ?? {}).filter(([item]) => !later[phase]!.includes(item)),
+      ),
+    );
+    assert.ok(
+      rowsOf(stage).every(line => row(before, line.id)),
+      `Phase ${phase}: no new line`,
+    );
+    assert.ok(buildings(stage) < buildings(before), `${buildings(stage)} < ${buildings(before)}`);
+  }
 });
 
 // Minimal construction with exact clocks (#1092 review): the stored plan's settings with
