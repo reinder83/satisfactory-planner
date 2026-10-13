@@ -21,9 +21,12 @@ import { calcStage, calculated, checked, progressionData, stage } from './sessio
 import { factoryGroupsState } from './views/factories.ts';
 import { power } from './wizard/fields.ts';
 import { sinkCaption, sinkCause } from './sink-cause.ts';
+import { lineSink, recycleModel } from './recycle.ts';
+import { recycleModelOf } from './stage-recycle.ts';
 import { BELT_MARKS, PIPE_MARKS, phaseForTier } from '../preferences.ts';
 import { rowStepTitle } from '../progression.ts';
 import type { ItemBooks } from './group-links.ts';
+import type { RecycleModel } from './recycle.ts';
 import type { FactoryLink } from './ui/actions.ts';
 import type {
   CalcRow,
@@ -395,6 +398,10 @@ export interface CalcFlowContext {
   // The profile's factory groups and the Logistics page's books for them (itemBooks), when the
   // phase has a group's own line made on site (#956). Absent: every item is shared plan-wide.
   site?: SiteBooks;
+  // The phase's line-level transfers (recycleModel in recycle.ts) for the profile's groups, as
+  // the byproduct advice reads them: each line's part of the sink comes from them (sinkPart,
+  // #1155). Absent (a context made by hand), worked out from the stage and the site's groups.
+  recycle?: RecycleModel;
 }
 
 // The books of a phase with lines made on site (CalcFlowContext.site).
@@ -670,26 +677,31 @@ function reserveOutputs(output: OutputItem, context: CalcFlowContext) {
   return outputs;
 }
 
-// What goes to the sink of an item groups make on site (#956), as the books send it: from a
-// group's own line its part of what the group's own lines make beyond the group's demand
-// (`sunk`), from any other line the plan's surplus less all of that (ordinaryPart: shared with
-// any group's offer, #918).
-function siteSinkRate(row: CalcRow, output: OutputItem, surplus: number): number {
-  const { item, site } = output;
-  if (!site) return surplus;
-  const sunk = site.books.sunk[item];
-  const rest = ordinaryPart(row, output, surplus - placeTotal(sunk));
-  if (!site.group) return rest;
-  // ownLineGroup found the group's lines in the books.
-  const made = site.books.local[item]!.get(site.group)!.made;
-  return ((sunk?.get(site.group) || 0) * (row.outputs[item] || 0)) / made + rest;
+// The recycling model a context made by hand reads (CalcFlowContext.recycle), once per context.
+const handMadeRecycle = new WeakMap<CalcFlowContext, RecycleModel>();
+const NO_GROUPS: FactoryGroups = { groups: [], assignments: {} };
+
+// What `row` sends to the sink of `item` per minute: its own part of the plan's surplus, as the
+// books share it out (lineSink in recycle.ts, #1155), so each line making the item shows its part
+// and the parts add up to the surplus, as its byproduct advice and burn note say. A line that alone
+// makes the item sends all of it. For an item groups make on site, a group's own line sends its
+// part of what its group's own lines make beyond the group's demand (#956), and after a group
+// edit only the plan's surplus (#918), as the books send it.
+function sinkPart(row: CalcRow, item: string, context: CalcFlowContext): number {
+  const { storedStage, settings, site } = context;
+  if (!((storedStage.surplus?.[item] ?? 0) > 0)) return 0;
+  let model = context.recycle ?? handMadeRecycle.get(context);
+  if (!model) {
+    model = recycleModel(storedStage, site?.groups ?? NO_GROUPS, settings?.onSite);
+    handMadeRecycle.set(context, model);
+  }
+  return lineSink(model, row.id, item);
 }
 
 // Plutonium rods the waste strategy sinks, then the plan's surplus for the item. The planner
 // leaves fluids, radioactive and unsinkable items out of `surplus`, so they never show here.
-// For an item groups make on site, the part of it this row sends (siteSinkRate). The surplus is
-// captioned by its cause (sinkCause, #1063): whole-machine rounding only where rounding explains
-// it.
+// Of the surplus, the part this row sends (sinkPart, #1155), captioned by its cause worked out
+// from that part (sinkCause, #1063): whole-machine rounding only where rounding explains it.
 function sinkOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext) {
   const { storedStage, settings } = context;
   const { item, unit, pre } = output;
@@ -704,7 +716,7 @@ function sinkOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext)
       unit,
       pre,
     });
-  const surplus = siteSinkRate(row, output, storedStage.surplus?.[item] ?? 0);
+  const surplus = sinkPart(row, item, context);
   if (surplus > 0.002) {
     const cause = sinkCause(row, item, surplus, storedStage, !!settings?.wholeMachines, isFluid);
     outputs.push({
@@ -1006,6 +1018,7 @@ export function calcFlowModel(row: CalcRow): FlowModel {
     stageKey: stage(),
     settings: calculated?.settings,
     ...(site ? { site } : {}),
+    recycle: recycleModelOf(storedStage),
   };
   const inputs = flowInputs(row, context);
   const outputs = capFlowOutputs(
