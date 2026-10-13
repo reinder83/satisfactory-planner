@@ -2087,7 +2087,7 @@ p.eyebrow {
 .split > aside .panel li {
   overflow-wrap: anywhere;
 }
-/* Hard-drive payoff (ui/plan/PayoffPanel.vue): a sortable table of alternate recipes. */
+/* Best next hard drive (ui/plan/PayoffPanel.vue): a sortable table of alternate recipes. */
 .payoff .section-head {
   align-items: center;
 }
@@ -2123,8 +2123,17 @@ p.eyebrow {
 .payoff-error {
   color: var(--red);
 }
-.payoff-mixed {
+.payoff-mixed,
+.payoff-needed {
   color: var(--gold);
+}
+/* The payoff threshold (#1075) above the table. */
+.payoff-threshold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 8px;
 }
 .factory-card .build-held {
   color: var(--accent-hi);

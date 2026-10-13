@@ -1,9 +1,20 @@
 <!--
-  "Hard-drive payoff" on a calculated profile's plan page (#204, part 3 of #67): what allowing
-  each alternate recipe the profile does not allow yet would do to this phase's plan. "Rank
-  alternates" runs POST /api/rank-alternates (#203), which stores the result with the profile;
-  a stored ranking for this phase shows at once. Rows open the alternate's recipe dialog.
-  The sorting and formatting live in app/payoff.ts.
+  "Best next hard drive" on a calculated profile's plan page (#204, part 3 of #67; #1075), right
+  after the phase's notices and above the build sequence: what each alternate recipe would change
+  in the plan. "Rank alternates" runs POST /api/rank-alternates (#203) for the phase on screen and
+  every later one the plan builds, with the recipes the plan counts on but the player does not own
+  (`remaining` and `hunting`, #1075), and stores the result with the profile; a stored ranking for
+  this phase shows at once, one made before #1075 as it was (that phase alone). Nothing is ranked
+  or recalculated until the user presses the button.
+
+  The table sorts by Δ buildings first, whatever the goal (#1075); a threshold hides the rows that
+  save fewer buildings, and only the first rows show until "Show all". A recipe not allowed yet
+  has "Add as hunting": it recalculates this profile in place with that recipe allowed as one to
+  hunt (huntingSettings in app/recipe-states.ts: exactly the plan the ranking tried), after the
+  confirmation every recalculation offer asks (recalculateOffer in ui/recalc-offer.ts: progress
+  carried, the current version kept as a backup). A hunting row says so: its figures are what
+  finding it saves. Rows open the alternate's recipe dialog. The sorting and formatting live in
+  app/payoff.ts.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -13,11 +24,12 @@ import {
   PAYOFF_COLUMNS,
   PAYOFF_STATUS,
   PAYOFF_WORDS,
-  payoffDefaultSort,
   payoffDelta,
   payoffTable,
+  rankedPhases,
   type PayoffColumn,
 } from '../../payoff.ts';
+import { huntingSettings } from '../../recipe-states.ts';
 import { browserMode } from '../../../browser-api.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import {
@@ -32,19 +44,28 @@ import {
 import { render } from '../../shell.ts';
 import { openAltRecipe } from '../../wizard/recipes.ts';
 import { legacy } from '../bridge.ts';
+import { recalculateOffer } from '../recalc-offer.ts';
 import type { StoredPayoff } from '../../../types/index.ts';
 
-// The chosen sort; null follows the profile's goal.
+// The chosen sort; null is Δ buildings (#1075).
 const sortBy = ref<PayoffColumn | null>(null);
 const direction = ref<1 | -1>(1);
 // "Checking 23 of 67 alternates…" while a ranking runs; empty otherwise.
 const running = ref('');
+// The payoff threshold (#1075): only rows saving at least this many buildings; 0 shows all.
+const THRESHOLDS = [0, 1, 5, 10, 20];
+const threshold = ref(0);
+// How many rows show until "Show all".
+const FIRST_ROWS = 8;
+const showAll = ref(false);
+const ADD_LABEL = 'Add as hunting';
 
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 const view = computed(() =>
   legacy(() => {
     if (!calculated || !calcStage()?.feasible) return null;
-    const column = sortBy.value ?? payoffDefaultSort(calculated.settings.goal);
+    const plan = calculated;
+    const column = sortBy.value ?? 'buildings';
     const stored = payoff;
     const ranking = stored?.ranking.phase === stage() ? stored.ranking : null;
     const table = ranking && payoffTable(ranking, column, direction.value);
@@ -55,22 +76,36 @@ const view = computed(() =>
         row => payoffDelta(row, key) !== '0' && payoffDelta(row, key) !== '–',
       );
     const columns = PAYOFF_COLUMNS.filter(([key]) => key === column || moves(key));
+    const rows = (table?.rows || [])
+      .filter(row => !threshold.value || row.buildings <= -threshold.value)
+      .map(row => ({
+        id: row.id,
+        name: row.name,
+        machine: row.machine,
+        status: row.status,
+        hunting: !!row.hunting,
+        // Settings to recalculate with, for a recipe not allowed yet that fits.
+        hunt:
+          row.hunting || row.status === 'infeasible' || row.status === 'error'
+            ? null
+            : huntingSettings(plan.settings, row.id),
+        // A hunting recipe the plan does not fit without is needed, not a failure.
+        needed: !!row.hunting && row.status === 'infeasible',
+        label: row.hunting && row.status === 'infeasible' ? 'Needed' : PAYOFF_STATUS[row.status],
+        error: row.error || '',
+        cells: columns.map(([key]) => payoffDelta(row, key)),
+      }));
     return {
       phase: phaseLabel(stage()),
+      phases: ranking ? rankedPhases(ranking) : '',
       column,
       ranking,
       // A ranking kept from another phase, named so the button's meaning is clear.
       otherPhase: stored && !ranking ? phaseLabel(stored.ranking.phase) : '',
       when: stored?.rankedAt ? new Date(stored.rankedAt).toLocaleString() : '',
-      rows: (table?.rows || []).map(row => ({
-        id: row.id,
-        name: row.name,
-        machine: row.machine,
-        status: row.status,
-        label: PAYOFF_STATUS[row.status],
-        error: row.error || '',
-        cells: columns.map(([key]) => payoffDelta(row, key)),
-      })),
+      rows: showAll.value ? rows : rows.slice(0, FIRST_ROWS),
+      more: rows.length - FIRST_ROWS,
+      hidden: (table?.rows.length || 0) - rows.length,
       columns,
       unchanged: PAYOFF_COLUMNS.filter(([key]) => !columns.some(([shown]) => shown === key)).map(
         ([key]) => PAYOFF_WORDS[key],
@@ -88,18 +123,23 @@ function sort(column: PayoffColumn) {
 const ariaSort = (column: PayoffColumn) =>
   view.value?.column === column ? (direction.value === 1 ? 'ascending' : 'descending') : 'none';
 
-// Runs the ranking for the phase on screen and shows it, unless another profile was opened
-// meanwhile (the result is stored with the profile it was run for either way). The button is
-// busy while it runs (bound aria-disabled, app/busy.ts: it keeps focus, #299).
+// Runs the ranking for the phase on screen and the ones after it, and shows it, unless another
+// profile was opened meanwhile (the result is stored with the profile it was run for either way).
+// The button is busy while it runs (bound aria-disabled, app/busy.ts: it keeps focus, #299).
 async function rank() {
   if (running.value) return;
   const profileId = currentProfile.id;
   running.value = 'Checking alternates…';
   try {
-    const result = await post<StoredPayoff>('/api/rank-alternates', { phase: stage() }, true, {
-      onRankProgress: (done, total) =>
-        (running.value = `Checking ${num(done)} of ${num(total)} alternates…`),
-    });
+    const result = await post<StoredPayoff>(
+      '/api/rank-alternates',
+      { phase: stage(), remaining: true, hunting: true },
+      true,
+      {
+        onRankProgress: (done, total) =>
+          (running.value = `Checking ${num(done)} of ${num(total)} alternates…`),
+      },
+    );
     if (currentProfile.id !== profileId) return;
     setPayoff(result);
     render();
@@ -109,12 +149,22 @@ async function rank() {
     running.value = '';
   }
 }
+
+// "Add as hunting": the recalculation in place every plan offer makes, after its confirmation.
+function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows'][number]) {
+  if (!row.hunt) return;
+  void recalculateOffer(event.currentTarget as HTMLButtonElement, {
+    settings: row.hunt,
+    change: `with ${row.name} allowed as a recipe to hunt`,
+    label: ADD_LABEL,
+  });
+}
 </script>
 
 <template>
   <section v-if="view" class="panel payoff" data-payoff>
     <div class="section-head">
-      <h2>Hard-drive payoff</h2>
+      <h2>Best next hard drive</h2>
       <button
         class="btn"
         data-rank-alternates
@@ -132,9 +182,10 @@ async function rank() {
     </p>
     <template v-if="!view.ranking">
       <p class="small muted">
-        What each alternate recipe this profile does not allow yet would change in
-        {{ view.phase }}'s plan: buildings, raw resources, power and delivery time. It recalculates
-        the phase once per alternate and keeps the result with this profile.
+        Which hard drive to spend next: what each alternate recipe would change in the plan from
+        {{ view.phase }} on (buildings, raw resources, power and delivery time), and what each
+        recipe you are hunting saves once found. It recalculates the plan once per alternate and
+        keeps the result with this profile.
       </p>
       <p v-if="view.otherPhase" class="small muted" data-payoff-other>
         The stored ranking is for {{ view.otherPhase }}.
@@ -143,7 +194,7 @@ async function rank() {
     <template v-else>
       <p class="small muted" data-payoff-summary>
         {{ view.ranking.candidates.length }} of {{ view.ranking.total }} alternates checked for
-        {{ view.phase }}<template v-if="view.when">, {{ view.when }}</template
+        {{ view.phases }}<template v-if="view.when">, {{ view.when }}</template
         >. Negative is better: fewer buildings, less raw, less power, sooner done.
       </p>
       <p v-if="view.ranking.stopped" class="notice error" data-payoff-stopped role="status">
@@ -152,6 +203,14 @@ async function rank() {
       <p v-if="!view.ranking.total" class="small" data-payoff-none>
         Every alternate available by {{ view.phase }} is already allowed in this profile.
       </p>
+      <label v-if="view.ranking.total" class="payoff-threshold small"
+        >Show alternates that save at least
+        <select v-model.number="threshold" data-payoff-threshold>
+          <option v-for="n in THRESHOLDS" :key="n" :value="n">
+            {{ n ? `${n} ${n === 1 ? 'building' : 'buildings'}` : 'any number of buildings' }}
+          </option>
+        </select></label
+      >
       <div v-if="view.rows.length" class="table-wrap">
         <table>
           <thead>
@@ -163,6 +222,7 @@ async function rank() {
                   {{ label }}{{ view.column === key ? (direction === 1 ? ' ▲' : ' ▼') : '' }}
                 </button>
               </th>
+              <th><span class="visually-hidden">Hunt</span></th>
             </tr>
           </thead>
           <tbody>
@@ -173,12 +233,41 @@ async function rank() {
                 </button>
                 <span class="small muted">{{ row.machine }}</span>
               </td>
-              <td :class="'payoff-' + row.status" :title="row.error">{{ row.label }}</td>
+              <td :class="'payoff-' + (row.needed ? 'needed' : row.status)" :title="row.error">
+                {{ row.label }}
+              </td>
               <td v-for="(cell, i) in row.cells" :key="i" class="number">{{ cell }}</td>
+              <td>
+                <span v-if="row.hunting" class="small muted" data-payoff-hunting
+                  >Hunting: if found</span
+                ><button
+                  v-else-if="row.hunt"
+                  type="button"
+                  class="btn quiet"
+                  :data-payoff-hunt="row.id"
+                  :aria-label="`Add ${row.name} as a recipe to hunt`"
+                  @click="addHunting($event, row)"
+                >
+                  {{ ADD_LABEL }}
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <button
+        v-if="view.more > 0"
+        type="button"
+        class="btn quiet"
+        data-payoff-more
+        @click="showAll = !showAll"
+      >
+        {{ showAll ? 'Show fewer' : `Show all ${view.more + FIRST_ROWS}` }}
+      </button>
+      <p v-if="view.hidden" class="small muted" data-payoff-hidden>
+        {{ view.hidden }} more {{ view.hidden === 1 ? 'alternate saves' : 'alternates save' }}
+        fewer buildings than that.
+      </p>
       <p v-if="view.same" class="small muted" data-payoff-same>
         {{ view.same }} other {{ view.same === 1 ? 'alternate changes' : 'alternates change' }}
         nothing in this plan.

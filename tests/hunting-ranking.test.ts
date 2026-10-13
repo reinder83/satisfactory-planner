@@ -161,9 +161,12 @@ test('#1075: only true options count, in both editions and on the worker', async
     postMessage: message => posted.push(message as { rank?: object }),
     terminate: () => {},
   };
-  void workerJobs(() => worker, 1000)
-    .rank(settings, '1', undefined, { remaining: true, hunting: true })
-    .catch(() => {});
+  void Promise.resolve(
+    workerJobs(() => worker, 1000).rank(settings, '1', undefined, {
+      remaining: true,
+      hunting: true,
+    }),
+  ).catch(() => {});
   assert.deepEqual(posted[0]!.rank, {
     phase: '1',
     budgetMs: 120000,
