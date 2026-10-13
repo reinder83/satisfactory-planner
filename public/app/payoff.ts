@@ -81,3 +81,35 @@ export function payoffDelta(alternate: AlternatePayoff, column: PayoffColumn): s
           : num(size))
   );
 }
+
+// The phases a ranking's figures cover, in words: "Phase 2", or "Phases 2–5" for a ranking over
+// the remaining phases (#1075).
+export function rankedPhases(ranking: Pick<AlternateRanking, 'phase' | 'phases'>): string {
+  const phases = ranking.phases?.length ? ranking.phases : [ranking.phase];
+  return phases.length === 1
+    ? 'Phase ' + phases[0]
+    : `Phases ${phases[0]}–${phases[phases.length - 1]}`;
+}
+
+// What the recipe picker (#1075, ui/wizard/AltPicker.vue) shows of a stored ranking, per
+// alternate: its buildings delta, its status and the phases it covers.
+export interface PayoffFigure {
+  buildings: number;
+  status: AlternatePayoff['status'];
+  where: string;
+}
+export function payoffFigures(ranking: AlternateRanking): Map<string, PayoffFigure> {
+  const where = rankedPhases(ranking);
+  return new Map(
+    ranking.candidates
+      .filter(candidate => candidate.status !== 'error')
+      .map(candidate => [
+        candidate.id,
+        { buildings: candidate.buildings, status: candidate.status, where },
+      ]),
+  );
+}
+// "−14 buildings in Phase 2"; without `where`, "−14 buildings".
+export const payoffSaving = (figure: PayoffFigure, where = true): string =>
+  `−${num(Math.abs(figure.buildings))} ${Math.abs(figure.buildings) === 1 ? 'building' : 'buildings'}` +
+  (where ? ' in ' + figure.where : '');

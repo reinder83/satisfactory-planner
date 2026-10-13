@@ -620,9 +620,19 @@ export interface AlternatePayoff {
   // null when either plan never finishes the phase.
   hours: number | null;
   error?: string;
+  // A recipe the plan already counts on but the player does not own (#1075, rankAlternates'
+  // `hunting` option): its deltas are the plan with it minus the plan without it, so negative
+  // is what finding it saves, and 'infeasible' means the plan does not fit without it. Absent
+  // from every other candidate and from rankings made before #1075.
+  hunting?: true;
+  // The buildings delta of each ranked phase, when the ranking covers several (`remaining`).
+  byPhase?: Partial<Record<StageKey, number>>;
 }
 export interface AlternateRanking {
   phase: StageKey;
+  // The phases the figures are summed over (#1075, rankAlternates' `remaining` option: `phase`
+  // and every later phase the plan builds). Absent: `phase` alone, as every ranking before it.
+  phases?: StageKey[];
   base: PhaseFigures;
   candidates: AlternatePayoff[];
   // How many candidates there were in all; fewer are listed when `stopped` (budget reached).

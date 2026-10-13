@@ -111,7 +111,10 @@ export function fieldsOf(sets: RecipeSets): {
 //   stars from when it was custom (#185), which it ignored: they are dropped, not brought back.
 //   The MAM recipes box keeps what the standard plan had (on for a plan stored without the box,
 //   mamRecipesOn in planner/recipes.ts), so Distilled Silica and the MAM recipes stay as they were.
-export function huntingSettings<T extends RecipeFields>(settings: T, id: string): T | null {
+export function huntingSettings<T extends RecipeFields>(
+  settings: T,
+  id: string,
+): (T & RecipeFields) | null {
   const state = recipeState(settings, id);
   if (state !== 'off') return null;
   if (settings.recipes === 'custom')
