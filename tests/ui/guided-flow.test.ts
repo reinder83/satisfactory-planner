@@ -134,8 +134,10 @@ test('"I will choose them myself" picks the recipes on its own screen and goes o
   // The MAM recipes box comes with it (#1058), ticked for a new plan.
   const mam = $<HTMLInputElement>('#wizard-form.guided-panel [data-mam-recipes] input')!;
   assert.ok(mam.checked);
-  const box = $<HTMLInputElement>('.alt-list input[name=alt]')!;
-  box.checked = true;
+  // A row marked hunting is a pick (#1075).
+  const row = $<HTMLElement>('.alt-list [data-alt-row]')!;
+  await change(`[data-alt-row="${row.dataset.altRow}"] input[data-alt-set=hunting]`, true);
+  const box = { value: row.dataset.altRow };
   const step = wizard!.guidedStep;
   await submit();
   assert.equal(wizard!.mode, 'guided', 'the questions go on');

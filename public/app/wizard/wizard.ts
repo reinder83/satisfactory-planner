@@ -447,8 +447,8 @@ function readSloops(form: HTMLFormElement, data: FormData, settings: WizardSetti
     settings.sloopReserved = data.getAll('sloop').map(String) as WizardSettings['sloopReserved'];
 }
 
-// The recipe picker's ticked alternates, the starred ones among them and the ones Planner's
-// choice ticked and the user left as they were (#1058, settings.plannerPicks, absent when none),
+// The recipe picker's picks (its hunting rows, #1075), the starred ones among them, the ones on
+// the hunt (#1058, settings.plannerPicks, absent when none) and its owned rows,
 // when it is on screen: All settings step 2, and the guided recipes question's "I will choose
 // them myself" (#1072). The MAM recipes box beside it is read here too (readMamRecipes).
 export function readAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
@@ -466,6 +466,13 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
     .filter(id => alternates.includes(id));
   if (planner.length) settings.plannerPicks = planner;
   else delete settings.plannerPicks;
+  // The picker's owned state (#1075) is settings.ownedAlternates, as "Alternates you already own"
+  // gives it under the other recipe access choices (readOwnedAlternates).
+  if (form.querySelector('[data-recipe-states]')) {
+    const owned = data.getAll('ownedAlt').map(String);
+    if (owned.length) settings.ownedAlternates = owned;
+    else delete settings.ownedAlternates;
+  }
 }
 
 // The MAM recipes box (#1058, ui/wizard/MamRecipes.vue), when it is on screen: ticked is

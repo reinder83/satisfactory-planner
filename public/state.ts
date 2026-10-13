@@ -36,7 +36,7 @@
 //                            (checkNewProfileKind, checkRoundUp), and Edit settings' recalculation
 //                            in place (recalculatedProfile, checkRecalculate)
 //   state/summary.ts         phaseProgress, planStepIds, profilePhases, profilePhasesCache and
-//                            currentPayoff
+//                            currentPayoff and rankScope
 //   state/restore.ts         Restore this version (#1071): the kept-version link (restoreTarget),
 //                            its refusals (checkRestore) and the swap (restoredVersions)
 //   state/figures.ts         planFigures and cachedPlanFigures: what Saves & profiles compares of
@@ -96,6 +96,7 @@ export {
   planStepIds,
   profilePhases,
   profilePhasesCache,
+  rankScope,
 } from './state/summary.ts';
 export {
   checkRestore,

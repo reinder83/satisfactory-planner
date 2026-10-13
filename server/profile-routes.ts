@@ -8,6 +8,7 @@ import {
   checkRestore,
   checkRoundUp,
   currentPayoff,
+  rankScope,
   recalculatedProfile,
   restoredVersions,
   roundUpSettings,
@@ -163,7 +164,11 @@ export function profileRoutes({
     const payoff: StoredPayoff = {
       planCreatedAt: plan.createdAt,
       rankedAt: new Date().toISOString(),
-      ranking: rankAlternates(plan.settings, { phase, budgetMs: rankBudgetMs }),
+      ranking: rankAlternates(plan.settings, {
+        phase,
+        budgetMs: rankBudgetMs,
+        ...rankScope(input),
+      }),
     };
     await commit(draft => {
       const draftProfile = draft.saves

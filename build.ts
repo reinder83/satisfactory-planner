@@ -255,6 +255,8 @@ self.onmessage = async ({ data }) => {
         ? rankAlternates(data.settings, {
             phase: data.rank.phase,
             budgetMs: data.rank.budgetMs,
+            remaining: data.rank.remaining === true,
+            hunting: data.rank.hunting === true,
             onProgress: (done, total) => self.postMessage({ id: data.id, done, total }),
             onPhase: phase => self.postMessage({ id: data.id, phase }),
           })

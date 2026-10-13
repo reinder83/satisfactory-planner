@@ -192,8 +192,9 @@ export interface AdaFacts {
     powerShort: boolean;
   } | null;
   // The alternate that pays off most in a stored hard-drive payoff ranking of this phase, on
-  // what the profile's goal optimises (app/payoff.ts), with that gain in words; null without one.
-  payoff: { name: string; gain: string } | null;
+  // what the profile's goal optimises (app/payoff.ts), with that gain in words and the phases it
+  // covers ("Phases 2–5" for a ranking over the remaining phases, #1075); null without one.
+  payoff: { name: string; gain: string; where?: string } | null;
 }
 
 // A line ADA says: a remark, an encore, or a fault line (which also has a name).
@@ -466,7 +467,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.payoff,
     text: facts =>
-      `Allowing ${facts.payoff!.name} would mean ${facts.payoff!.gain} in ${facts.phaseLabel}. The hard-drive payoff table on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
+      `Allowing ${facts.payoff!.name} would mean ${facts.payoff!.gain} in ${facts.payoff!.where ?? facts.phaseLabel}. Best next hard drive on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
   },
   {
     id: 'storage-search-miss',

@@ -38,6 +38,7 @@ import {
   renameOfferFields,
   currentPayoff,
   phaseProgress,
+  rankScope,
   roundUpSettings,
   wholeMachineProfile,
 } from './state.ts';
@@ -55,6 +56,7 @@ import type {
   Catalog,
   CurrentCalculatedPlan,
   ProgressState,
+  RankScope,
   Recipe,
   StageKey,
   StoredProfile,
@@ -86,7 +88,9 @@ export type Ranker = (
   settings: unknown,
   phase: StageKey,
   onProgress?: (done: number, total: number) => void,
+  scope?: RankScope,
 ) => Promise<AlternateRanking> | AlternateRanking;
+
 // A ranking in this edition runs on the worker, so the page stays usable; it still stops here.
 const RANK_BUDGET_MS = 120000;
 // What every route handler in createBrowserApi gets: the route as a URL, app/api.ts's plain
@@ -374,7 +378,7 @@ export function createBrowserApi(
       throw Error('Hard-drive payoff needs a calculated profile.');
     const phase = String(body.phase) as StageKey;
     if (!['1', '2', '3', '4', '5'].includes(phase)) throw Error('Choose a phase from 1 to 5.');
-    const ranking = await ranker(plan.settings, phase, options.onRankProgress);
+    const ranking = await ranker(plan.settings, phase, options.onRankProgress, rankScope(body));
     return store.transaction(data => {
       const { profile } = scope(data, url, headers);
       if (profile.plan?.createdAt !== plan.createdAt)
@@ -590,7 +594,7 @@ export function workerJobs(
   limit = 180000,
 ): { calculate: Calculator; rank: Ranker } {
   // What the worker is sent, apart from the id.
-  type Job = { settings: unknown; rank?: { phase: StageKey; budgetMs: number } };
+  type Job = { settings: unknown; rank?: { phase: StageKey; budgetMs: number } & RankScope };
   // A progress message: { phase } from a calculation, { done, total } from a ranking.
   type Progress = { phase?: number; done?: number; total?: number };
   type Entry = {
@@ -677,9 +681,9 @@ export function workerJobs(
         { settings },
         onProgress && (progress => progress.phase !== undefined && onProgress(progress.phase)),
       ),
-    rank: (settings, phase, onProgress) =>
+    rank: (settings, phase, onProgress, scope) =>
       run<AlternateRanking>(
-        { settings, rank: { phase, budgetMs: RANK_BUDGET_MS } },
+        { settings, rank: { phase, budgetMs: RANK_BUDGET_MS, ...scope } },
         onProgress &&
           (progress =>
             progress.done !== undefined && onProgress(progress.done, progress.total ?? 0)),
