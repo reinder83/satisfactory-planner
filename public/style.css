@@ -3646,7 +3646,7 @@ button.rail-tile:hover {
   border-left: 1px solid #343b41;
 }
 .alt-state input:checked + span {
-  background: #2a2f33;
+  background: var(--line2);
   color: var(--bright);
 }
 .alt-state-owned input:checked + span {
