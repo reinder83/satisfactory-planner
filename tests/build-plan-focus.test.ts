@@ -31,6 +31,14 @@ const PHASES = ['1', '2', '3', '4', '5', 'post'];
 // A stage's Space Elevator parts.
 const parts = (plan: CurrentCalculatedPlan, stage: StageKey) => plan.stages[stage]?.delivery ?? {};
 const NEW_STEP = (id: string) => id.startsWith('deliver-') || id === 'space-elevator';
+// #1057 made Iron Pipe a Phase 2 recipe, as its hard drive needs Basic Steel Production, so the
+// all-alternates plan calculated here no longer stocks Steel Pipe with it in Phase 1: its line and
+// unlock step went with the plan, not with #1070. A stored plan keeps both, and their ticks
+// (tests/recipe-phases.test.ts).
+const RECIPE_MOVED = (label: string, phase: string, id: string) =>
+  label === 'phase 1, all alternates' &&
+  phase === '1' &&
+  id.endsWith('-Recipe_Alternate_SteelPipe_Iron_C');
 
 let phaseOne: CurrentCalculatedPlan | undefined, alternates: CurrentCalculatedPlan | undefined;
 const plans = (): Record<string, CurrentCalculatedPlan> => ({
@@ -160,7 +168,7 @@ test('powerFirst moves only the generators, keeps their order and changes nothin
 test('every step key listed before is still listed, so saved ticks mark the same steps', () => {
   for (const [label, plan] of Object.entries(plans()))
     for (const phase of PHASES) {
-      const before = recorded[label]![phase]!;
+      const before = recorded[label]![phase]!.filter(id => !RECIPE_MOVED(label, phase, id));
       const now = ids(plan, phase);
       assert.deepEqual(
         now.filter(id => !NEW_STEP(id)).sort(),
