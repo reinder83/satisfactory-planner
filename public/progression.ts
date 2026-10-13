@@ -8,7 +8,7 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import { listNames, powerAmount, slug } from './wording.ts';
-import { AMPLIFIER_RESEARCH } from './somersloops.ts';
+import { AMPLIFIER_RESEARCH, AMPLIFIER_WORDS, handFedPhase } from './somersloops.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
@@ -616,6 +616,9 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   // (#1056); their rows have no recipe of their own to bring it in. A plan stored before the
   // planner waited for it may amplify in Phases 1-2, where the research cannot be listed yet.
   if (rows.some(isAmplified)) add(byName(AMPLIFIER_RESEARCH));
+  // So do the hand-fed constructors' somersloops (#1150), from the phase that lists their step on.
+  if (plan.settings.sloopReserved?.length && stage >= handFedPhase(startPhase(context)))
+    add(byName(AMPLIFIER_RESEARCH));
   // Petroleum Power from its own phase on, as Coal Power from Phase 2, whether or not this plan
   // builds Fuel Generators (#1048): a player who already runs fuel power ticks it, and "Power
   // available now" then stops advising coal.
@@ -1775,10 +1778,14 @@ function augmenterTable(count: number, fueled: number, build: string, grid: stri
   };
 }
 
-// The somersloops reserved for hand-fed constructors, shown only in the profile's starting phase.
-function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
-  const reserved = plan.settings.sloopReserved || [];
-  if (!(stage === Number(plan.settings.phase || 1) && reserved.length)) return [];
+// The somersloops reserved for hand-fed constructors, shown once: in the profile's starting phase,
+// but not before Phase 3, since machines take somersloops only after the MAM research Production
+// Amplifier (#1150, handFedPhase), which requiredMilestones then lists. The id stays
+// `sloop-hand-fed` whichever phase lists it, so its tick carries.
+function sloopTasks(context: GuideContext): GuideTask[] {
+  const { plan, stage } = context,
+    reserved = plan.settings.sloopReserved || [];
+  if (!(stage === handFedPhase(startPhase(context)) && reserved.length)) return [];
   const labels: Record<string, string> = {
     shards:
       'a Constructor making Power Shards from power slugs — the world holds a fixed number of slugs, so an amplified Constructor is the difference between 2,650 and 5,301 shards for the whole save',
@@ -1789,7 +1796,8 @@ function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
   const picked = reserved.map(id => labels[id]).filter((label): label is string => !!label);
   const reserve = `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''}`;
   const after =
-    'Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.';
+    AMPLIFIER_WORDS +
+    ' Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.';
   return [
     {
       id: 'sloop-hand-fed',

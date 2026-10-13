@@ -43,7 +43,7 @@ export const helpText: Record<string, string> = {
   amplifySloops:
     'Optional. How many somersloops you are willing to put in this plan’s own production machines. An amplified machine keeps its inputs, doubles its output and draws four times the power, so it saves ore and buildings and costs power. Amplification starts in Phase 3: machines take somersloops only after the MAM research Production Amplifier, whose SAM Fluctuators and Circuit Boards first come in Phase 3, so Phases 1 and 2 are planned without it. Leave it at 0 to plan without amplification — collecting every somersloop is a hunt, and the plan is calculated exactly as it was before. The budget applies per phase, not as a running total.',
   sloopReserved:
-    'Somersloops parked in hand-fed Constructors. They double a finite gathered input — slugs into Power Shards, remains into Alien DNA, biomass into Solid Biofuel — and only reserve a sloop and add a checklist step, because those lines are never belted.',
+    'Somersloops parked in hand-fed Constructors. They double a finite gathered input — slugs into Power Shards, remains into Alien DNA, biomass into Solid Biofuel — and only reserve a sloop and add a checklist step, because those lines are never belted. The step comes in Phase 3 or the start phase if later: machines take somersloops once the MAM research Production Amplifier is done.',
   cellsPerMinute:
     'Each Main Portal consumes 2 cells/min while connected. 10 cells/min supports five maintained connections. Reserve portal electrical power separately.',
   goal: 'Choose a construction-light plan, a delivery-time target, or maximum output within verified budgets.',
