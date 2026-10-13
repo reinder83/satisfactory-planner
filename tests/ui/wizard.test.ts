@@ -351,49 +351,86 @@ test('recipe access, preferred power and ingots redraw the step', async () => {
   assert.equal($('.alt-picker'), null);
 });
 
-test('the alternate picker ticks, forces, filters and shows each recipe', async () => {
-  const RIP = 'Recipe_Alternate_ReinforcedIronPlate_2_C';
-  const box = (id: string) => $<HTMLInputElement>(`input[name=alt][value="${id}"]`);
+test('the recipe picker sets owned, hunting or not allowed, groups by product, filters and forces (#1075)', async () => {
+  const RIP = 'Recipe_Alternate_ReinforcedIronPlate_2_C',
+    CAST = 'Recipe_Alternate_Screw_C',
+    WIRE = 'Recipe_Alternate_Wire_1_C';
+  const stateOf = (id: string) => $<HTMLElement>(`[data-alt-row="${id}"]`)?.dataset.altState;
+  const set = (id: string, state: string) =>
+    change(`[data-alt-row="${id}"] input[data-alt-set=${state}]`, true);
   const star = (id: string) => $<HTMLInputElement>(`input[name=altpref][value="${id}"]`);
-  wizardAt(2, {}, { recipes: 'custom', alternateRecipes: [RIP], mamRecipes: true });
-  assert.ok(box(RIP)!.checked, 'picked alternates are pre-checked');
+  wizardAt(
+    2,
+    {},
+    { recipes: 'custom', alternateRecipes: [RIP], ownedAlternates: [WIRE], mamRecipes: true },
+  );
+  // A pick is hunting, an owned alternate owned, the rest not allowed.
+  assert.equal(stateOf(RIP), 'hunting');
+  assert.equal(stateOf(WIRE), 'owned');
+  assert.equal(stateOf(CAST), 'off');
+  assert.ok($<HTMLInputElement>(`[data-alt-row="${RIP}"] input[data-alt-set=hunting]`)!.checked);
   assert.match(main(), /Stitched Iron Plate/);
+  // The picker holds the owned ones, so "Alternates you already own" is not shown beside it.
+  assert.equal($('[data-owned-alt-picker]'), null);
   // The MAM recipes have their own box (#1058), not a row of the picker.
-  assert.equal(box('Recipe_Alternate_Turbofuel_C'), null, 'MAM recipes are not picks');
+  assert.equal($('[data-alt-row="Recipe_Alternate_Turbofuel_C"]'), null, 'MAM recipes');
   assert.ok($<HTMLInputElement>('[data-mam-recipes] input[name=mamRecipes]')!.checked);
-  assert.ok(box('Recipe_Alternate_PureIronIngot_C'), 'pure recipes are picks by default');
+  assert.ok($('[data-alt-row="Recipe_Alternate_PureIronIngot_C"]'), 'pure recipes are rows');
   assert.doesNotMatch(main(), /Charcoal/, 'recipes beyond Phase 5 are not offered');
-  assert.match(text('.alt-picker-head b'), /1 selected/);
-  assert.equal(star(RIP)!.disabled, false, 'a picked row can be forced');
-  assert.equal(star('Recipe_Alternate_Screw_C')!.disabled, true, 'an unpicked one cannot');
-  // Ticks and stars are the picker's own until the step is read.
-  await change(`input[name=alt][value="Recipe_Alternate_Screw_C"]`, true);
-  assert.match(text('.alt-picker-head b'), /2 selected/);
-  assert.equal(star('Recipe_Alternate_Screw_C')!.disabled, false);
+  assert.match(text('[data-alt-count]'), /1 owned · 1 hunting/);
+  // Grouped by product, each group with a verdict: Cast Screws skips the Iron Rod.
+  const screws = $<HTMLElement>('[data-alt-group="Screws"]')!;
+  assert.ok(screws.querySelector(`[data-alt-row="${CAST}"]`));
+  assert.match(text('[data-alt-group="Screws"] [data-alt-verdict]'), /Cast Screws skips Iron Rod/);
+  // A hunting row names what the plan makes its product with until it is found.
+  assert.match(
+    text(`[data-alt-row="${RIP}"] [data-alt-payoff]`),
+    /^Until found: Reinforced Iron Plate$/,
+  );
+  assert.equal(star(RIP)!.disabled, false, 'a hunting row can be forced');
+  assert.equal(star(CAST)!.disabled, true, 'a row not allowed cannot');
+  // States and stars are the picker's own until the step is read.
+  await set(CAST, 'hunting');
+  assert.match(text('[data-alt-count]'), /1 owned · 2 hunting/);
+  assert.equal(star(CAST)!.disabled, false);
   await change(`input[name=altpref][value="${RIP}"]`, true);
-  await change(`input[name=alt][value="${RIP}"]`, false);
-  assert.equal(star(RIP)!.checked, false, 'unticking a recipe drops its star');
+  await set(RIP, 'off');
+  assert.equal(star(RIP)!.checked, false, 'not allowed drops its star');
   assert.equal(star(RIP)!.disabled, true);
-  // The filter hides rows in place; Select all and Clear all apply to what it shows.
+  // The filters hide rows in place: by text, by phase and by state.
   const filter = $<HTMLInputElement>('#alt-filter')!;
   filter.value = 'iron plate';
   filter.dispatchEvent(new Event('input'));
   await nextTick();
   const shown = $$('.alt-row:not([hidden])');
   assert.ok(shown.length > 0 && shown.length < $$('.alt-row').length);
+  // Hunt all shown and Clear shown apply to what the filters show, never to owned rows.
   await click('[data-alt-all]');
-  for (const row of shown) {
-    const checkbox = row.querySelector<HTMLInputElement>('input[name=alt]');
-    if (checkbox) assert.ok(checkbox.checked, row.dataset.altText);
-  }
-  assert.equal(box('Recipe_Alternate_Screw_C')!.checked, true, 'a hidden row keeps its tick');
-  assert.equal(box('Recipe_Alternate_Wire_1_C')!.checked, false, 'and a hidden row gets none');
+  for (const row of shown) assert.equal(row.dataset.altState, 'hunting', row.dataset.altText);
+  assert.equal(stateOf(CAST), 'hunting', 'a hidden row keeps its state');
+  assert.equal(stateOf('Recipe_Alternate_Wire_2_C'), 'off', 'and a hidden row gets none');
   await click('[data-alt-none]');
-  for (const row of shown)
-    assert.equal(row.querySelector<HTMLInputElement>('input[name=alt]')?.checked ?? false, false);
+  for (const row of shown) assert.equal(row.dataset.altState, 'off');
+  filter.value = '';
+  filter.dispatchEvent(new Event('input'));
+  await change('[data-alt-only]', 'owned');
+  assert.deepEqual(
+    $$('.alt-row:not([hidden])').map(row => row.dataset.altRow),
+    [WIRE],
+    'only the owned ones',
+  );
+  await change('[data-alt-only]', '');
+  await change('[data-alt-phase]', '1');
+  assert.ok($$('.alt-row:not([hidden])').every(row => /Phase 1\b/.test(row.textContent!)));
+  assert.ok($('[data-alt-group]:not([hidden])'), 'groups with a row shown stay');
   // Reading the step takes exactly what the screen shows.
+  await set(WIRE, 'hunting');
+  await set(RIP, 'owned');
   await click('[data-wizard-step="1"]');
-  assert.deepEqual(wizard!.settings.alternateRecipes, ['Recipe_Alternate_Screw_C']);
+  assert.deepEqual(wizard!.settings.alternateRecipes, [CAST, WIRE]);
+  assert.deepEqual(wizard!.settings.ownedAlternates, [RIP]);
+  // Rows the user marks hunting stay on the hunt (#1058's plannerPicks).
+  assert.deepEqual(wizard!.settings.plannerPicks, [CAST, WIRE]);
   // "recipe ↗" compares the alternate with the standard recipe.
   wizardAt(2, {}, { recipes: 'custom' });
   await click(`[data-alt-info="${RIP}"]`);
@@ -430,23 +467,24 @@ test('an alternate-recipe dialog put in place of another takes focus, and closin
 test('a preference that requires recipes locks them on, and unlocking keeps your own ticks (#1058)', async () => {
   const PURE = 'Recipe_Alternate_PureIronIngot_C',
     COPPER = 'Recipe_Alternate_PureCopperIngot_C';
+  const stateOf = (id: string) => $<HTMLElement>(`[data-alt-row="${id}"]`)?.dataset.altState;
   wizardAt(2, {}, { recipes: 'custom', pureIngots: true });
-  assert.match(main(), /required by your ingot preference/);
-  assert.equal($(`input[name=alt][value="${PURE}"][type=checkbox]`), null);
+  assert.match(main(), /Required by your ingot preference/);
+  assert.equal(stateOf(PURE), 'required');
+  assert.equal($(`[data-alt-row="${PURE}"] input[data-alt-set]`), null, 'no states to set');
   // Changing the preference on screen redraws the picker.
   await change('select[name=pureIngots]', 'false');
-  assert.ok($(`input[name=alt][value="${PURE}"]`));
-  assert.equal($<HTMLInputElement>(`input[name=alt][value="${PURE}"]`)!.checked, false);
-  // Tick one yourself and star it, lock the pure recipes and unlock them again: still yours.
-  await change(`input[name=alt][value="${PURE}"]`, true);
+  assert.equal(stateOf(PURE), 'off');
+  // Mark one hunting yourself and star it, lock the pure recipes and unlock them again: still yours.
+  await change(`[data-alt-row="${PURE}"] input[data-alt-set=hunting]`, true);
   await change(`input[name=altpref][value="${PURE}"]`, true);
   await change('select[name=pureIngots]', 'true');
-  assert.match(main(), /required by your ingot preference/);
+  assert.match(main(), /Required by your ingot preference/);
   assert.deepEqual(wizard!.settings.alternateRecipes, [PURE]);
   await change('select[name=pureIngots]', 'false');
-  assert.ok($<HTMLInputElement>(`input[name=alt][value="${PURE}"]`)!.checked, 'kept');
+  assert.equal(stateOf(PURE), 'hunting', 'kept');
   assert.ok($<HTMLInputElement>(`input[name=altpref][value="${PURE}"]`)!.checked, 'starred');
-  assert.equal($<HTMLInputElement>(`input[name=alt][value="${COPPER}"]`)!.checked, false);
+  assert.equal(stateOf(COPPER), 'off');
   await click('[data-wizard-step="1"]');
   assert.deepEqual(wizard!.settings.alternateRecipes, [PURE]);
   assert.deepEqual(wizard!.settings.preferredRecipes, [PURE]);
@@ -456,10 +494,10 @@ test('a preference that requires recipes locks them on, and unlocking keeps your
     {},
     { recipes: 'custom', mainPower: 'turbofuel', alternateRecipes: [PURE], mamRecipes: true },
   );
-  assert.doesNotMatch(main(), /required by your power preference/);
+  assert.doesNotMatch(main(), /required by your power preference/i);
   await change('select[name=mainPower]', 'coal');
   await change('select[name=mainPower]', 'turbofuel');
-  assert.ok($<HTMLInputElement>(`input[name=alt][value="${PURE}"]`)!.checked);
+  assert.equal(stateOf(PURE), 'hunting');
   assert.equal(wizard!.settings.mamRecipes, true);
 });
 
@@ -477,7 +515,7 @@ test('the MAM recipes are their own box under every recipe access (#1058)', asyn
     assert.equal($(`[data-alt-info="${id}"]`), null, id);
   assert.match(
     main(),
-    /with none ticked it is the same plan as with Standard recipes\. .*The MAM recipes follow their own box above, and Distilled Silica comes with the Tier 7 milestone Control System Development in every plan\./,
+    /With nothing hunting or owned it is the same plan as with Standard recipes\. The MAM recipes follow their own box above, and Distilled Silica comes with the Tier 7 milestone Control System Development in every plan\./,
   );
   // Its recipe dialog still says where Distilled Silica comes from.
   openAltRecipe(DISTILLED);
@@ -547,22 +585,23 @@ test('Planner’s choice ticks the hard-drive alternates the plan uses, as recip
     [...before].some(id => hardDrive.has(id) && !picks.includes(id)),
     'a recipe only Phases 1–3 use is left out',
   );
-  const box = (id: string) => $<HTMLInputElement>(`input[name=alt][value="${id}"]`)!;
-  assert.ok(box(picks[0]!).checked, 'and shown');
-  assert.match(main(), /Planner’s choice, to hunt/);
+  const stateOf = (id: string) => $<HTMLElement>(`[data-alt-row="${id}"]`)!.dataset.altState;
+  assert.equal(stateOf(picks[0]!), 'hunting', 'and shown as hunting (#1075)');
   assert.equal($$('[data-alt-planner]').length, picks.length);
   assert.match(
     $('#toast')!.textContent,
-    new RegExp(`Selected ${picks.length} alternate recipes .* stay on the hard-drive hunt`),
+    new RegExp(
+      `Marked ${picks.length} alternate recipes .* as hunting. They stay on the hard-drive hunt`,
+    ),
   );
   assert.equal($('[data-alt-best]')!.textContent.trim(), 'Planner’s choice');
   assert.equal($<HTMLButtonElement>('[data-alt-best]')!.disabled, false);
-  // A box you change is your own pick from then on.
-  await change(`input[name=alt][value="${picks[0]}"]`, false);
-  await change(`input[name=alt][value="${picks[0]}"]`, true);
+  // One you mark owned is owned from then on: still a pick, no longer on the hunt.
+  await change(`[data-alt-row="${picks[0]}"] input[data-alt-set=owned]`, true);
   await click('[data-wizard-step="1"]');
   assert.deepEqual(wizard!.settings.alternateRecipes!.sort(), [...picks].sort());
   assert.deepEqual([...wizard!.settings.plannerPicks!].sort(), picks.slice(1));
+  assert.deepEqual(wizard!.settings.ownedAlternates, [picks[0]]);
 });
 
 test('the somersloop ledger totals what the plan commits', () => {

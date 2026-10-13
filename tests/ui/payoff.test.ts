@@ -73,7 +73,7 @@ const stored = (over: Partial<AlternateRanking> = {}): StoredPayoff => ({
   rankedAt: '2026-09-26T12:00:00Z',
   ranking: ranking(over),
 });
-const names = () => $$('[data-payoff-row] td:first-child button').map(b => b.textContent!.trim());
+const names = () => $$('[data-payoff-row] [data-payoff-recipe]').map(b => b.textContent!.trim());
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
@@ -147,12 +147,12 @@ test('a stored ranking shows on the calculated plan; headers re-sort and rows op
   assert.match(dialog.textContent!, new RegExp(alternates[0]!.name.replace('Alternate: ', '')));
 });
 
-test('a timed profile sorts by delivery time; a ranking of another phase is only mentioned', async () => {
+test('a timed profile sorts by buildings too (#1075); a ranking of another phase is only mentioned', async () => {
   openPlan('timed');
   setPayoff(stored());
   render();
-  assert.equal($('th[aria-sort="ascending"] [data-payoff-sort]')!.dataset.payoffSort, 'hours');
-  assert.equal(names()[0], 'Alt 5');
+  assert.equal($('th[aria-sort="ascending"] [data-payoff-sort]')!.dataset.payoffSort, 'buildings');
+  assert.equal(names()[0], 'Alt 0');
   setPayoff(stored({ phase: '2' }));
   render();
   await nextTick();
@@ -177,7 +177,7 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   openPlan();
   render();
   assert.equal(sessionPayoff, null);
-  assert.match($('[data-payoff]')!.textContent!, /does not allow\s+yet/);
+  assert.match($('[data-payoff]')!.textContent!, /Which hard drive to spend next/);
   const calls = stubFetch({ '/api/rank-alternates': stored() });
   $('[data-rank-alternates]')!.click();
   await nextTick();
@@ -186,7 +186,10 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   assert.equal($<HTMLButtonElement>('[data-rank-alternates]')!.disabled, false);
   assert.match($('[data-payoff-progress]')!.textContent!, /Checking alternates/);
   await settle();
-  assert.deepEqual(calls, [['/api/rank-alternates', { phase: '3' }]]);
+  // The phase on screen and the ones after it, with the hunting recipes (#1075).
+  assert.deepEqual(calls, [
+    ['/api/rank-alternates', { phase: '3', remaining: true, hunting: true }],
+  ]);
   assert.equal(names().length, 6);
   assert.ok(!$('[data-payoff-progress]'));
   assert.equal($('[data-rank-alternates]')!.getAttribute('aria-disabled'), null);

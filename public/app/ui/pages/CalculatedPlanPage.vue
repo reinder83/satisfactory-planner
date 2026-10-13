@@ -10,8 +10,8 @@
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
   "Built so far" (ui/plan/BuildStatusPanel.vue), what whole machines cost (ui/plan/RoundingCost.vue,
-  #1066) and the profile's assumptions, then the
-  hard-drive payoff table (ui/plan/PayoffPanel.vue) across the page's width. Everything
+  #1066) and the profile's assumptions. The best next hard drive (ui/plan/PayoffPanel.vue, the
+  hard-drive payoff table) sits above the checklist, after the handover (#1075). Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
   (#759) has no stage to read: its checklist is its milestones, with ui/plan/MilestoneOnlyNotice.vue
@@ -191,6 +191,7 @@ const page = computed(() =>
     <OpenedEarlierNotice />
     <MilestoneOnlyNotice />
     <HandoverSummary />
+    <PayoffPanel />
     <div :class="page.milestones ? undefined : 'split'">
       <section>
         <div class="section-head">
@@ -235,6 +236,5 @@ const page = computed(() =>
         </section>
       </aside>
     </div>
-    <PayoffPanel />
   </template>
 </template>

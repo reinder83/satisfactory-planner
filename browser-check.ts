@@ -533,6 +533,13 @@ try {
   assert.ok(payoff.ranking.total > 0);
   assert.equal(payoff.ranking.candidates.length, payoff.ranking.total);
   assert.deepEqual((await api<ContextReply>('/api/context')).payoff, payoff);
+  // The plan page's request (#1075) reaches the worker: over the remaining phases.
+  const remaining = await api<StoredPayoff>('/api/rank-alternates', {
+    phase: '1',
+    remaining: true,
+    hunting: true,
+  });
+  assert.ok((remaining.ranking.phases || []).length > 1, 'ranked over the remaining phases');
   // Every dialog opens at the top (#316): the <dialog> is the scroll container and kept its
   // offset while closed, and while a link inside it put another factory in its place.
   const detailTop = () =>

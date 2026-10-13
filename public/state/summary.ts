@@ -5,6 +5,7 @@ import type {
   CustomTask,
   PhaseProgress,
   Progression,
+  RankScope,
   StageKey,
   StoredCalculatedPlan,
   StoredPayoff,
@@ -164,3 +165,10 @@ export const currentPayoff = (
   profile: Pick<StoredProfile, 'plan' | 'payoff'>,
 ): StoredPayoff | null =>
   profile.plan && profile.payoff?.planCreatedAt === profile.plan.createdAt ? profile.payoff : null;
+// The ranking options a POST /api/rank-alternates body asks for (#1075, rankAlternates in
+// planner.ts): over the remaining phases, and with the hunting alternates. Only `true` counts, so
+// a request without them, from any earlier tab, ranks as before. Both editions read it.
+export const rankScope = (body: Record<string, unknown>): RankScope => ({
+  ...(body.remaining === true ? { remaining: true } : {}),
+  ...(body.hunting === true ? { hunting: true } : {}),
+});

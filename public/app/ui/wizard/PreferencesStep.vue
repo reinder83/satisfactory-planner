@@ -2,8 +2,9 @@
   All settings step 2, preferences: recipes, ingots, SAM, power and drone fuel, nuclear,
   storage and refill rates, somersloops and augmenters, then the somersloop ledger, the
   per-item storage rates, the MAM recipes box (MamRecipes, #1058, under every recipe access),
-  for custom recipe access the alternate recipe picker, and the
-  alternates you already own (OwnedAlternates, #1068, under every recipe access). Recipe
+  for custom recipe access the alternate recipe picker with its owned, hunting and not allowed
+  states (AltPicker, #1075), and for Standard and All the alternates you already own
+  (OwnedAlternates, #1068; the picker holds them under custom access). Recipe
   access, preferred power, the ingot choice, drone fuel and nuclear change what the step shows,
   so WizardPage reads the step and redraws when they change. A rate that only means something
   with a choice made (the drone fuel supply and the battery bridge, the minimum of uranium
@@ -198,7 +199,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
   </div>
   <SloopLedger /><StorageRates /><MamRecipes /><AltPicker
     v-if="settings.recipes === 'custom'"
-  /><OwnedAlternates />
+  /><OwnedAlternates v-else />
   <div class="notice info">
     SAM conversion controls raw resource conversion, not SAM ingredients required by late-game
     parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have
