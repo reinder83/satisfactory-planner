@@ -156,6 +156,10 @@ export interface AdaFacts {
   // and the groups, as name lists. null or absent otherwise.
   onSiteOverflow?: { items: string; groups: string } | null;
   profiles: number;
+  // "Compare profiles" on Saves & profiles (#1074): the open save's profiles whose plans deliver
+  // every phase soonest, against the open profile, as a name list, and that delivery time. Absent
+  // when fewer than two can be compared.
+  fastest?: { names: string; total: string; count: number } | null;
   // Days since the browser edition's last full export, or null.
   backupDays: number | null;
   post: boolean;
@@ -659,6 +663,15 @@ const RULES: AdaRule[] = [
     when: facts => facts.imported,
     text: facts =>
       `The import added ${facts.imported} as a copy of its own. You are still on “${facts.profile}”, so your next ticks land there, not in the copy. Open the copy from the notice when you mean to. I will not ask whose factory it was.`,
+  },
+  {
+    id: 'compare-fastest',
+    on: ['profiles'],
+    tone: 'calm',
+    when: facts => !!facts.fastest,
+    // Only after when() found the fastest profiles.
+    text: facts =>
+      `Of the plans in “${facts.save}”, ${facts.fastest!.names} ${facts.fastest!.count === 1 ? 'delivers' : 'deliver'} every phase soonest: ${facts.fastest!.total}. Delivery time only. How long you take to build it all is between you and your conveyor belts.`,
   },
   {
     id: 'one-profile',
