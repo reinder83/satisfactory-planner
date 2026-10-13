@@ -13,7 +13,9 @@
   goal alone, as profiles made before #1105 are, offers "Rename to “<descriptive name>”" until the
   user acts on it (renameOffers in app/profile-edit.ts): accepting renames the profile through
   /api/rename, and the ✕ keeps the name and stores that (/api/dismiss-rename-offer), so the offer
-  does not come back. Either way focus goes to the card's ✎ button.
+  does not come back. Either way focus goes to the card's ✎ button. Under the cards of a save with
+  two or more calculated profiles, "Compare profiles" sets their plans side by side
+  (profiles/ProfileCompare.vue, #1074).
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -49,6 +51,7 @@ import ActionMenu from '../ActionMenu.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
+import ProfileCompare from '../profiles/ProfileCompare.vue';
 import { newSave, openProfile } from '../actions.ts';
 import { renameOffers } from '../../profile-edit.ts';
 import {
@@ -84,9 +87,20 @@ const page = computed(() =>
     saves: workspace.saves.map(save => {
       // Without the catalog's goals (a summary stubbed without one) nothing is offered.
       const offers = renameOffers(save.profiles, workspace.catalog?.goals ?? []);
+      // "Compare profiles" (#1074) starts from the open profile when it is in this save, else the
+      // save's active one, on the phase that profile works on.
+      const baseline =
+        save.profiles.find(p => save.id === currentSave.id && p.id === currentProfile.id) ??
+        save.profiles.find(p => p.id === save.activeProfile) ??
+        save.profiles[0];
       return {
         id: save.id,
         name: save.name,
+        compare: {
+          profiles: save.profiles.map(({ id, name, figures }) => ({ id, name, figures })),
+          baseline: baseline?.id ?? '',
+          phase: baseline?.phase === 'post' ? '5' : (baseline?.phase ?? ''),
+        },
         profiles: save.profiles.map(profile => ({
           id: profile.id,
           name: profile.name,
@@ -598,6 +612,12 @@ async function rename(
         </div>
       </article>
     </div>
+    <ProfileCompare
+      :save-id="save.id"
+      :profiles="save.compare.profiles"
+      :baseline="save.compare.baseline"
+      :phase="save.compare.phase"
+    />
   </section>
   <p class="small muted">
     Edit settings recalculates a profile in place, keeps its progress and keeps the current version

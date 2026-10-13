@@ -158,6 +158,35 @@ export interface ProfileSummary {
   // production lines ticked Running over the phase's lines, and its build-plan steps ticked
   // (`steps`, #746). Absent without a calculated plan.
   phases?: PhaseProgress[];
+  // What Saves & profiles compares of the profile's plan (#1074, planFigures in
+  // public/state/figures.ts). Absent without a calculated plan and in replies before #1074.
+  figures?: PlanFigures;
+}
+
+// A calculated profile's plan as Saves & profiles compares it (#1074): its start phase, each
+// planned phase's figures and the delivery hours of all of them together (null unless every
+// planned phase fits and has a delivery time).
+export interface PlanFigures {
+  from: number;
+  phases: ComparedPhase[];
+  totalHours: number | null;
+}
+// One planned phase of PlanFigures, as the stored plan holds it. null where the plan holds no
+// such figure (an older plan, a bare draft), which the page shows as "—".
+export interface ComparedPhase {
+  phase: StageKey;
+  feasible: boolean;
+  // Machines of every line, and the power the phase needs (powerView's needMW).
+  buildings: number | null;
+  powerMW: number | null;
+  // Per-minute draw on the mined resources together, and on Crude Oil.
+  ore: number | null;
+  oil: number | null;
+  // Alternate recipes the phase's lines use first, which its hard-drive step asks for.
+  alternates: number | null;
+  // Delivery hours; null with `never` for a phase that never finishes (a rate of 0).
+  hours: number | null;
+  never?: true;
 }
 
 // One phase of ProfileSummary.phases: `done`/`total` are its production lines ticked Running (0

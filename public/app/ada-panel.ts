@@ -40,6 +40,7 @@ import { groupsReorder } from './group-order.ts';
 import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
+import { fastestProfiles } from './profile-compare.ts';
 import { render } from './shell.ts';
 import {
   idleStepNotes,
@@ -325,6 +326,19 @@ function unplacedCount(): number {
   );
 }
 
+// The open save's fastest profiles in "Compare profiles" (#1074), against the open profile as the
+// page starts, in quotes as a name list; null when fewer than two can be compared.
+function fastestFact(): AdaFacts['fastest'] {
+  const save = workspace.saves.find(s => s.id === currentSave.id);
+  const fastest = save ? fastestProfiles(save.profiles, currentProfile.id) : null;
+  if (!fastest?.names.length) return null;
+  return {
+    names: listNames(fastest.names.map(name => `“${name}”`)),
+    total: fastest.total,
+    count: fastest.names.length,
+  };
+}
+
 function adaFacts(): AdaFacts {
   const steps = currentSave.id ? planTasks() : [];
   // The next step leaves out the lines a delivered elevator part leaves without work (#1062), as
@@ -473,6 +487,7 @@ function adaFacts(): AdaFacts {
         ? onSiteDroppedFacts(storedStage.onSiteOverflow, calculated.settings.onSite)
         : null,
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
+    fastest: fastestFact(),
     backupDays: backupDays(workspace.lastBackup),
     post: phase() === 'post',
     startPhase: startPhase(),
