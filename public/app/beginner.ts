@@ -36,10 +36,11 @@ export function setBeginnerMode(value: boolean) {
   markPage();
 }
 
-// Called once at startup and on every change.
+// Called once at startup and on every change. A page without a root element (the tests' bare
+// documents) is left alone.
 export function markPage() {
   if (typeof document !== 'undefined')
-    document.documentElement.toggleAttribute('data-beginner', beginner);
+    document.documentElement?.toggleAttribute?.('data-beginner', beginner);
 }
 
 // The stock a new plan starts with: the guided start's "My building materials" with Concrete
