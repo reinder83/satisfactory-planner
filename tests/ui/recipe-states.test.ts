@@ -184,7 +184,15 @@ test('#1075: Add as hunting recalculates in place with the recipe allowed, after
     '/api/context': {
       save: { id: 's', name: 'World' },
       profile: { id: 'p', kind: 'calculated', name: 'Mine' },
-      state: { version: 1, revision: 1, checks: {}, notes: {}, deliveries: {} },
+      state: {
+        version: 1,
+        revision: 1,
+        settings: { phase: '3' },
+        checks: {},
+        notes: {},
+        deliveries: {},
+        customTasks: [],
+      },
       plan,
     },
   });
@@ -205,4 +213,6 @@ test('#1075: Add as hunting recalculates in place with the recipe allowed, after
   assert.deepEqual(body.settings.alternateRecipes, [CAST]);
   assert.deepEqual(body.settings.plannerPicks, [CAST]);
   assert.equal(body.settings.mamRecipes, true, 'the standard plan’s MAM recipes stay');
+  // The new plan is opened and the page redrawn before the test ends.
+  await settle();
 });
