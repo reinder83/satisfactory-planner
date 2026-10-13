@@ -2,55 +2,105 @@
   The alternate recipe picker on All settings step 2, shown when Recipe access is "Pick
   specific alternate recipes", and on the guided recipes question under "I will choose them
   myself" (#1072). It lists the hard-drive alternates only: the MAM recipes have their own box
-  (MamRecipes.vue, #1058) and Distilled Silica comes with its milestone in every plan. Ticked
-  boxes (name="alt") become settings.alternateRecipes and ticked stars (name="altpref")
-  settings.preferredRecipes, read back by readAlternates with the rest of the step. A recipe the
-  ingot preference already requires is a locked, ticked box with no name, so it is never read
-  back as a pick; a tick the user gave it before keeps a hidden "alt" field, so locking and
-  unlocking it keeps the tick (#1058). The ticks, stars and filter are this component's own until
-  the step is read: a star can only be ticked beside a ticked recipe, and Select all / Clear all
-  apply to the rows the filter shows. "Planner's choice" calculates with every alternate allowed
-  and ticks the ones that plan uses from its start phase on, then calculates with just those and
-  keeps the ones that plan uses too (#1058). Its ticks are recipes to hunt, not owned: each keeps
-  a hidden "altplanner" field (settings.plannerPicks) until the user changes that row's box. Only
-  the draft changes, nothing is saved.
+  (MamRecipes.vue, #1058) and Distilled Silica comes with its milestone in every plan.
+
+  Each recipe has three states (#1075, app/recipe-states.ts): owned, hunting or not allowed, a
+  radio group per row. They are the settings every plan has: owned is settings.ownedAlternates
+  (hidden "ownedAlt" fields), hunting a pick (hidden "alt" fields, settings.alternateRecipes) that
+  is not owned, and a hunting row the user set or Planner's choice ticked is on the hunt (hidden
+  "altplanner", settings.plannerPicks); not allowed is neither. readAlternates reads them back with
+  the rest of the step, so "Alternates you already own" (OwnedAlternates.vue) is not shown beside
+  it. Ticked stars (name="altpref") are settings.preferredRecipes. A recipe the ingot preference
+  already requires has no states; a pick the user gave it keeps its hidden "alt" field (#1058).
+
+  The rows are grouped by product, each group with a one-line verdict: what its best alternate
+  skips from the standard recipe and, when this profile's stored hard-drive ranking (#203) has
+  them, the buildings it saves. A hunting row says what it saves if found and what the plan's
+  product is made with until then. Filters by text, phase and state hide rows in place; "Hunt all
+  shown" and "Clear shown" apply to the rows shown. "Planner's choice" calculates with every
+  alternate allowed and marks the ones that plan uses from its start phase on as hunting, then
+  calculates with just those and keeps the ones that plan uses too (#1058). Only the draft
+  changes, nothing is saved.
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { post, toast } from '../../api.ts';
 import { $, required } from '../../format.ts';
-import { draft, wizard, workspace } from '../../session.ts';
+import {
+  compared,
+  fallbacksOf,
+  productOf,
+  recipeSets,
+  stateIn,
+  withState,
+  type RecipeSets,
+  type RecipeState,
+} from '../../recipe-states.ts';
+import { payoffFigures, payoffSaving, rankedPhases } from '../../payoff.ts';
+import { currentProfile, draft, payoff, wizard, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.ts';
 import { readGuidedForm } from '../../wizard/guided.ts';
 import { calcProgress, readWizard, wizardError } from '../../wizard/wizard.ts';
+import { listNames } from '../../../wording.ts';
 import { legacy } from '../bridge.ts';
 import type { StoredCalculatedPlan } from '../../../types/index.ts';
 
 // A stable empty list, so a draft without picks does not look replaced on every redraw.
 const NONE: string[] = [];
 
+const STATE_LABELS: [RecipeState, string][] = [
+  ['owned', 'Owned'],
+  ['hunting', 'Hunting'],
+  ['off', 'Not allowed'],
+];
+
 const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
     const settings = wizard.settings;
+    const standard = workspace.catalog.standardRecipes || [];
+    // The stored ranking of the profile Edit settings edits, while it belongs to its plan.
+    const edit = wizard.edit;
+    const ranking =
+      edit &&
+      payoff &&
+      currentProfile?.id === edit.profileId &&
+      payoff.planCreatedAt === edit.plan.createdAt
+        ? payoff.ranking
+        : null;
+    const figures = ranking ? payoffFigures(ranking) : new Map();
+    const rows = (workspace.catalog.alternates || [])
+      .filter(alternate => !alternate.mam && !alternate.milestone)
+      .map(alternate => {
+        const outs = Object.keys(alternate.outputs);
+        const name = alternate.name.replace('Alternate: ', '');
+        const { skips, adds } = compared(alternate, standard);
+        return {
+          id: alternate.id,
+          name,
+          product: productOf(alternate),
+          outs,
+          phase: alternate.phase,
+          text: (name + ' ' + outs.join(' ')).toLowerCase(),
+          why: alternate.pure && settings.pureIngots === true ? 'ingot preference' : '',
+          skips,
+          adds,
+          fallback: fallbacksOf(alternate, standard).map(recipe => recipe.name),
+          figure: figures.get(alternate.id) || null,
+        };
+      })
+      .sort((a, b) => a.product.localeCompare(b.product) || a.phase - b.phase);
     return {
-      alternates: settings.alternateRecipes || NONE,
-      preferred: settings.preferredRecipes || NONE,
-      planner: settings.plannerPicks || NONE,
-      rows: (workspace.catalog.alternates || [])
-        .filter(alternate => !alternate.mam && !alternate.milestone)
-        .map(alternate => {
-          const outs = Object.keys(alternate.outputs);
-          return {
-            id: alternate.id,
-            name: alternate.name,
-            outs,
-            text: (alternate.name + ' ' + outs.join(' ')).toLowerCase(),
-            when: 'Phase ' + alternate.phase,
-            why: alternate.pure && settings.pureIngots === true ? 'ingot preference' : '',
-          };
-        }),
+      key: [
+        settings.alternateRecipes || NONE,
+        settings.ownedAlternates || NONE,
+        settings.plannerPicks || NONE,
+        settings.preferredRecipes || NONE,
+      ],
+      settings,
+      rows,
+      ranked: ranking ? rankedPhases(ranking) : null,
     };
   }),
 );
@@ -58,68 +108,92 @@ const view = computed(() =>
 // One alternate's row in the picker.
 type AltRow = NonNullable<(typeof view)['value']>['rows'][number];
 
-// The picks on screen, from the draft whenever the draft's lists are replaced (a read of the
-// step, Planner's choice). `touched` once a box has been changed here: the heading counts the
-// draft's list until then, and the ticked editable boxes after, as the screen shows them.
-const picked = ref(new Set<string>());
-const starred = ref(new Set<string>());
-const touched = ref(false);
-// Planner's choice's ticks the user has not changed since (#1058): recipes to hunt.
-const planner = ref(new Set<string>());
+// The states on screen, from the draft whenever its lists are replaced (a read of the step,
+// Planner's choice).
+const sets = ref<RecipeSets>(recipeSets({}));
 watch(
-  () => view.value?.alternates,
-  list => {
-    picked.value = new Set(list || []);
-    touched.value = false;
+  () => view.value?.key,
+  () => {
+    if (view.value) sets.value = recipeSets(view.value.settings);
   },
   { immediate: true },
 );
-watch(
-  () => view.value?.planner,
-  list => (planner.value = new Set(list || [])),
-  { immediate: true },
-);
-watch(
-  () => view.value?.preferred,
-  list => (starred.value = new Set(list || [])),
-  { immediate: true },
-);
+const state = (row: AltRow): RecipeState => stateIn(sets.value, row.id);
+function choose(row: AltRow, next: RecipeState) {
+  sets.value = withState(sets.value, row.id, next);
+}
 
 const filter = ref('');
+const phase = ref('');
+const only = ref<RecipeState | ''>('');
 const shown = (row: AltRow) =>
-  filter.value.trim() === '' || row.text.includes(filter.value.trim().toLowerCase());
-const count = computed(() =>
-  touched.value
-    ? // touched is only set by the boxes, which the view draws.
-      view.value!.rows.filter(r => !r.why && picked.value.has(r.id)).length
-    : picked.value.size,
-);
+  (filter.value.trim() === '' || row.text.includes(filter.value.trim().toLowerCase())) &&
+  (phase.value === '' || row.phase <= Number(phase.value)) &&
+  (only.value === '' || (!row.why && state(row) === only.value));
 
-function tick(row: AltRow, on: boolean) {
-  const picks = new Set(picked.value),
-    stars = new Set(starred.value);
-  on ? picks.add(row.id) : picks.delete(row.id);
-  if (!on) stars.delete(row.id);
-  picked.value = picks;
-  starred.value = stars;
-  touched.value = true;
-  // A box the user changes is the user's own pick from then on, not Planner's choice.
-  if (planner.value.has(row.id)) {
-    const hunts = new Set(planner.value);
-    hunts.delete(row.id);
-    planner.value = hunts;
+// The rows grouped by product, in the order the rows are sorted, with each group's verdict.
+const groups = computed(() => {
+  const list: { product: string; rows: AltRow[]; verdict: string }[] = [];
+  for (const row of view.value?.rows || []) {
+    const last = list[list.length - 1];
+    if (last?.product === row.product) last.rows.push(row);
+    else list.push({ product: row.product, rows: [row], verdict: '' });
   }
+  for (const group of list) group.verdict = verdict(group.rows);
+  return list;
+});
+// "Cast Screws skips Iron Rod, −14 buildings in Phase 2": the group's alternate that saves the
+// most buildings by the ranking, else its first one that skips or adds an input.
+function verdict(rows: AltRow[]): string {
+  const ranked = rows
+    .filter(row => row.figure && row.figure.buildings < 0)
+    .sort((a, b) => a.figure!.buildings - b.figure!.buildings)[0];
+  const best = ranked || rows.find(row => row.skips.length || row.adds.length);
+  if (!best) return '';
+  const how = best.skips.length
+    ? `${best.name} skips ${listNames(best.skips)}`
+    : best.adds.length
+      ? `${best.name} uses ${listNames(best.adds)}`
+      : best.name;
+  return ranked ? `${how}, ${payoffSaving(ranked.figure!)}` : how;
 }
-// A row Planner's choice ticked and the user has not changed since: a recipe to hunt (#1058).
-const hunting = (row: AltRow) => planner.value.has(row.id) && picked.value.has(row.id);
+// A row's figure in words: what a hunting row saves once found and what the plan makes its
+// product with until then; what a recipe not allowed would save.
+function payoffLine(row: AltRow): string {
+  const now = state(row);
+  const until = row.fallback.length ? `until then: ${listNames(row.fallback)}` : '';
+  if (now === 'hunting') {
+    if (row.figure?.status === 'infeasible') return 'The plan does not fit without it';
+    if (row.figure && row.figure.buildings < 0)
+      return [`If found: ${payoffSaving(row.figure)}`, until].filter(Boolean).join(' · ');
+    return until ? 'Until found: ' + listNames(row.fallback) : '';
+  }
+  if (now === 'off' && row.figure && row.figure.buildings < 0)
+    return `Worth a hard drive: ${payoffSaving(row.figure)}`;
+  return '';
+}
+
+const counts = computed(() => {
+  const rows = (view.value?.rows || []).filter(row => !row.why);
+  return {
+    owned: rows.filter(row => state(row) === 'owned').length,
+    hunting: rows.filter(row => state(row) === 'hunting').length,
+  };
+});
+
 function star(row: AltRow, on: boolean) {
-  const stars = new Set(starred.value);
-  on ? stars.add(row.id) : stars.delete(row.id);
-  starred.value = stars;
+  const next = { ...sets.value, starred: new Set(sets.value.starred) };
+  if (on) {
+    next.starred.add(row.id);
+    // A star counts only on a pick: an owned recipe becomes one too (the pool is the same).
+    if (!next.picked.has(row.id)) next.picked = new Set([...next.picked, row.id]);
+  } else next.starred.delete(row.id);
+  sets.value = next;
 }
-function all(on: boolean) {
+function all(to: RecipeState) {
   // The buttons are only drawn with the view.
-  for (const row of view.value!.rows) if (!row.why && shown(row)) tick(row, on);
+  for (const row of view.value!.rows)
+    if (!row.why && shown(row) && state(row) !== 'owned') choose(row, to);
 }
 
 // Planner's choice: its label shows the calculation's progress meanwhile, busy (bound
@@ -187,7 +261,7 @@ async function best() {
     else delete settings.plannerPicks;
     render();
     toast(
-      `Selected ${used.length} alternate recipes the planner uses with your current settings. They stay on the hard-drive hunt until you mark them unlocked.`,
+      `Marked ${used.length} alternate recipes the planner uses with your current settings as hunting. They stay on the hard-drive hunt until you mark them unlocked.`,
     );
   } catch (error) {
     wizardError($<HTMLFormElement>('#wizard-form'), error as Error);
@@ -199,119 +273,163 @@ async function best() {
 </script>
 
 <template>
-  <div v-if="view" class="alt-picker">
+  <div v-if="view" class="alt-picker" data-recipe-states>
     <div class="alt-picker-head">
-      <b>Alternate recipes · {{ count }} selected</b
+      <b data-alt-count
+        >Alternate recipes · {{ counts.owned }} owned · {{ counts.hunting }} hunting</b
       ><span class="alt-tools"
         ><button
           type="button"
           class="btn quiet"
           data-alt-best
-          title="Recalculates with every alternate allowed and ticks only the recipes the optimal plan uses"
+          title="Recalculates with every alternate allowed and marks only the recipes the optimal plan uses as hunting"
           :aria-disabled="busy || undefined"
           @click="best"
         >
           {{ bestLabel }}</button
-        ><button type="button" class="btn quiet" data-alt-all @click="all(true)">Select all</button
-        ><button type="button" class="btn quiet" data-alt-none @click="all(false)">
-          Clear all
+        ><button type="button" class="btn quiet" data-alt-all @click="all('hunting')">
+          Hunt all shown</button
+        ><button type="button" class="btn quiet" data-alt-none @click="all('off')">
+          Clear shown
         </button></span
-      ><input
+      >
+    </div>
+    <div class="alt-filters">
+      <input
         id="alt-filter"
         v-model="filter"
         type="search"
         placeholder="Filter by recipe or product…"
         aria-label="Filter alternate recipes"
-      />
+      /><label
+        >Phase
+        <select v-model="phase" data-alt-phase aria-label="Show the recipes available by">
+          <option value="">Any phase</option>
+          <option v-for="n in 5" :key="n" :value="String(n)">By Phase {{ n }}</option>
+        </select></label
+      ><label
+        >Show
+        <select v-model="only" data-alt-only aria-label="Show the recipes in this state">
+          <option value="">All states</option>
+          <option v-for="[value, text] in STATE_LABELS" :key="value" :value="value">
+            {{ text }}
+          </option>
+        </select></label
+      >
     </div>
     <p class="small muted">
-      Only the hard-drive alternates you tick are allowed in the plan, and with none ticked it is
-      the same plan as with Standard recipes. Hard-drive alternates are unlocked from crash sites.
-      The MAM recipes follow their own box above, and Distilled Silica comes with the Tier 7
-      milestone Control System Development in every plan. Requiring pure ingots locks the pure
-      recipes; one you ticked yourself stays ticked when you turn that off again. Raw-resource
-      conversion recipes are not alternates — they follow the SAM conversion setting and Tier 9
-      unlocks. <b>Planner’s choice</b> recalculates with every alternate allowed and ticks only the
-      recipes the plan uses from your start phase on — each costs one hard drive, and they stay on
-      the build plan’s hard-drive hunt until you mark them unlocked. Select all and Clear all apply
-      to the rows currently shown by the filter.
+      <b>Owned</b>: you have unlocked it; the plan uses it freely and its unlock step starts ticked.
+      <b>Hunting</b>: the plan counts on it, and its hard-drive step stays on the build plan’s hunt
+      until you mark it unlocked. <b>Not allowed</b>: the plan never uses it. With nothing hunting
+      or owned it is the same plan as with Standard recipes. The MAM recipes follow their own box
+      above, and Distilled Silica comes with the Tier 7 milestone Control System Development in
+      every plan. Requiring pure ingots locks the pure recipes; one you picked yourself stays picked
+      when you turn that off again. Raw-resource conversion recipes are not alternates — they follow
+      the SAM conversion setting and Tier 9 unlocks. <b>Planner’s choice</b> recalculates with every
+      alternate allowed and marks only the recipes the plan uses from your start phase on as hunting
+      — each costs one hard drive.
+      <template v-if="view.ranked"
+        >Buildings saved are from this profile’s hard-drive ranking for {{ view.ranked }}.</template
+      >
     </p>
     <p class="alt-force-hint">
       <span class="alt-force-star">★</span
       ><span
-        ><b>Force a recipe:</b> tick it, then click its star. The plan will use
+        ><b>Force a recipe:</b> mark it owned or hunting, then click its star. The plan will use
         <b>no other recipe</b> for that product once the starred one is available.</span
       >
     </p>
     <div class="alt-list">
-      <div
-        v-for="row in view.rows"
-        :key="row.id"
-        class="alt-row"
-        :data-alt-text="row.text"
-        :hidden="!shown(row)"
+      <section
+        v-for="group in groups"
+        :key="group.product"
+        class="alt-group"
+        :data-alt-group="group.product"
+        :hidden="!group.rows.some(shown)"
       >
-        <label class="check-row"
-          ><input
-            v-if="row.why"
-            type="checkbox"
-            checked
-            disabled
-            :aria-label="`${row.name} is required by your ${row.why}`"
-          /><input
-            v-if="row.why && picked.has(row.id)"
-            type="hidden"
-            name="alt"
-            :value="row.id"
-          /><input
-            v-if="row.why && picked.has(row.id) && starred.has(row.id)"
-            type="hidden"
-            name="altpref"
-            :value="row.id"
-          /><input
-            v-if="!row.why"
-            type="checkbox"
-            name="alt"
-            :value="row.id"
-            :checked="picked.has(row.id)"
-            @change="tick(row, ($event.target as HTMLInputElement).checked)"
-          /><span
+        <h4>{{ group.product }}</h4>
+        <p v-if="group.verdict" class="alt-verdict" data-alt-verdict>{{ group.verdict }}</p>
+        <div
+          v-for="row in group.rows"
+          :key="row.id"
+          class="alt-row"
+          :data-alt-row="row.id"
+          :data-alt-state="row.why ? 'required' : state(row)"
+          :data-alt-text="row.text"
+          :hidden="!shown(row)"
+        >
+          <span class="alt-name"
             >{{ row.name
             }}<small class="muted">
-              · {{ row.outs.join(', ') }} · {{ row.when
-              }}{{ row.why ? ' · required by your ' + row.why : ''
-              }}{{ hunting(row) ? ' · Planner’s choice, to hunt' : '' }}</small
+              · Phase {{ row.phase
+              }}{{ row.outs.length > 1 ? ' · also ' + row.outs.slice(1).join(', ') : '' }}</small
             ></span
-          ></label
-        ><input
-          v-if="hunting(row)"
-          type="hidden"
-          name="altplanner"
-          :value="row.id"
-          data-alt-planner
-        /><label
-          v-if="!row.why"
-          class="alt-pref"
-          :title="`Force this recipe: the plan will not use any other recipe for ${row.outs[0]} once this one is available`"
-          ><input
-            type="checkbox"
+          >
+          <span v-if="row.why" class="alt-required small muted"
+            >Required by your {{ row.why }}</span
+          >
+          <span
+            v-else
+            class="alt-states"
+            role="radiogroup"
+            :aria-label="`${row.name}: owned, hunting or not allowed`"
+            ><label
+              v-for="[value, text] in STATE_LABELS"
+              :key="value"
+              :class="['alt-state', 'alt-state-' + value]"
+              ><input
+                type="radio"
+                :name="'altstate:' + row.id"
+                :value="value"
+                :data-alt-set="value"
+                :checked="state(row) === value"
+                @change="choose(row, value)"
+              /><span>{{ text }}</span></label
+            ></span
+          >
+          <input v-if="sets.picked.has(row.id)" type="hidden" name="alt" :value="row.id" /><input
+            v-if="state(row) === 'owned'"
+            type="hidden"
+            name="ownedAlt"
+            :value="row.id"
+          /><input
+            v-if="sets.picked.has(row.id) && sets.planner.has(row.id)"
+            type="hidden"
+            name="altplanner"
+            :value="row.id"
+            data-alt-planner
+          /><input
+            v-if="row.why && sets.picked.has(row.id) && sets.starred.has(row.id)"
+            type="hidden"
             name="altpref"
             :value="row.id"
-            :checked="starred.has(row.id)"
-            :disabled="!picked.has(row.id)"
-            :aria-label="`Force ${row.name} as the only ${row.outs[0]} recipe`"
-            @change="star(row, ($event.target as HTMLInputElement).checked)"
-          /><span>★</span></label
-        ><button
-          type="button"
-          class="btn quiet alt-info"
-          :data-alt-info="row.id"
-          :aria-label="`Show the ${row.name} recipe`"
-          @click="openAltRecipe(row.id)"
-        >
-          recipe ↗
-        </button>
-      </div>
+          /><label
+            v-if="!row.why"
+            class="alt-pref"
+            :title="`Force this recipe: the plan will not use any other recipe for ${row.product} once this one is available`"
+            ><input
+              type="checkbox"
+              name="altpref"
+              :value="row.id"
+              :checked="sets.starred.has(row.id)"
+              :disabled="state(row) === 'off'"
+              :aria-label="`Force ${row.name} as the only ${row.product} recipe`"
+              @change="star(row, ($event.target as HTMLInputElement).checked)"
+            /><span>★</span></label
+          ><button
+            type="button"
+            class="btn quiet alt-info"
+            :data-alt-info="row.id"
+            :aria-label="`Show the ${row.name} recipe`"
+            @click="openAltRecipe(row.id)"
+          >
+            recipe ↗
+          </button>
+          <small v-if="!row.why && payoffLine(row)" class="alt-payoff" data-alt-payoff>{{
+            payoffLine(row)
+          }}</small>
+        </div>
+      </section>
     </div>
   </div>
 </template>

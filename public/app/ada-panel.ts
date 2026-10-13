@@ -39,7 +39,7 @@ import {
 import { groupsReorder } from './group-order.ts';
 import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { onSiteChange } from './on-site-picker.ts';
-import { payoffBest, payoffDefaultSort } from './payoff.ts';
+import { payoffBest, payoffDefaultSort, rankedPhases } from './payoff.ts';
 import { fastestProfiles } from './profile-compare.ts';
 import { render } from './shell.ts';
 import {
@@ -137,7 +137,11 @@ function buildFacts(): AdaFacts['build'] {
 function payoffFacts(): AdaFacts['payoff'] {
   if (!calculated || milestoneOnly() || payoff?.ranking.phase !== stage()) return null;
   const column = payoffDefaultSort(calculated.settings.goal);
-  const best = payoffBest(payoff.ranking, column);
+  // Not a recipe the plan already counts on (#1075): "Allowing" it would change nothing.
+  const best = payoffBest(
+    { ...payoff.ranking, candidates: payoff.ranking.candidates.filter(c => !c.hunting) },
+    column,
+  );
   if (!best) return null;
   const gain = -(best[column] ?? 0);
   return {
@@ -146,6 +150,7 @@ function payoffFacts(): AdaFacts['payoff'] {
       column === 'hours'
         ? `${num(gain)} ${gain === 1 ? 'hour' : 'hours'} sooner`
         : `${num(gain)} fewer ${gain === 1 ? 'building' : 'buildings'}`,
+    where: rankedPhases(payoff.ranking),
   };
 }
 
