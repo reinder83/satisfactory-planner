@@ -57,6 +57,7 @@ const SHARED = [
   'state/alternates.ts',
   'state/carry.ts',
   'state/factory-groups.ts',
+  'state/figures.ts',
   'state/items.ts',
   'state/mutate.ts',
   'state/rename-offer.ts',

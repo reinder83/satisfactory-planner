@@ -8,40 +8,18 @@
   then takes keyboard focus, named by the table's caption, so the arrow keys can scroll it (#1020).
 -->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
 import type { StepTable } from '../../../step-table.ts';
+import { useScrollBox } from '../scroll-box.ts';
 
 defineProps<{ table: StepTable }>();
-// Whether the table is wider than its box, worked out when it is drawn and whenever the box
-// changes size (a closed step's box has no width, so it scrolls nothing).
-const box = ref<HTMLElement | null>(null);
-const scrolls = ref(false);
-const measure = () => {
-  const el = box.value;
-  scrolls.value = !!el && el.scrollWidth > el.clientWidth + 1;
-};
-let observer: ResizeObserver | undefined;
-onMounted(() => {
-  measure();
-  if (typeof ResizeObserver !== 'undefined' && box.value) {
-    observer = new ResizeObserver(measure);
-    observer.observe(box.value);
-  }
-});
-onBeforeUnmount(() => observer?.disconnect());
+// Whether the table is wider than its box (ui/scroll-box.ts).
+const { scrollAttrs } = useScrollBox('box');
 // An empty cell hides on a phone; a short one (a rate, a count, an amount) never wraps.
 const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 });
 </script>
 
 <template>
-  <div
-    ref="box"
-    class="step-table"
-    data-step-table
-    :tabindex="scrolls ? 0 : undefined"
-    :role="scrolls ? 'region' : undefined"
-    :aria-label="scrolls ? table.caption + ' (scrolls sideways)' : undefined"
-  >
+  <div ref="box" class="step-table" data-step-table v-bind="scrollAttrs(table.caption)">
     <p>{{ table.intro }}</p>
     <table>
       <caption class="visually-hidden">
