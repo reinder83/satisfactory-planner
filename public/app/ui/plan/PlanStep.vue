@@ -10,7 +10,8 @@
   (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done. A
   line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
   dimmed, with its note under the title; a line at exact clocks, or one whose clocks a
-  recalculation would change (`step.clocks`, #1066), says so there too. A step just ticked is
+  recalculation would change (`step.clocks`, #1066), says so there too. Its text marks the glossary
+  terms in `step.terms` (#1076, ui/TermText.vue); the words stay the step's `body`. A step just ticked is
   `held` in place for a few seconds (tick-hold.ts, #1054), and `leaving` as it fades out of it.
 -->
 <script setup lang="ts">

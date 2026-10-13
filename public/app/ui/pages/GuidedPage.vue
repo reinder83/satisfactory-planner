@@ -14,7 +14,8 @@
   step, Review (ReviewStep.vue, as All settings shows it), whose Create profile ends the flow:
   one flow, with no second set of steps (#1072). The form is keyed by screen, so each starts from the draft. A
   missing Save name stops Continue and All settings with a message beside the box
-  (form/NameField.vue, #622).
+  (form/NameField.vue, #622). The first question offers "New to Satisfactory" (#1076, app/beginner.ts),
+  and each question's lead marks its glossary terms (TermText.vue).
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
