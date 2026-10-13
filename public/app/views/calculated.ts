@@ -3,7 +3,7 @@
 // setup and expansion its factory dialog shows (ui/detail/CalcFactoryDialog.vue). Its
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
-import { groupedRows, groupedSteps } from '../group-order.ts';
+import { groupedRows, groupedSteps, LINK_DUST } from '../group-order.ts';
 import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
 import { buildStatus, siteRouting, type BuildStatus } from '../build-status.ts';
 import {
@@ -14,8 +14,9 @@ import {
   type PhaseCarry,
 } from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
-import { siteItems } from '../group-links.ts';
+import { OUTSIDE, siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
+import { burnNote, COAL_GENERATOR_FUELS } from '../sink-cause.ts';
 import { adviceLineText, adviceSentence, lineAdvice, NO_COVER, recycleModel } from '../recycle.ts';
 import type { AdviceLine, AdviceWords, RecycleModel } from '../recycle.ts';
 import {
@@ -114,7 +115,8 @@ const calcTasksOf = perRedraw(stepInputs, (shownPhase: Phase): PlanStepData[] =>
 });
 
 // A production row's build-plan step text: what already runs and the generators the player has,
-// then its machines, inputs and outputs (rowLineText), then the factory dialog's byproduct advice in
+// then its machines, inputs and outputs (rowLineText) and why the plan sinks its spare coke
+// (burnNotes, #1063), then the factory dialog's byproduct advice in
 // `snapshot`, the stage of the phase the step is in (#1022). With advice, the same words as a list
 // (#1136): the text before the advice above it, and each paragraph of the advice (one byproduct or
 // input, adviceLineText in recycle.ts) as an item, as the dialog shows them.
@@ -124,8 +126,12 @@ function rowStep(
   shownPhase: Phase,
   title: string,
 ): Pick<PlanStepData, 'body' | 'list'> {
+  const burn = burnNotes(row, snapshot);
   const lead =
-    carriedStepText(row, shownPhase) + ownedGeneratorsText(row, snapshot) + rowLineText(row);
+    carriedStepText(row, shownPhase) +
+    ownedGeneratorsText(row, snapshot) +
+    rowLineText(row) +
+    burn.map(note => ' ' + note).join('');
   const advice = rowAdvice(row, snapshot).map(adviceLineText);
   if (!advice.length) return { body: lead };
   return {
@@ -234,6 +240,42 @@ export const rowAdvice = (
   snapshot: StoredStage | undefined = calcStage(),
   place?: string,
 ): AdviceLine[] => (snapshot ? lineAdvice(row, recycleModelOf(snapshot), recycleWords, place) : []);
+
+// Why the plan sinks `row`'s spare Petroleum Coke or Compacted Coal rather than burning it, and
+// that coal power burns it (burnNote in sink-cause.ts, #1063), in stage `snapshot`, the phase
+// shown unless given: one sentence per such output the line sends to the sink, for the end of its
+// build-plan step (rowStep) and under the flow in its dialog (CalcFactoryDialog.vue). What the
+// line sends to the sink is its part of the books' sink (recycleModelOf), as its byproduct advice
+// words it ("store or sink the other …"). Empty for any other line.
+export function burnNotes(row: CalcRow, snapshot: StoredStage | undefined = calcStage()): string[] {
+  const outputs = Object.keys(row.outputs || {}).filter(item =>
+    COAL_GENERATOR_FUELS.includes(item),
+  );
+  if (!snapshot || !calculated || !outputs.length) return [];
+  const model = recycleModelOf(snapshot);
+  const phase = Number(
+    Object.entries(calculated.stages).find(([, stage]) => stage === snapshot)?.[0] ?? 0,
+  );
+  return outputs.flatMap(item => {
+    const sunk = model.transfers
+      .filter(
+        transfer =>
+          transfer.item === item &&
+          transfer.from.kind === 'line' &&
+          transfer.from.id === row.id &&
+          transfer.to.kind === 'place' &&
+          transfer.to.id === OUTSIDE.surplus,
+      )
+      .reduce((total, transfer) => total + transfer.rate, 0);
+    const note =
+      sunk > LINK_DUST
+        ? burnNote(row, item, sunk, snapshot, calculated?.settings, phase, piped =>
+            FLUIDS.has(piped),
+          )
+        : undefined;
+    return note ? [note] : [];
+  });
+}
 
 // One ♻ line of a group's flow page: the advice for an output (`out`, a byproduct) or an input
 // (`in`) of the group's part of a line, as text, with the Water Extractors after the sentence.

@@ -6,7 +6,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { exactClocksKeep, sinkCaption, sinkCause } from '../public/app/sink-cause.ts';
+import {
+  burnNote,
+  exactClocksKeep,
+  mainPowerWords,
+  sinkCaption,
+  sinkCause,
+} from '../public/app/sink-cause.ts';
 import type { CalcRow, StoredCalculatedPlan, StoredStage } from '../public/types/index.ts';
 
 const FLUIDS = new Set(['Heavy Oil Residue', 'Crude Oil', 'Fuel', 'Water']);
@@ -121,4 +127,69 @@ test("the exact-clocks note says exact clocks remove only rounding's overflow", 
     exactClocksKeep({ kind: 'unused' }),
     'That is more than rounding to whole machines explains, so exact clocks would remove at most part of it: they only underclock the last machine to the exact remainder.',
   );
+});
+
+// Why the plan sinks spare Petroleum Coke or Compacted Coal rather than burning it (#1063, the
+// owner's decision): only under a main power that builds no Coal Generators, and never for a sink
+// that rounding explains or a fuel a generator line of the phase already burns.
+test('the burn note says why the coke is sunk and points at coal power', () => {
+  const stage = stageOf([plastic, coke], { surplus: { 'Petroleum Coke': 240 } });
+  const note = (mainPower: string | undefined, phase = 4, on = stage, row = coke, sunk = 240) =>
+    burnNote(row, 'Petroleum Coke', sunk, on, { mainPower: mainPower as 'rocket' }, phase, fluid);
+  assert.equal(
+    note('rocket'),
+    'The plan sinks its spare Petroleum Coke: burning it in Coal Generators would need more machines than it saves in the rocket fuel power chain. With coal power, the plan burns it in Coal Generators instead.',
+  );
+  assert.match(note('nuclear')!, /in the nuclear power chain\./);
+  assert.match(note('rocket-nuclear')!, /in the rocket fuel and nuclear power chain\./);
+  assert.match(note('turbofuel-nuclear')!, /in the turbofuel and nuclear power chain\./);
+  assert.match(note('fuel', 5)!, /in the fuel power chain\./);
+  // Phase 3 runs the rocket and nuclear choices on Turbofuel (generators() in planner/recipes.ts).
+  assert.match(note('rocket', 3)!, /in the turbofuel power chain\./);
+  assert.match(note('nuclear', 3)!, /in the turbofuel power chain\./);
+  // Coal, auto, a plan stored without the setting and Phase 2 may build Coal Generators for it.
+  for (const mainPower of ['coal', 'auto', undefined]) assert.equal(note(mainPower), undefined);
+  assert.equal(note('rocket', 2), undefined);
+  // A phase that already burns it, and nothing sunk.
+  const burner = {
+    ...coke,
+    id: 'power-petroleum-coke',
+    generationMW: 75,
+    inputs: { 'Petroleum Coke': 25 },
+  };
+  assert.equal(note('rocket', 4, stageOf([plastic, coke, burner])), undefined);
+  assert.equal(note('rocket', 4, stage, coke, 0), undefined);
+  // Any other item.
+  assert.equal(
+    burnNote(plates, 'Iron Plate', 60, stageOf([plates]), { mainPower: 'rocket' }, 4, fluid),
+    undefined,
+  );
+  // Compacted Coal made alongside Rocket Fuel, which the phase burns: the same note.
+  const rocketFuel = line(
+    'rocket',
+    3,
+    { Turbofuel: 300 },
+    { 'Rocket Fuel': 300, 'Compacted Coal': 30 },
+  );
+  const rocketPower = line('power', 72, { 'Rocket Fuel': 300 }, {});
+  const rocketStage = stageOf([rocketFuel, rocketPower], { surplus: { 'Compacted Coal': 4 } });
+  assert.match(
+    burnNote(rocketFuel, 'Compacted Coal', 4, rocketStage, { mainPower: 'rocket' }, 4, fluid)!,
+    /^The plan sinks its spare Compacted Coal: /,
+  );
+  // A whole-machine rounding sink of a Compacted Coal line: rounding explains it, no note.
+  const enriched = line('enriched', 5, { Coal: 125, Sulfur: 125 }, { 'Compacted Coal': 125 });
+  assert.equal(
+    burnNote(
+      enriched,
+      'Compacted Coal',
+      18,
+      stageOf([enriched], { surplus: { 'Compacted Coal': 18 } }),
+      { mainPower: 'rocket', wholeMachines: true },
+      4,
+      fluid,
+    ),
+    undefined,
+  );
+  assert.equal(mainPowerWords('coal', 4), undefined);
 });

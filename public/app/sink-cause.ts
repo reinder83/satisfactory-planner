@@ -14,10 +14,12 @@
 // - 'alongside': the line runs for another of its outputs that the phase uses (Rubber beyond
 //   what the plan uses, made alongside the Heavy Oil Residue it needs);
 // - 'unused': none of these.
+// burnNote, at the end of this file, says why the plan sinks spare Petroleum Coke or Compacted
+// Coal rather than burning it, under a main power that builds no Coal Generators.
 // It reads only its arguments: a stored plan's rows and settings, so it changes nothing that is
 // stored, and a plan keeps its numbers until the user recalculates.
 import { rawResources } from '../preferences.ts';
-import type { CalcRow, StoredStage } from '../types/index.ts';
+import type { CalcRow, MainPower, StoredSettings, StoredStage } from '../types/index.ts';
 
 export type SinkCause =
   | { kind: 'rounding' }
@@ -118,4 +120,65 @@ export function sinkCaption(cause: SinkCause): string {
     case 'unused':
       return 'more than this phase uses';
   }
+}
+
+// The Coal Generator fuels a line may make beyond what its phase uses (#1055): Petroleum Coke
+// from Heavy Oil Residue, Compacted Coal beside Rocket Fuel.
+export const COAL_GENERATOR_FUELS: readonly string[] = ['Petroleum Coke', 'Compacted Coal'];
+
+// The main power a phase runs on, as the burn note names it (burnNote), for a choice whose
+// generators burn no Coal Generator fuel in that phase: what generators() in planner/recipes.ts
+// keeps for it (Turbofuel before Phase 4 for the rocket and nuclear choices). Undefined for auto
+// and coal, which may build Coal Generators, and before Phase 3, which offers every generator.
+export function mainPowerWords(
+  mainPower: MainPower | undefined,
+  phase: number,
+): string | undefined {
+  if (phase < 3) return undefined;
+  const late = phase >= 4;
+  switch (mainPower) {
+    case 'fuel':
+      return 'fuel';
+    case 'turbofuel':
+      return 'turbofuel';
+    case 'rocket':
+      return late ? 'rocket fuel' : 'turbofuel';
+    case 'nuclear':
+      return late ? 'nuclear' : 'turbofuel';
+    case 'turbofuel-nuclear':
+      return late ? 'turbofuel and nuclear' : 'turbofuel';
+    case 'rocket-nuclear':
+      return late ? 'rocket fuel and nuclear' : 'turbofuel';
+    default:
+      return undefined;
+  }
+}
+
+// Why the plan sinks a Coal Generator fuel rather than burning it (#1063, the owner's decision):
+// under a main power that builds no Coal Generators, burning the spare coke would take more
+// machines (generators and their Water Extractors) than it saves of the main power's chain, so
+// the plan sinks it, and coal power is the choice that burns it (#1055). Undefined for any other
+// item, for a phase that already has a generator line burning it, for a sink that rounding to
+// whole machines explains and under a main power that may burn it. `sunk` is what `row` sends to
+// the sink of `item` per minute; `phase` is the stage's phase (5 for post-game). Words only: it
+// reads the stored plan and changes nothing.
+export function burnNote(
+  row: CalcRow,
+  item: string,
+  sunk: number,
+  stage: StoredStage,
+  settings: Pick<StoredSettings, 'mainPower' | 'wholeMachines'> | undefined,
+  phase: number,
+  fluid: (item: string) => boolean,
+): string | undefined {
+  if (!COAL_GENERATOR_FUELS.includes(item) || !(sunk > 0)) return undefined;
+  const words = mainPowerWords(settings?.mainPower, phase);
+  if (!words) return undefined;
+  const burnt = (stage.rows || []).some(
+    other => (other.generationMW || 0) > 0 && (other.inputs?.[item] || 0) > 0,
+  );
+  if (burnt) return undefined;
+  const cause = sinkCause(row, item, sunk, stage, !!settings?.wholeMachines, fluid);
+  if (cause.kind === 'rounding') return undefined;
+  return `The plan sinks its spare ${item}: burning it in Coal Generators would need more machines than it saves in the ${words} power chain. With coal power, the plan burns it in Coal Generators instead.`;
 }
