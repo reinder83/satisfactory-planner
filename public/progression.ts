@@ -8,6 +8,7 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import { listNames, powerAmount, slug } from './wording.ts';
+import { AMPLIFIER_RESEARCH } from './somersloops.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
@@ -48,6 +49,9 @@ const recipeNameOf = (row: Pick<CalcRow, 'id' | 'name'>): string =>
   row.id.startsWith(AMPLIFIED_ID) && row.name.endsWith(AMPLIFIED_NAME)
     ? row.name.slice(0, -AMPLIFIED_NAME.length)
     : row.name;
+// Whether a row is an amplified twin: the planner marks it `amplified`; its id says so too.
+export const isAmplified = (row: Pick<CalcRow, 'id' | 'amplified'>): boolean =>
+  !!row.amplified || row.id.startsWith(AMPLIFIED_ID);
 
 // What every task list of one phase's guide reads, built once by guideContext. `plan` is the
 // profile's calculation snapshot, `checks` its ticked checklist keys, `data` progression.json,
@@ -608,6 +612,10 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   // "Build N Alien Power Augmenters" step (endgameTasks) asks for it (#810). Fueled augmenters'
   // Alien Power Matrix node comes in through the fuel row's recipe above.
   if (stage === 5 && (plan.settings.augmenters ?? 0) > 0) add(byName(AUGMENTER_RESEARCH));
+  // Amplified lines take somersloops only once the MAM's Production Amplifier is researched
+  // (#1056); their rows have no recipe of their own to bring it in. A plan stored before the
+  // planner waited for it may amplify in Phases 1-2, where the research cannot be listed yet.
+  if (rows.some(isAmplified)) add(byName(AMPLIFIER_RESEARCH));
   // Petroleum Power from its own phase on, as Coal Power from Phase 2, whether or not this plan
   // builds Fuel Generators (#1048): a player who already runs fuel power ticks it, and "Power
   // available now" then stops advising coal.

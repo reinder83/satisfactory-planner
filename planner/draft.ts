@@ -1,6 +1,7 @@
 // The draft of a phase that does not fit, and the reason it gives.
 import { listNames } from '../public/wording.ts';
 import { phaseMining } from '../public/preferences.ts';
+import { amplifiesIn } from '../public/somersloops.ts';
 import type { CurrentSettings, CurrentStage, ItemRates, Shortfall } from '../public/types/index.ts';
 import type { Solved, RunResult, RunOptions } from './types.ts';
 import { RAW } from './data.ts';
@@ -56,7 +57,7 @@ export function draftStage(
       config.goal !== 'maximum' && fitsInHours(draft, currentHours)
         ? wholeMachinesReason(stage, draft)
         : shortfallReason(stage, draft, diagnostic, currentHours);
-    if (config.amplifySloops > 0 && stage.shortfalls?.length)
+    if (amplifiesIn(config, phase) && stage.shortfalls?.length)
       stage.reason +=
         ' These amounts are before production amplification; amplified machines may need somewhat less.';
   }

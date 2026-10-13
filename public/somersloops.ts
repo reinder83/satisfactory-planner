@@ -29,6 +29,18 @@ export interface SloopCommitment {
 // Somersloops per Alien Power Augmenter.
 export const SLOOPS_PER_AUGMENTER = 10;
 
+// Production amplification needs the MAM research Production Amplifier (#1056,
+// Research_Alien_ProductionBooster_C in progression.json): machines take somersloops only once it
+// is researched. It costs SAM Fluctuators and Circuit Boards, first available in Phase 3
+// (milestonePhase in progression.ts, which a test keeps in step), so the planner places no
+// amplified lines before AMPLIFIER_PHASE and the build plan lists the research in a phase with
+// amplified lines.
+export const AMPLIFIER_RESEARCH = 'Production Amplifier';
+export const AMPLIFIER_PHASE = 3;
+// Whether a phase's plan may amplify: a budget, and the research available by then.
+export const amplifiesIn = (settings: Pick<SloopSettings, 'amplifySloops'>, phase: number) =>
+  (settings.amplifySloops ?? 0) > 0 && phase >= AMPLIFIER_PHASE;
+
 export function sloopCommitment(settings: SloopSettings): SloopCommitment {
   const whole = (value: number | undefined) =>
     Number.isFinite(value) && value! > 0 ? Math.floor(value!) : 0;

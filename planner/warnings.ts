@@ -2,6 +2,7 @@
 // Re-exported by ../planner.ts.
 import { durationOfHours, listNames } from '../public/wording.ts';
 import { extractionEquipment } from '../public/power.ts';
+import { AMPLIFIER_PHASE, AMPLIFIER_RESEARCH } from '../public/somersloops.ts';
 import { ownedBeltsWords, phaseMinersWords } from '../public/mining.ts';
 import type {
   CurrentSettings,
@@ -43,9 +44,11 @@ function amplificationWarnings({ config, stages }: FinishedPlan): string[] {
   const dropped = Object.entries(stages)
     .filter(([, stage]) => stage.amplificationDropped)
     .map(([phase]) => phase);
+  // Phases before the Production Amplifier research are planned without it (#1056).
+  const early = Object.keys(stages).filter(phase => Number(phase) < AMPLIFIER_PHASE);
   if (config.amplifySloops > 0)
     warnings.push(
-      `Production amplification may place up to ${config.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`,
+      `Production amplification may place up to ${config.amplifySloops} somersloops in each phase's plan from Phase ${AMPLIFIER_PHASE} on, once the MAM research ${AMPLIFIER_RESEARCH} is done${early.length ? ` (${early.length > 1 ? 'Phases' : 'Phase'} ${listNames(early)} ${early.length > 1 ? 'are' : 'is'} planned without it)` : ''}, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`,
     );
   if (dropped.length)
     warnings.push(
