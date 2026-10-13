@@ -16,6 +16,7 @@ import NameField from '../form/NameField.vue';
 import SelectField from '../form/SelectField.vue';
 import SupplyRows from './SupplyRows.vue';
 import StepHeading from '../form/StepHeading.vue';
+import Term from '../Term.vue';
 
 const PHASES = ['1', '2', '3', '4', '5'].map(phase => [phase, 'Phase ' + phase]);
 
@@ -119,7 +120,7 @@ const view = computed(() =>
   <SupplyRows />
   <p class="small muted">
     Other settings are notes only. Modified recipes, production boosts and modded items are not
-    simulated. Phase plans assume the necessary milestones and MAM research are unlocked by
-    commissioning.
+    simulated. Phase plans assume the necessary milestones and
+    <Term term="mam" text="MAM" /> research are unlocked by commissioning.
   </p>
 </template>

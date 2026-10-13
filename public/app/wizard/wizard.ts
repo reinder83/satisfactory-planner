@@ -17,6 +17,7 @@ import {
 import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../progression.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
+import { beginnerMode, beginnerStock } from '../beginner.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { defaultProfileName } from '../profile-edit.ts';
@@ -237,7 +238,8 @@ function startingSettings(existing: SaveSummary | undefined): WizardSettings {
 }
 
 // A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and both
-// editions start at Phase 1, where a new player starts (#561).
+// editions start at Phase 1, where a new player starts (#561). In "New to Satisfactory" mode
+// (#1076, beginner.ts) nothing is stocked beyond the elevator instead.
 function freshSettings(): WizardSettings {
   const settings: WizardSettings = {
     phase: '1',
@@ -268,6 +270,7 @@ function freshSettings(): WizardSettings {
     mamRecipes: true,
   };
   settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
+  if (beginnerMode()) beginnerStock(settings, true);
   return settings;
 }
 

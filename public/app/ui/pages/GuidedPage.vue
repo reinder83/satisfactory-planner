@@ -21,7 +21,14 @@ import { computed, watch } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { guidedFlow, moveGuided, readGuidedForm, toAdvanced } from '../../wizard/guided.ts';
+import { beginnerMode } from '../../beginner.ts';
+import {
+  guidedFlow,
+  moveGuided,
+  readGuidedForm,
+  switchBeginner,
+  toAdvanced,
+} from '../../wizard/guided.ts';
 import { NAME_HINT, cancelWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
@@ -33,6 +40,7 @@ import GuidedHave from '../guided/GuidedHave.vue';
 import GuidedTopics from '../guided/GuidedTopics.vue';
 import GuidedTopup from '../guided/GuidedTopup.vue';
 import PageHeader from '../PageHeader.vue';
+import TermText from '../TermText.vue';
 import SupplyRows from '../wizard/SupplyRows.vue';
 import StepHeading from '../form/StepHeading.vue';
 import { focusNewStep } from '../refocus.ts';
@@ -86,6 +94,8 @@ const page = computed(() =>
       name: wizardDraft.saveId ? wizardDraft.name : wizardDraft.saveName,
       submit: topics ? 'Continue →' : submitLabel(wizardDraft),
       first: topics || wizardDraft.guidedStep <= 1,
+      // "New to Satisfactory" (#1076), offered on the first question.
+      beginner: !topics && !review && wizardDraft.guidedStep <= 1 ? beginnerMode() : null,
       // Review's All settings is the five steps' Review, with this plan (#1072).
       advancedStep: review ? 5 : question?.step || 1,
     };
@@ -100,6 +110,13 @@ watch(() => page.value?.key, focusNewStep, { flush: 'post' });
 // is only recorded (wizard.guidedTopics): Continue applies them, so the topics screen stays.
 function changed(event: Event) {
   const name = String((event.target as HTMLInputElement).name);
+  if (name === 'beginner') {
+    switchBeginner(
+      event.currentTarget as HTMLFormElement,
+      (event.target as HTMLInputElement).checked,
+    );
+    return;
+  }
   if (name.startsWith('guided:') || name === 'topup' || name === 'topic') {
     readGuidedForm(event.currentTarget as HTMLFormElement);
     render();
@@ -171,6 +188,22 @@ async function submit(event: Event) {
           :placeholder="page.adding ? NAME_HINT : 'e.g. My Satisfactory save'"
         />
       </div>
+      <div v-if="page.beginner !== null" class="guided-beginner" data-guided-beginner>
+        <label class="check-row"
+          ><input
+            type="checkbox"
+            name="beginner"
+            data-beginner-switch
+            aria-describedby="guided-beginner-note"
+            :checked="page.beginner"
+          />New to Satisfactory</label
+        >
+        <p id="guided-beginner-note" class="small muted">
+          Keeps it simple: skips the questions on alternate recipes and clock speeds, hides the
+          hard-drive and clock details on the build plan, and starts a new save with nothing stocked
+          beyond the Space Elevator. All settings still has everything.
+        </p>
+      </div>
       <ReviewStep v-if="page.review" />
       <GuidedTopics v-else-if="page.topics" />
       <StepHeading v-else-if="!page.question">Ready to calculate</StepHeading>
@@ -178,7 +211,7 @@ async function submit(event: Event) {
         <StepHeading :step="page.index + 1" :total="page.progress.length">{{
           page.question.title
         }}</StepHeading>
-        <p>{{ page.question.lead }}</p>
+        <p><TermText :text="page.question.lead" /></p>
         <SupplyRows v-if="page.question.kind === 'supply'" />
         <GuidedHave v-else-if="page.question.kind === 'have'" />
         <GuidedBudgets v-else-if="page.question.kind === 'budgets'" />

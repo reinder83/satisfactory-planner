@@ -208,3 +208,22 @@ The browser edition's calculator runs in a browser worker and saves profiles, ch
 Browser data is specific to the browser, device and site address. Clearing site data deletes saves; private browsing may discard them when closed. Use **Backup → Export all saves** regularly. Import adds separate copies rather than overwriting existing saves. The **Request persistent browser storage** button on the Backup page asks for protection from automatic eviction where supported; it is not a backup.
 
 To move between the browser edition and a self-hosted server, see [self-hosting](SELF-HOSTING.md#moving-between-docker-and-the-browser-edition).
+
+## New to Satisfactory
+
+Tick **New to Satisfactory** on the guided start’s first screen, or above the build plan’s steps, to keep the planner simple while you learn the game. The guided start then skips the questions on alternate recipes and clock speeds while their answers are the simple ones (standard recipes, whole machines at 100%), and a new save starts with nothing stocked beyond the Space Elevator, which keeps Phase 1 to a few biomass burners. The build plan hides the hard-drive payoff and what whole machines cost. It is a view setting of this browser: it changes no saved profile and recalculates nothing, and All settings still has every setting. Untick it to see everything again.
+
+## Glossary
+
+The planner explains these game terms where they first appear on a page: hover over the dotted word, tab to it, or tap it.
+
+- **MAM**: The Molecular Analysis Machine, the research building. You feed it items such as ores, Power Slugs, Somersloops and hard drives to unlock research: Caterium, Quartz, Sulfur, Power Shards and more. _Where to get it:_ Build it after the Tier 1 milestone Field Research in the HUB.
+- **SAM**: An alien raw resource. Late-game parts use it, mostly as Reanimated SAM and SAM Fluctuators, and converters turn it into other resources. _Where to get it:_ Mine it from SAM nodes with a Miner, then research it in the MAM to process it.
+- **Power Slugs**: Glowing blue, yellow and purple creatures found in the world. A Constructor turns each one into Power Shards: 1, 2 or 5. _Where to get it:_ Pick them up while exploring, often on cliffs and in caves. Research them in the MAM (Power Slugs) to unlock the shard recipes.
+- **Power Shards**: They let a machine run faster than 100%. Each shard in a machine raises its limit by 50%, up to 250% with three. _Where to get it:_ Craft them from Power Slugs in a Constructor, after the MAM research Blue Power Slugs and Overclock Production.
+- **Hard drives**: Data drives salvaged from crashed drop pods. Analysing one in the MAM offers a choice of alternate recipes, and you keep the one you pick. _Where to get it:_ Open the crash sites around the map. Some need power, an item or a cleared path before they open.
+- **AWESOME Sink**: A building that destroys the items you feed it and pays you points for them. The points print coupons for the AWESOME Shop. _Where to get it:_ Unlock the Tier 2 milestone Resource Sink Bonus Program in the HUB.
+- **Underclock**: Running a machine slower than 100% by lowering its clock speed. It makes and uses less, and draws less power. _Where to get it:_ Set the clock speed in any machine’s menu. It needs nothing and works from the start.
+- **Overclock**: Running a machine faster than 100%, up to 250%. It needs Power Shards in the machine and draws much more power. _Where to get it:_ Put Power Shards in the machine’s menu once the MAM research Overclock Production is done.
+- **Somersloops**: Rare alien artifacts. One in a production machine doubles what it makes (production amplification); ten power an Alien Power Augmenter. _Where to get it:_ Find them around the map; the world holds 106. Research them in the MAM (Alien Technology) to use them.
+- **Alternate recipes**: Other recipes for a part, often with cheaper or different inputs. The standard recipe stays available. _Where to get it:_ Analyse a hard drive in the MAM and pick one of the recipes it offers.

@@ -9,6 +9,7 @@
 //   fuels.ts       main power, the generators a player may already have, vehicle and drone
 //                  fuel choices, the drone fuel supply
 //   help.ts        the wizard's and the guided start's help text
+//   glossary.ts    the game terms the pages explain on hover, focus and tap (#1076)
 //   guided.ts      the guided start's questions
 //   extraction.ts  the node survey: extraction rates, yields and the budgets they give, and
 //                  the Water Extractors a line's Water needs, and the power extraction draws
@@ -42,6 +43,7 @@ export {
   vehicleFuels,
 } from './preferences/fuels.ts';
 export { helpText } from './preferences/help.ts';
+export { firstTerms, glossary, termParts } from './preferences/glossary.ts';
 export {
   GUIDED_TOPUP_RATE,
   guidedBudgetsQuestion,

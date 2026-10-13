@@ -14,6 +14,7 @@ import {
   guidedTopupItems,
   tutorialKeys,
 } from '../../preferences.ts';
+import { beginnerMode, beginnerStock, setBeginnerMode } from '../beginner.ts';
 import { $ } from '../format.ts';
 import { draft, wizard } from '../session.ts';
 import { render } from '../shell.ts';
@@ -74,13 +75,16 @@ export const GUIDED_GLYPHS: Record<string, string> = {
 // screen), only those ids are kept, with the budgets screen following the goal. vuePage (ui/pages.ts)
 // and the screens compare guidedStep with this length to know when the questions
 // are finished; ada-panel.ts reads it too. A question worded for the start phase is asked as
-// that phase's (phased, #1072).
+// that phase's (phased, #1072). In "New to Satisfactory" mode (#1076) the recipes and exactness
+// questions are left out while their answers are the simple ones (standardOnly), unless the
+// "What is different" screen asks for them.
 export function guidedFlow(): GuidedQuestion[] {
   const wizardDraft = draft(),
     ask = wizardDraft.guidedAsk,
     phase = String(wizardDraft.settings.phase || '3'),
     list: GuidedQuestion[] = [];
   for (const question of guidedQuestions) {
+    if (!ask && beginnerSkips(question.id, wizardDraft.settings)) continue;
     list.push(question.phased ? question.phased(phase) : question);
     // Maximum output needs its budgets confirmed (#1072): asked here rather than on All settings
     // step 4, so the questions after the goal follow as for any other goal.
@@ -94,6 +98,27 @@ export function guidedFlow(): GuidedQuestion[] {
   return ask
     ? list.filter(q => ask.includes(q.id === guidedBudgetsQuestion.id ? 'goal' : q.id))
     : list;
+}
+
+// The guided questions "New to Satisfactory" leaves out (#1076): alternate recipes while the plan
+// uses the standard ones, and exactness while it builds whole machines, the simple answers.
+function beginnerSkips(id: string, settings: WizardDraft['settings']): boolean {
+  if (!beginnerMode()) return false;
+  if (id === 'recipes') return settings.recipes === 'standard';
+  if (id === 'exact') return settings.wholeMachines !== false;
+  return false;
+}
+
+// "New to Satisfactory" on the guided start's first screen (#1076): remembers the choice and, for
+// a new save (whose settings are a fresh plan's), switches the stock question's default between
+// "Nothing" and "My building materials" while the user has not picked another stock. The screen is
+// read first, so nothing typed is lost, and redrawn; nothing is calculated.
+export function switchBeginner(form: HTMLFormElement | null, value: boolean) {
+  const wizardDraft = draft();
+  if (form) readGuidedForm(form);
+  setBeginnerMode(value);
+  if (!wizardDraft.saveId && beginnerStock(wizardDraft.settings, value)) wizardDraft.preview = null;
+  render();
 }
 
 // The option value currently chosen for a question, derived from the settings

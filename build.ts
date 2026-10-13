@@ -48,6 +48,7 @@ const SHARED = [
   'wording.ts',
   'preferences/extraction.ts',
   'preferences/fuels.ts',
+  'preferences/glossary.ts',
   'preferences/guided.ts',
   'preferences/help.ts',
   'preferences/mining.ts',
