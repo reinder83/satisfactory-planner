@@ -4598,6 +4598,112 @@ button.rail-tile:hover {
   gap: 15px;
   flex-wrap: wrap;
 }
+/* "Compare profiles" under a save's cards (#1074, ui/profiles/ProfileCompare.vue). Each table
+   scrolls inside its own box, which takes focus when it does (ui/scroll-box.ts), with the profile
+   column kept in view. A difference carries its sign; the colour only repeats it. */
+.profile-compare {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.profile-compare h3,
+.profile-compare h4 {
+  margin: 0 0 6px;
+}
+.profile-compare h4 {
+  margin-top: 16px;
+}
+.compare-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 8px 0;
+}
+.compare-pickers label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compare-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.compare-table:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
+.compare-table table {
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--ink);
+  min-width: 100%;
+}
+.compare-table th,
+.compare-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line2);
+}
+.compare-table td {
+  white-space: nowrap;
+}
+.compare-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom-color: var(--line);
+}
+.compare-table tbody th,
+.compare-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  color: var(--bright);
+  font-weight: 600;
+  min-width: 120px;
+  max-width: 200px;
+}
+.compare-table thead th:first-child {
+  color: var(--muted);
+}
+.compare-table tbody tr.baseline th,
+.compare-table tbody tr.baseline td {
+  background: var(--row);
+}
+.compare-value,
+.compare-note,
+.compare-table .delta {
+  display: block;
+}
+.compare-note {
+  color: var(--muted);
+  font-weight: 400;
+}
+.compare-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.compare-tag.best {
+  margin: 2px 0 0;
+  border-color: var(--green);
+  color: var(--green);
+}
+.delta {
+  font-weight: 600;
+}
+.delta.lower {
+  color: var(--green);
+}
+.delta.higher {
+  color: var(--gold);
+}
 .form-error {
   color: #ff7a5e;
   font-weight: 600;

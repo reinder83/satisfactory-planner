@@ -39,6 +39,8 @@
 //                            currentPayoff and rankScope
 //   state/restore.ts         Restore this version (#1071): the kept-version link (restoreTarget),
 //                            its refusals (checkRestore) and the swap (restoredVersions)
+//   state/figures.ts         planFigures and cachedPlanFigures: what Saves & profiles compares of
+//                            a profile's plan (#1074)
 //   state/rename-offer.ts    the "Rename to …" offer's dismissal flag (renameOfferFields, #1071)
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 //   state/alternates.ts      ALTERNATE_RECIPE_IDS, every alternate recipe id the game data has held
@@ -106,6 +108,7 @@ export {
   restoreTarget,
   restoreTargetGone,
 } from './state/restore.ts';
+export { cachedPlanFigures, planFigures } from './state/figures.ts';
 export { renameOfferFields } from './state/rename-offer.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
 export { ALTERNATE_RECIPE_IDS } from './state/alternates.ts';

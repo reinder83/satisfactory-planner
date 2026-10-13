@@ -42,7 +42,7 @@ import {
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
-import { AMPLIFIER_PHASE, AMPLIFIER_RESEARCH } from '../../somersloops.ts';
+import { AMPLIFIER_WORDS } from '../../somersloops.ts';
 import { minerWords, waterChoice } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
@@ -188,7 +188,7 @@ const setupText = (setup: ReturnType<typeof machineSetup>): string =>
 // the build plan lists (requiredMilestones in progression.ts).
 const sloopText = (row: CalcRow): string =>
   row.amplified
-    ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. Machines take somersloops once the MAM research ${AMPLIFIER_RESEARCH} is done, from Phase ${AMPLIFIER_PHASE} on. `
+    ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ${AMPLIFIER_WORDS} `
     : '';
 
 // The recycling model (recycleModel in recycle.ts) of `snapshot`, a stage of the open plan, for

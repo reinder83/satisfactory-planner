@@ -40,6 +40,12 @@ export const AMPLIFIER_PHASE = 3;
 // Whether a phase's plan may amplify: a budget, and the research available by then.
 export const amplifiesIn = (settings: Pick<SloopSettings, 'amplifySloops'>, phase: number) =>
   (settings.amplifySloops ?? 0) > 0 && phase >= AMPLIFIER_PHASE;
+// The sentence every build-plan step that inserts somersloops ends its advice with: an amplified
+// line's (sloopText in app/views/calculated.ts) and the hand-fed constructors' (#1150).
+export const AMPLIFIER_WORDS = `Machines take somersloops once the MAM research ${AMPLIFIER_RESEARCH} is done, from Phase ${AMPLIFIER_PHASE} on.`;
+// The phase whose build plan lists the hand-fed constructors' step (#1150): the profile's start
+// phase, but not before the research their somersloops wait for.
+export const handFedPhase = (startPhase: number): number => Math.max(startPhase, AMPLIFIER_PHASE);
 
 export function sloopCommitment(settings: SloopSettings): SloopCommitment {
   const whole = (value: number | undefined) =>

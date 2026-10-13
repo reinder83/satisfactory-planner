@@ -906,3 +906,22 @@ test('ADA says the ticks show more than the plan counts, while the build plan of
   assert.match(line.text, /keeps this version as a backup/);
   assert.ok(!ids(facts({ view: 'plan' })).includes('owned-ticks'), 'absent means none');
 });
+
+test('ADA names the profile that delivers every phase soonest on Saves & profiles (#1074)', () => {
+  const fastest = { names: '“Balanced”', total: 'about 23 h 22 min', count: 1 };
+  const line = adaRemarks(facts({ view: 'profiles', profiles: 3, fastest })).find(
+    r => r.id === 'compare-fastest',
+  )!;
+  assert.equal(line.tone, 'calm');
+  assert.match(line.text, /“Balanced” delivers every phase soonest: about 23 h 22 min/);
+  assert.match(line.text, /Delivery time only/);
+  const tie = adaRemarks(
+    facts({ view: 'profiles', fastest: { ...fastest, names: '“A” and “B”', count: 2 } }),
+  ).find(r => r.id === 'compare-fastest')!;
+  assert.match(tie.text, /“A” and “B” deliver every phase/);
+  // Nothing to compare: no line.
+  for (const none of [null, undefined])
+    assert.ok(
+      !adaRemarks(facts({ view: 'profiles', fastest: none })).some(r => r.id === 'compare-fastest'),
+    );
+});

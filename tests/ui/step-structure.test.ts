@@ -311,7 +311,10 @@ test('the hand-fed constructors are a list, one line each', async () => {
   assert.equal(list.intro, 'Reserve 2 Somersloops, one for each:');
   assert.equal(list.items.length, 2);
   assert.match(list.items[1]!, /^A Constructor making Power Shards from power slugs/);
-  assert.match(list.after, /^Insert the Somersloop in the Constructor/);
+  assert.match(
+    list.after,
+    /^Machines take somersloops once the MAM research Production Amplifier is done, from Phase 3 on\. Insert the Somersloop in the Constructor/,
+  );
   assert.equal(list.label, 'The hand-fed constructors');
   assert.ok(await foundOnlyInStructure('sloop-hand-fed', 'one for each'));
 });

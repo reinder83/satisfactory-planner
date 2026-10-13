@@ -63,7 +63,7 @@ import type {
   UpdateOp,
   WorkspaceSummary,
 } from './types/index.ts';
-import { profilePhasesCache } from './state.ts';
+import { cachedPlanFigures, profilePhasesCache } from './state.ts';
 import { reviewedPlans, reviewedReplacement } from './reviewed-plans.ts';
 import type { Progression } from './types/index.ts';
 
@@ -164,6 +164,8 @@ export function createBrowserApi(
         phases: progression
           ? cachedPhases(profile.id, profile.plan, profile.state, progression)
           : phaseProgress(profile.plan, profile.state.checks),
+        // What Saves & profiles compares of its plan, as the server sends it (#1074).
+        figures: cachedPlanFigures(profile.plan),
         ...restoreFields(save.profiles, profile),
         ...renameOfferFields(profile),
       })),
