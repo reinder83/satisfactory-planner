@@ -222,7 +222,6 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
                   {{ label }}{{ view.column === key ? (direction === 1 ? ' ▲' : ' ▼') : '' }}
                 </button>
               </th>
-              <th><span class="visually-hidden">Hunt</span></th>
             </tr>
           </thead>
           <tbody>
@@ -232,18 +231,12 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
                   {{ row.name }}
                 </button>
                 <span class="small muted">{{ row.machine }}</span>
-              </td>
-              <td :class="'payoff-' + (row.needed ? 'needed' : row.status)" :title="row.error">
-                {{ row.label }}
-              </td>
-              <td v-for="(cell, i) in row.cells" :key="i" class="number">{{ cell }}</td>
-              <td>
                 <span v-if="row.hunting" class="small muted" data-payoff-hunting
                   >Hunting: if found</span
                 ><button
                   v-else-if="row.hunt"
                   type="button"
-                  class="btn quiet"
+                  class="btn quiet payoff-hunt"
                   :data-payoff-hunt="row.id"
                   :aria-label="`Add ${row.name} as a recipe to hunt`"
                   @click="addHunting($event, row)"
@@ -251,6 +244,10 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
                   {{ ADD_LABEL }}
                 </button>
               </td>
+              <td :class="'payoff-' + (row.needed ? 'needed' : row.status)" :title="row.error">
+                {{ row.label }}
+              </td>
+              <td v-for="(cell, i) in row.cells" :key="i" class="number">{{ cell }}</td>
             </tr>
           </tbody>
         </table>

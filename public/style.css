@@ -2127,6 +2127,14 @@ p.eyebrow {
 .payoff-needed {
   color: var(--gold);
 }
+/* Add as hunting (#1075), under the alternate's name and machine. */
+.payoff .payoff-hunt {
+  display: block;
+  text-align: left;
+  margin-top: 4px;
+  padding: 2px 0;
+  font-size: 10.5px;
+}
 /* The payoff threshold (#1075) above the table. */
 .payoff-threshold {
   display: flex;

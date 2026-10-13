@@ -73,7 +73,7 @@ const stored = (over: Partial<AlternateRanking> = {}): StoredPayoff => ({
   rankedAt: '2026-09-26T12:00:00Z',
   ranking: ranking(over),
 });
-const names = () => $$('[data-payoff-row] td:first-child button').map(b => b.textContent!.trim());
+const names = () => $$('[data-payoff-row] [data-payoff-recipe]').map(b => b.textContent!.trim());
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
@@ -213,7 +213,6 @@ test('a column no alternate changes is left out and named under the table', () =
     $$('[data-payoff-sort]').map(b => b.dataset.payoffSort),
     ['buildings', 'rawTotal', 'powerMW'],
   );
-  // Name, effect, three figures and the hunt column.
-  assert.equal($$('[data-payoff-row]')[0]!.querySelectorAll('td').length, 6);
+  assert.equal($$('[data-payoff-row]')[0]!.querySelectorAll('td').length, 5);
   assert.match($('[data-payoff-unchanged]')!.textContent!, /No alternate changes delivery time/);
 });

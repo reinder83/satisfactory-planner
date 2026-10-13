@@ -36,8 +36,8 @@ import {
   type RecipeSets,
   type RecipeState,
 } from '../../recipe-states.ts';
-import { payoffFigures, payoffSaving } from '../../payoff.ts';
-import { currentProfile, draft, payoff, phaseLabel, wizard, workspace } from '../../session.ts';
+import { payoffFigures, payoffSaving, rankedPhases } from '../../payoff.ts';
+import { currentProfile, draft, payoff, wizard, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.ts';
 import { readGuidedForm } from '../../wizard/guided.ts';
@@ -100,7 +100,7 @@ const view = computed(() =>
       ],
       settings,
       rows,
-      ranked: ranking ? (ranking.phases || [ranking.phase]).map(phaseLabel) : null,
+      ranked: ranking ? rankedPhases(ranking) : null,
     };
   }),
 );
@@ -329,8 +329,7 @@ async function best() {
       alternate allowed and marks only the recipes the plan uses from your start phase on as hunting
       — each costs one hard drive.
       <template v-if="view.ranked"
-        >Buildings saved are from this profile’s hard-drive ranking for
-        {{ listNames(view.ranked) }}.</template
+        >Buildings saved are from this profile’s hard-drive ranking for {{ view.ranked }}.</template
       >
     </p>
     <p class="alt-force-hint">
