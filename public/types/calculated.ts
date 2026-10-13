@@ -628,6 +628,11 @@ export interface AlternatePayoff {
   // The buildings delta of each ranked phase, when the ranking covers several (`remaining`).
   byPhase?: Partial<Record<StageKey, number>>;
 }
+// What POST /api/rank-alternates may ask for beyond the phase (#1075, rankScope).
+export interface RankScope {
+  remaining?: boolean;
+  hunting?: boolean;
+}
 export interface AlternateRanking {
   phase: StageKey;
   // The phases the figures are summed over (#1075, rankAlternates' `remaining` option: `phase`
