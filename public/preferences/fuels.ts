@@ -76,17 +76,31 @@ export function ownedGeneratorCounts(value: unknown): OwnedGenerators | null {
   return Object.keys(counts).length ? counts : null;
 }
 
-// What a truck, tractor or explorer on a factory-group link can burn (#205): the solid and
-// packaged fuels a vehicle's fuel slot takes. Stored per link in factoryGroups.links, so the
-// names are saved data: add, but do not rename.
+// The vehicle fuels added after the first ones (#1165): Packaged Oil, Packaged Heavy Oil Residue,
+// Battery and Petroleum Coke. A link burning one is state version 17, since a release before them
+// refuses the fuel as malformed (validateState in state/validate.ts).
+export const laterVehicleFuels: readonly string[] = [
+  'Packaged Oil',
+  'Packaged Heavy Oil Residue',
+  'Battery',
+  'Petroleum Coke',
+];
+// What a truck, tractor or explorer on a factory-group link can burn (#205, #1165): the solid and
+// packaged fuels a vehicle's fuel slot takes, in menu order; their energy is the game data's
+// (catalog().vehicleFuels). Stored per link in factoryGroups.links, so the names are saved data:
+// add, but do not rename, and give an added fuel a state version, as laterVehicleFuels has.
 export const vehicleFuels: string[] = [
   'Packaged Fuel',
   'Packaged Turbofuel',
   'Packaged Rocket Fuel',
   'Packaged Ionized Fuel',
   'Packaged Liquid Biofuel',
+  'Packaged Oil',
+  'Packaged Heavy Oil Residue',
+  'Battery',
   'Coal',
   'Compacted Coal',
+  'Petroleum Coke',
   'Solid Biofuel',
 ];
 

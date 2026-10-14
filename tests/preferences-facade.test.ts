@@ -67,6 +67,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'helpText',
     'isWellKind',
     'knownWorld',
+    'laterVehicleFuels',
     'matchingPreset',
     'minedResources',
     'minerMarks',

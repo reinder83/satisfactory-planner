@@ -38,6 +38,7 @@ export {
 export {
   droneFuels,
   droneSupply,
+  laterVehicleFuels,
   OWNED_GENERATORS,
   OWNED_GENERATORS_MAX,
   ownedGeneratorCounts,

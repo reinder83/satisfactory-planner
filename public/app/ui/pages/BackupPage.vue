@@ -363,9 +363,12 @@ async function persistStorage() {
     <section class="panel">
       <h2>Calculation assumptions</h2>
       <p v-for="(warning, i) in page.warnings" :key="i">{{ warning }}</p>
-      <a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer"
-        >Recipe data source</a
-      >
+      <p data-game-data>
+        Satisfactory 1.1 data (SatisfactoryTools b5210ae9), balance unchanged through 1.2.4.0.
+        <a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer"
+          >Recipe data source</a
+        >
+      </p>
     </section>
   </template>
 </template>
