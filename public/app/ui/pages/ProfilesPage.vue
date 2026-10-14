@@ -29,7 +29,7 @@ import {
   toast,
   writeQueue,
 } from '../../api.ts';
-import { num, plural, slug } from '../../format.ts';
+import { plural, slug } from '../../format.ts';
 import {
   boot,
   currentProfile,
@@ -53,7 +53,7 @@ import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
 import ProfileCompare from '../profiles/ProfileCompare.vue';
 import { newSave, openProfile } from '../actions.ts';
-import { renameOffers } from '../../profile-edit.ts';
+import { profileSummary, renameOffers } from '../../profile-edit.ts';
 import {
   postRestore,
   restoreKeptName,
@@ -112,9 +112,7 @@ const page = computed(() =>
           planCreatedAt: profile.planCreatedAt,
           open: save.id === currentSave.id && profile.id === currentProfile.id,
           editable: !!profile.settings,
-          summary: profile.settings
-            ? `${profile.settings.purity} purity · ${num(profile.settings.multiplier)}× elevator · ${num(profile.settings.powerFactor)}× power`
-            : '',
+          summary: profile.settings ? profileSummary(profile.settings) : '',
           // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
           progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
           bar: phaseBar(profile),

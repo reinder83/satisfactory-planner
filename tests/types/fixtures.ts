@@ -218,6 +218,20 @@ export const version16 = {
   exactClocks: { '3': ['Recipe_Screw_C'], '4': ['Recipe_IronPlate_C'] },
 } satisfies SavedState;
 
+// Version 17: a link whose vehicles burn a fuel added in #1165 (laterVehicleFuels): trucks taking
+// plates to the elevator on Battery.
+export const version17 = {
+  ...version16,
+  version: 17,
+  factoryGroups: {
+    ...version16.factoryGroups,
+    links: {
+      ...version16.factoryGroups.links,
+      'fg-plates1:elevator': { mode: 'truck', roundTripMin: 4, fuel: 'Battery' },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -237,6 +251,7 @@ export const states: [SavedState, number][] = [
   [version14, 14],
   [version15, 15],
   [version16, 16],
+  [version17, 17],
 ];
 
 export const backup = {

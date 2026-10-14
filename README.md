@@ -24,6 +24,8 @@ Most calculators stop at the numbers. This one keeps going: which milestone to u
 
 The [user guide](docs/USER-GUIDE.md) covers every screen and exactly what the calculator does and does not model.
 
+**Game data:** Satisfactory 1.1 data (SatisfactoryTools b5210ae9), balance unchanged through 1.2.4.0. Recipes, items and milestones come from that dataset ([third-party notices](THIRD_PARTY.md)).
+
 <img src="docs/assets/hazard-divider.svg" alt="" width="100%">
 
 ## Use it in your browser

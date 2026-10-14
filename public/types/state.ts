@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–16). Later versions only add optional sections, so an older
+//                  version (1–17). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -17,11 +17,29 @@ import type { ExactClocks } from './calculated.ts';
 // profile migrated from the handbook (handbookOrigin), 13 one that also records what its
 // migration mapped (handbookOrigin.mapping), 14 a group that makes items on site
 // (factoryGroups.local), 15 ticks a recalculation kept for review because of lines made on site
-// (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks).
+// (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks), 17 a
+// factory-group link whose vehicles burn a fuel added in #1165 (laterVehicleFuels).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+export type StateVersion =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17;
 
 // Ticks a recalculation into a new profile could not carry onto one line of the new plan, because
 // of factory groups' own lines made on site (#876, newProfileState in state/carry.ts): a tick on a
@@ -135,7 +153,8 @@ export interface LinkTransport {
   mode: LinkMode;
   // Minutes for one vehicle there and back, loading included.
   roundTripMin: number;
-  // What a truck, tractor or explorer burns (preferences.ts vehicleFuels); absent for a train
+  // What a truck, tractor or explorer burns (preferences.ts vehicleFuels; one of
+  // laterVehicleFuels makes the state version 17); absent for a train
   // (electric) and a drone.
   fuel?: string;
 }
@@ -192,7 +211,8 @@ export interface SavedState {
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
 export type UpdateOp =
   | { type: 'check'; key: string; value: boolean }
-  | { type: 'checks'; keys: string[]; value: boolean }
+  // null forgets the keys, as if never ticked (#1163).
+  | { type: 'checks'; keys: string[]; value: boolean | null }
   // An empty or blank value deletes the note. `base` is the saved text the value was typed over
   // (#1052): the write is refused (409) when the note now says something else (checkBase).
   | { type: 'note'; key: string; value: string; base?: string }

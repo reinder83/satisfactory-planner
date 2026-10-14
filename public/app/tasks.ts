@@ -77,6 +77,8 @@ export interface PlanStepView extends Step {
   // A production line at exact clocks in a whole-machine plan, or the change a recalculation would
   // make to its clocks (lineClockNote in exact-clocks.ts, #1066), under the title.
   clocks?: string;
+  // The glossary terms its text marks (#1076): those no step above it on screen marked first.
+  terms?: string[];
   icon: StepIconData;
   link: StepLink | null;
   custom?: boolean;

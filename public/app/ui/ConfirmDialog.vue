@@ -3,7 +3,8 @@
   title, the question and two buttons. `answer` settles the question: true for the confirm
   button, false for Cancel. A destructive action (`danger`) gets a red confirm button;
   confirmAction() then puts focus on Cancel, and on the confirm button otherwise. The text is
-  interpolated, so a user's name in it stays text.
+  interpolated, so a user's name in it stays text. A question may add a list, a note and a folded
+  list under the explanation (the merge preview on the Backup page, #1160).
 -->
 <script setup lang="ts">
 import type { ConfirmOptions } from './confirm.ts';
@@ -22,6 +23,16 @@ defineProps<ConfirmOptions & { answer: (ok: boolean) => void }>();
   </header>
   <div class="dialog-body">
     <p id="confirm-body">{{ body }}</p>
+    <ul v-if="list?.length" class="confirm-list" data-confirm-list>
+      <li v-for="(item, i) in list" :key="i">{{ item }}</li>
+    </ul>
+    <p v-if="note" class="small muted" data-confirm-note>{{ note }}</p>
+    <details v-if="folded" class="confirm-folded" data-confirm-folded>
+      <summary>{{ folded.summary }}</summary>
+      <ul>
+        <li v-for="(item, i) in folded.items" :key="i">{{ item }}</li>
+      </ul>
+    </details>
     <div class="detail-actions">
       <button type="button" class="btn" data-confirm-cancel @click="answer(false)">Cancel</button>
       <button

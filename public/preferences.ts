@@ -4,11 +4,12 @@
 // names the planner, the wizard, the pages and the tests use, so none of them names a file
 // under preferences/:
 //   storage.ts     the storage setting: covered items, construction materials, refill rates
-//   world.ts       World Randomization choices, the raw resources, the original map's node counts,
-//                  default budgets
+//   world.ts       World Randomization choices, the recipe part cost steps (#1161), the raw
+//                  resources, the original map's node counts, default budgets
 //   fuels.ts       main power, the generators a player may already have, vehicle and drone
 //                  fuel choices, the drone fuel supply
 //   help.ts        the wizard's and the guided start's help text
+//   glossary.ts    the game terms the pages explain on hover, focus and tap (#1076)
 //   guided.ts      the guided start's questions
 //   extraction.ts  the node survey: extraction rates, yields and the budgets they give, and
 //                  the Water Extractors a line's Water needs, and the power extraction draws
@@ -29,11 +30,15 @@ export {
   nodeCounts,
   purities,
   rawResources,
+  RECIPE_COSTS,
+  recipeCostChoices,
+  recipeCostOf,
   resourceDefaults,
 } from './preferences/world.ts';
 export {
   droneFuels,
   droneSupply,
+  laterVehicleFuels,
   OWNED_GENERATORS,
   OWNED_GENERATORS_MAX,
   ownedGeneratorCounts,
@@ -42,6 +47,7 @@ export {
   vehicleFuels,
 } from './preferences/fuels.ts';
 export { helpText } from './preferences/help.ts';
+export { firstTerms, glossary, termParts } from './preferences/glossary.ts';
 export {
   GUIDED_TOPUP_RATE,
   guidedBudgetsQuestion,

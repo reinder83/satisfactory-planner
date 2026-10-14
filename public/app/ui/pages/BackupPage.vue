@@ -1,6 +1,7 @@
 <!--
   #backup, in two versions: the browser edition (saves live in this browser, so there is no
   progress download) and the server edition, with this profile's progress download and restore.
+  Both have the full-save export and import and, under it, Co-op progress (ui/backup/, #1160).
   The save-wide note (key `global`) moved to the Notes page with the phase notes (NotesPage.vue,
   #243); the server version points there where it used to be.
 -->
@@ -31,6 +32,7 @@ import {
 import { render } from '../../shell.ts';
 import { backupAge, restoreMessage } from '../../views/backup.ts';
 import { invalidate, legacy } from '../bridge.ts';
+import ProgressMerge from '../backup/ProgressMerge.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -289,6 +291,8 @@ async function persistStorage() {
       </button>
     </details>
   </section>
+  <!-- Co-op progress (#1160), in both editions: this profile's ticks out, a friend's merged in. -->
+  <ProgressMerge />
 
   <section v-if="page.kind === 'browser'" class="panel">
     <h2>Keep a backup</h2>
@@ -359,9 +363,12 @@ async function persistStorage() {
     <section class="panel">
       <h2>Calculation assumptions</h2>
       <p v-for="(warning, i) in page.warnings" :key="i">{{ warning }}</p>
-      <a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer"
-        >Recipe data source</a
-      >
+      <p data-game-data>
+        Satisfactory 1.1 data (SatisfactoryTools b5210ae9), balance unchanged through 1.2.4.0.
+        <a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer"
+          >Recipe data source</a
+        >
+      </p>
     </section>
   </template>
 </template>

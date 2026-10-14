@@ -47,6 +47,8 @@ export interface AdaFacts {
   // does not count ("8 Coal Generators"); each absent for none.
   ownedGenerators?: string;
   idleGenerators?: string;
+  // The recipe part cost multiplier the open plan was calculated with (#1161); absent at 1×.
+  recipeCost?: number;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -67,6 +69,10 @@ export interface AdaFacts {
   // The saves the last import added while another save stayed open, as a name list (#1052), shown
   // on Saves & profiles until it is left; '' or absent otherwise.
   imported?: string;
+  // The last merge of a friend's progress into the open profile on the Backup page (#1160): how
+  // many steps it ticked and the file's name; absent when there was none since the page opened.
+  merged?: number;
+  mergedFrom?: string;
   // Where the user's other tabs or devices moved while this tab shows another profile (#1052):
   // that profile's name in quotes, with its save's when it is another save; '' or absent otherwise.
   groupMoved?: string;
@@ -415,6 +421,17 @@ const RULES: AdaRule[] = [
         .filter(Boolean)
         .join(' '),
   },
+  {
+    // The game mode's recipe part cost (#1161): the plan's numbers already count it, and only
+    // Edit settings changes it, so nothing here waits for a recalculation.
+    id: 'recipe-cost',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.recipeCost && facts.recipeCost !== 1,
+    // The game's steps (RECIPE_COSTS) are short decimals, so the number is written as it is.
+    text: facts =>
+      `This plan was calculated with a ${facts.recipeCost}× recipe part cost: every recipe takes ${facts.recipeCost} times its usual inputs for the same outputs, and every number here already counts it. ${(facts.recipeCost ?? 1) > 1 ? 'Your patience is not included.' : 'Enjoy the discount.'}`,
+  },
   // Factory, storage, delivery and notes counters for the current phase.
   {
     id: 'factories-none',
@@ -655,6 +672,16 @@ const RULES: AdaRule[] = [
     // Only after when() found a backup age.
     text: facts =>
       `Last full backup: ${plural(facts.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
+  },
+  // Both editions: the merge of a friend's progress just made on this page (#1160).
+  {
+    id: 'progress-merged',
+    on: ['backup'],
+    tone: 'calm',
+    when: facts => facts.merged,
+    // Only after when() found a merge.
+    text: facts =>
+      `Your merge ticked ${plural(facts.merged!, 'step')} from ${facts.mergedFrom}. Nothing was unticked. Whether your co-op partner really built all that is between the two of you.`,
   },
   // Page-specific hints: the profile list, factories, the wizard and Resources.
   {

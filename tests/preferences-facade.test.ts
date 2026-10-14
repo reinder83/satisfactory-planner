@@ -13,7 +13,8 @@ const modules = fs
 // share (#921), the Water Extractor figures and counts for the byproduct advice (#1024), and the
 // extraction power the plan's power model charges (#1064), and the mining and belts per phase
 // (#1065), with the belt you already have (phaseBelt, #1068), and the generators you already have
-// (OWNED_GENERATORS, ownedGeneratorCounts, #1068).
+// (OWNED_GENERATORS, ownedGeneratorCounts, #1068), and the recipe part cost steps (RECIPE_COSTS,
+// recipeCostChoices, recipeCostOf, #1161).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_MARKS',
@@ -35,6 +36,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'PHASE_CLOCK',
     'PIPE_MARKS',
     'PRESSURIZER_MW',
+    'RECIPE_COSTS',
     'WATER_EXTRACTOR',
     'WELL_BASE',
     'WELL_SATELLITES',
@@ -54,6 +56,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'extractorMW',
     'extractorOption',
     'extractorShards',
+    'firstTerms',
+    'glossary',
     'guidedBudgetsQuestion',
     'guidedHaveQuestion',
     'guidedQuestions',
@@ -63,6 +67,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'helpText',
     'isWellKind',
     'knownWorld',
+    'laterVehicleFuels',
     'matchingPreset',
     'minedResources',
     'minerMarks',
@@ -88,6 +93,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'purities3',
     'purityFactor',
     'rawResources',
+    'recipeCostChoices',
+    'recipeCostOf',
     'resourceAvailable',
     'resourceDefaults',
     'resourcePool',
@@ -99,6 +106,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'startingSurvey',
     'storageOptions',
     'storageRateFor',
+    'termParts',
     'turbofuelRecipes',
     'tutorialKeys',
     'uncountedResources',

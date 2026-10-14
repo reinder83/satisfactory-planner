@@ -9,6 +9,7 @@ import {
   purities,
   ownedGeneratorCounts,
   powerOptions,
+  RECIPE_COSTS,
   resourceDefaults,
   turbofuelRecipes,
 } from '../public/preferences.ts';
@@ -329,6 +330,15 @@ const ownedAlternatesSetting = (value: unknown): { ownedAlternates?: string[] } 
   const ids = [...new Set(value.filter((id): id is string => ALT_IDS.has(id)))].sort();
   return ids.length ? { ownedAlternates: ids } : {};
 };
+// The game mode's recipe part cost multiplier (#1161): `{ recipeCost }` for one of the game's steps
+// (RECIPE_COSTS) other than 1, nothing for 1 or absent, so a 1× plan, and every plan stored before
+// it, has no field and calculates exactly as before; any other value is refused, never corrected.
+const recipeCostSetting = (value: unknown): { recipeCost?: number } => {
+  if (value === undefined || value === 1) return {};
+  if (typeof value !== 'number' || !RECIPE_COSTS.includes(value))
+    fail('Choose a recipe part cost from 0.25× to 2×.');
+  return { recipeCost: value };
+};
 // The generators the player already has (#1068): `{ ownedGenerators: { building: count } }` with
 // only the known kinds (OWNED_GENERATORS in public/preferences/fuels.ts) and whole counts from 1,
 // or nothing, so the field is absent unless one is entered.
@@ -375,6 +385,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     ),
     multiplier: number(input.multiplier, 0.1, 1000, 1),
     powerFactor: number(input.powerFactor, 0, 10, 1),
+    // The recipe part cost multiplier (#1161): absent at 1×, so settings without it stay as they
+    // were.
+    ...recipeCostSetting(input.recipeCost),
     availablePowerGW: number(input.availablePowerGW, 0, 10000, 0),
     recipes: choice(input.recipes, ['standard', 'all', 'custom'], 'standard'),
     pureIngots: !!input.pureIngots,

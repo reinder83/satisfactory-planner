@@ -17,6 +17,7 @@ import {
 import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../progression.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
+import { beginnerMode, beginnerStock } from '../beginner.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { defaultProfileName } from '../profile-edit.ts';
@@ -237,7 +238,8 @@ function startingSettings(existing: SaveSummary | undefined): WizardSettings {
 }
 
 // A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and both
-// editions start at Phase 1, where a new player starts (#561).
+// editions start at Phase 1, where a new player starts (#561). In "New to Satisfactory" mode
+// (#1076, beginner.ts) nothing is stocked beyond the elevator instead.
 function freshSettings(): WizardSettings {
   const settings: WizardSettings = {
     phase: '1',
@@ -268,6 +270,7 @@ function freshSettings(): WizardSettings {
     mamRecipes: true,
   };
   settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
+  if (beginnerMode()) beginnerStock(settings, true);
   return settings;
 }
 
@@ -421,10 +424,19 @@ function readField(wizardDraft: WizardDraft, name: string, value: FormDataEntryV
   else if (name === 'saveName') wizardDraft.saveName = String(value);
   else if (name === 'profileName') wizardDraft.name = String(value);
   else if (name.startsWith('limit:')) readLimit(settings, name, value);
+  else if (name === 'recipeCost') readRecipeCost(settings, value);
   else if (NUMBER_SETTINGS.has(name)) byName[name] = Number(value);
   else if (name === 'collectables') settings.collectables = value === 'true';
   else if (name === 'pureIngots') settings.pureIngots = value === 'true';
   else if (TEXT_SETTINGS.has(name)) byName[name] = value;
+}
+
+// The recipe part cost select (#1161, All settings step 1): 1× leaves the field out, as settings()
+// stores it, so a draft from a plan made before the setting keeps settings without it.
+function readRecipeCost(settings: WizardSettings, value: FormDataEntryValue) {
+  const cost = Number(value);
+  if (cost === 1) delete settings.recipeCost;
+  else settings.recipeCost = cost;
 }
 
 // A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:

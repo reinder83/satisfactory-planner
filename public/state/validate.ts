@@ -5,7 +5,7 @@
 // Types: ProgressState is what validateState returns, SavedState anything it accepts
 // (public/types/state.ts). Input arrives as unknown and is narrowed by the checks below
 // (plain, safeKey, label, ...), which are type guards; nothing is trusted before them.
-import { vehicleFuels } from '../preferences.ts';
+import { laterVehicleFuels, vehicleFuels } from '../preferences.ts';
 import { ALTERNATE_RECIPE_IDS } from './alternates.ts';
 import { ITEM_NAMES } from './items.ts';
 import type {
@@ -425,6 +425,12 @@ export const linkKey = (from: unknown, to: unknown, known: Set<string>) =>
 // A link from a source of its own (#231) is 11: releases before it know only 'mines'.
 const linksNeedV11 = (factoryGroups: FactoryGroups) =>
   Object.keys(factoryGroups.links || {}).some(key => sourcePlace(key.split(':')[0]));
+// A link whose vehicles burn a fuel added in #1165 (laterVehicleFuels) is 17: a release before
+// it refuses that fuel as malformed.
+const linksNeedV17 = (factoryGroups: FactoryGroups) =>
+  Object.values(factoryGroups.links || {}).some(
+    transport => !!transport.fuel && laterVehicleFuels.includes(transport.fuel),
+  );
 // A link's transport as saved: a vehicle mode, a round trip of up to a day in minutes, and a
 // fuel for the vehicles that burn one.
 export function linkTransport(value: unknown): LinkTransport {
@@ -699,10 +705,10 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–16 are accepted as they are; there is no field-by-field upgrade, because each
-// version only adds optional sections that default to blank. The one rewrite is of keys, not of
-// a version: an amplified twin's unlock records and a group line's unlock tick merge into their
-// recipe's (mergeOldUnlockKeys).
+// Versions 1–17 are accepted as they are; there is no field-by-field upgrade, because each
+// version only adds optional sections or values that default to blank. The one rewrite is of
+// keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
+// into their recipe's (mergeOldUnlockKeys).
 // A higher version is refused with an update message, so a newer save is never downgraded or
 // stripped. Anything malformed throws with status 400 instead of being dropped, so a bad import
 // cannot replace good progress. Unknown top-level fields and settings other than phase are not
@@ -710,11 +716,11 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(state.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "17" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 16
+      // Compared as the old code did, so a version given as "18" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 17
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -794,38 +800,43 @@ export function validateState(state: unknown): ProgressState {
   // site (factoryGroups.local, #874) is 14: an older release's validateGroups would drop the choice.
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876) are
   // 15: an older release would drop them, and they are progress. The production lines asked to run
-  // at exact clocks (exactClocks, #1066) are 16: an older release would drop the choice.
-  clean.version = clean.exactClocks
-    ? 16
-    : clean.onSiteReview
-      ? 15
-      : clean.factoryGroups.local
-        ? 14
-        : clean.handbookOrigin?.mapping
-          ? 13
-          : clean.handbookOrigin
-            ? 12
-            : linksNeedV11(clean.factoryGroups)
-              ? 11
-              : clean.storageEdits.bayOrder
-                ? 10
-                : linksNeedV9(clean.factoryGroups)
-                  ? 9
-                  : clean.storageEdits.bayFloors
-                    ? 8
-                    : clean.factoryGroups.links
-                      ? 7
-                      : clean.storageEdits.hiddenFloors.length
-                        ? 6
-                        : clean.storageEdits.hiddenBays.length
-                          ? 5
-                          : hasAddedSlots(clean.storageEdits)
-                            ? 4
-                            : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                              ? 3
-                              : hasEdits(clean.storageEdits)
-                                ? 2
-                                : 1;
+  // at exact clocks (exactClocks, #1066) are 16: an older release would drop the choice. A link
+  // whose vehicles burn Packaged Oil, Packaged Heavy Oil Residue, Battery or Petroleum Coke
+  // (laterVehicleFuels, #1165) is 17: an older release would refuse that fuel as malformed instead
+  // of asking for an update.
+  clean.version = linksNeedV17(clean.factoryGroups)
+    ? 17
+    : clean.exactClocks
+      ? 16
+      : clean.onSiteReview
+        ? 15
+        : clean.factoryGroups.local
+          ? 14
+          : clean.handbookOrigin?.mapping
+            ? 13
+            : clean.handbookOrigin
+              ? 12
+              : linksNeedV11(clean.factoryGroups)
+                ? 11
+                : clean.storageEdits.bayOrder
+                  ? 10
+                  : linksNeedV9(clean.factoryGroups)
+                    ? 9
+                    : clean.storageEdits.bayFloors
+                      ? 8
+                      : clean.factoryGroups.links
+                        ? 7
+                        : clean.storageEdits.hiddenFloors.length
+                          ? 6
+                          : clean.storageEdits.hiddenBays.length
+                            ? 5
+                            : hasAddedSlots(clean.storageEdits)
+                              ? 4
+                              : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                                ? 3
+                                : hasEdits(clean.storageEdits)
+                                  ? 2
+                                  : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

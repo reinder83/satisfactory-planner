@@ -6,12 +6,23 @@
   one block, every cell under its column's name (data-label), so the page never scrolls sideways.
   Wider, a table that still does not fit its step scrolls inside its own box (style.css); that box
   then takes keyboard focus, named by the table's caption, so the arrow keys can scroll it (#1020).
+  The lines above and after it mark the glossary terms in `terms` (#1076, ui/TermText.vue), each once.
 -->
 <script setup lang="ts">
+import { computed } from 'vue';
+import { termParts } from '../../../preferences.ts';
 import type { StepTable } from '../../../step-table.ts';
 import { useScrollBox } from '../scroll-box.ts';
+import TermText from '../TermText.vue';
 
-defineProps<{ table: StepTable }>();
+const props = withDefaults(defineProps<{ table: StepTable; terms?: readonly string[] }>(), {
+  terms: () => [],
+});
+// The terms the line after the table marks: those the line above it has not.
+const afterTerms = computed(() => {
+  const above = termParts(props.table.intro, props.terms).map(part => part.term);
+  return props.terms.filter(term => !above.includes(term));
+});
 // Whether the table is wider than its box (ui/scroll-box.ts).
 const { scrollAttrs } = useScrollBox('box');
 // An empty cell hides on a phone; a short one (a rate, a count, an amount) never wraps.
@@ -20,7 +31,7 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
 
 <template>
   <div ref="box" class="step-table" data-step-table v-bind="scrollAttrs(table.caption)">
-    <p>{{ table.intro }}</p>
+    <p><TermText :text="table.intro" :terms="terms" /></p>
     <table>
       <caption class="visually-hidden">
         {{
@@ -49,6 +60,8 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
         </tr>
       </tfoot>
     </table>
-    <p v-if="table.after" data-step-table-after>{{ table.after }}</p>
+    <p v-if="table.after" data-step-table-after>
+      <TermText :text="table.after" :terms="afterTerms" />
+    </p>
   </div>
 </template>

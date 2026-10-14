@@ -1489,6 +1489,14 @@ textarea::placeholder {
   font-size: 19px;
   overflow-wrap: anywhere;
 }
+/* A factory's own actions beside its name, "Mark all running" and "Build order →" (#1163): they
+   wrap under each other on a narrow page rather than making it scroll sideways. */
+.site-group .site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
 .site-group .site-head p {
   margin: 0;
   max-width: 560px;
@@ -3136,6 +3144,28 @@ dialog::backdrop {
 }
 #confirm .detail-actions {
   justify-content: flex-end;
+}
+/* A question's optional details (ConfirmDialog.vue): the merge preview's count per phase, the
+   steps ticked already and the skipped step ids, folded, each id wrapped anywhere so a long one
+   never widens the dialog (#1160). */
+#confirm .confirm-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+#confirm .dialog-body [data-confirm-note] {
+  margin-top: 8px;
+}
+#confirm .confirm-folded {
+  margin-top: 10px;
+}
+#confirm .confirm-folded summary {
+  cursor: pointer;
+}
+#confirm .confirm-folded ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 /* ── Factory flow rails (2B layout) and belt logistics ── */
@@ -4894,6 +4924,63 @@ button.rail-tile:hover {
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }
+/* A glossary term (#1076, ui/Term.vue): the word as written, underlined with dots, and its
+   definition in a tooltip under it. The tooltip is at the end of <body>, fixed where the component
+   places it (under the word, inside the window), so no scrolling box clips it; above the sticky
+   edit bar and the top toast, under the phone menu. */
+.term-word {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.term-word:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.term-tip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  display: block;
+  width: min(300px, calc(100vw - 32px));
+  padding: 12px;
+  background: #22272b;
+  border: 1px solid #343b41;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+.term-where {
+  display: block;
+  margin-top: 6px;
+}
+/* "New to Satisfactory" (#1076, app/beginner.ts) hides the hard-drive payoff. */
+:root[data-beginner] [data-payoff] {
+  display: none;
+}
+.guided-beginner {
+  margin: 0 0 16px;
+}
+.guided-beginner p {
+  margin: 4px 0 0;
+}
 
 /* ── Responsive ────────────────────────────────────────── */
 @media (min-width: 1500px) {
@@ -6067,6 +6154,7 @@ button.rail-tile:hover {
   .assign-editor select,
   .used-input,
   .setting-help [role='tooltip'],
+  .term-tip,
   .alt-picker-head input,
   .alt-filters input[type='search'],
   .owned-alt-tools input[type='search'],
@@ -6119,6 +6207,11 @@ button.rail-tile:hover {
 /* All settings step 1's Save name (#578, SettingsStep.vue): the same message, under the box in
    its grid cell. */
 .settings-name .form-error:not(:empty) {
+  margin: 0 0 6px;
+}
+/* All settings step 1's recipe part cost (#1161, SettingsStep.vue): what it does, under the select
+   in its grid cell. */
+.recipe-cost p {
   margin: 0 0 6px;
 }
 /* The guided start's stepper (SP-35, GuidedPage.vue): numbered steps, the current one in the
