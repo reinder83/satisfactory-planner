@@ -4916,6 +4916,63 @@ button.rail-tile:hover {
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }
+/* A glossary term (#1076, ui/Term.vue): the word as written, underlined with dots, and its
+   definition in a tooltip under it. The tooltip is at the end of <body>, fixed where the component
+   places it (under the word, inside the window), so no scrolling box clips it; above the sticky
+   edit bar and the top toast, under the phone menu. */
+.term-word {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.term-word:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.term-tip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  display: block;
+  width: min(300px, calc(100vw - 32px));
+  padding: 12px;
+  background: #22272b;
+  border: 1px solid #343b41;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+.term-where {
+  display: block;
+  margin-top: 6px;
+}
+/* "New to Satisfactory" (#1076, app/beginner.ts) hides the hard-drive payoff. */
+:root[data-beginner] [data-payoff] {
+  display: none;
+}
+.guided-beginner {
+  margin: 0 0 16px;
+}
+.guided-beginner p {
+  margin: 4px 0 0;
+}
 
 /* ── Responsive ────────────────────────────────────────── */
 @media (min-width: 1500px) {
@@ -6089,6 +6146,7 @@ button.rail-tile:hover {
   .assign-editor select,
   .used-input,
   .setting-help [role='tooltip'],
+  .term-tip,
   .alt-picker-head input,
   .alt-filters input[type='search'],
   .owned-alt-tools input[type='search'],

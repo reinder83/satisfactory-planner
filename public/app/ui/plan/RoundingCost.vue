@@ -6,15 +6,18 @@
   with a pointer to the line dialog's exact-clocks choice); the wizard's Review shows every phase
   it lists as a table. Nothing shows for a plan without whole machines, or one calculated before
   the planner recorded the exact plan: the figures are the calculation's, never worked out again.
+  Nor in "New to Satisfactory" mode (#1076, app/beginner.ts), which hides clock details.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { beginnerMode } from '../../beginner.ts';
 import { roundingCost } from '../../exact-clocks.ts';
 import { itemRate } from '../../flow.ts';
 import { durationOfHours, num } from '../../format.ts';
 import { power } from '../../wizard/fields.ts';
 import { listNames } from '../../../wording.ts';
 import type { StoredStage } from '../../../types/index.ts';
+import { legacy } from '../bridge.ts';
 
 const props = withDefaults(
   defineProps<{ entries: { phase: string; stage: StoredStage | undefined }[]; layout?: string }>(),
@@ -25,6 +28,7 @@ const props = withDefaults(
 const hoursText = (hours: number) => (Number.isFinite(hours) ? durationOfHours(hours) : 'never');
 
 const view = computed(() => {
+  if (legacy(beginnerMode)) return null;
   const phases = props.entries.flatMap(({ phase, stage }) => {
     const cost = roundingCost(stage);
     if (!cost) return [];

@@ -15,9 +15,14 @@
   at exact clocks, or one whose clocks a recalculation would change (#1066), says so there too.
   With every step done, a line says the phase checklist is complete. While editing, the list
   stays flat in the plan's order, since ↑ / ↓ move a step past its neighbour on screen.
+  A step's text marks the glossary terms (#1076, ui/TermText.vue) the steps above it on screen have
+  not marked yet, so each term is explained once. "New to Satisfactory" (app/beginner.ts) is a
+  view preference beside "Hide completed": it hides the plan's hard-drive and clock details.
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount } from 'vue';
+import { firstTerms } from '../../../preferences.ts';
+import { beginnerMode, setBeginnerMode } from '../../beginner.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import {
   calculated,
@@ -89,8 +94,26 @@ const list = computed(() =>
         form: planEditing && editingTask === task.id ? taskLinkChoices(task) : null,
       };
     });
+    // Outside edit mode: the unfinished steps (the first leads) and the completed ones. The
+    // steps of lines a delivered part leaves without work (#1062) come last among the
+    // unfinished ones, dimmed, and never lead. A step just ticked is held in its place among
+    // them for a few seconds (tick-hold.ts, #1054).
+    const unfinished = [
+        ...steps.filter(s => open(s) && !s.idle),
+        ...steps.filter(s => open(s) && s.idle),
+      ],
+      finished = steps.filter(s => !open(s));
+    // Each glossary term is marked in the first step text on screen that has it (#1076).
+    const order = planEditing ? steps : [...unfinished, ...finished],
+      marks = firstTerms(
+        order.map(s =>
+          s.table ? `${s.table.intro} ${s.table.after ?? ''}` : s.list ? '' : s.body || '',
+        ),
+      );
+    order.forEach((s, i) => (s.terms = marks[i]));
     return {
       total: tasks.length,
+      beginner: beginnerMode(),
       query,
       hideDone,
       requiredOnly,
@@ -103,12 +126,8 @@ const list = computed(() =>
           ? 'No steps match this search.'
           : 'Every step of this phase is completed. Untick “Hide completed” to review them.',
       steps,
-      // Outside edit mode: the unfinished steps (the first leads) and the completed ones. The
-      // steps of lines a delivered part leaves without work (#1062) come last among the
-      // unfinished ones, dimmed, and never lead. A step just ticked is held in its place among
-      // them for a few seconds (tick-hold.ts, #1054).
-      open: [...steps.filter(s => open(s) && !s.idle), ...steps.filter(s => open(s) && s.idle)],
-      done: steps.filter(s => !open(s)),
+      open: unfinished,
+      done: finished,
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
       // "Required steps only" hides every step still open: only optional ones are left (#1070).
@@ -165,6 +184,12 @@ function toggleHideDone(event: Event) {
   render();
 }
 
+// "New to Satisfactory" (#1076): a view preference like Hide completed, remembered in this browser.
+function toggleBeginner(event: Event) {
+  setBeginnerMode((event.target as HTMLInputElement).checked);
+  render();
+}
+
 // "Required steps only" (#1070): hides the optional steps, a view preference like Hide completed.
 function toggleRequiredOnly(event: Event) {
   setRequiredOnly((event.target as HTMLInputElement).checked);
@@ -196,8 +221,25 @@ function toggleRequiredOnly(event: Event) {
         :checked="list.requiredOnly"
         @change="toggleRequiredOnly"
       />Required steps only</label
+    ><label class="check-row small"
+      ><input
+        type="checkbox"
+        data-beginner-switch
+        :checked="list.beginner"
+        :aria-describedby="list.beginner ? 'beginner-note' : undefined"
+        @change="toggleBeginner"
+      />New to Satisfactory</label
     ><span class="small muted">{{ list.count }}</span>
   </div>
+  <p
+    v-if="list.total > 0 && list.beginner"
+    id="beginner-note"
+    class="small muted"
+    data-beginner-note
+  >
+    New to Satisfactory: the hard-drive payoff and what whole machines cost are hidden. Untick it to
+    see them.
+  </p>
   <div v-if="list.editing" class="checklist">
     <template v-if="list.steps.length">
       <template v-for="step in list.steps" :key="step.id">
