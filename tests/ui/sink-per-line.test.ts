@@ -18,7 +18,12 @@ import { OUTSIDE } from '../../public/app/group-links.ts';
 import { recycleModel } from '../../public/app/recycle.ts';
 import { calcStage } from '../../public/app/session.ts';
 import { $, catalog, generatedWith, open, page } from './setup.ts';
-import type { CalcRow, FactoryGroups, StoredStage } from '../../public/types/index.ts';
+import type {
+  CalcRow,
+  FactoryGroups,
+  StoredSettings,
+  StoredStage,
+} from '../../public/types/index.ts';
 
 const COAL = 'Compacted Coal';
 const COAL_LINE = 'Recipe_Alternate_EnrichedCoal_C',
@@ -160,6 +165,9 @@ test("the sink caption's cause is the phase's, shared by the lines that make the
     equivalent: 1,
     lastClock: 100,
     power: 4,
+    phase: 3,
+    peakMW: 4,
+    generationMW: 0,
     inputs,
     outputs,
   });
@@ -170,7 +178,8 @@ test("the sink caption's cause is the phase's, shared by the lines that make the
     const context: CalcFlowContext = {
       storedStage: { feasible: true, rows, surplus: { X: surplus } },
       stageKey: '3',
-      settings: { wholeMachines: true },
+      // A partial settings fixture: the sink's cause reads only wholeMachines.
+      settings: { wholeMachines: true } as StoredSettings,
     };
     return [first, second].map(row => {
       const sink = flowOutputs(row, context).find(output => output.kind === 'sink')!;
