@@ -20,6 +20,7 @@ import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
 import StepHeading from '../form/StepHeading.vue';
+import Term from '../Term.vue';
 
 const PHASE_TIME = [
   ['every', 'Every phase'],
@@ -117,10 +118,10 @@ const view = computed(() =>
   <p id="whole-machines-cost" class="small muted">
     Whole machines have a cost: every machine runs at 100%, so the lines that feed it run at full
     speed too, which takes more buildings, power and raw resources than exact clocks (the last
-    machine of each line underclocked to the exact remainder). Fluid, generator and nuclear lines
-    always run at exact clocks, and single production lines can be set to exact clocks later, in
-    their dialog. Recipe choices are selected first, then whole-machine counts are fitted within
-    your budgets.<template v-if="view.cost"
+    machine of each line <Term term="underclock" text="underclocked" /> to the exact remainder).
+    Fluid, generator and nuclear lines always run at exact clocks, and single production lines can
+    be set to exact clocks later, in their dialog. Recipe choices are selected first, then
+    whole-machine counts are fitted within your budgets.<template v-if="view.cost"
       >{{ ' ' }}<span data-whole-machines-cost>{{ view.cost }}</span></template
     >
   </p>

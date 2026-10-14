@@ -22,6 +22,9 @@ import { itemRateRows, storageRows } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
+import Term from '../Term.vue';
+import TermText from '../TermText.vue';
+import { firstTerms } from '../../../preferences.ts';
 import { ALLOWANCE_SETTING } from '../../../power.ts';
 import { currentProfile, currentSave } from '../../session.ts';
 import { startEdit } from '../../wizard/wizard.ts';
@@ -182,6 +185,12 @@ const page = computed(() =>
     };
   }),
 );
+
+// The glossary terms the mining advice marks (#1076): each in the first line that has it.
+const miningTerms = computed(() => {
+  const mining = page.value?.mining;
+  return mining ? firstTerms([mining.equipment, ...mining.rows.map(row => row.words)]) : [];
+});
 </script>
 
 <template>
@@ -297,12 +306,15 @@ const page = computed(() =>
     </p>
     <section v-if="page.mining" class="panel mining-advice" data-mining>
       <h2>Miners and extractors</h2>
-      <p class="small muted" data-mining-equipment>{{ page.mining.equipment }}</p>
+      <p class="small muted" data-mining-equipment>
+        <TermText :text="page.mining.equipment" :terms="miningTerms[0] ?? []" />
+      </p>
       <ul v-if="page.mining.rows.length" class="supply-summary">
-        <li v-for="row in page.mining.rows" :key="row.name" :data-mining-resource="row.name">
+        <li v-for="(row, i) in page.mining.rows" :key="row.name" :data-mining-resource="row.name">
           <ItemIcon :name="row.name" aria-hidden="true" /><span
-            ><b>{{ row.name }}</b> {{ row.rate }}. {{ row.words }}</span
-          >
+            ><b>{{ row.name }}</b> {{ row.rate }}.
+            <TermText :text="row.words" :terms="miningTerms[i + 1] ?? []"
+          /></span>
         </li>
       </ul>
       <p v-else>This phase mines nothing.</p>
@@ -330,8 +342,8 @@ const page = computed(() =>
         <p v-else>{{ list.empty }}</p>
         <p v-if="list.id === 'storage' && page.fromSurplus" class="small muted">
           Each container takes the plan’s surplus of its item first, and a full one overflows to the
-          AWESOME Sink. Storage-only lines run only for items with no surplus; they are optional and
-          built last.
+          <Term term="sink" text="AWESOME Sink" />. Storage-only lines run only for items with no
+          surplus; they are optional and built last.
         </p>
         <p v-if="list.id === 'supplied' && page.credited" class="small muted">
           The plan does not build these lines or the chain behind them. Their extraction is assumed
