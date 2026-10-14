@@ -130,17 +130,21 @@ function setRecord(state: SavedState, update: Raw) {
     delete state.notes[update.key];
   else (state[kind] as Raw)[update.key] = update.value;
 }
-// Ticks or clears many checklist keys at once.
+// Ticks or clears many checklist keys at once. `value: null` forgets them, as if never ticked:
+// the Undo of a factory's "Mark all running" (#1163) puts a line that had no record back that
+// way, since a stored `false` means "deliberately unticked" to a new profile's carry (`built`).
 function setChecks(state: SavedState, update: Raw) {
   if (
     !Array.isArray(update.keys) ||
     !update.keys.length ||
     update.keys.length > 1000 ||
     update.keys.some((key: unknown) => !safeKey(key)) ||
-    typeof update.value !== 'boolean'
+    (update.value !== null && typeof update.value !== 'boolean')
   )
     fail('Invalid checklist update.');
-  for (const key of update.keys as string[]) state.checks[key] = update.value;
+  for (const key of update.keys as string[])
+    if (update.value === null) delete state.checks[key];
+    else state.checks[key] = update.value;
 }
 function setPhase(state: SavedState, update: Raw) {
   state.settings.phase = update.value as Phase;
