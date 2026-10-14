@@ -2,7 +2,7 @@
   The "recipe ↗" dialog of the wizard's alternate recipe picker: the alternate beside the
   standard recipe(s) for its first output, so the two can be compared. Rates are one machine
   at 100%, per minute, with the inputs at the draft's recipe part cost (#1161), as the plan takes
-  them.
+  them: the Packager's recipes keep their 1× inputs (withRecipeCost in planner/recipes.ts).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -19,7 +19,10 @@ const props = defineProps<{ id: string }>();
 const panel = (recipe: CatalogRecipe, cost: number): RecipeView => ({
   name: recipe.name.replace('Alternate: ', ''),
   machine: recipe.machine,
-  ins: Object.entries(recipe.inputs || {}).map(([item, rate]) => [item, rate * cost]),
+  ins: Object.entries(recipe.inputs || {}).map(([item, rate]) => [
+    item,
+    recipe.machine === 'Packager' ? rate : rate * cost,
+  ]),
   outs: Object.entries(recipe.outputs || {}),
 });
 

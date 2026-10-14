@@ -70,20 +70,30 @@ export function standardAlternateIn(config: CurrentSettings, id: string): boolea
 // whatever the recipe setting, from the phase each becomes available in; without them the pool is
 // the one every earlier release planned with.
 // Last, the game mode's recipe part cost (`recipeCost`, #1161) scales every recipe's inputs
-// (withRecipeCost); its outputs, machine and power stay. The power generators (generators()) are
-// not recipes and keep their fuel. At 1× (the field absent) the pool is the recipes themselves.
+// (withRecipeCost); its outputs, machine and power stay. The Packager's recipes keep their 1×
+// inputs: each packs or unpacks one fluid at the same rate both ways, so below 1× a pack and
+// unpack pair would make the fluid from nothing. The power generators (generators()) are not
+// recipes and keep their fuel. At 1× (the field absent) the pool is the recipes themselves.
 export function recipePool(config: CurrentSettings, phase: number, conversion: boolean): Recipe[] {
   return withRecipeCost(basePool(config, phase, conversion), config.recipeCost);
 }
-// Every recipe of `pool` taking `cost` times its inputs; the same objects at 1× or without a cost.
-export function withRecipeCost<T extends Pick<Recipe, 'inputs'>>(pool: T[], cost?: number): T[] {
+// Every recipe of `pool` taking `cost` times its inputs, except the Packager's, which keep theirs;
+// the same objects at 1× or without a cost.
+export function withRecipeCost<T extends Pick<Recipe, 'inputs' | 'machine'>>(
+  pool: T[],
+  cost?: number,
+): T[] {
   if (cost === undefined || cost === 1) return pool;
-  return pool.map(recipe => ({
-    ...recipe,
-    inputs: Object.fromEntries(
-      Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * cost]),
-    ),
-  }));
+  return pool.map(recipe =>
+    recipe.machine === 'Packager'
+      ? recipe
+      : {
+          ...recipe,
+          inputs: Object.fromEntries(
+            Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * cost]),
+          ),
+        },
+  );
 }
 function basePool(config: CurrentSettings, phase: number, conversion: boolean): Recipe[] {
   const owned = config.ownedAlternates || [];

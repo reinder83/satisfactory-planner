@@ -15,6 +15,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { calculate, catalog, recipePool, settings } from '../planner.ts';
 import { generators } from '../planner/recipes.ts';
+import { DATA } from '../planner/data.ts';
+import { solve } from '../optimizer.ts';
 import { powerView } from '../public/power.ts';
 import { RECIPE_COSTS, recipeCostChoices, recipeCostOf } from '../public/preferences.ts';
 import { initialState, validateState } from '../public/state.ts';
@@ -32,6 +34,7 @@ import {
 } from './helpers/editions.ts';
 import type {
   CurrentCalculatedPlan,
+  Recipe,
   SaveExport,
   StoredCalculatedPlan,
 } from '../public/types/index.ts';
@@ -72,6 +75,7 @@ test('settings keep a recipe part cost of the game’s steps other than 1×, and
 });
 
 test('the LP’s recipes take the multiplier times their inputs, with the same outputs, machines and power', () => {
+  let packagers = 0;
   for (const phase of [1, 3, 5])
     for (const cost of [0.25, 2]) {
       const plain = recipePool(settings({ recipes: 'all' }), phase, true),
@@ -85,14 +89,81 @@ test('the LP’s recipes take the multiplier times their inputs, with the same o
           'outputs, machine, power and the rest',
         );
         assert.deepEqual(Object.keys(other.inputs), Object.keys(recipe.inputs));
+        // The Packager's recipes keep their 1× inputs (a pack and unpack pair would otherwise
+        // make the fluid from nothing below 1×).
+        if (recipe.machine === 'Packager') packagers++;
+        const factor = recipe.machine === 'Packager' ? 1 : cost;
         for (const [item, rate] of Object.entries(recipe.inputs))
-          close(other.inputs[item]!, rate * cost, `${recipe.id} ${item}`);
+          close(other.inputs[item]!, rate * factor, `${recipe.id} ${item}`);
       });
       // The power generators are not recipes: they burn the same fuel.
       assert.deepEqual(
         generators(settings({ recipeCost: cost }), phase),
         generators(settings({}), phase),
       );
+    }
+  assert.ok(packagers > 0, 'the Packager recipes were checked');
+});
+
+// Whether `pool` can make anything from nothing: an LP that runs each recipe at most once, may
+// not take in any item (not even a raw resource) more than it makes, and maximises everything it
+// makes on balance. Excited Photonic Matter is left out: the Converter makes it from no inputs
+// at every multiplier, and the plans treat it as free. Returns the net surplus, 0 when none.
+const fromNothing = (pool: Recipe[]): number => {
+  const variables: Record<string, Record<string, number>> = {},
+    constraints: Record<string, { min?: number; max?: number }> = {};
+  for (const recipe of pool.filter(recipe => Object.keys(recipe.inputs).length)) {
+    const column: Record<string, number> = { surplus: 0, ['once:' + recipe.id]: 1 };
+    for (const [item, rate] of Object.entries(recipe.outputs))
+      column['item:' + item] = (column['item:' + item] || 0) + rate;
+    for (const [item, rate] of Object.entries(recipe.inputs))
+      column['item:' + item] = (column['item:' + item] || 0) - rate;
+    for (const [key, rate] of Object.entries(column)) {
+      if (key.startsWith('item:')) {
+        column.surplus! += rate;
+        constraints[key] = { min: 0 };
+      }
+    }
+    variables[recipe.id] = column;
+    constraints['once:' + recipe.id] = { max: 1 };
+  }
+  const { values } = solve({ optimize: 'surplus', opType: 'max', constraints, variables });
+  return Object.entries(values).reduce(
+    (sum, [id, rate]) => sum + (variables[id]?.surplus || 0) * rate,
+    0,
+  );
+};
+
+test('below 1× nothing is made from nothing: the Packager keeps 1×, so no pack and unpack loop', () => {
+  // With every alternate and the Converter's ore conversions, at each step below 1×, no set of
+  // recipes makes any item without taking in more of another (#1164's review: a Packaged and
+  // Unpackage Rocket Fuel pair made Rocket Fuel from nothing at 0.5×).
+  for (const cost of [0.25, 0.5, 0.75]) {
+    const config = settings({ recipes: 'all', recipeCost: cost, nuclear: 'recycle' });
+    for (const phase of [3, 5])
+      assert.ok(fromNothing(recipePool(config, phase, true)) < 1e-6, `${cost}× phase ${phase}`);
+  }
+  // A Phase 5 plan at 0.5× and 0.25×, standard and with every alternate, packs no fluid only to
+  // unpack it, and its Packager lines take their recipe's 1× inputs.
+  const byId = new Map(DATA.recipes.map(recipe => [recipe.id, recipe]));
+  for (const cost of [0.5, 0.25])
+    for (const recipes of ['standard', 'all'] as const) {
+      const plan = calculate({ phase: '5', recipes, recipeCost: cost });
+      for (const [phase, stage] of Object.entries(plan.stages)) {
+        const rows = (stage.rows || []).filter(row => row.equivalent > 0);
+        const names = new Set(rows.map(row => row.name));
+        for (const row of rows) {
+          const fluid = /^Packaged (.+)$/.exec(row.name)?.[1];
+          assert.ok(
+            !fluid || !names.has('Unpackage ' + fluid),
+            `${cost}× ${recipes} phase ${phase}: ${row.name} and its Unpackage`,
+          );
+          const recipe = byId.get(row.id);
+          if (recipe?.machine !== 'Packager') continue;
+          for (const [item, rate] of Object.entries(recipe.inputs))
+            close(row.inputs[item]! / row.equivalent, rate, `${cost}× ${row.name} ${item}`);
+        }
+      }
     }
 });
 

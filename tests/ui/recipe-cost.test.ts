@@ -9,6 +9,7 @@ import { setView, setWizard, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import { carryOptions } from '../../public/state.ts';
+import { openAltRecipe } from '../../public/app/wizard/recipes.ts';
 import { $, catalog, generated, go, open, page } from './setup.ts';
 import type { CurrentCalculatedPlan } from '../../public/types/index.ts';
 
@@ -110,4 +111,20 @@ test('the sidebar names the recipe part cost a plan was calculated with, only wh
       shown ? 4 : 3,
     );
   }
+});
+
+test('"recipe ↗" shows inputs at the draft’s multiplier, the Packager’s at 1× as the plan takes them', () => {
+  settingsStep({ ...generated().settings, recipeCost: 2 });
+  openAltRecipe('Recipe_Alternate_DilutedPackagedFuel_C');
+  const panels = [...document.querySelectorAll('#detail .rail-recipe')].map(panel =>
+    [...panel.querySelectorAll('.rail-recipe-ins .rail-cell')].map(cell =>
+      cell.textContent!.trim(),
+    ),
+  );
+  // Diluted Packaged Fuel (a Refinery) takes 30 Heavy Oil Residue and 60 Packaged Water at 1×;
+  // the standard Packaged Fuel (the Packager) takes 40 Fuel and 40 Empty Canisters at every cost.
+  assert.deepEqual(panels, [
+    ['60 m³Heavy Oil Residue', '120Packaged Water'],
+    ['40 m³Fuel', '40Empty Canister'],
+  ]);
 });
