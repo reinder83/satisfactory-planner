@@ -667,6 +667,7 @@ test('a migrated profile’s backup page has its download, restore and transfer 
     $$('#main .panel h2').map(h2 => h2.textContent),
     [
       'Full saves & transfer',
+      'Co-op progress',
       'Download this profile',
       'Restore this profile',
       'Calculation assumptions',

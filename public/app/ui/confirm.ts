@@ -19,6 +19,11 @@ export interface ConfirmOptions {
   confirmLabel: string;
   // A destructive action: a red confirm button, and focus starts on Cancel.
   danger?: boolean;
+  // Optional details under the explanation (the merge preview, #1160): a list, a line after it
+  // and a folded list under its summary. A question without them looks as before.
+  list?: string[];
+  note?: string;
+  folded?: { summary: string; items: string[] };
 }
 
 let open: {

@@ -3137,6 +3137,28 @@ dialog::backdrop {
 #confirm .detail-actions {
   justify-content: flex-end;
 }
+/* A question's optional details (ConfirmDialog.vue): the merge preview's count per phase, the
+   steps ticked already and the skipped step ids, folded, each id wrapped anywhere so a long one
+   never widens the dialog (#1160). */
+#confirm .confirm-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+#confirm .dialog-body [data-confirm-note] {
+  margin-top: 8px;
+}
+#confirm .confirm-folded {
+  margin-top: 10px;
+}
+#confirm .confirm-folded summary {
+  cursor: pointer;
+}
+#confirm .confirm-folded ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 
 /* ── Factory flow rails (2B layout) and belt logistics ── */
 .rail-cap {
