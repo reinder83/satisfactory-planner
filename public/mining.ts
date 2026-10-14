@@ -514,16 +514,198 @@ export function shardNeeds(
   return { shards, machines, at100 };
 }
 
+// --- Upgrade before expanding (#1169) ---
+//
+// Every phase plans its nodes with its own belts, miner and clock (phaseMining), best nodes first
+// (miningAdvice), from the same counted nodes: a node kind's count does not depend on the phase
+// (the budget's scale is worked out against a fixed reference). So the nodes the previous phase
+// tapped are the first ones a later phase taps again, at the later phase's cap, and the stored
+// later stage's node count already uses them upgraded; only the rest of its draw takes new nodes.
+// nodeUpgrades says how much more those tapped nodes give once upgraded, so the build plan can
+// advise the milestones that raise their cap before tapping more (the owner's "upgrade the belts /
+// miners before placing more miners"), and the later phase's mining step can say how many of its
+// nodes are new. It reads two stored stages only, so a stored plan keeps its numbers.
+
+// How one raw resource's tapped nodes do in a later phase: the nodes the previous phase tapped
+// (`tapped`, per kind; never a resource well's satellites, whose pressurizer the pipe already
+// caps), what they give at the previous phase's cap (`before`) and at this phase's (`after`),
+// this phase's draw (`rate`), the nodes it taps beyond them (`added`) and how many new nodes the
+// same draw would take without the upgrade (`without`, null where that cannot be compared: the
+// draw also takes well satellites, or the nodes could not give it at the old cap).
+export interface NodeUpgrade {
+  resource: string;
+  fluid: boolean;
+  tapped: [MiningSource['kind'], number][];
+  nodes: number;
+  before: number;
+  after: number;
+  rate: number;
+  added: number;
+  without: number | null;
+}
+// A later phase's upgrade of the nodes already tapped (nodeUpgrades): the previous phase, what
+// changed between the two phases that raises a tapped node's output (each null when it raises
+// none: the belt for an ore, the pipe for crude oil, the miner's mark for an ore and the clock),
+// and each resource whose draw needs more than its tapped nodes give at the old cap and gets more
+// from them upgraded.
+export interface PhaseUpgrade {
+  previous: number;
+  belt: { from: string; to: string } | null;
+  pipe: { from: string; to: string } | null;
+  miner: { from: number; to: number } | null;
+  clock: { from: number; to: number } | null;
+  resources: NodeUpgrade[];
+}
+
+// Rounding noise in a rate, per minute.
+const RATE_DUST = 1e-6;
+
+// The nodes of each kind an advice taps, best kind first, wells left out.
+function tappedKinds(runs: MiningRun[]): [MiningSource['kind'], number][] {
+  const counts = new Map<MiningSource['kind'], number>();
+  for (const run of runs.filter(run => !isWellKind(run.kind)))
+    counts.set(run.kind, (counts.get(run.kind) ?? 0) + run.full + (run.last === null ? 0 : 1));
+  return [...counts].filter(([, count]) => count > 0);
+}
+
+// The upgrade of the nodes `previous` (the stage of phase `phase - 1`) tapped, for the stage of
+// `phase`, or null when no resource of it needs one: the previous phase tapped none of it, this
+// phase draws no more than they already give, or nothing this phase builds raises their output
+// (the belt, miner, pipe and clock are already the best, or only a mark that does not limit them
+// changed).
+export function nodeUpgrades(
+  previous: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: number,
+): PhaseUpgrade | null {
+  const old = previous?.mining,
+    now = stage?.mining;
+  if (!old || !now) return null;
+  const earlier = stageMiningAdvice(previous);
+  const raised = { belt: false, pipe: false, miner: false, clock: false };
+  const resources: NodeUpgrade[] = [];
+  for (const entry of stageMiningAdvice(stage)) {
+    const tapped = tappedKinds(
+      earlier.find(each => each.resource === entry.resource)?.advice.runs ?? [],
+    );
+    const pairs = tapped.map(([kind, count]) => ({
+      count,
+      from: old.sources[entry.resource]?.find(source => source.kind === kind),
+      to: now.sources[entry.resource]?.find(source => source.kind === kind),
+    }));
+    if (!pairs.length || pairs.some(pair => !pair.from || !pair.to)) continue;
+    // What the tapped nodes give with `base`, `clock` and `cap` each the old or the new one.
+    const give = (base: 'from' | 'to', clock: number, cap: 'from' | 'to') =>
+      pairs.reduce(
+        (sum, pair) => sum + pair.count * Math.min(pair[base]!.base * clock, pair[cap]!.cap),
+        0,
+      );
+    const before = give('from', old.miner.clock, 'from'),
+      after = give('to', now.miner.clock, 'to');
+    if (!(entry.rate > before + RATE_DUST && after > before + RATE_DUST)) continue;
+    // A change raises the output when going back on it alone gives less.
+    const lane = after - give('to', now.miner.clock, 'from') > RATE_DUST,
+      miner = after - give('from', now.miner.clock, 'to') > RATE_DUST,
+      clock = after - give('to', old.miner.clock, 'to') > RATE_DUST;
+    if (lane) raised[entry.fluid ? 'pipe' : 'belt'] = true;
+    if (miner && !entry.fluid) raised.miner = true;
+    if (clock) raised.clock = true;
+    const nowKinds = tappedKinds(entry.advice.runs);
+    const nodes = nowKinds.reduce((sum, [, count]) => sum + count, 0);
+    const added = nowKinds.reduce(
+      (sum, [kind, count]) =>
+        sum + Math.max(0, count - (tapped.find(([each]) => each === kind)?.[1] ?? 0)),
+      0,
+    );
+    // The new nodes the draw would take at the old cap: the nodes not tapped yet, with the old
+    // miner, lane and clock.
+    let without: number | null = null;
+    if (!entry.advice.runs.some(run => isWellKind(run.kind))) {
+      const rest = (now.sources[entry.resource] ?? [])
+        .filter(source => !isWellKind(source.kind))
+        .map(source => {
+          const from = old.sources[entry.resource]?.find(each => each.kind === source.kind);
+          const used = tapped.find(([kind]) => kind === source.kind)?.[1] ?? 0;
+          return {
+            ...source,
+            base: from?.base ?? source.base,
+            cap: from?.cap ?? source.cap,
+            nodes: Math.max(0, source.nodes - used),
+          };
+        });
+      const advice = miningAdvice(entry.rate - before, rest, old.miner.clock);
+      without = advice.short ? null : advice.nodes;
+    }
+    resources.push({
+      resource: entry.resource,
+      fluid: entry.fluid,
+      tapped,
+      nodes,
+      before,
+      after,
+      rate: entry.rate,
+      added,
+      without,
+    });
+  }
+  if (!resources.length) return null;
+  const changed = <T>(from: T, to: T, on: boolean) => (on && from !== to ? { from, to } : null);
+  return {
+    previous: phase - 1,
+    belt: changed(old.belt.mark, now.belt.mark, raised.belt),
+    pipe: changed(old.pipe.mark, now.pipe.mark, raised.pipe),
+    miner: changed(old.miner.mark, now.miner.mark, raised.miner),
+    clock: changed(old.miner.clock, now.miner.clock, raised.clock),
+    resources,
+  };
+}
+
+// "5 pure", "3 pure and 2 normal": tapped nodes per kind.
+export const tappedWords = (tapped: [MiningSource['kind'], number][]): string =>
+  listNames(tapped.map(([kind, count]) => `${miningNumber(count)} ${kind}`));
+// "2,400/min", "600 m³/min".
+export const rateWords = (rate: number, fluid: boolean): string =>
+  `${miningNumber(rate)}${fluid ? ' m³' : ''}/min`;
+// "3 new nodes", "1 new node", "no new nodes".
+export const newNodeWords = (count: number): string =>
+  count ? `${miningNumber(count)} new node${count === 1 ? '' : 's'}` : 'no new nodes';
+// The mining table's note on a resource's nodes after an upgrade: "5 tapped in Phase 3, 3 new",
+// or "all tapped in Phase 3" when the phase needs no new ones.
+const keptCell = (own: NodeUpgrade, previous: number): string =>
+  own.added
+    ? `${miningNumber(own.nodes - own.added)} tapped in Phase ${previous}, ${miningNumber(own.added)} new`
+    : `all tapped in Phase ${previous}`;
+// The same in the step's text: "Phase 3 tapped 5 of them, upgraded in the step before: 3 new
+// nodes."
+const keptSentence = (own: NodeUpgrade, previous: number): string =>
+  own.added
+    ? `Phase ${previous} tapped ${miningNumber(own.nodes - own.added)} of them, upgraded in the step before: ${newNodeWords(own.added)}.`
+    : `Phase ${previous} tapped them all, upgraded in the step before: no new nodes.`;
+// What the mining step's intro adds after an upgrade: " The nodes Phase 3 tapped give more once
+// upgraded (the step before), so Iron Ore and Coal take 4 new nodes, not 12." '' without one.
+function upgradedWords(upgrade: PhaseUpgrade | null | undefined): string {
+  if (!upgrade) return '';
+  const added = upgrade.resources.reduce((sum, own) => sum + own.added, 0);
+  const without = upgrade.resources.every(own => own.without !== null)
+    ? upgrade.resources.reduce((sum, own) => sum + own.without!, 0)
+    : null;
+  const names = listNames(upgrade.resources.map(own => own.resource));
+  return ` The nodes Phase ${upgrade.previous} tapped give more once upgraded (the step before), so ${names} take${upgrade.resources.length === 1 ? 's' : ''} ${newNodeWords(added)}${without !== null && without > added ? `, not ${miningNumber(without)}` : ''}.`;
+}
+
 // The build plan's mining step for a stage (#1065), or null without mining per phase or with
 // nothing to mine: the phase's equipment, then each resource's nodes, its Water Extractors in both
 // options with the suggested one counted (#1142, waterRow), and the Power Shards in all (#1137),
 // as one text (`body`, which search, copying and step edits read) and as a table, one
 // row per resource with a total row (`table`, #1136). `settings` (the plan's) adds the advice to
-// research Power Shards (overclockSaving).
+// research Power Shards (overclockSaving). `upgrade` (nodeUpgrades, #1169: the build plan passes
+// it for a phase after a planned one) says which of a resource's nodes the previous phase tapped
+// and how many are new, after the upgrade step before it.
 export function miningStep(
   stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
   phase: string,
   settings?: MiningSettings,
+  upgrade?: PhaseUpgrade | null,
 ): { body: string; table: StepTable } | null {
   const resources = stageMiningAdvice(stage);
   if (!stage?.mining || !resources.length) return null;
@@ -536,13 +718,16 @@ export function miningStep(
     ? ` and ${miningNumber(shards)} Power Shard${shards === 1 ? '' : 's'}`
     : '';
   const advice = overclockAdviceWords(overclockSaving(stage, Number(phase), settings));
-  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.`;
+  const upgraded = upgradedWords(upgrade);
+  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.${upgraded}`;
+  const ofUpgrade = (resource: string) =>
+    upgrade?.resources.find(each => each.resource === resource);
   const body = [
     intro,
-    ...resources.map(
-      entry =>
-        `${entry.resource} ${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min: ${entry.words.charAt(0).toLowerCase()}${entry.words.slice(1)}`,
-    ),
+    ...resources.map(entry => {
+      const own = ofUpgrade(entry.resource);
+      return `${entry.resource} ${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min: ${entry.words.charAt(0).toLowerCase()}${entry.words.slice(1)}${own ? ` ${keptSentence(own, upgrade!.previous)}` : ''}`;
+    }),
     ...(water ? [water.words] : []),
     ...(advice ? [advice] : []),
   ].join(' ');
@@ -563,7 +748,10 @@ export function miningStep(
         ...resources.map(entry => [
           entry.resource,
           `${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min`,
-          nodeCells(entry.advice.runs),
+          nodeCells(entry.advice.runs) +
+            (ofUpgrade(entry.resource)
+              ? ` (${keptCell(ofUpgrade(entry.resource)!, upgrade!.previous)})`
+              : ''),
           machineCells(entry, stage.mining!),
           entry.advice.shards ? miningNumber(entry.advice.shards) : 'None',
           powerAmount(entry.advice.mw),
@@ -587,7 +775,8 @@ export const miningStepBody = (
   stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
   phase: string,
   settings?: MiningSettings,
-): string | null => miningStep(stage, phase, settings)?.body ?? null;
+  upgrade?: PhaseUpgrade | null,
+): string | null => miningStep(stage, phase, settings, upgrade)?.body ?? null;
 
 // A resource's nodes for the mining table: "8 pure, 9 normal" and "4 well satellites (2 pure, 2
 // normal)".
