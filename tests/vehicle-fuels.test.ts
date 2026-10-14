@@ -275,7 +275,7 @@ async function checkEdition(
   const exported = (await request('/api/export-saves')) as SaveExport;
   const carried = validateTransfer(exported).saves[0]!.profiles[0]!.state;
   assert.equal(carried.version, 17);
-  assert.deepEqual(carried.factoryGroups.links, after.state.factoryGroups.links);
+  assert.deepEqual(carried.factoryGroups!.links, after.state.factoryGroups.links);
   // Saves from before: a version-11 profile (Packaged Fuel on a tractor) and a version-17 one
   // import with their fuels and versions as they were.
   const old: SaveExport = {
