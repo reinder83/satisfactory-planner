@@ -145,3 +145,39 @@ test('a step table that scrolls sideways can be focused and is named; one that f
   assert.equal(box.getAttribute('tabindex'), null, 'a table that fits is no tab stop');
   assert.equal(box.getAttribute('role'), null);
 });
+
+// #1169: a later phase that draws more than the nodes the previous phase tapped give gets the
+// upgrade of those nodes as its own step, a table, right before "Tap the resource nodes", whose
+// table then says which of each resource's nodes are new.
+test('Phase 4 upgrades the tapped nodes before tapping more: its own table, right before the mining step', () => {
+  open({ calculated: structuredClone(mined), phase: '4' });
+  go('plan');
+  render();
+  const step = $('[data-task="upgrade-nodes-4"]')!;
+  assert.ok(step, 'the upgrade step');
+  assert.match(
+    plain(step.querySelector('summary')?.textContent),
+    /^Upgrade the belts to Mk\.5 and the miners to Mk\.3 before tapping more nodes/,
+  );
+  const order = $$('[data-task]').map(element => (element as HTMLElement).dataset.task);
+  assert.equal(order[order.indexOf('upgrade-nodes-4') + 1], 'mining-4', 'right before it');
+  const table = step.querySelector('[data-step-table]')!;
+  assert.deepEqual(
+    [...table.querySelectorAll('thead th')].map(cell => plain(cell.textContent)),
+    ['Resource', 'Tapped nodes', 'Now', 'Upgraded', 'Phase 4 draws', 'New nodes'],
+  );
+  const iron = [...table.querySelectorAll('[data-step-table-row]')].find(
+    row => plain(row.querySelector('th')?.textContent) === 'Iron Ore',
+  )!;
+  const cells = [...iron.querySelectorAll('td')].map(cell => plain(cell.textContent));
+  assert.match(cells[0]!, /^\d+ pure$/);
+  assert.match(cells[2]!, /^[\d,.]+\/min \(\+[\d,.]+\)$/);
+  assert.match(cells[4]!, /^\d+ \(\d+ without the upgrade\)$/);
+  const mining = [...$('[data-task="mining-4"]')!.querySelectorAll('[data-step-table-row]')].find(
+    row => plain(row.querySelector('th')?.textContent) === 'Iron Ore',
+  )!;
+  assert.match(
+    plain(mining.querySelectorAll('td')[1]!.textContent),
+    /^\d+ pure \(\d+ tapped in Phase 3, \d+ new\)$/,
+  );
+});
