@@ -6179,6 +6179,11 @@ button.rail-tile:hover {
 .settings-name .form-error:not(:empty) {
   margin: 0 0 6px;
 }
+/* All settings step 1's recipe part cost (#1161, SettingsStep.vue): what it does, under the select
+   in its grid cell. */
+.recipe-cost p {
+  margin: 0 0 6px;
+}
 /* The guided start's stepper (SP-35, GuidedPage.vue): numbered steps, the current one in the
    accent, and "3 of 6" beside them. */
 .guided-stepper {

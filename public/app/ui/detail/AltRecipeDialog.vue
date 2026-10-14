@@ -1,11 +1,13 @@
 <!--
   The "recipe ↗" dialog of the wizard's alternate recipe picker: the alternate beside the
   standard recipe(s) for its first output, so the two can be compared. Rates are one machine
-  at 100%, per minute.
+  at 100%, per minute, with the inputs at the draft's recipe part cost (#1161), as the plan takes
+  them.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { workspace } from '../../session.ts';
+import { recipeCostOf } from '../../../preferences.ts';
+import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import DialogFrame from './DialogFrame.vue';
 import RecipePanel from './RecipePanel.vue';
@@ -14,10 +16,10 @@ import type { CatalogRecipe } from '../../../types/index.ts';
 
 const props = defineProps<{ id: string }>();
 
-const panel = (recipe: CatalogRecipe): RecipeView => ({
+const panel = (recipe: CatalogRecipe, cost: number): RecipeView => ({
   name: recipe.name.replace('Alternate: ', ''),
   machine: recipe.machine,
-  ins: Object.entries(recipe.inputs || {}),
+  ins: Object.entries(recipe.inputs || {}).map(([item, rate]) => [item, rate * cost]),
   outs: Object.entries(recipe.outputs || {}),
 });
 
@@ -26,6 +28,7 @@ const view = computed(() =>
     const alternate = (workspace.catalog.alternates || []).find(a => a.id === props.id);
     if (!alternate) return null;
     const primary = Object.keys(alternate.outputs)[0];
+    const cost = recipeCostOf(wizard?.settings ?? {});
     return {
       name: alternate.name,
       subtitle: alternate.mam
@@ -34,10 +37,10 @@ const view = computed(() =>
           ? `Tier ${alternate.milestone} milestone · unlocked at the HUB, not from hard drives · ${alternate.machine}`
           : `Alternate recipe · available from Phase ${alternate.phase} · ${alternate.machine}`,
       primary,
-      recipe: panel(alternate),
+      recipe: panel(alternate, cost),
       standards: (workspace.catalog.standardRecipes || [])
         .filter(r => r.outputs[primary ?? ''])
-        .map(panel),
+        .map(recipe => panel(recipe, cost)),
     };
   }),
 );

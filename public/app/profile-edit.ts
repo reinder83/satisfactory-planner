@@ -8,7 +8,7 @@
 // "<name> (before edit, Oct 7, 2:05 PM)" (backupName), which "Restore this version" can swap back
 // (app/restore-version.ts). Review lists what the edit changes
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
-import { distributions, purities } from '../preferences.ts';
+import { distributions, purities, recipeCostOf } from '../preferences.ts';
 import { ALLOWANCE_SETTING, powerView } from '../power.ts';
 import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
@@ -28,6 +28,7 @@ const FRESH: NameSettings = {
   purity: 'vanilla',
   multiplier: 1,
   powerFactor: 1,
+  recipeCost: 1,
   recipes: 'standard',
   wholeMachines: true,
 };
@@ -49,7 +50,26 @@ const NAME_PARTS: [key: string, words: (value: unknown) => string][] = [
   ['purity', value => `${labelOf(purities, value)} purity`],
   ['multiplier', value => `${num(Number(value))}× elevator`],
   ['powerFactor', value => `${num(Number(value))}× power`],
+  // Present in settings only when not 1× (#1161).
+  ['recipeCost', value => `${num(Number(value))}× recipe parts`],
 ];
+
+// A profile card's line of the game settings its plan was calculated with (Saves & profiles):
+// "vanilla purity · 1× elevator · 1× power", and the recipe part cost when not 1× (#1161).
+export function profileSummary(settings: {
+  purity: string;
+  multiplier: number;
+  powerFactor: number;
+  recipeCost?: number;
+}): string {
+  const cost = recipeCostOf(settings);
+  return [
+    `${settings.purity} purity`,
+    `${num(settings.multiplier)}× elevator`,
+    `${num(settings.powerFactor)}× power`,
+    ...(cost === 1 ? [] : [`${num(cost)}× recipe parts`]),
+  ].join(' · ');
+}
 
 // The date a name ends with, in the user's own way of writing it: "Oct 7".
 export const nameDate = (date = new Date()) =>
@@ -163,6 +183,10 @@ function stable(value: unknown): string {
 }
 
 const onOff = (value: unknown) => (value ? 'On' : 'Off');
+// The recipe part cost (#1161) in words, absent as 1×: a plan made before the setting was planned
+// at 1×, so an edit to 2× is named, and a draft that keeps 1× is no change.
+const recipeCostWords = (settings: NameSettings): string =>
+  `${num(recipeCostOf(settings as { recipeCost?: number }))}×`;
 
 // The settings Review names when an edit changes them, with the words for their values.
 const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => string][] = [
@@ -268,12 +292,26 @@ export function settingsChanges(
       before: words(before[key]),
       after: words(after[key]),
     })),
+    ...(recipeCostWords(before) !== recipeCostWords(after)
+      ? [
+          {
+            label: 'Recipe part cost',
+            before: recipeCostWords(before),
+            after: recipeCostWords(after),
+          },
+        ]
+      : []),
     // Absent means what the plan did before the box (#1058), so a plan without it is compared too.
     ...(mamWords(before) !== mamWords(after)
       ? [{ label: 'MAM recipes', before: mamWords(before), after: mamWords(after) }]
       : []),
   ];
-  const named = new Set(['goal', 'mamRecipes', ...SETTING_LABELS.map(([key]) => key)]);
+  const named = new Set([
+    'goal',
+    'mamRecipes',
+    'recipeCost',
+    ...SETTING_LABELS.map(([key]) => key),
+  ]);
   const others = Object.keys(after).filter(key => !named.has(key) && changed(key)).length;
   return { changes, others };
 }
