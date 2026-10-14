@@ -11,13 +11,26 @@ import { listNames, powerAmount, slug } from './wording.ts';
 import { AMPLIFIER_RESEARCH, AMPLIFIER_WORDS, handFedPhase } from './somersloops.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import {
+  BELT_MARKS,
+  MINER_MARKS,
   miningLinearMW,
   OVERCLOCK_RESEARCH,
   OWNED_GENERATORS,
   phaseForTier,
+  PIPE_MARKS,
   SHARD_RECIPE_RESEARCH,
 } from './preferences.ts';
-import { miningBuildings, miningStep, shardNeeds, waterPowerWords } from './mining.ts';
+import {
+  miningBuildings,
+  miningStep,
+  newNodeWords,
+  nodeUpgrades,
+  rateWords,
+  shardNeeds,
+  tappedWords,
+  waterPowerWords,
+} from './mining.ts';
+import type { PhaseUpgrade } from './mining.ts';
 import type { StepList, StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
@@ -174,7 +187,8 @@ export interface PhaseStep extends GuideTask {
 // milestone steps and nothing else, since production is planned from the start phase on.
 // Otherwise (#1070): startup, power and the required milestone steps, each power step after the
 // unlock it asks for, the Power Shards research where a profile made for a later phase first taps
-// its nodes overclocked (#1169, shardResearchTask), mining, hard drives, one step per production
+// its nodes overclocked (#1169, shardResearchTask), the upgrade of the nodes the previous phase
+// tapped before tapping more (#1169, upgradeTask), mining, hard drives, one step per production
 // row (generators first,
 // powerFirst), storage, the delivery, the storage-only lines, the lines this phase retires, and
 // last the research only a later phase needs (optional). Row steps use the saved key
@@ -221,7 +235,9 @@ export function phaseSteps(
     ...startup,
     // The Power Shards research before the first nodes tapped overclocked (#1169).
     ...(phase === 'post' ? [] : shardResearchTask(plan, state, data, stage)),
-    ...miningTask(plan, stage),
+    // The nodes already tapped upgraded before tapping more (#1169).
+    ...(phase === 'post' ? [] : upgradeTask(plan, state, data, stage)),
+    ...miningTask(plan, stage, phase !== 'post'),
     ...steps.hardDrives,
     // The power plant before the machines it powers (powerFirst).
     ...powerFirst(rows.filter(row => !row.stock)).map(rowStep),
@@ -358,12 +374,136 @@ function deliveryTask(
 // its draw needs, best nodes first, as text and as a table (miningStep in mining.ts, #1136). Its
 // key is `mining-<stage>`;
 // a plan without mining per phase has no such step, so its build plan is as it was.
+// After an upgrade step (`upgraded`, not Post Phase 5's copy of Phase 5's step) it also says
+// which of each upgraded resource's nodes are new (phaseUpgrade).
 function miningTask(
   plan: Pick<StoredCalculatedPlan, 'stages'> & { settings?: StoredCalculatedPlan['settings'] },
   stage: StageKey,
+  upgraded = false,
 ): GuideTask[] {
-  const step = miningStep(plan.stages[stage], stage, plan.settings);
+  const upgrade =
+    upgraded && plan.settings
+      ? phaseUpgrade({ settings: plan.settings, stages: plan.stages }, stage)
+      : null;
+  const step = miningStep(plan.stages[stage], stage, plan.settings, upgrade);
   return step ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', ...step }] : [];
+}
+
+// The upgrade of the nodes the previous phase tapped (nodeUpgrades in mining.ts, #1169), for a
+// planned phase after another planned one; null otherwise, and where no resource needs one.
+export function phaseUpgrade(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  stage: StageKey,
+): PhaseUpgrade | null {
+  const phase = Number(stage),
+    start = Number(plan.settings.phase || 1);
+  if (!(phase - 1 >= start)) return null;
+  return nodeUpgrades(plan.stages[String(phase - 1) as StageKey], plan.stages[stage], phase);
+}
+
+// "Logistics Mk.5 (Tier 7)": the milestone that unlocks a mark, as its step names it; '' when
+// progression.json has none.
+function markMilestone(id: string | null | undefined, data: Progression): string {
+  const entry = id ? data.entries.find(each => each.id === id) : undefined;
+  return entry ? ` (milestone ${entry.name}, Tier ${entry.tier})` : '';
+}
+
+// Upgrade before expanding (#1169, the owner: "upgrade the belts / miners before placing more
+// miners"): in a planned phase after another planned one, when its draw of a resource needs more
+// than the nodes the previous phase tapped give at that phase's cap, and this phase's belt, miner,
+// pipe or clock raises what those nodes give (phaseUpgrade), this step comes before "Tap the
+// resource nodes": it names each upgrade with its milestone (listed earlier in the phase) and,
+// per resource, what the tapped nodes give before and after, and how many new nodes are left to
+// tap, against how many the draw would take without it. The stored stages are read as they are,
+// so a stored plan keeps its numbers: its later phase's node count already counts the tapped
+// nodes at that phase's cap (best nodes first, nodeUpgrades). Its key is `upgrade-nodes-<stage>`;
+// it shows as done while a later phase is worked on, and ticking it by hand also works.
+function upgradeTask(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  state: GuideState,
+  data: Progression,
+  stage: StageKey,
+): GuideTask[] {
+  const upgrade = phaseUpgrade(plan, stage);
+  if (!upgrade) return [];
+  const { belt, pipe, miner, clock, previous } = upgrade;
+  const beltMark = BELT_MARKS.find(mark => mark.mark === belt?.to),
+    pipeMark = PIPE_MARKS.find(mark => mark.mark === pipe?.to),
+    minerMark = MINER_MARKS.find(mark => mark.mark === miner?.to);
+  const percent = (value: number) => `${formatNumber(value * 100)}%`;
+  const actions = [
+    ...(belt
+      ? [
+          `replace their ${belt.from} belts with ${beltMark?.building ?? `Conveyor Belt ${belt.to}`}${markMilestone(beltMark?.entry, data)}`,
+        ]
+      : []),
+    ...(miner
+      ? [
+          `replace their Miner Mk.${miner.from} with Miner Mk.${miner.to}${markMilestone(minerMark?.entry, data)}`,
+        ]
+      : []),
+    ...(pipe
+      ? [
+          `replace their ${pipe.from} pipes with ${pipeMark?.building ?? `Pipeline ${pipe.to}`}${markMilestone(pipeMark?.entry, data)}`,
+        ]
+      : []),
+    ...(clock
+      ? [
+          `overclock them from up to ${percent(clock.from)} to up to ${percent(clock.to)} with Power Shards`,
+        ]
+      : []),
+  ];
+  const marks = [
+    ...(belt ? [`the belts to ${belt.to}`] : []),
+    ...(miner ? [`the miners to Mk.${miner.to}`] : []),
+    ...(pipe ? [`the pipes to ${pipe.to}`] : []),
+  ];
+  const title = marks.length
+    ? `Upgrade ${listNames(marks)} before tapping more nodes`
+    : 'Overclock the tapped nodes before tapping more';
+  const newCount = (own: PhaseUpgrade['resources'][number]) =>
+    own.without !== null && own.without > own.added
+      ? `${newNodeWords(own.added)} (${formatNumber(own.without)} without the upgrade)`
+      : newNodeWords(own.added);
+  const tappedCount = (own: PhaseUpgrade['resources'][number]) =>
+    own.tapped.reduce((sum, [, count]) => sum + count, 0);
+  const resources = upgrade.resources.map(
+    own =>
+      `${own.resource}: the ${tappedWords(own.tapped)} ${tappedCount(own) === 1 ? 'node gives' : 'nodes give'} up to ${rateWords(own.after, own.fluid)} instead of ${rateWords(own.before, own.fluid)}, ${rateWords(own.after - own.before, own.fluid)} more; Phase ${stage} draws ${rateWords(own.rate, own.fluid)}, so ${newCount(own)}.`,
+  );
+  const intro = `Phase ${stage} draws more than the nodes Phase ${previous} tapped give at their cap. Upgrade those nodes first, before tapping more: ${listNames(actions)}.`;
+  const after = 'Then tap only the new nodes the next step lists.';
+  return [
+    {
+      id: 'upgrade-nodes-' + stage,
+      title,
+      body: [intro, ...resources, after].join(' '),
+      table: {
+        intro,
+        caption: `Phase ${previous}'s nodes upgraded in Phase ${stage}`,
+        columns: [
+          'Resource',
+          'Tapped nodes',
+          'Now',
+          'Upgraded',
+          `Phase ${stage} draws`,
+          'New nodes',
+        ],
+        rows: upgrade.resources.map(own => [
+          own.resource,
+          tappedWords(own.tapped),
+          rateWords(own.before, own.fluid),
+          `${rateWords(own.after, own.fluid)} (+${formatNumber(own.after - own.before)})`,
+          rateWords(own.rate, own.fluid),
+          own.without !== null && own.without > own.added
+            ? `${formatNumber(own.added)} (${formatNumber(own.without)} without the upgrade)`
+            : formatNumber(own.added),
+        ]),
+        after,
+      },
+      ...(workingPhase(state) > Number(stage) ? { satisfied: LATER_PHASE } : {}),
+    },
+  ];
 }
 
 // The Power Shards research before tapping the nodes (#1169): from Phase 2 the plan taps each node

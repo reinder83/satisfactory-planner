@@ -157,7 +157,7 @@ test('the very early game: Phase 1 plans 100% with no shards; a Phase 1 profile 
   for (const phase of PHASES) assert.equal(researchOf(plan, phase), undefined, `Phase ${phase}`);
 });
 
-test('a plan stored before #1169 keeps its numbers and every step id; only the research step is added', () => {
+test('a plan stored before #1169 keeps its numbers and every step id; only the research and upgrade steps are added', () => {
   const stored = json(fixture.plan);
   for (const phase of PHASES) {
     const ids = stepsOf(stored, phase).map(step => step.id);
@@ -165,6 +165,10 @@ test('a plan stored before #1169 keeps its numbers and every step id; only the r
     // that needs Power Shards, so the step comes right before its mining step.
     const expected = [...fixture.stepIds[phase]!];
     if (phase === '4') expected.splice(expected.indexOf('mining-4'), 0, 'power-shards-4');
+    // Its Phases 4 and 5 draw more than the nodes before them give at their cap, so each gets the
+    // upgrade of those nodes before its mining step too (#1169, tests/upgrade-first.test.ts).
+    if (phase === '4' || phase === '5')
+      expected.splice(expected.indexOf('mining-' + phase), 0, 'upgrade-nodes-' + phase);
     assert.deepEqual(ids, expected, `Phase ${phase}`);
   }
   // Its mining step keeps its 100% numbers and says what it was calculated with.

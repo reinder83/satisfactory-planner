@@ -12,7 +12,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { calculate, catalog, settings } from '../planner.ts';
-import { milestonesListedIn, phaseSteps } from '../public/progression.ts';
+import { milestonesListedIn, phaseSteps, phaseUpgrade } from '../public/progression.ts';
 import { powerView } from '../public/power.ts';
 import {
   BELT_MARKS,
@@ -364,7 +364,11 @@ test('the build plan has a mining step per phase, after the milestones and befor
     assert.ok(index > 0, `Phase ${key}`);
     assert.ok(steps.findIndex(step => step.id.startsWith('calc-' + key + '-')) > index);
     const body = steps[index]!.body;
-    assert.equal(body, miningStepBody(plan.stages[key] as StoredStage, key, plan.settings));
+    // After the upgrade of the nodes the previous phase tapped (#1169), it says which are new.
+    assert.equal(
+      body,
+      miningStepBody(plan.stages[key] as StoredStage, key, plan.settings, phaseUpgrade(plan, key)),
+    );
     assert.match(body, /^Phase \d mines with Miner Mk\.\d at \d+% and carries on Mk\.\d belts/);
     assert.match(body, /Iron Ore [\d,.]+\/min: tap \d+ pure/);
   }

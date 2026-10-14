@@ -358,6 +358,7 @@ const TASK_ID_KINDS: [RegExp, string][] = [
   [/^custom-/, 'note'],
   [/^recipe-unlock-|^hard-drives-/, 'harddrive'],
   [/^power-shards-/, 'research'],
+  [/^upgrade-nodes-/, 'logistics'],
   [/^retire-/, 'retire'],
   [/^portal-supply/, 'portal'],
   [/^drone-fuel-/, 'logistics'],
