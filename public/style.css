@@ -4895,10 +4895,9 @@ button.rail-tile:hover {
   outline-offset: 3px;
 }
 /* A glossary term (#1076, ui/Term.vue): the word as written, underlined with dots, and its
-   definition in a tooltip under it, moved sideways by the component to stay in the window. */
-.term {
-  position: relative;
-}
+   definition in a tooltip under it. The tooltip is at the end of <body>, fixed where the component
+   places it (under the word, inside the window), so no scrolling box clips it; above the sticky
+   edit bar and the top toast, under the phone menu. */
 .term-word {
   display: inline;
   padding: 0;
@@ -4919,9 +4918,9 @@ button.rail-tile:hover {
   outline-offset: 2px;
 }
 .term-tip {
-  position: absolute;
-  z-index: 30;
-  top: 1.6em;
+  position: fixed;
+  z-index: 50;
+  top: 0;
   left: 0;
   display: block;
   width: min(300px, calc(100vw - 32px));

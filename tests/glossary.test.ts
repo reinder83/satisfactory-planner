@@ -6,6 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { firstTerms, glossary, termParts } from '../public/preferences.ts';
+import { AMPLIFIER_RESEARCH, SLOOPS_PER_AUGMENTER } from '../public/somersloops.ts';
+import { AMPLIFY_SLOTS } from '../planner.ts';
 
 // The terms the playtest asked for (N6, N13): MAM, SAM, slugs, shards, hard drives, AWESOME Sink
 // and underclock.
@@ -22,6 +24,25 @@ test('every asked-for term has a definition and where to get it', () => {
     assert.match(entry.label, entry.match, key + ' matches its own label');
     assert.equal(entry.match.flags.includes('g'), false, key + ' is not a global pattern');
   }
+});
+
+// The Somersloops entry says what the planner counts (#1158 review): the slots each machine takes
+// (planner/recipes.ts), the Augmenter's cost and the research that lets machines take them.
+test('the Somersloops entry gives each machine its slots, the Augmenter cost and the research', () => {
+  const entry = glossary.sloops!;
+  const counts = new Map<number, string[]>();
+  for (const [machine, slots] of Object.entries(AMPLIFY_SLOTS))
+    counts.set(slots, [...(counts.get(slots) ?? []), machine]);
+  for (const [slots, machines] of counts) {
+    // "1 in a Constructor or Smelter, 2 in …": the machines up to the next count or the full stop.
+    const said = new RegExp(`\\b${slots} in (?:an? )?([^:;.]*?)(?:,? \\d|\\.)`).exec(
+      entry.definition,
+    );
+    assert.ok(said, `${slots} slots`);
+    for (const machine of machines) assert.ok(said[1]!.includes(machine), `${machine}: ${slots}`);
+  }
+  assert.ok(entry.definition.includes(`Alien Power Augmenter costs ${SLOOPS_PER_AUGMENTER}.`));
+  assert.ok(entry.where.includes(`research ${AMPLIFIER_RESEARCH} `));
 });
 
 test('the asked-for words are recognized as written in the planner', () => {
@@ -74,10 +95,15 @@ test('a screen marks each term once, in the first text that has it', () => {
   );
 });
 
-test('the user guide lists every glossary term', () => {
+test('the user guide lists every glossary term, worded as the tooltips', () => {
   const guide = fs.readFileSync(new URL('../docs/USER-GUIDE.md', import.meta.url), 'utf8');
   const section = guide.slice(guide.indexOf('## Glossary'));
   assert.ok(guide.includes('## Glossary'));
+  // One line per term, as the tooltip words it (the checkout may end lines in CRLF).
+  const lines = section.split(/\r?\n/);
   for (const entry of Object.values(glossary))
-    assert.ok(section.includes(`**${entry.label}**`), entry.label);
+    assert.ok(
+      lines.includes(`- **${entry.label}**: ${entry.definition} _Where to get it:_ ${entry.where}`),
+      entry.label,
+    );
 });

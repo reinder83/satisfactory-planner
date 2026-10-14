@@ -1,8 +1,9 @@
 // Glossary terms on the pages (#1076, ui/Term.vue and ui/TermText.vue): a term opens its
 // definition and where to get it on hover, keyboard focus and a tap, Escape closes it without
 // moving focus, the tooltip is in the page only while open (so the text reads, searches and
-// copies as before), and the build plan, the guided start and the Resources page mark each term
-// once, where it first appears.
+// copies as before) and at the end of <body>, out of any box that would clip it (a step table's),
+// and the build plan, the guided start and the Resources page mark each term once, where it first
+// appears.
 import assert from 'node:assert/strict';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -11,6 +12,7 @@ import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import Term from '../../public/app/ui/Term.vue';
 import TermText from '../../public/app/ui/TermText.vue';
+import StepTable from '../../public/app/ui/plan/StepTable.vue';
 import { glossary } from '../../public/preferences.ts';
 import { $, $$, generated, generatedWith, go, open, page } from './setup.ts';
 
@@ -19,12 +21,15 @@ beforeEach(() => page());
 const pointer = (type: string, pointerType = 'mouse') =>
   new PointerEvent(type, { bubbles: type === 'pointerdown', pointerType });
 
+// Past the moment a mouse leaving the word has to reach the tooltip (LEAVE_DELAY in Term.vue).
+const settle = () => new Promise(resolve => setTimeout(resolve, 150)).then(() => nextTick());
+
 function term(key = 'mam', text = 'MAM') {
   const host = document.createElement('p');
   document.body.append(host);
   const wrapper = mount(Term, { props: { term: key, text }, attachTo: host });
   const button = wrapper.find('button').element as HTMLButtonElement;
-  const tip = () => wrapper.element.querySelector?.('[role="tooltip"]') as HTMLElement | null;
+  const tip = () => document.querySelector<HTMLElement>('[role="tooltip"]');
   return { wrapper, button, tip, root: wrapper.element as HTMLElement };
 }
 
@@ -38,9 +43,14 @@ test('hover opens the definition with where to get it, and leaving closes it', a
   assert.match(tip()!.textContent!, /Molecular Analysis Machine/);
   assert.match(tip()!.textContent!, /Where to get it: Build it after the Tier 1 milestone/);
   assert.equal(button.getAttribute('aria-describedby'), tip()!.id, 'the button is described by it');
+  // The mouse may cross from the word onto the tooltip, which keeps it open.
   root.dispatchEvent(pointer('pointerleave'));
-  await nextTick();
-  assert.equal(tip(), null);
+  tip()!.dispatchEvent(pointer('pointerenter'));
+  await settle();
+  assert.ok(tip(), 'the pointer on the tooltip keeps it open');
+  tip()!.dispatchEvent(pointer('pointerleave'));
+  await settle();
+  assert.equal(tip(), null, 'leaving both closes it');
   // A touch's pointerenter does not open it: the tap's click does.
   root.dispatchEvent(pointer('pointerenter', 'touch'));
   await nextTick();
@@ -147,4 +157,80 @@ test('the Resources page explains the AWESOME Sink under storage', () => {
     sink!.closest('p')!.textContent!.replace(/\s+/g, ' '),
     /overflows to the AWESOME Sink\./,
   );
+});
+
+test('a term in a step table opens its tooltip outside the table box, which would clip it', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  mount(StepTable, {
+    attachTo: host,
+    props: {
+      terms: ['mam', 'overclock'],
+      table: {
+        intro: 'Research it in the MAM.',
+        columns: ['Item', 'Rate'],
+        rows: [['Iron Ore', '60/min']],
+        after: 'Then overclock the miners.',
+        caption: 'Mining',
+      },
+    },
+  });
+  for (const key of ['mam', 'overclock']) {
+    const button = host.querySelector<HTMLButtonElement>(`[data-term="${key}"]`)!;
+    assert.ok(button.closest('[data-step-table]'), key + ': the word is in the table');
+    button.focus();
+    await nextTick();
+    const tip = document.getElementById(button.getAttribute('aria-describedby')!);
+    assert.ok(tip, key + ': open, and the button is described by it');
+    assert.equal(tip!.getAttribute('role'), 'tooltip');
+    assert.equal(tip!.closest('[data-step-table]'), null, key + ': not inside the table box');
+    assert.equal(tip!.parentElement, document.body, key + ': at the end of the page');
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    assert.equal(document.querySelector('[role="tooltip"]'), null, key + ': Escape closes it');
+    assert.equal(document.activeElement, button, key + ': focus stays on the term');
+    button.blur();
+  }
+  // The text reads as before: no tooltip text inside the table.
+  assert.equal(
+    host.querySelector('[data-step-table-after]')!.textContent!.trim(),
+    'Then overclock the miners.',
+  );
+});
+
+test('the tooltip sits under the word, inside the window, and follows a scroll', async () => {
+  const { button, tip } = term('overclock', 'overclock');
+  const rect = (left: number, top: number, width: number, height: number) =>
+    ({
+      left,
+      top,
+      width,
+      height,
+      right: left + width,
+      bottom: top + height,
+      x: left,
+      y: top,
+    }) as DOMRect;
+  let wordAt = rect(300, 100, 60, 18);
+  button.getBoundingClientRect = () => wordAt;
+  const width = document.documentElement.clientWidth || window.innerWidth;
+  button.focus();
+  await nextTick();
+  const box = tip()!;
+  box.getBoundingClientRect = () => rect(0, 0, 300, 120);
+  window.dispatchEvent(new Event('resize'));
+  assert.equal(box.style.top, '122px', '4px under the word');
+  assert.equal(
+    box.style.left,
+    `${Math.min(300, width - 8 - 300)}px`,
+    'from the word, inside the window',
+  );
+  // Near the right edge it moves left to stay 8px inside.
+  wordAt = rect(width - 20, 140, 60, 18);
+  document.body.dispatchEvent(new Event('scroll'));
+  assert.equal(box.style.top, '162px', 'follows the word on a scroll anywhere in the page');
+  assert.equal(box.style.left, `${width - 8 - 300}px`);
+  button.blur();
+  await nextTick();
+  assert.equal(tip(), null);
 });

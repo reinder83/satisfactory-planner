@@ -78,9 +78,9 @@ export const glossary: Record<string, GlossaryEntry> = {
   sloops: {
     label: 'Somersloops',
     definition:
-      'Rare alien artifacts. One in a production machine doubles what it makes (production amplification); ten power an Alien Power Augmenter.',
+      'Rare alien artifacts. Filling a production machine’s somersloop slots doubles what it makes at four times the power (production amplification): 1 in a Constructor or Smelter, 2 in an Assembler, Foundry, Refinery or Converter, 4 in a Manufacturer, Blender, Particle Accelerator or Quantum Encoder. Building an Alien Power Augmenter costs 10.',
     where:
-      'Find them around the map; the world holds 106. Research them in the MAM (Alien Technology) to use them.',
+      'Find them around the map; the world holds 106. In the MAM’s Alien Technology research, analyse one (Somersloop Analysis), then research Production Amplifier so machines take them.',
     match: /\b[Ss]omersloops?\b/,
   },
   alternates: {
