@@ -192,7 +192,8 @@ export interface SavedState {
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
 export type UpdateOp =
   | { type: 'check'; key: string; value: boolean }
-  | { type: 'checks'; keys: string[]; value: boolean }
+  // null forgets the keys, as if never ticked (#1163).
+  | { type: 'checks'; keys: string[]; value: boolean | null }
   // An empty or blank value deletes the note. `base` is the saved text the value was typed over
   // (#1052): the write is refused (409) when the note now says something else (checkBase).
   | { type: 'note'; key: string; value: string; base?: string }
