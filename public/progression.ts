@@ -10,8 +10,14 @@ import type {
 import { listNames, powerAmount, slug } from './wording.ts';
 import { AMPLIFIER_RESEARCH, AMPLIFIER_WORDS, handFedPhase } from './somersloops.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
-import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
-import { miningBuildings, miningStep, waterPowerWords } from './mining.ts';
+import {
+  miningLinearMW,
+  OVERCLOCK_RESEARCH,
+  OWNED_GENERATORS,
+  phaseForTier,
+  SHARD_RECIPE_RESEARCH,
+} from './preferences.ts';
+import { miningBuildings, miningStep, shardNeeds, waterPowerWords } from './mining.ts';
 import type { StepList, StepTable } from './step-table.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
@@ -167,7 +173,9 @@ export interface PhaseStep extends GuideTask {
 // A phase before the profile's start phase is milestone-only (#759, milestoneOnlyPhase): its
 // milestone steps and nothing else, since production is planned from the start phase on.
 // Otherwise (#1070): startup, power and the required milestone steps, each power step after the
-// unlock it asks for, mining, hard drives, one step per production row (generators first,
+// unlock it asks for, the Power Shards research where a profile made for a later phase first taps
+// its nodes overclocked (#1169, shardResearchTask), mining, hard drives, one step per production
+// row (generators first,
 // powerFirst), storage, the delivery, the storage-only lines, the lines this phase retires, and
 // last the research only a later phase needs (optional). Row steps use the saved key
 // `calc-<stage>-<row id>`, the same key as that factory card's Running box, and must stay stable.
@@ -211,6 +219,8 @@ export function phaseSteps(
   });
   return [
     ...startup,
+    // The Power Shards research before the first nodes tapped overclocked (#1169).
+    ...(phase === 'post' ? [] : shardResearchTask(plan, state, data, stage)),
     ...miningTask(plan, stage),
     ...steps.hardDrives,
     // The power plant before the machines it powers (powerFirst).
@@ -354,6 +364,60 @@ function miningTask(
 ): GuideTask[] {
   const step = miningStep(plan.stages[stage], stage, plan.settings);
   return step ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', ...step }] : [];
+}
+
+// The Power Shards research before tapping the nodes (#1169): from Phase 2 the plan taps each node
+// overclocked, up to what its belt or pipe carries (PHASE_CLOCK), so the MAM's Blue Power Slugs and
+// Overclock Production come first. Those research steps are listed in their own phase, Phase 1
+// (milestonesListedIn): before every later phase's nodes in a profile made for Phase 1, but in a
+// milestone-only phase before the start phase of a profile made for a later one. Such a profile
+// gets this step right before the mining step of its first planned phase whose nodes take Power
+// Shards (shardNeeds), once. Its key is `power-shards-<stage>`. It shows as done while Overclock
+// Production is ticked, the player can overclock (settings.overclock, "I can overclock"), or the
+// phase worked on is later; ticking it by hand also works. A plan without mining per phase, and a
+// phase whose stage was stored at 100% before #1169, have no such step.
+function shardResearchTask(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  state: GuideState,
+  data: Progression,
+  stage: StageKey,
+): GuideTask[] {
+  const research = data.entries.find(entry => entry.id === OVERCLOCK_RESEARCH),
+    recipe = data.entries.find(entry => entry.id === SHARD_RECIPE_RESEARCH);
+  const start = Number(plan.settings.phase || 1);
+  if (!research || !recipe || !(milestonePhase(research, data) < start)) return [];
+  const first = (['2', '3', '4', '5'] as const).find(
+    key => Number(key) >= start && shardNeeds(plan.stages[key], key, plan.settings),
+  );
+  if (first !== stage) return [];
+  const needs = shardNeeds(plan.stages[stage], stage, plan.settings)!;
+  const shards = `${formatNumber(needs.shards)} Power Shard${needs.shards === 1 ? '' : 's'}`;
+  const saving =
+    needs.at100 === null
+      ? ', more than its nodes could give at 100%'
+      : needs.at100 > needs.machines
+        ? `, where 100% would take ${formatNumber(needs.at100)} machines`
+        : '';
+  const cost = Object.entries(research.cost)
+    .map(([item, amount]) => `${formatNumber(amount)} ${item}`)
+    .join(', ');
+  const listed = milestonePhase(research, data);
+  const done =
+    state.checks['unlock-' + OVERCLOCK_RESEARCH] === true
+      ? `Done: ${research.name} is ticked.`
+      : plan.settings.overclock
+        ? 'Done: you can overclock (“I can overclock” in your settings).'
+        : workingPhase(state) > Number(stage)
+          ? LATER_PHASE
+          : '';
+  return [
+    {
+      id: 'power-shards-' + stage,
+      title: 'Research Power Shards before tapping the nodes',
+      body: `Phase ${stage} taps its nodes overclocked, each up to what its belt or pipe carries, so fewer nodes give the same ore: its miners and extractors take ${formatNumber(needs.machines)} machines and ${shards}${saving}. Research Power Shards in the MAM first: find a Blue Power Slug and research ${recipe.name}, which unlocks the Power Shard recipe; make a Power Shard from the slug in a Constructor; then research ${research.name} (${cost}), which lets machines take them. A Blue Power Slug makes 1 Power Shard, a Yellow one 2 and a Purple one 5, each after its own research. Both research steps are also listed under Phase ${listed}; ticking ${research.name} there, or “I can overclock” in Edit settings, marks this step done.`,
+      ...(done ? { satisfied: done } : {}),
+    },
+  ];
 }
 
 // What phaseSteps reads of a profile's progress: its ticks, its factory groups' names, which
