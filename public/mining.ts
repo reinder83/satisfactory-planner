@@ -7,7 +7,6 @@ import {
   EXTRACTOR_MIN_RATE,
   EXTRACTOR_OPTIONS,
   OVERCLOCK,
-  PHASE_CLOCK,
   WATER_EXTRACTOR,
   extractorOption,
   isWellKind,
@@ -241,18 +240,20 @@ export function stageMiningAdvice(
 // user picks; the plan only suggests one, first: the one its power counts (waterClock, which
 // settings.waterOverclock sets, #1137; a stage stored before that counts its miner's clock, and a
 // plan without mining per phase its survey's clock, else 250%). So a stored plan suggests what
-// its numbers were calculated with until the user recalculates. Before Power Shards are
-// researched (no settings.overclock, and Phases 1–3 of a plan with mining per phase) the
-// overclocked option is the advice to research them instead of a count, once the MAM is usable
-// (OVERCLOCK_ADVICE_FROM); before that only the 100% option is given.
+// its numbers were calculated with until the user recalculates. The overclocked option always
+// gives its count (#1169), once the MAM is usable (OVERCLOCK_ADVICE_FROM); before that only the
+// 100% option is given. Where the plan counts on no Power Shards for its nodes (no
+// settings.overclock, and a Phase 2 or 3 stage at 100%: stored before #1169, or a survey's clock),
+// the count says the research comes first: "Overclocked (after researching Power Shards …)".
 export interface WaterChoice {
   // The overclocked option's clock (1 = 100%): the counted clock when that is above 100%, else
   // OVERCLOCK.
   overclock: number;
   // Whether the power counts the overclocked option, which is then suggested first.
   suggestOverclocked: boolean;
-  // What the overclocked option gives: its extractors and Power Shards (`count`), the advice to
-  // research Power Shards (`research`), or nothing (`none`, before the MAM).
+  // What the overclocked option gives: its extractors and Power Shards (`count`), the same after
+  // researching Power Shards (`research`, #1169: never the advice alone), or nothing (`none`,
+  // before the MAM).
   shards: 'count' | 'research' | 'none';
 }
 // The Water Extractor options of a stage in `phase` of a plan with `settings`.
@@ -265,19 +266,23 @@ export function waterChoice(
     ? waterClock(stage.mining)
     : (settings?.extraction?.clock ?? DEFAULT_EXTRACTION.clock);
   const overclocked = counted > 1 + 1e-9;
+  // A stage's nodes count on Power Shards when its miners run above 100% (from Phase 2 since
+  // #1169); Phases 4 and 5 always did, whatever a survey says.
   const canOverclock =
     overclocked ||
     !!settings?.overclock ||
-    (stage?.mining ? (PHASE_CLOCK[phase] ?? 1) > 1 : phase >= OVERCLOCK_ADVICE_FROM);
+    (stage?.mining
+      ? stage.mining.miner.clock > 1 + 1e-9 || phase >= 4
+      : phase >= OVERCLOCK_ADVICE_FROM);
   return {
     overclock: overclocked ? counted : OVERCLOCK,
     suggestOverclocked: overclocked,
     shards: canOverclock ? 'count' : phase >= OVERCLOCK_ADVICE_FROM ? 'research' : 'none',
   };
 }
-// Where to research Power Shards, as the mining step's advice says it (#1137).
-const SHARD_RESEARCH =
-  'research Power Shards in the MAM (Blue Power Slugs, then Overclock Production)';
+// The overclocked option's condition where the plan counts on no Power Shards yet (#1169).
+const AFTER_SHARD_RESEARCH =
+  'after researching Power Shards in the MAM: Blue Power Slugs, then Overclock Production';
 // The choice when nothing says otherwise: both options counted, 100% suggested. A function, so
 // nothing imported is read while the modules load (the interface tests bundle them in one script).
 const bothAt100 = (): WaterChoice => ({
@@ -287,13 +292,20 @@ const bothAt100 = (): WaterChoice => ({
 });
 
 // The two options for `rate` m³/min of Water, the suggested one first: each its name ("at 100%",
-// "overclocked", OVERCLOCKED) and its extractors (extractorOption), or for the overclocked one the
-// research advice. The overclocked option's name gives no ceiling (#1020, owner 2026-10-12): its
-// words say what is built, "2 overclocked at 250% and 1 at 40%"; the 250% limit is help text. `same` when both are the same extractors (one at 100% or less), and null for
-// less Water than one extractor gives at its lowest clock.
+// "overclocked", OVERCLOCKED) and its extractors (extractorOption), the overclocked one with the
+// research as its `condition` where the plan counts on no Power Shards yet (#1169). The
+// overclocked option's name gives no ceiling (#1020, owner 2026-10-12): its words say what is
+// built, "2 overclocked at 250% and 1 at 40%"; the 250% limit is help text. `same` when both are
+// the same extractors (one at 100% or less), and null for less Water than one extractor gives at
+// its lowest clock.
+export interface WaterOption {
+  name: string;
+  option: ExtractorOption;
+  condition?: string;
+}
 export interface WaterOptions {
-  first: { name: string; option: ExtractorOption };
-  second: { name: string; option: ExtractorOption } | { name: string; research: string } | null;
+  first: WaterOption;
+  second: WaterOption | null;
   same: boolean;
 }
 export function waterOptions(rate: number, choice: WaterChoice = bothAt100()): WaterOptions | null {
@@ -308,7 +320,7 @@ export function waterOptions(rate: number, choice: WaterChoice = bothAt100()): W
   if (choice.shards === 'research')
     return {
       first: atFull,
-      second: { name: overName, research: `with fewer extractors: ${SHARD_RESEARCH} first` },
+      second: { name: overName, option: sharded, condition: AFTER_SHARD_RESEARCH },
       same,
     };
   const over = { name: overName, option: sharded };
@@ -343,11 +355,11 @@ const optionWords = (option: ExtractorOption, over = false): string =>
   `${runWords(option, over)} (${[extractorCount(option.extractors), ...(option.shards ? [shardCount(option.shards)] : []), powerAmount(option.mw)].join(', ')})`;
 // One of the options in words, after "Water Extractors" or "Or": "at 100% (suggested): 2 at 100% +
 // 1 at 15.03% (3 extractors, 41.63 MW)", "(suggested): 1 overclocked at 215.03% (1 extractor, 3
-// Power Shards, 55.03 MW)", "2 overclocked at 250% and 1 at 40% (…)", or "overclocked, with fewer
-// extractors: research Power Shards …".
-const optionPart = (part: NonNullable<WaterOptions['second']>, suggested: boolean): string =>
-  'research' in part
-    ? `${part.name}, ${part.research}`
+// Power Shards, 55.03 MW)", "2 overclocked at 250% and 1 at 40% (…)", or with the research first
+// "overclocked (after researching Power Shards …): 2 at 250% + 1 at 40% (…)" (#1169).
+const optionPart = (part: WaterOption, suggested: boolean): string =>
+  part.condition
+    ? `${part.name} (${part.condition}): ${optionWords(part.option)}`
     : part.name === OVERCLOCKED
       ? `${suggested ? '(suggested): ' : ''}${optionWords(part.option, true)}`
       : `${part.name}${suggested ? ' (suggested)' : ''}: ${optionWords(part.option)}`;
@@ -383,8 +395,8 @@ function waterRow(
     : `Water Extractor${firstOver ? '' : ' ' + first.name}${second ? ' (suggested)' : ''}: ${runWords(first.option, firstOver)}` +
       (!second
         ? ''
-        : 'research' in second
-          ? `. ${capital(second.name)}, ${second.research}`
+        : second.condition
+          ? `. ${capital(optionPart(second, false))}`
           : second.name === OVERCLOCKED
             ? `. Or ${optionWords(second.option, true)}`
             : `. ${capital(second.name)}: ${optionWords(second.option)}`);
@@ -410,8 +422,8 @@ export const WATER_ROW_NOTE =
 
 // What the power step says about the phase's Water Extractors (#1142): which option its power
 // counts, the suggested one, with that MW (the grid's, as Power needed counts it), and the other
-// option's extractors, Power Shards and MW, or the research advice. '' without extracted Water or
-// a grid.
+// option's extractors, Power Shards and MW, after the research where the plan counts on no Power
+// Shards yet (#1169). '' without extracted Water or a grid.
 export function waterPowerWords(
   stage: Pick<StoredStage, 'mining' | 'raw' | 'grid'> | undefined,
   phase: number,
@@ -430,18 +442,19 @@ export function waterPowerWords(
       ? `${extractorCount(option.extractors)} and ${shardCount(option.shards)}, drawing ${powerAmount(drawn)}`
       : `${extractorCount(option.extractors)} drawing ${powerAmount(drawn)}`;
   if (options.same || !second) return ` ${counted}: ${takes(first.option, mw)}.`;
-  if ('research' in second)
-    return ` ${counted}, the suggested option: ${takes(first.option, mw)}. ${capital(second.name)}, ${second.research}.`;
   // The other option's MW at the power model's rate per m³ (waterMWPerUnit): its clock's share.
   const clockOf = (option: ExtractorOption) => (option.full > 100 ? choice.overclock : 1);
   const otherMW =
     mw * (clockOf(second.option) / clockOf(first.option)) ** (WATER_EXTRACTOR.exponent - 1);
-  return ` ${counted}, the suggested option: ${takes(first.option, mw)}. ${capital(second.name)} instead, they would take ${takes(second.option, otherMW)}.`;
+  const other = second.condition
+    ? `${capital(second.name)} instead (${second.condition})`
+    : `${capital(second.name)} instead`;
+  return ` ${counted}, the suggested option: ${takes(first.option, mw)}. ${other}, they would take ${takes(second.option, otherMW)}.`;
 }
 
 // The first phase in which the MAM's Power Shards research is worth advising (#1137): before it
 // the player cannot use the MAM yet, so the step says nothing about overclocking. From it on the
-// plan overclocks (PHASE_CLOCK, #1169), after the research step (shardResearch below).
+// plan overclocks (PHASE_CLOCK, #1169), after the research step (shardResearchTask in progression.ts).
 export const OVERCLOCK_ADVICE_FROM = 2;
 // What overclocking would save on a stage stored at a lower clock than the plan now gives it
 // (#1137, #1169): the miners and extractors its draw takes as stored, and how many it would take
