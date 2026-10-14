@@ -822,6 +822,15 @@ test('ADA says an imported copy left the open profile alone (#1052)', () => {
   assert.ok(!ids(facts({ view: 'profiles' })).includes('imported'), 'absent means none');
 });
 
+test('ADA restates a merge of a friend’s progress on the Backup page (#1160)', () => {
+  const line = adaRemarks(facts({ view: 'backup', merged: 3, mergedFrom: '“anna.json”' })).find(
+    r => r.id === 'progress-merged',
+  )!;
+  assert.equal(line.tone, 'calm');
+  assert.match(line.text, /^Your merge ticked 3 steps from “anna\.json”\. Nothing was unticked\./);
+  assert.ok(!ids(facts({ view: 'backup' })).includes('progress-merged'), 'absent means none');
+});
+
 test('ADA warns on every page when the others moved to another profile (#1052)', () => {
   for (const view of ['plan', 'factories', 'notes', 'profiles']) {
     const remarks = adaRemarks(facts({ view, groupMoved: '“Main · copy”' }));

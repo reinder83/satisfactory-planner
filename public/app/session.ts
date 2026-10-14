@@ -134,6 +134,9 @@ export let factoryEditing = false;
 // The saves the last import added while another save stayed open (#1052), by id, which Saves &
 // profiles names in a notice with a way to open each; emptied when that page goes. View state.
 export let importedSaves: string[] = [];
+// The last merge of a friend's progress on the Backup page (#1160): how many steps it ticked, from
+// which file and into which profile, for ADA's `progress-merged` line; null when that page goes.
+export let mergedProgress: { count: number; fileName: string; profileId: string } | null = null;
 
 // Other modules cannot assign imported bindings, so they change these through setters.
 export function setWorkspace(value: WorkspaceSummary) {
@@ -275,6 +278,11 @@ export function setFactoryEditing(value: boolean) {
 }
 export function setImportedSaves(value: string[]) {
   importedSaves = value;
+}
+export function setMergedProgress(
+  value: { count: number; fileName: string; profileId: string } | null,
+) {
+  mergedProgress = value;
 }
 
 // A profile records the phase it was created for: its production is planned from there on.
