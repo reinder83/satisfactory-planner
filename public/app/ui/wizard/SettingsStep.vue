@@ -1,13 +1,13 @@
 <!--
   All settings step 1, game settings: the save name (read-only when adding to a save), phase,
-  world settings, multipliers, power in MW (stored as GW by readWizard) and the production you
-  already run. An empty Save name, or one of spaces, stops Continue with a message beside the
+  world settings, multipliers (the recipe part cost a select of the game's steps, #1161), power
+  in MW (stored as GW by readWizard) and the production you already run. An empty Save name, or one of spaces, stops Continue with a message beside the
   box (form/NameField.vue), as in the guided start. Changing purity or distribution replaces
   the budgets on step 4 with that world's starting estimates when the step is read.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { distributions, purities } from '../../../preferences.ts';
+import { distributions, purities, recipeCostChoices } from '../../../preferences.ts';
 import { draft } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
@@ -33,6 +33,8 @@ const view = computed(() =>
       worldSeed: settings.worldSeed || '',
       multiplier: settings.multiplier,
       powerFactor: settings.powerFactor,
+      // Absent is 1× (#1161), as in every plan made before the setting.
+      recipeCost: settings.recipeCost ?? 1,
       availablePowerMW: settings.availablePowerGW * 1000,
       installedPowerMW: (settings.installedPowerGW ?? settings.availablePowerGW) * 1000,
       modNotes: settings.modNotes || '',
@@ -90,6 +92,17 @@ const view = computed(() =>
       step="0.1"
       required
     />
+    <div class="recipe-cost">
+      <SelectField
+        label="Recipe part cost multiplier"
+        name="recipeCost"
+        :options="recipeCostChoices"
+        :value="view.recipeCost"
+      />
+      <p class="small muted">
+        Every recipe takes this many times its usual inputs; its outputs stay the same.
+      </p>
+    </div>
     <InputField
       label="Spare existing power (MW)"
       name="availablePowerMW"

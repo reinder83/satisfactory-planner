@@ -4,8 +4,8 @@
 // names the planner, the wizard, the pages and the tests use, so none of them names a file
 // under preferences/:
 //   storage.ts     the storage setting: covered items, construction materials, refill rates
-//   world.ts       World Randomization choices, the raw resources, the original map's node counts,
-//                  default budgets
+//   world.ts       World Randomization choices, the recipe part cost steps (#1161), the raw
+//                  resources, the original map's node counts, default budgets
 //   fuels.ts       main power, the generators a player may already have, vehicle and drone
 //                  fuel choices, the drone fuel supply
 //   help.ts        the wizard's and the guided start's help text
@@ -30,6 +30,9 @@ export {
   nodeCounts,
   purities,
   rawResources,
+  RECIPE_COSTS,
+  recipeCostChoices,
+  recipeCostOf,
   resourceDefaults,
 } from './preferences/world.ts';
 export {

@@ -24,6 +24,18 @@ export const purities: Choice[] = [
   ['random', 'Random'],
   ['custom', 'Custom / manual'],
 ];
+// The game mode's recipe part cost multiplier (#1161, `settings.recipeCost`): the steps the
+// game's Game Modes menu offers, 1× the default. Every recipe takes this many times its inputs and
+// makes its usual outputs (recipePool in planner/recipes.ts). settings() keeps one of these other
+// than 1 and refuses any other value; absent means 1×, as in every plan made before it.
+export const RECIPE_COSTS: readonly number[] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+// The multiplier a plan's settings were calculated with: 1 when the field is absent.
+export const recipeCostOf = (settings: { recipeCost?: number }): number => settings.recipeCost ?? 1;
+// [value, label] pairs for the wizard's select.
+export const recipeCostChoices: Choice[] = RECIPE_COSTS.map(cost => [
+  String(cost),
+  cost === 1 ? '1× (default)' : `${cost}×`,
+]);
 // The raw resources the planner extracts (RAW in planner/data.ts, which plans with this list).
 // Kept here, outside the planner, so the interface can apply the planner's rules about them
 // without loading recipes.json: an item made on site is never one of them (onSitePlannable in

@@ -100,6 +100,11 @@ export interface CurrentSettings {
   distribution: Distribution;
   multiplier: number;
   powerFactor: number;
+  // The game mode's recipe part cost multiplier (#1161, All settings step 1): every recipe in the
+  // pool takes this many times its inputs and makes its usual outputs (recipePool in
+  // planner/recipes.ts). One of RECIPE_COSTS in public/preferences/world.ts other than 1. Absent
+  // at 1× and from every plan made before it, which therefore calculates exactly as before.
+  recipeCost?: number;
   availablePowerGW: number;
   recipes: 'standard' | 'all' | 'custom';
   pureIngots: boolean;

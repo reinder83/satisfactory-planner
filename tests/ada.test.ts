@@ -565,6 +565,23 @@ test('ADA counts the generators you already have, or says the phase does not (#1
   }
 });
 
+test('ADA names the recipe part cost a plan was calculated with, when not 1× (#1161)', () => {
+  for (const view of ['plan', 'resources']) {
+    const line = (recipeCost?: number) =>
+      adaRemarks(facts({ view, ...(recipeCost === undefined ? {} : { recipeCost }) })).find(
+        r => r.id === 'recipe-cost',
+      );
+    assert.equal(line(2)!.tone, 'calm');
+    assert.match(
+      line(2)!.text,
+      /^This plan was calculated with a 2× recipe part cost: every recipe takes 2 times its usual inputs for the same outputs, and every number here already counts it\. Your patience is not included\.$/,
+    );
+    assert.match(line(0.5)!.text, /a 0\.5× recipe part cost: .* Enjoy the discount\.$/);
+    assert.equal(line(1), undefined);
+    assert.equal(line(), undefined, 'absent means 1×');
+  }
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

@@ -13,6 +13,8 @@ export const helpText: Record<string, string> = {
   multiplier: 'Space Elevator item requirements only. 50 means fifty times the normal delivery.',
   powerFactor:
     'Machine consumption multiplier: 0.5 means half consumption. Generator output is unchanged.',
+  recipeCost:
+    'The Game Modes setting Recipe Part Cost. 2 means every machine needs twice its usual inputs for the same output. It is chosen when the save is created.',
   availablePowerMW:
     'Enter unused capacity after existing consumption. Reserve existing generator fuel separately in Resources.',
   recipes:

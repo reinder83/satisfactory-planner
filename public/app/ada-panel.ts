@@ -412,6 +412,10 @@ function adaFacts(): AdaFacts {
     requiredOnly,
     ...keptFacts(storedStage),
     ...ownedGeneratorFacts(storedStage),
+    // The recipe part cost the open plan was calculated with (#1161), only when not 1×.
+    ...(calculated?.settings.recipeCost && calculated.settings.recipeCost !== 1
+      ? { recipeCost: calculated.settings.recipeCost }
+      : {}),
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,

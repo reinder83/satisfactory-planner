@@ -47,6 +47,8 @@ export interface AdaFacts {
   // does not count ("8 Coal Generators"); each absent for none.
   ownedGenerators?: string;
   idleGenerators?: string;
+  // The recipe part cost multiplier the open plan was calculated with (#1161); absent at 1×.
+  recipeCost?: number;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -418,6 +420,17 @@ const RULES: AdaRule[] = [
       ]
         .filter(Boolean)
         .join(' '),
+  },
+  {
+    // The game mode's recipe part cost (#1161): the plan's numbers already count it, and only
+    // Edit settings changes it, so nothing here waits for a recalculation.
+    id: 'recipe-cost',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.recipeCost && facts.recipeCost !== 1,
+    // The game's steps (RECIPE_COSTS) are short decimals, so the number is written as it is.
+    text: facts =>
+      `This plan was calculated with a ${facts.recipeCost}× recipe part cost: every recipe takes ${facts.recipeCost} times its usual inputs for the same outputs, and every number here already counts it. ${(facts.recipeCost ?? 1) > 1 ? 'Your patience is not included.' : 'Enjoy the discount.'}`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {

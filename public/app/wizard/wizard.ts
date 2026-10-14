@@ -424,10 +424,19 @@ function readField(wizardDraft: WizardDraft, name: string, value: FormDataEntryV
   else if (name === 'saveName') wizardDraft.saveName = String(value);
   else if (name === 'profileName') wizardDraft.name = String(value);
   else if (name.startsWith('limit:')) readLimit(settings, name, value);
+  else if (name === 'recipeCost') readRecipeCost(settings, value);
   else if (NUMBER_SETTINGS.has(name)) byName[name] = Number(value);
   else if (name === 'collectables') settings.collectables = value === 'true';
   else if (name === 'pureIngots') settings.pureIngots = value === 'true';
   else if (TEXT_SETTINGS.has(name)) byName[name] = value;
+}
+
+// The recipe part cost select (#1161, All settings step 1): 1× leaves the field out, as settings()
+// stores it, so a draft from a plan made before the setting keeps settings without it.
+function readRecipeCost(settings: WizardSettings, value: FormDataEntryValue) {
+  const cost = Number(value);
+  if (cost === 1) delete settings.recipeCost;
+  else settings.recipeCost = cost;
 }
 
 // A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:
