@@ -5,7 +5,9 @@
   renamed (saved when the field is committed, then redrawn with the saved name either way) or
   removed; otherwise a group with more than one factory links to its build order, the group's flow
   page (#factories/<group>/flow, GroupFlowPage.vue, #895). It is a link, not a button: it goes to
-  another page, so it can open in a new tab and the address can be shared. Each group can be
+  another page, so it can open in a new tab and the address can be shared. Before it, "Mark all
+  running" marks every line of the group running at once, or its reverse (GroupRunning.vue,
+  #1163). Each group can be
   folded (CollapseToggle.vue, SP-17): its header stays, its cards go. Unfolded, a group shows its
   "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise what
   the open plan makes on site for it in this phase, its own lines, then the items it marks that give
@@ -33,6 +35,7 @@ import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
 import FactoryHandover from './FactoryHandover.vue';
+import GroupRunning from './GroupRunning.vue';
 import OnSitePicker from './OnSitePicker.vue';
 import { onSiteEntriesText, onSiteSummaries } from '../../on-site-picker.ts';
 
@@ -150,14 +153,16 @@ async function remove(event: Event, id: string) {
       >
         Remove factory
       </button>
-      <a
-        v-else-if="section.members.length > 1"
-        class="btn"
-        :href="'#' + flowRoute(section.id)"
-        :data-group-flow="section.id"
-      >
-        Build order →
-      </a>
+      <div v-else class="site-actions">
+        <GroupRunning :group-id="section.id" :group-name="section.name" /><a
+          v-if="section.members.length > 1"
+          class="btn"
+          :href="'#' + flowRoute(section.id)"
+          :data-group-flow="section.id"
+        >
+          Build order →
+        </a>
+      </div>
     </header>
     <template v-if="!section.collapsed">
       <OnSitePicker v-if="editing" :group-id="section.id" :group-name="section.name" />

@@ -1489,6 +1489,14 @@ textarea::placeholder {
   font-size: 19px;
   overflow-wrap: anywhere;
 }
+/* A factory's own actions beside its name, "Mark all running" and "Build order →" (#1163): they
+   wrap under each other on a narrow page rather than making it scroll sideways. */
+.site-group .site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
 .site-group .site-head p {
   margin: 0;
   max-width: 560px;
