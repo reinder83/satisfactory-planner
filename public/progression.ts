@@ -381,7 +381,10 @@ function miningTask(
   stage: StageKey,
   upgraded = false,
 ): GuideTask[] {
-  const upgrade = upgraded && plan.settings ? phaseUpgrade(plan, stage) : null;
+  const upgrade =
+    upgraded && plan.settings
+      ? phaseUpgrade({ settings: plan.settings, stages: plan.stages }, stage)
+      : null;
   const step = miningStep(plan.stages[stage], stage, plan.settings, upgrade);
   return step ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', ...step }] : [];
 }
