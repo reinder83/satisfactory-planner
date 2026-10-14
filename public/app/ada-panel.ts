@@ -21,6 +21,7 @@ import {
   currentSave,
   groupMoved,
   importedSaves,
+  mergedProgress,
   milestoneOnly,
   openedFrom,
   payoff,
@@ -308,6 +309,13 @@ function groupMovedFact(): string {
   return `“${moved.profileName}”` + (moved.otherSave ? ` in “${moved.saveName}”` : '');
 }
 
+// The last merge of a friend's progress into the open profile (#1160), as the toast counted it.
+function mergedFacts(): Pick<AdaFacts, 'merged' | 'mergedFrom'> {
+  const merged = mergedProgress;
+  if (!merged || merged.profileId !== currentProfile.id) return {};
+  return { merged: merged.count, mergedFrom: `“${merged.fileName}”` };
+}
+
 // A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
 function guideFacts(): AdaFacts['guide'] {
   const guide = calculated?.guide;
@@ -421,6 +429,7 @@ function adaFacts(): AdaFacts {
     imported: listNames(
       workspace.saves.filter(save => importedSaves.includes(save.id)).map(save => `“${save.name}”`),
     ),
+    ...mergedFacts(),
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),
