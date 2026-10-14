@@ -7,10 +7,11 @@
 // Phase 1, Mk.2 (Tier 4) from Phase 2 and Mk.3 (Tier 8) from Phase 4; the best belt and pipe of
 // the phase (Mk.2 belts in Phase 1 up to Mk.6 belts, Tier 9, in Phase 5); Oil Extractors from
 // Phase 3 (Tier 5) and resource wells from Phase 4 (Tier 8). Miners and extractors run at 100%
-// in Phases 1–3 and up to 250% from Phase 4 (PHASE_CLOCK), with Power Shards from Power Slugs
-// (owner's choice on #1096), and up to 250% in every phase once the player can overclock
-// (settings.overclock, #1137: the MAM's Power Shards research, or "I can overclock"); a node's
-// belt or pipe still caps each machine. A node survey's miner and clock cap each phase's (never
+// in Phase 1 and up to 250% from Phase 2 (PHASE_CLOCK), with Power Shards from Power Slugs, whose
+// MAM research the build plan schedules before the phase taps its nodes (#1169; Phases 4 and 5
+// since #1096), and up to 250% in Phase 1 too once the player can overclock (settings.overclock,
+// #1137: the MAM's Power Shards research, or "I can overclock"); a node's belt or pipe still caps
+// each machine, so each node gives what its belt or pipe carries. A node survey's miner and clock cap each phase's (never
 // raise it). Water Extractors are counted at 100% unless settings.waterOverclock suggests the
 // phase's clock (#1137); a stage stored before it has no `water` and used its miner's clock.
 // Their advice always gives both options, the counted one suggested (waterChoice in
@@ -95,13 +96,28 @@ export const EXTRACTOR_TIERS = {
   'Resource Well Pressurizer': { tier: 8, entry: 'Schematic_8-2_C' },
 } as const;
 // The clock miners and extractors run at in each phase without a survey that says less: 100% in
-// Phases 1–3, then up to 250% (three Power Shards each), the endgame assumption the shipped
-// budgets use, from Phase 4 (owner's choice on #1096). Phase 4's shards come from Power Slugs:
-// the MAM's Blue Power Slugs and Overclock Production, which the build plan asks for in every
-// phase (requiredMilestones in progression.ts); Synthetic Power Shards are a Phase 5 research.
-export const PHASE_CLOCK: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 1, 4: 2.5, 5: 2.5 };
+// Phase 1, before the MAM is usable, then up to 250% (three Power Shards each), never more than a
+// node's belt or pipe carries (owner, #1169: each node at its belt cap, so 2,356.75 Iron Ore/min
+// on Phase 3's Mk.4 belts takes 5 Miner Mk.2, 4 at 200%, not 10 at 100%; Phases 4 and 5 since
+// #1096). The shards come from Power Slugs: the MAM's Blue Power Slugs and Overclock Production,
+// which the build plan asks for in every phase (requiredMilestones in progression.ts) and
+// schedules before the first phase that taps its nodes overclocked (shardResearchTask);
+// Synthetic Power Shards are a Phase 5 research. A stage stored before #1169 keeps the 100% it
+// was calculated with in Phases 2 and 3 (its mining.miner.clock) until the user recalculates.
+export const PHASE_CLOCK: Readonly<Record<number, number>> = {
+  1: 1,
+  2: 2.5,
+  3: 2.5,
+  4: 2.5,
+  5: 2.5,
+};
+// The MAM research that lets the player overclock with Power Shards (#1137): Overclock Production
+// in the Power Slugs tree, after Blue Power Slugs (SHARD_RECIPE_RESEARCH, the Power Shard recipe).
+export const OVERCLOCK_RESEARCH = 'Research_PowerSlugs_2_C';
+export const SHARD_RECIPE_RESEARCH = 'Research_PowerSlugs_1_C';
 // The clock miners and extractors run at in every phase once the player can overclock
-// (settings.overclock, #1137): 250%, three Power Shards each, a node's belt or pipe capping it.
+// (settings.overclock, #1137; since #1169 it raises only Phase 1): 250%, three Power Shards each,
+// a node's belt or pipe capping it.
 export const OVERCLOCK = 2.5;
 // The clock of `phase` before a survey caps it: PHASE_CLOCK, or OVERCLOCK when the player can
 // overclock (#1137).
@@ -145,7 +161,9 @@ export interface MiningSettings {
   // Mk.3 to Mk.6. Raises every phase's belt to at least that mark; absent unless chosen.
   ownedBelt?: number;
   // The player can overclock (#1137: the MAM's Power Shards research ticked, or "I can overclock"
-  // in "What you already have"): every phase's clock is OVERCLOCK. Absent unless chosen.
+  // in "What you already have"): every phase's clock is OVERCLOCK, Phase 1's too (the later
+  // phases' are since #1169), and the build plan's Power Shards research step shows as done.
+  // Absent unless chosen.
   overclock?: boolean;
   // Water Extractors are suggested and counted at the phase's clock instead of 100% (#1137,
   // #1142: both options are always advised). Absent unless chosen.

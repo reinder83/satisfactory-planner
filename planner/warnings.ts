@@ -248,15 +248,17 @@ function miningWarnings({ config }: FinishedPlan): string[] {
     `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner, config.overclock)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. ${overclockWords(config)} The entered budgets are the most any phase draws.`,
   ];
 }
-// How the plan overclocks its miners and oil extractors (#1137, phaseMiner in
-// public/preferences/mining.ts): with Power Shards ("I can overclock", settings.overclock) up to
-// 250% in every phase, else at 100% in Phases 1–3 with the build plan's research advice and up to
-// 250% from Phase 4; never more than a node's belt or pipe carries, nor a node survey's clock.
+// How the plan overclocks its miners and oil extractors (#1137, #1169, phaseMiner in
+// public/preferences/mining.ts): up to 250% from Phase 2, after the Power Shards research the
+// build plan schedules before the nodes are tapped, and in Phase 1 too with "I can overclock"
+// (settings.overclock), else at 100% there; never more than a node's belt or pipe carries, nor a
+// node survey's clock.
 function overclockWords(config: CurrentSettings): string {
-  const cap = 'never more than their belt or pipe carries';
-  if (config.overclock || Number(config.phase) >= 4)
-    return `Miners and oil extractors run overclocked with Power Shards, up to 250% and ${cap}.`;
-  return `Until you can overclock, miners and oil extractors run at 100% in Phases 1–3, and from Phase 2 the build plan says how many miners researching Power Shards in the MAM (Blue Power Slugs, then Overclock Production) would save; once you can, turn on “I can overclock” with Edit settings. From Phase 4 they run overclocked up to 250%, ${cap}.`;
+  const cap =
+    'never more than their belt or pipe carries, so each node gives what its belt or pipe takes';
+  if (config.overclock || Number(config.phase) >= 2)
+    return `Miners and oil extractors run overclocked with Power Shards, up to 250% and ${cap}; the build plan has the Power Shards research in the MAM (Blue Power Slugs, then Overclock Production) before the first nodes it taps that way.`;
+  return `In Phase 1, before the MAM is usable, miners run at 100%; turn on “I can overclock” with Edit settings if you already have Power Shards. From Phase 2 they run overclocked with Power Shards up to 250%, ${cap}, after the Power Shards research in the MAM (Blue Power Slugs, then Overclock Production).`;
 }
 // What every plan assumes about unlocks and power.
 function assumptionWarnings({ config }: FinishedPlan): string[] {

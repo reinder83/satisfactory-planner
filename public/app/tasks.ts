@@ -357,6 +357,7 @@ export const TASK_GLYPHS: Record<string, string> = {
 const TASK_ID_KINDS: [RegExp, string][] = [
   [/^custom-/, 'note'],
   [/^recipe-unlock-|^hard-drives-/, 'harddrive'],
+  [/^power-shards-/, 'research'],
   [/^retire-/, 'retire'],
   [/^portal-supply/, 'portal'],
   [/^drone-fuel-/, 'logistics'],

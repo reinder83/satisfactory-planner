@@ -80,12 +80,25 @@ test("a production line's dialog gives both options, the suggested one first", (
   );
 });
 
-test('before Power Shards the overclocked option is the research advice', () => {
+test('the overclocked option always gives its figures, after the research where the plan counts on no Power Shards (#1169)', () => {
+  // Phase 2 plans its nodes overclocked since #1169: both options with figures.
   openPlan(early, '2');
   openCalculatedFactory(waterLine(early, '2', 'Coal power').id);
   assert.match(
     dialogExtractors(),
-    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or overclocked, with fewer extractors: research Power Shards in the MAM \(Blue Power Slugs, then Overclock Production\) first\.$/,
+    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or 1 overclocked at [\d.]+% \(1 extractor, \d Power Shards?, [\d.]+ MW\)\.$/,
+  );
+  // The same Phase 2 stored at 100% before #1169: the figures, after the research.
+  page();
+  const stored = structuredClone(early);
+  const mining = stored.stages['2'].mining!;
+  mining.miner = { ...mining.miner, clock: 1 };
+  mining.water = 1;
+  openPlan(stored, '2');
+  openCalculatedFactory(waterLine(stored, '2', 'Coal power').id);
+  assert.match(
+    dialogExtractors(),
+    /^Water Extractors at 100% \(suggested\): 1 at 100% \+ 1 at [\d.]+% \(2 extractors, [\d.]+ MW\)\. Or overclocked \(after researching Power Shards in the MAM: Blue Power Slugs, then Overclock Production\): 1 at [\d.]+% \(1 extractor, \d Power Shards?, [\d.]+ MW\)\.$/,
   );
 });
 

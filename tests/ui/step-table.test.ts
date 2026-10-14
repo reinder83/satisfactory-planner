@@ -57,10 +57,20 @@ test('the mining step shows a table: a row per resource, a total row, the intro 
   assert.match(plain(cells[4]!.textContent), /MW$/);
   const total = table.querySelector('[data-step-table-total]')!;
   assert.equal(plain(total.querySelector('th')?.textContent), 'Total');
-  // Without Power Shards in Phase 3 the step advises the research, under the table.
-  assert.match(
+  // Since #1169 Phase 3 taps its nodes overclocked: the shards are in the table, and the research
+  // is its own step right before this one, not advice under the table.
+  assert.match(plain(cells[3]!.textContent), /^\d+$/);
+  assert.doesNotMatch(
     plain(table.querySelector('[data-step-table-after]')?.textContent),
-    /^Research Power Shards in the MAM/,
+    /Research Power Shards|calculated with/,
+  );
+  const research = $('[data-task="power-shards-3"]')!;
+  assert.ok(research, 'the research step');
+  const order = $$('[data-task]').map(element => (element as HTMLElement).dataset.task);
+  assert.equal(order[order.indexOf('power-shards-3') + 1], 'mining-3', 'right before it');
+  assert.equal(
+    plain(research.querySelector('summary')?.textContent),
+    'Research Power Shards before tapping the nodes',
   );
 });
 

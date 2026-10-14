@@ -33,17 +33,20 @@ test('settings keep only Miner Mk.2 or Mk.3 as the miner you already have', () =
 test('a miner you already have raises each phase to it, and a survey still caps it', () => {
   assert.deepEqual(phaseMiner(1, null), { mark: 1, clock: 1 });
   assert.deepEqual(phaseMiner(1, null, 2), { mark: 2, clock: 1 });
-  assert.deepEqual(phaseMiner(3, null, 3), { mark: 3, clock: 1 }, 'the clock stays the phase’s');
+  assert.deepEqual(phaseMiner(1, null, 3), { mark: 3, clock: 1 }, 'the clock stays the phase’s');
+  // From Phase 2 the phase's clock is up to 250% (#1169).
+  assert.deepEqual(phaseMiner(3, null, 3), { mark: 3, clock: 2.5 }, 'the clock stays the phase’s');
   assert.deepEqual(phaseMiner(4, null, 2), { mark: 3, clock: 2.5 }, 'never lowers a phase');
-  assert.deepEqual(phaseMiner(3, { mark: 2 }, 3), { mark: 2, clock: 1 }, 'the survey caps it');
+  assert.deepEqual(phaseMiner(3, { mark: 2 }, 3), { mark: 2, clock: 2.5 }, 'the survey caps it');
   assert.deepEqual(phaseMiner(3, null, 7), phaseMiner(3, null), 'an unknown mark is ignored');
-  assert.equal(
-    phaseMinersWords(null, 3, 3),
-    'Miner Mk.3 at 100% in Phase 3 and Mk.3 at 250% in Phases 4 and 5',
-  );
+  assert.equal(phaseMinersWords(null, 3, 3), 'Miner Mk.3 at 250% in Phases 3, 4 and 5');
   assert.equal(
     phaseMinersWords(null, 3),
-    'Miner Mk.2 at 100% in Phase 3 and Mk.3 at 250% in Phases 4 and 5',
+    'Miner Mk.2 at 250% in Phase 3 and Mk.3 at 250% in Phases 4 and 5',
+  );
+  assert.equal(
+    phaseMinersWords(null, 1, 3),
+    'Miner Mk.3 at 100% in Phase 1 and Mk.3 at 250% in Phases 2, 3, 4 and 5',
   );
   const limits = settings({ phase: '3' }).limits;
   const own = phaseMining({ limits, ownedMiner: 3 }, 3),
@@ -63,7 +66,7 @@ test('a plan with a miner you already have mines Phase 3 with it; without one, a
   assert.ok(
     owned.stages['3'].mining!.budgets['Iron Ore']! > plain.stages['3'].mining!.budgets['Iron Ore']!,
   );
-  assert.match(owned.warnings.join(' '), /Miner Mk\.3 at 100% in Phase 3/);
+  assert.match(owned.warnings.join(' '), /Miner Mk\.3 at 250% in Phases 3, 4 and 5/);
   // Phase 4 already has Mk.3: the same phase in both plans.
   assert.deepEqual(json(owned.stages['4'].mining), json(plain.stages['4'].mining));
   // Absent means as before: the same plan as one calculated without the field.

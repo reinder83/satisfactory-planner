@@ -29,10 +29,10 @@
 import {
   BELT_MARKS,
   MINER_MARKS,
+  OVERCLOCK_RESEARCH,
   OWNED_GENERATORS,
   ownedGeneratorCounts,
   phaseBelt,
-  phaseClock,
   phaseMiner,
 } from '../preferences.ts';
 import { listNames } from '../wording.ts';
@@ -106,14 +106,25 @@ function beltFound(settings: StoredSettings, checks: Checks, phase: number): num
 
 // The MAM research that lets the player overclock with Power Shards (#1137): Overclock Production
 // in the Power Slugs tree, after Blue Power Slugs (the Power Shard recipe). The build plan asks for
-// both in every phase (requiredMilestones in progression.ts).
-export const OVERCLOCK_RESEARCH = 'Research_PowerSlugs_2_C';
+// both in every phase (requiredMilestones in progression.ts). OVERCLOCK_RESEARCH lives in
+// preferences/mining.ts, since the build plan's Power Shards research step reads it too (#1169).
 // Whether the ticks show overclocking the plan does not count: the research ticked, mining per
-// phase on, settings.overclock absent, and some phase from `phase` on that it would run faster.
-function overclockFound(settings: StoredSettings, checks: Checks, phase: number): boolean {
+// phase on, settings.overclock absent, and some phase from `phase` on whose miners run slower
+// than they would with it (phaseMiner with overclock, a survey still capping it). A planned phase
+// is compared as it is stored, so a Phase 2 or 3 stored at 100% before #1169 counts; one the plan
+// has no stage for as it would be calculated now (only Phase 1 is then slower).
+function overclockFound(plan: TicksPlan, checks: Checks, phase: number): boolean {
+  const settings = plan.settings;
   if (!settings.phaseMining || settings.overclock) return false;
   if (checks['unlock-' + OVERCLOCK_RESEARCH] !== true) return false;
-  for (let at = phase; at <= 5; at++) if (phaseClock(at, true) > phaseClock(at)) return true;
+  for (let at = phase; at <= 5; at++) {
+    const key = String(at) as keyof TicksPlan['stages'];
+    const now =
+      plan.stages?.[key]?.mining?.miner.clock ??
+      phaseMiner(at, settings.extraction, settings.ownedMiner).clock;
+    if (phaseMiner(at, settings.extraction, settings.ownedMiner, true).clock > now + 1e-9)
+      return true;
+  }
   return false;
 }
 
@@ -216,7 +227,7 @@ export function ownedFromTicks(
   const found: OwnedFound = {
     ...markField('miner', minerFound(settings, checks, phase)),
     ...markField('belt', beltFound(settings, checks, phase)),
-    ...(overclockFound(settings, checks, phase) ? { overclock: true as const } : {}),
+    ...(overclockFound(plan, checks, phase) ? { overclock: true as const } : {}),
     alternates: alternatesFound(settings, checks, alternates),
     generators: generatorsFound(plan, checks, phase),
   };

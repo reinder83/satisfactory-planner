@@ -161,11 +161,22 @@ const withBox = (): StoredCalculatedPlan =>
     }),
   );
 
-test('migration: a custom plan stored before #1058 calculates exactly as it did', () => {
+test('migration: a custom plan stored before #1058 calculates with the pool it had', () => {
   assert.equal('mamRecipes' in stored.settings, false);
   assert.equal('mamRecipes' in settings(stored.settings), false);
   assert.equal('plannerPicks' in settings(stored.settings), false);
-  assert.deepEqual(json(calculate(stored.settings).stages), json(stored.stages));
+  // Until #1169 a recalculation gave exactly the stored plan. Since then Phases 2 and 3 plan their
+  // nodes overclocked (the stored ones are at 100%), so the numbers move; the recipe pool does not:
+  // no MAM recipe comes in, in any phase, as in the stored plan.
+  const again = calculate(stored.settings);
+  const mam = (plan: StoredCalculatedPlan) =>
+    Object.values(plan.stages).flatMap(stage =>
+      (stage.rows || []).map(row => row.id).filter(id => [...MAM_RECIPES, DISTILLED].includes(id)),
+    );
+  assert.deepEqual(mam(stored), []);
+  assert.deepEqual(mam(again), []);
+  assert.deepEqual(again.stages['3'].mining!.miner, { mark: 2, clock: 2.5 });
+  assert.deepEqual(stored.stages['3'].mining!.miner, { mark: 2, clock: 1 });
 });
 
 test('migration: plans with and without the new fields load, import and export unchanged (Docker)', async () => {

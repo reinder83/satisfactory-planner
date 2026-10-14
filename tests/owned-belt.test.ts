@@ -47,8 +47,8 @@ test('a belt you already have raises each phase to it, never lowers one', () => 
   assert.equal(ownedBeltsWords(4, 4), '', 'none where no phase is raised');
 });
 
-// A pure Iron Ore node under Phase 2's Miner Mk.3 (owned, at 100%) gives 480/min, but Phase 2's
-// Mk.3 belts carry only 270/min of it; with Mk.4 belts (480/min) it gives all of it.
+// A pure Iron Ore node under Phase 2's Miner Mk.3 (owned, up to 250% since #1169) gives 1,200/min,
+// but Phase 2's Mk.3 belts carry only 270/min of it; with Mk.4 belts (480/min) it gives 480.
 test('Phase 2: a pure node under an owned Miner Mk.3 gives all 480/min on owned Mk.4 belts', () => {
   const limits = settings({ phase: '2' }).limits;
   const plain = phaseMining({ limits, ownedMiner: 3 }, 2),
@@ -59,14 +59,21 @@ test('Phase 2: a pure node under an owned Miner Mk.3 gives all 480/min on owned 
     mining.sources['Iron Ore']!.find(source => source.kind === 'pure')!;
   assert.equal(sourceYield(pure(plain), plain.miner.clock), 270);
   assert.equal(sourceYield(pure(own), own.miner.clock), 480);
-  assert.equal(plain.budgets['Iron Ore'], 27180);
-  assert.equal(own.budgets['Iron Ore'], 36840);
+  // 39 impure, 42 normal and 46 pure nodes: 270 a node on Mk.3 belts; 300, 480 and 480 on Mk.4.
+  assert.equal(plain.budgets['Iron Ore'], 34290);
+  assert.equal(own.budgets['Iron Ore'], 53940);
   assert.equal(own.budgets['Water'], plain.budgets['Water'], 'Water keeps its allowance');
-  // The belt alone changes nothing where the miner never fills the phase's belt (Mk.2 at 100%
-  // gives a pure node 240/min), and nothing in Phase 5, which already has Mk.6.
+  // The belt alone changes nothing where the miner never fills the phase's belt (Phase 1's Mk.1
+  // at 100% gives a pure node 120/min, which its Mk.2 belts carry), and nothing in Phase 5, which
+  // already has Mk.6. Phase 2's Mk.2, up to 250% since #1169, fills Mk.3 belts, so Mk.4 belts
+  // raise its budget.
   assert.deepEqual(
-    phaseMining({ limits, ownedBelt: 4 }, 2).budgets,
-    phaseMining({ limits }, 2).budgets,
+    phaseMining({ limits, ownedBelt: 4 }, 1).budgets,
+    phaseMining({ limits }, 1).budgets,
+  );
+  assert.ok(
+    phaseMining({ limits, ownedBelt: 4 }, 2).budgets['Iron Ore']! >
+      phaseMining({ limits }, 2).budgets['Iron Ore']!,
   );
   assert.deepEqual(phaseMining({ limits, ownedBelt: 6 }, 5), phaseMining({ limits }, 5));
   // Phase 4's Miner Mk.3 at 250% gives a pure node 1,200/min: on its Mk.5 belts 780, on Mk.6 all.
@@ -83,13 +90,13 @@ test('a plan with a belt you already have mines Phase 2 with it; without one, as
   assert.equal(plain.stages['2'].mining!.belt.mark, 'Mk.3');
   assert.equal(owned.stages['2'].mining!.belt.mark, 'Mk.4');
   assert.equal(owned.stages['3'].mining!.belt.mark, 'Mk.4');
-  assert.equal(owned.stages['2'].mining!.budgets['Iron Ore'], 36840);
-  assert.equal(plain.stages['2'].mining!.budgets['Iron Ore'], 27180);
+  assert.equal(owned.stages['2'].mining!.budgets['Iron Ore'], 53940);
+  assert.equal(plain.stages['2'].mining!.budgets['Iron Ore'], 34290);
   // The explanation names the belts, and the one the player has.
   const words = owned.warnings.find(warning => warning.startsWith("Each phase's resource budgets"));
   assert.match(
     words!,
-    /\(Miner Mk\.3 at 100% in Phases 2 and 3 and Mk\.3 at 250% in Phases 4 and 5; Mk\.4 belts in Phases 2 and 3, Mk\.5 in Phase 4 and Mk\.6 in Phase 5, at least the Mk\.4 belts you already have\):/,
+    /\(Miner Mk\.3 at 250% in Phases 2, 3, 4 and 5; Mk\.4 belts in Phases 2 and 3, Mk\.5 in Phase 4 and Mk\.6 in Phase 5, at least the Mk\.4 belts you already have\):/,
   );
   assert.doesNotMatch(plain.warnings.join(' '), /you already have/);
   // Phases 4 and 5 already have better belts: the same phases in both plans.

@@ -229,13 +229,14 @@ const names = (items: string[], max = 3) =>
     : `${items.slice(0, max).join(', ')} and ${items.length - max} more`;
 const share = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 100);
 // What each line taking Water says about its Water Extractors (#1142): both options, the
-// suggested one first, or 100% with the research advice, or 100% alone before the MAM.
+// suggested one first (the overclocked one after the Power Shards research where the plan counts on
+// none yet, #1169), or 100% alone before the MAM.
 function waterOptionsWords(choice: AdaFacts['waterChoice']): string {
   const lead = 'Each line that takes it says how many Water Extractors to build';
   const exact = 'the clocks adding up to exactly what it needs.';
   if (choice?.shards === 'none') return `${lead} at 100%, with ${exact}`;
   if (choice?.shards === 'research')
-    return `${lead} at 100%, with ${exact} Overclocked, fewer would do: that takes Power Shards from the MAM.`;
+    return `${lead} both ways, at 100% (suggested) or overclocked with Power Shards once you research them in the MAM, each with ${exact} Your pick.`;
   return choice?.suggestOverclocked
     ? `${lead} both ways, overclocked with Power Shards (suggested) or at 100%, each with ${exact} Your pick.`
     : `${lead} both ways, at 100% (suggested) or overclocked with Power Shards, each with ${exact} Your pick.`;

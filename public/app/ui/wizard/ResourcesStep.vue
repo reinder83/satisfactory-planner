@@ -110,7 +110,7 @@ const overclock = ref(!!draft().settings.overclock);
       >Suggest overclocked Water Extractors<br /><small class="muted"
         >The build plan always shows both ways to build them: at 100%, and overclocked up to 250%
         with Power Shards. This only picks the one suggested first and counted in the power total:
-        100% when off, overclocked when on (once you can overclock).</small
+        100% when off, overclocked when on (from Phase 2, or once you can overclock).</small
       ></span
     ></label
   >
@@ -119,10 +119,10 @@ const overclock = ref(!!draft().settings.overclock);
       <caption class="small muted">
         These budgets are the most any phase draws. Each phase gets what its miner, clock and belts
         take from the same nodes: crude oil from Phase 3 and resource wells from Phase 4. Miners and
-        extractors run up to 250% once you can overclock (Power Shards researched in the MAM), and
-        from Phase 4 in any case, never more than their belt or pipe carries. A miner or belt you
-        already have raises every phase's to its mark; a node survey's miner and clock cap every
-        phase's.
+        extractors run up to 250% from Phase 2, after the Power Shards research the build plan
+        schedules before the nodes are tapped, never more than their belt or pipe carries; in Phase
+        1 only once you can overclock. A miner or belt you already have raises every phase's to its
+        mark; a node survey's miner and clock cap every phase's.
       </caption>
       <thead>
         <tr>

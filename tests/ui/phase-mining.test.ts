@@ -86,8 +86,8 @@ test('the Resources page gives the phase’s own budgets and the nodes its draw 
     plain($('[data-power-part="extraction"] small')?.textContent),
     /^Miner Mk\.3 at 250% on the nodes this phase taps, best first/,
   );
-  // Crude oil's extractors at 100% and at 250% in Phase 4, and only at 100% in Phase 3, whose
-  // budgets count on no Power Shards.
+  // Crude oil's extractors at 100% and at 250% in Phase 4, and since #1169 in Phase 3 too, whose
+  // budgets now count on Power Shards.
   const oil = () => plain($('[data-mining-resource="Crude Oil"]')?.textContent);
   assert.match(oil(), /At 100%: tap .*; at 250%: tap .*Power Shards/);
   page();
@@ -96,10 +96,9 @@ test('the Resources page gives the phase’s own budgets and the nodes its draw 
   render();
   assert.equal(
     plain($('[data-mining-equipment]')?.textContent).split(' · ')[0],
-    'Miner Mk.2 at 100%',
+    'Miner Mk.2 at 250%',
   );
-  assert.match(oil(), /At 100%: tap /);
-  assert.doesNotMatch(oil(), /250%|Power Shard/);
+  assert.match(oil(), /At 100%: tap .*; at 250%: tap .*Power Shards/);
 });
 
 test('a plan stored before #1065 keeps its entered budgets and shows no mining panel', () => {
@@ -239,11 +238,11 @@ test('the budgets step offers the miners you already have, and the table follows
   assert.ok(select, 'offered with the box ticked');
   assert.equal(select.value, '', 'none by default');
   const phaseThree = () => plain($$('[data-phase-budgets] tbody tr')[0]!.textContent);
-  assert.match(phaseThree(), /^3 Miner Mk.2 at 100%/);
+  assert.match(phaseThree(), /^3 Miner Mk.2 at 250%/);
   select.value = '3';
   select.dispatchEvent(new Event('change', { bubbles: true }));
   await nextTick();
-  assert.match(phaseThree(), /^3 Miner Mk.3 at 100%/, 'the table follows the choice');
+  assert.match(phaseThree(), /^3 Miner Mk.3 at 250%/, 'the table follows the choice');
   readWizard($<HTMLFormElement>('#wizard-form')!);
   assert.equal(wizard!.settings.ownedMiner, 3);
   // Unticking the box drops it: the choice means nothing without mining per phase.
@@ -279,14 +278,14 @@ test('the budgets step offers the belts you already have, and the table follows 
     ],
   );
   const phaseTwo = () => plain($$('[data-phase-budgets] tbody tr')[0]!.textContent);
-  assert.match(phaseTwo(), /^2 Miner Mk\.3 at 100% · Mk\.3 belts \(270\/min\)/);
+  assert.match(phaseTwo(), /^2 Miner Mk\.3 at 250% · Mk\.3 belts \(270\/min\)/);
   const share = phaseTwo().split(' ').at(-1);
   select.value = '4';
   select.dispatchEvent(new Event('change', { bubbles: true }));
   await nextTick();
   assert.match(
     phaseTwo(),
-    /^2 Miner Mk\.3 at 100% · Mk\.4 belts \(480\/min\)/,
+    /^2 Miner Mk\.3 at 250% · Mk\.4 belts \(480\/min\)/,
     'the table follows',
   );
   assert.notEqual(phaseTwo().split(' ').at(-1), share, 'and so does the share of the budgets');
@@ -398,6 +397,6 @@ test('Review names the miner and belts each phase’s budgets follow', () => {
   go('wizard');
   render();
   const cells = $$('table tbody tr').map(row => plain(row.textContent));
-  assert.ok(cells.some(text => text.includes('Within Miner Mk.2 at 100% on Mk.4 belts')));
+  assert.ok(cells.some(text => text.includes('Within Miner Mk.2 at 250% on Mk.4 belts')));
   assert.ok(cells.some(text => text.includes('Within Miner Mk.3 at 250% on Mk.6 belts')));
 });
