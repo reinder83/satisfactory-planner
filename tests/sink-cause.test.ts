@@ -191,5 +191,23 @@ test('the burn note says why the coke is sunk and points at coal power', () => {
     ),
     undefined,
   );
+  // The rounding check reads the phase's whole sink, not the line's part (#1155): beside a Rocket
+  // Fuel line, the Compacted Coal line's 30/min is its part of 40/min sunk, more than one machine
+  // of each line together (25 + 10), so rounding does not explain it and the note stays.
+  const sharedStage = stageOf([enriched, rocketFuel, rocketPower], {
+    surplus: { 'Compacted Coal': 40 },
+  });
+  const sharedNote = (sunk: number) =>
+    burnNote(
+      enriched,
+      'Compacted Coal',
+      sunk,
+      sharedStage,
+      { mainPower: 'rocket', wholeMachines: true },
+      4,
+      fluid,
+    );
+  assert.match(sharedNote(30)!, /^The plan sinks its spare Compacted Coal: /);
+  assert.equal(sharedNote(30), sharedNote(40));
   assert.equal(mainPowerWords('coal', 4), undefined);
 });

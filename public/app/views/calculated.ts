@@ -14,11 +14,12 @@ import {
   type PhaseCarry,
 } from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
-import { OUTSIDE, siteItems } from '../group-links.ts';
+import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
 import { burnNote, COAL_GENERATOR_FUELS } from '../sink-cause.ts';
-import { adviceLineText, adviceSentence, lineAdvice, NO_COVER, recycleModel } from '../recycle.ts';
-import type { AdviceLine, AdviceWords, RecycleModel } from '../recycle.ts';
+import { adviceLineText, adviceSentence, lineAdvice, lineSink, NO_COVER } from '../recycle.ts';
+import type { AdviceLine, AdviceWords } from '../recycle.ts';
+import { recycleModelOf } from '../stage-recycle.ts';
 import {
   calcStage,
   calculated,
@@ -44,7 +45,7 @@ import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
 import { AMPLIFIER_WORDS } from '../../somersloops.ts';
-import { minerWords, waterChoice } from '../../mining.ts';
+import { minerWords } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 import type { StepList, StepTable } from '../../step-table.ts';
@@ -197,33 +198,6 @@ const sloopText = (row: CalcRow): string =>
     ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ${AMPLIFIER_WORDS} `
     : '';
 
-// The recycling model (recycleModel in recycle.ts) of `snapshot`, a stage of the open plan, for
-// the profile's factory groups. The build plan, a group's flow page and the factory dialog ask
-// for it once per line, so it is worked out once per stage, groups and plan. Its Water Extractor
-// options follow the stage's phase and the plan's settings (waterChoice, #1142).
-let recycleCache:
-  | { snapshot: StoredStage; groups: string; plan: unknown; model: RecycleModel }
-  | undefined;
-function recycleModelOf(snapshot: StoredStage): RecycleModel {
-  const groups = factoryGroupsState(),
-    key = JSON.stringify(groups);
-  const cache = recycleCache;
-  if (cache?.snapshot === snapshot && cache.groups === key && cache.plan === calculated)
-    return cache.model;
-  // The phase the stage is, for its Water Extractor options (#1142).
-  const phase = Object.entries(calculated?.stages ?? {}).find(
-    ([, stage]) => stage === snapshot,
-  )?.[0];
-  const model = recycleModel(
-    snapshot,
-    groups,
-    calculated?.settings.onSite,
-    waterChoice(snapshot, Number(phase ?? 0), calculated?.settings),
-  );
-  recycleCache = { snapshot, groups: key, plan: calculated, model };
-  return model;
-}
-
 // How the advice names a line (as its build-plan step is titled: "Wire for Alpha") and words a rate.
 const recycleWords: AdviceWords = {
   name: row => stepRowName(row),
@@ -257,16 +231,7 @@ export function burnNotes(row: CalcRow, snapshot: StoredStage | undefined = calc
     Object.entries(calculated.stages).find(([, stage]) => stage === snapshot)?.[0] ?? 0,
   );
   return outputs.flatMap(item => {
-    const sunk = model.transfers
-      .filter(
-        transfer =>
-          transfer.item === item &&
-          transfer.from.kind === 'line' &&
-          transfer.from.id === row.id &&
-          transfer.to.kind === 'place' &&
-          transfer.to.id === OUTSIDE.surplus,
-      )
-      .reduce((total, transfer) => total + transfer.rate, 0);
+    const sunk = lineSink(model, row.id, item);
     const note =
       sunk > LINK_DUST
         ? burnNote(row, item, sunk, snapshot, calculated?.settings, phase, piped =>

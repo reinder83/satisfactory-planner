@@ -614,6 +614,23 @@ export const lineAdvice = (
   ...inputAdvice(row, model, words, place),
 ];
 
+// What line `rowId` sends to the AWESOME Sink of `item` per minute, from every place it is in: its
+// part of the phase's sink as the books share it out (#1155), which its byproduct advice words as
+// "store or sink the other …". The parts of the lines making an item add up to the phase's
+// surplus of it. The factory dialog's flow (sinkOutputs in flow.ts) and the burn note (burnNotes
+// in views/calculated.ts) read it.
+export const lineSink = (model: RecycleModel, rowId: string, item: string): number =>
+  model.transfers
+    .filter(
+      transfer =>
+        transfer.item === item &&
+        transfer.from.kind === 'line' &&
+        transfer.from.id === rowId &&
+        transfer.to.kind === 'place' &&
+        transfer.to.id === OUTSIDE.surplus,
+    )
+    .reduce((total, transfer) => total + transfer.rate, 0);
+
 // How many byproducts the lines of a phase make, one per line and byproduct (ADA's
 // recycle-byproducts remark).
 export const byproductCount = (stage: StoredStage): number =>
