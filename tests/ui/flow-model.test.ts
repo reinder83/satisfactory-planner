@@ -102,11 +102,12 @@ test("flowOutputs adds the phase's books, then the sinks above the threshold", (
     storage: { 'Iron Plate': 5 },
     delivery: { 'Iron Plate': { target: 100, rate: 10 } },
     drone: { 'Iron Plate': 2 },
-    surplus: { 'Iron Plate': 40 },
+    // What the rows make beyond every use (80 - 30 - 10 - 5 - 2): the books send it to the sink.
+    surplus: { 'Iron Plate': 33 },
   });
   const outputs = flowOutputs(plates, stage);
   assert.deepEqual(labels(outputs), [
-    'AWESOME Sink 40',
+    'AWESOME Sink 33',
     'screws 30',
     'Space Elevator delivery 10',
     'Protected storage 5',

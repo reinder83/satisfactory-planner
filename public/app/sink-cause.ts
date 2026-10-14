@@ -64,7 +64,10 @@ function fluidUsedUp(
   );
 }
 
-// Why `row`'s `item` goes to the sink at `sunk` per minute in `stage` (see the top of this file).
+// Why `row`'s `item` goes to the sink in `stage` (see the top of this file). `sunk` is what the
+// phase sinks of the item per minute, all its lines together (stage.surplus), not the row's own
+// part of it (#1155): the rounding check compares the phase's sink with the room of every line
+// making the item, so the lines that share a sink share its cause.
 // `wholeMachines`: the plan's settings ask for whole machines. `fluid` says whether an item
 // travels by pipe (FLUIDS in flow.ts).
 export function sinkCause(
@@ -160,7 +163,8 @@ export function mainPowerWords(
 // the plan sinks it, and coal power is the choice that burns it (#1055). Undefined for any other
 // item, for a phase that already has a generator line burning it, for a sink that rounding to
 // whole machines explains and under a main power that may burn it. `sunk` is what `row` sends to
-// the sink of `item` per minute; `phase` is the stage's phase (5 for post-game). Words only: it
+// the sink of `item` per minute, and the rounding check reads the phase's whole sink of it, as
+// the flow's caption does (#1155); `phase` is the stage's phase (5 for post-game). Words only: it
 // reads the stored plan and changes nothing.
 export function burnNote(
   row: CalcRow,
@@ -178,7 +182,8 @@ export function burnNote(
     other => (other.generationMW || 0) > 0 && (other.inputs?.[item] || 0) > 0,
   );
   if (burnt) return undefined;
-  const cause = sinkCause(row, item, sunk, stage, !!settings?.wholeMachines, fluid);
+  const phaseSink = Math.max(stage.surplus?.[item] ?? 0, sunk);
+  const cause = sinkCause(row, item, phaseSink, stage, !!settings?.wholeMachines, fluid);
   if (cause.kind === 'rounding') return undefined;
   return `The plan sinks its spare ${item}: burning it in Coal Generators would need more machines than it saves in the ${words} power chain. With coal power, the plan burns it in Coal Generators instead.`;
 }

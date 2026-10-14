@@ -700,8 +700,12 @@ function sinkPart(row: CalcRow, item: string, context: CalcFlowContext): number 
 
 // Plutonium rods the waste strategy sinks, then the plan's surplus for the item. The planner
 // leaves fluids, radioactive and unsinkable items out of `surplus`, so they never show here.
-// Of the surplus, the part this row sends (sinkPart, #1155), captioned by its cause worked out
-// from that part (sinkCause, #1063): whole-machine rounding only where rounding explains it.
+// Of the surplus, the part this row sends (sinkPart, #1155), captioned by its cause (sinkCause,
+// #1063): whole-machine rounding only where rounding explains it. The cause is worked out from the
+// phase's whole surplus, not from the part: rounding explains a sink only when the lines making
+// the item together sink less than one machine's output of each, and a part can be below that
+// while the whole is not. So the lines making an item give one cause between them, as the line's
+// "Exact clocks for this line" note (ExactClockChoice.vue) gives it from the same whole surplus.
 function sinkOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext) {
   const { storedStage, settings } = context;
   const { item, unit, pre } = output;
@@ -716,15 +720,16 @@ function sinkOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext)
       unit,
       pre,
     });
-  const surplus = sinkPart(row, item, context);
-  if (surplus > 0.002) {
+  const part = sinkPart(row, item, context);
+  if (part > 0.002) {
+    const surplus = Math.max(storedStage.surplus?.[item] ?? 0, part);
     const cause = sinkCause(row, item, surplus, storedStage, !!settings?.wholeMachines, isFluid);
     outputs.push({
       kind: 'sink',
       label: 'AWESOME Sink',
       subTxt: sinkCaption(cause),
       icon: item,
-      rate: surplus,
+      rate: part,
       unit,
       pre,
     });
