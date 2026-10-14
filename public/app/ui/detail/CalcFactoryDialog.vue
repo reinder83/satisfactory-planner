@@ -1,9 +1,11 @@
 <!--
   The dialog for one row of a calculated plan at the current phase: its Running box in the
   sticky header (#239), writing `calc-<stage>-<row id>` like the row's card and build-plan
-  step, and under the title the card's headline rate (SP-21, #256); then the flow diagram, the
-  byproduct advice (RecycleAdvice.vue, #1022), machine setup (machineSetup in
-  views/calculated.ts, drawn as the three MachineCells, SP-20) with the line's clocks in a
+  step, and under the title the card's headline rate (SP-21, #256); then the flow diagram, why
+  the plan sinks spare Petroleum Coke or Compacted Coal rather than burning it (burnNotes in
+  views/calculated.ts, #1063), the byproduct advice (RecycleAdvice.vue, #1022), machine setup
+  (machineSetup in views/calculated.ts, drawn as the three MachineCells, SP-20) with the line's
+  clocks in a
   whole-machine plan (ExactClockChoice.vue, #1066),
   lane advice, the outputs (only where the headline does not already say them), expansion by
   phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
@@ -19,6 +21,7 @@ import { calcFlowModel, FLUIDS } from '../../flow.ts';
 import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
 import {
   buildRowName,
+  burnNotes,
   calcExpansion,
   carriedLineText,
   easierSetup,
@@ -96,6 +99,8 @@ const view = computed(() =>
           : power(row.generationMW),
       icon: rowIcon(row),
       flow: calcFlowModel(row),
+      // Why the plan sinks the line's spare coke rather than burning it (#1063).
+      burn: burnNotes(row),
       setup,
       // The three machine cells (SP-20), from the count and clock the row's card shows; the
       // captions keep the output per machine and the calculated clock this table used to show.
@@ -153,6 +158,7 @@ const view = computed(() =>
       generic storage surplus.
     </div>
     <FlowDiagram :model="view.flow" />
+    <p v-for="note in view.burn" :key="note" class="small muted" data-burn-note>{{ note }}</p>
     <RecycleAdvice :id="view.row.id" />
     <h3>Machine setup</h3>
     <MachineCells
