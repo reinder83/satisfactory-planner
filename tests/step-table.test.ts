@@ -43,10 +43,20 @@ test("the owner's case as a table: Iron Ore on 5 Miner Mk.2 with 10 Power Shards
   assert.equal(step.table.after, undefined, 'no advice once the player can overclock');
 });
 
-test('without Power Shards the table says None and the advice follows it', () => {
-  const step = miningStep(stage(false), '3', { limits })!;
+test('a stage stored at 100% before #1169: the table says None and the hint follows it', () => {
+  // Since #1169 Phase 3 plans overclocked without "I can overclock" too.
+  assert.deepEqual(
+    miningStep(stage(false), '3', { limits })!.table.rows,
+    miningStep(stage(true), '3', { limits })!.table.rows,
+  );
+  const stored = stage(false);
+  stored.mining!.miner = { ...stored.mining!.miner, clock: 1 };
+  const step = miningStep(stored, '3', { limits })!;
   assert.equal(step.table.rows[0]![4], 'None');
-  assert.match(step.table.after!, /^Research Power Shards in the MAM/);
+  assert.match(
+    step.table.after!,
+    /^This plan was calculated with these miners and extractors at 100%\./,
+  );
   assert.ok(step.body.endsWith(step.table.after!));
   assert.match(tableText(step.table), /Machines Shards Power/);
   assert.equal(tableText(undefined), '');

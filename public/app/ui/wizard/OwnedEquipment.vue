@@ -11,9 +11,10 @@
   offer is not drawn. Without it, every mark, as step 4 always offered.
 
   "I can overclock" (#1137, settings.overclock, data-owned-overclock): Power Shards researched in
-  the MAM, so every phase plans its miners and extractors up to 250%, a node's belt or pipe capping
-  them. Drawn with a hidden `overclockAsked` field, since an unticked box is absent from the form;
-  with `phase`, only where it changes that phase (Phases 1 to 3).
+  the MAM, so Phase 1 too plans its miners and extractors up to 250%, a node's belt or pipe capping
+  them (the later phases do since #1169), and the build plan's Power Shards research step shows as
+  done. Drawn with a hidden `overclockAsked` field, since an unticked box is absent from the form;
+  with `phase`, only where it changes that phase's plan (Phase 1).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -26,8 +27,8 @@ const emit = defineEmits<{
   'update:belt': [value: number | undefined];
   'update:overclock': [value: boolean];
 }>();
-// Whether "I can overclock" changes the plan: always on step 4, from a start phase only before
-// Phase 4, which plans 250% anyway.
+// Whether "I can overclock" changes the plan: always on step 4, from a start phase only in Phase 1,
+// since the later phases plan up to 250% anyway (#1169).
 const overclockShown = computed(
   () => !props.phase || phaseClock(props.phase, true) > phaseClock(props.phase),
 );
@@ -94,9 +95,10 @@ const chosen = (event: Event) => Number((event.target as HTMLSelectElement).valu
       @change="emit('update:overclock', ($event.target as HTMLInputElement).checked)"
     /><span
       >I can overclock<br /><small class="muted"
-        >Power Shards researched in the MAM (Overclock Production): miners and oil extractors plan
-        up to 250%, never more than their belt or pipe carries, so fewer nodes give the same
-        ore.</small
+        >Power Shards researched in the MAM (Overclock Production): Phase 1's miners and oil
+        extractors plan up to 250% too, never more than their belt or pipe carries, and the build
+        plan's Power Shards research step shows as done. From Phase 2 they plan overclocked in any
+        case.</small
       ></span
     ></label
   >

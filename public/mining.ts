@@ -440,13 +440,16 @@ export function waterPowerWords(
 }
 
 // The first phase in which the MAM's Power Shards research is worth advising (#1137): before it
-// the player cannot use the MAM yet, so the step says nothing about overclocking.
+// the player cannot use the MAM yet, so the step says nothing about overclocking. From it on the
+// plan overclocks (PHASE_CLOCK, #1169), after the research step (shardResearch below).
 export const OVERCLOCK_ADVICE_FROM = 2;
-// What researching Power Shards would save on a stage's nodes (#1137): the miners and extractors
-// its draw takes now, and how many it would take overclocked (phaseMiner with overclock, each
-// machine up to 250% and never past its belt or pipe). Null when the player can overclock
-// already (settings.overclock), before OVERCLOCK_ADVICE_FROM, when overclocking would not raise
-// the phase's clock (Phases 4 and 5 already run 250%, or a survey caps it) or would save none.
+// What overclocking would save on a stage stored at a lower clock than the plan now gives it
+// (#1137, #1169): the miners and extractors its draw takes as stored, and how many it would take
+// overclocked (phaseMiner with overclock, each machine up to 250% and never past its belt or
+// pipe). Only a Phase 2 or 3 stage stored at 100% before #1169 has one. Null when the player can
+// overclock already (settings.overclock), before OVERCLOCK_ADVICE_FROM, when overclocking would
+// not raise the stage's clock (it was calculated overclocked, or a survey caps it) or would save
+// none.
 export function overclockSaving(
   stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
   phase: number,
@@ -464,11 +467,38 @@ export function overclockSaving(
   }
   return overclocked < now ? { now, overclocked } : null;
 }
-// The advice to research Power Shards (#1137), or '' (overclockSaving).
+// What a stage stored at 100% says it was calculated with (#1137, #1169), or '' (overclockSaving):
+// recalculated now, its nodes are planned overclocked after the Power Shards research.
 export function overclockAdviceWords(saving: { now: number; overclocked: number } | null): string {
   if (!saving) return '';
   const saved = saving.now - saving.overclocked;
-  return `Research Power Shards in the MAM (Blue Power Slugs, then Overclock Production) to halve the miners on these nodes: overclocked up to what their belts and pipes carry, the same draw takes ${miningNumber(saving.overclocked)} machines instead of ${miningNumber(saving.now)}, ${miningNumber(saved)} fewer.`;
+  return `This plan was calculated with these miners and extractors at 100%. Plans calculated now run them overclocked, up to what their belts and pipes carry, after researching Power Shards in the MAM (Blue Power Slugs, then Overclock Production): the same draw takes ${miningNumber(saving.overclocked)} machines instead of ${miningNumber(saving.now)}, ${miningNumber(saved)} fewer. To plan it that way, Edit settings and recalculate in place.`;
+}
+
+// What a stage's overclocked nodes take (#1169), for the build plan's Power Shards research step
+// before its mining step: the Power Shards the mining step counts (its miners and extractors, and
+// the suggested Water Extractors), the machines its nodes take as planned, and those they would
+// take at 100% (`at100`, null when the nodes at 100% cannot give the draw at all). Null for a
+// stage without mining per phase, or whose mining takes no Power Shards.
+export function shardNeeds(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: string,
+  settings?: MiningSettings,
+): { shards: number; machines: number; at100: number | null } | null {
+  const resources = stageMiningAdvice(stage);
+  if (!stage?.mining || !resources.length) return null;
+  const mining = stage.mining;
+  const water = waterRow(stage, waterChoice(stage, Number(phase), settings));
+  const shards = resources.reduce((sum, entry) => sum + entry.advice.shards, water?.shards ?? 0);
+  if (!shards) return null;
+  let machines = 0,
+    at100: number | null = 0;
+  for (const entry of resources) {
+    machines += entry.advice.nodes + entry.advice.pressurizers;
+    const plain = miningAdvice(entry.rate, mining.sources[entry.resource]!, 1);
+    at100 = at100 === null || plain.short ? null : at100 + plain.nodes + plain.pressurizers;
+  }
+  return { shards, machines, at100 };
 }
 
 // The build plan's mining step for a stage (#1065), or null without mining per phase or with
