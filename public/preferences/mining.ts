@@ -31,7 +31,13 @@
 // The planner charges each node kind's draw at its own power (one segment per kind, best nodes
 // first: model.ts), and the pages say how many nodes of each kind a phase's draw taps, with the
 // last machine underclocked to the remainder (miningAdvice).
-import type { ItemRates, MiningSource, NodeCounts, StageMining } from '../types/index.ts';
+import type {
+  ItemRates,
+  MiningSource,
+  NodeCounts,
+  NodeExclusions,
+  StageMining,
+} from '../types/index.ts';
 import {
   MINER_BASE,
   MINER_MW,
@@ -42,8 +48,11 @@ import {
   WELL_BASE,
   WELL_SATELLITES,
   blankCounts,
+  leavesNodesOut,
   oilNodeResources,
   purityFactor,
+  remainingSurvey,
+  resourcePool,
   uncountedResources,
   wellResources,
 } from './extraction.ts';
@@ -146,12 +155,15 @@ export const extractorBuilt = (machine: keyof typeof EXTRACTOR_TIERS, phase: num
 // world they are for.
 export interface MiningSettings {
   limits: ItemRates;
-  extraction?: {
-    mark?: number;
-    clock?: number;
-    nodes?: Record<string, NodeCounts>;
-    wells?: Record<string, NodeCounts>;
-  } | null;
+  // The node survey, with the nodes it leaves out of the plan (#1183).
+  extraction?:
+    | ({
+        mark?: number;
+        clock?: number;
+        nodes?: Record<string, NodeCounts>;
+        wells?: Record<string, NodeCounts>;
+      } & NodeExclusions)
+    | null;
   purity?: string;
   distribution?: string;
   // The best miner the player already has (#1068, the wizard's "Miners you already have"): 2 or 3.
@@ -211,7 +223,8 @@ export function sourceMWPerUnit(source: MiningSource, clock: number): number {
 }
 
 // The node mix behind a resource's budget: the survey's counts for it, else the world's known
-// counts, else the default map's. Nodes and well satellites apart.
+// counts, else the default map's. Nodes and well satellites apart. A survey's counts are the
+// nodes it does not leave out of the plan (#1183), none when it leaves them all out.
 function nodeMix(
   settings: MiningSettings,
   resource: string,
@@ -220,12 +233,14 @@ function nodeMix(
     !!counts &&
     (Number(counts.impure) || 0) + (Number(counts.normal) || 0) + (Number(counts.pure) || 0) > 0;
   const survey = settings.extraction;
-  if (survey && (counted(survey.nodes?.[resource]) || counted(survey.wells?.[resource])))
+  if (survey && (counted(survey.nodes?.[resource]) || counted(survey.wells?.[resource]))) {
+    const rest = remainingSurvey(survey);
     return {
-      nodes: { ...blankCounts(), ...survey.nodes?.[resource] },
-      wells: { ...blankCounts(), ...survey.wells?.[resource] },
+      nodes: { ...blankCounts(), ...rest.nodes?.[resource] },
+      wells: { ...blankCounts(), ...rest.wells?.[resource] },
       surveyed: true,
     };
+  }
   const world = knownWorld(settings.purity ?? 'vanilla', settings.distribution ?? 'original')
     ? presetSurvey(settings.purity ?? 'vanilla', null, settings.distribution ?? 'original')
     : null;
@@ -290,6 +305,47 @@ function nodeKinds(
   return kinds;
 }
 
+// The most a resource's budget may be when the node survey leaves some of its nodes or well
+// satellites out of the plan (#1183): what the rest give at the survey's miner and clock, the
+// equipment the survey's budgets are worked out with (resourceAvailable). null when the survey
+// leaves none of them out. The budgets the survey writes are within it already; it holds the plan
+// to the rest whatever budget was entered, and to none when every node is left out.
+export function leftOutCap(
+  settings: Pick<MiningSettings, 'extraction'>,
+  resource: string,
+): number | null {
+  const survey = settings.extraction;
+  if (!survey || !(survey.excludedNodes?.[resource] || survey.excludedWells?.[resource]))
+    return null;
+  return resourcePool(
+    remainingSurvey({
+      ...survey,
+      mark: survey.mark ?? REFERENCE.mark,
+      clock: survey.clock ?? REFERENCE.clock,
+    }),
+    resource,
+  );
+}
+// A resource's entered budget, held to what the nodes the survey does not leave out give
+// (leftOutCap, #1183).
+export function budgetLimit(
+  settings: Pick<MiningSettings, 'limits' | 'extraction'>,
+  resource: string,
+): number {
+  const limit = Math.max(0, Number(settings.limits[resource]) || 0),
+    cap = leftOutCap(settings, resource);
+  return cap === null ? limit : Math.min(limit, cap);
+}
+// The entered budgets, each held as budgetLimit holds it: `limits` itself when the survey leaves no
+// node out, so a plan without left-out nodes plans with exactly its budgets.
+export function budgetLimits(settings: Pick<MiningSettings, 'limits' | 'extraction'>): ItemRates {
+  if (!leavesNodesOut(settings.extraction)) return settings.limits;
+  const limits: ItemRates = { ...settings.limits };
+  for (const resource of Object.keys(limits))
+    if (leftOutCap(settings, resource) !== null) limits[resource] = budgetLimit(settings, resource);
+  return limits;
+}
+
 // Rounds a budget down to 0.01/min, so floating-point noise never adds to it.
 const budgetOf = (value: number) => Math.floor(value * 100 + 1e-6) / 100;
 
@@ -307,12 +363,25 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
   const budgets: ItemRates = {},
     sources: Record<string, MiningSource[]> = {};
   for (const resource of rawResources) {
-    const limit = Math.max(0, Number(settings.limits[resource]) || 0);
+    const limit = budgetLimit(settings, resource);
     if (uncountedResources.includes(resource)) {
       budgets[resource] = limit;
       continue;
     }
-    const mix = nodeMix(settings, resource);
+    // A survey that leaves every node of the resource out of the plan (#1183) keeps its node
+    // kinds, with none of their nodes, so the budget is none while a diagnostic, which drops the
+    // per-kind caps, still finds the resource: the phase's draft then names the shortfall and
+    // why (draftStage), rather than calling the recipes unable to make the phase.
+    const none = leftOutCap(settings, resource) === 0;
+    const mix = nodeMix(
+      none && settings.extraction
+        ? {
+            ...settings,
+            extraction: { ...settings.extraction, excludedNodes: {}, excludedWells: {} },
+          }
+        : settings,
+      resource,
+    );
     // What the budget was worked out with: every node kind, no lane cap.
     const pool = nodeKinds(resource, mix, reference.mark).reduce(
       (sum, kind) => sum + kind.count * kind.base * reference.clock,
@@ -320,8 +389,8 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
     );
     const scale = pool > 0 ? limit / pool : 0;
     const kinds = nodeKinds(resource, mix, miner.mark, phase, { belt: belt.cap, pipe: pipe.cap })
-      .map(({ count, ...kind }) => ({ ...kind, nodes: count * scale }))
-      .filter(kind => kind.nodes > 0);
+      .map(({ count, ...kind }) => ({ ...kind, nodes: none ? 0 : count * scale }))
+      .filter(kind => none || kind.nodes > 0);
     sources[resource] = kinds;
     budgets[resource] = budgetOf(
       kinds.reduce((sum, kind) => sum + kind.nodes * sourceYield(kind, miner.clock), 0),

@@ -43,6 +43,7 @@ import { objectiveWords, purities, recipeCostOf } from '../../preferences.ts';
 import { allowSwitch, notesNotSaved, pending, save, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
+import { leftOutNote } from '../../mining.ts';
 import {
   calculated,
   currentProfile,
@@ -245,6 +246,8 @@ function profileFooter() {
       currentProfile.name,
       `${purity} purity · ${num(settings.multiplier)}× elevator parts`,
       `${num(settings.powerFactor)}× power consumption`,
+      // The nodes its node survey leaves out of it (#1183), named only when it leaves some out.
+      ...(leftOutNote(settings.extraction) ? [leftOutNote(settings.extraction)] : []),
       // The recipe part cost the plan was calculated with (#1161), named only when not 1×.
       ...(recipeCostOf(settings) === 1 ? [] : [`${num(recipeCostOf(settings))}× recipe part cost`]),
       // The objective it was calculated with (#1180), named only when not the fewest buildings.

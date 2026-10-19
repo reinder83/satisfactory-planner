@@ -61,8 +61,18 @@ export interface NodeCounts {
   pure: number;
 }
 
+// The nodes and resource-well satellites a node survey leaves out of the plan (#1183), per
+// resource and purity, each at most the survey's own count of them: the plan never taps them, so
+// its budgets, its node counts and the build plan's mining steps use only the rest. Each map is
+// absent when it leaves nothing out, so a survey without them, and every survey stored before
+// them, plans exactly as before.
+export interface NodeExclusions {
+  excludedNodes?: Record<string, NodeCounts>;
+  excludedWells?: Record<string, NodeCounts>;
+}
+
 // The extraction survey behind the budgets, kept so it can be reopened.
-export interface ExtractionRecord {
+export interface ExtractionRecord extends NodeExclusions {
   mark: 1 | 2 | 3;
   // Miner clock, 0.01–2.5.
   clock: number;
@@ -75,13 +85,16 @@ export interface ExtractionRecord {
 // A survey while it is edited (the wizard, preferences.ts): looser than ExtractionRecord. The
 // mark is whatever the form holds until the planner checks it, and the maps are created as
 // counts are entered.
-export interface Survey {
+export interface Survey extends NodeExclusions {
   mark: number;
   clock: number;
   nodes?: Record<string, NodeCounts>;
   wells?: Record<string, NodeCounts>;
   used?: ItemRates;
 }
+// A survey with every map of counts present, as a new or prefilled one starts; the nodes it
+// leaves out (#1183) stay optional.
+export type FullSurvey = Required<Omit<Survey, keyof NodeExclusions>> & NodeExclusions;
 
 // The machines that stand on each production line, per phase (#1176, settings.builtLines):
 // { phase: { rowId: machines } }, whole counts from 1.

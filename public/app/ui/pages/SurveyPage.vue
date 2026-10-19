@@ -15,9 +15,12 @@ import { browserMode } from '../../../browser-api.ts';
 import {
   clockChoices,
   knownWorld,
+  leavesNodesOut,
+  leftOutPool,
   minedResources,
   minerMarks,
   nodeYield,
+  remainingSurvey,
   resourcePool,
   wellYield,
 } from '../../../preferences.ts';
@@ -40,6 +43,7 @@ import SelectField from '../form/SelectField.vue';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import CountTable from '../survey/CountTable.vue';
+import LeaveOut from '../survey/LeaveOut.vue';
 import WorldSettings from '../survey/WorldSettings.vue';
 
 const MAP_URL = 'https://satisfactory-calculator.com/en/interactive-map';
@@ -57,9 +61,14 @@ const page = computed(() =>
       step = wizard.extractionStep ?? 1;
     const sample = (name: string, purity: string) =>
       num(Math.round(nodeYield(name, purity, extraction)));
+    // The nodes the survey leaves out of the plan (#1183) come off the pool before what is
+    // committed: their column shows only when some are left out.
+    const leaving = leavesNodesOut(extraction);
     const budgets = BUDGET_ROWS.map(name => {
       const pool = Math.round(resourcePool(extraction, name)),
-        used = Number(extraction.used?.[name]) || 0;
+        used = Number(extraction.used?.[name]) || 0,
+        out = leftOutPool(extraction, name),
+        rest = resourcePool(remainingSurvey(extraction), name);
       // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore. The
       // committed input keeps a bare number; its unit is a suffix beside it and in its name.
       const fluid = FLUIDS.has(name);
@@ -69,14 +78,20 @@ const page = computed(() =>
         used: used || '',
         unit: rateUnit(name),
         label: name + ' already committed' + (fluid ? ', cubic metres' : '') + ' per minute',
-        left: pool ? itemRate(name, Math.max(0, pool - used)) : '—',
-        over: pool && used > pool,
+        leftOut: out > 0 ? '−' + itemRate(name, Math.round(out)) : '—',
+        left: pool ? itemRate(name, Math.max(0, Math.round(rest) - used)) : '—',
+        over: pool && used > rest,
       };
     });
     // Leaving a resource at zero is a legitimate answer, and it is also exactly what a
     // half-finished survey looks like. The plan that follows would simply fail to fit, so
     // the last screen names them rather than let that be a surprise.
     const empty = BUDGET_ROWS.filter(name => resourcePool(extraction, name) <= 0);
+    // Counted, but every node left out (#1183): the plan cannot mine them either.
+    const allOut = BUDGET_ROWS.filter(
+      name =>
+        resourcePool(extraction, name) > 0 && resourcePool(remainingSurvey(extraction), name) <= 0,
+    );
     return {
       step,
       last: step >= EXTRACTION_STEPS.length,
@@ -90,7 +105,9 @@ const page = computed(() =>
         well: itemRate('Crude Oil', Math.round(wellYield('normal', extraction))),
       },
       water: itemRate('Water', wizard.settings.limits.Water || 0),
+      leaving,
       budgets,
+      allOut: allOut.join(', '),
       empty: empty.length
         ? {
             heading:
@@ -109,7 +126,7 @@ const page = computed(() =>
 // pending undo (of a reset or refill): undoing after it would silently throw the edit away.
 function changed(event: Event) {
   const el = event.target as HTMLInputElement | HTMLSelectElement;
-  if (!/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))) return;
+  if (!/^(mark|clock|purity|distribution|node:|well:|used:|exclude-)/.test(String(el.name))) return;
   readExtraction(event.currentTarget as HTMLFormElement);
   if (['purity', 'distribution'].includes(el.name)) {
     const settings = draft().settings;
@@ -196,6 +213,7 @@ function submit() {
           everything you intend to work.
         </p>
         <CountTable kind="node" :names="minedResources" />
+        <LeaveOut :tables="[{ kind: 'node', names: minedResources }]" />
       </template>
       <template v-else-if="page.step === 3">
         <h2>Resource wells</h2>
@@ -208,6 +226,16 @@ function submit() {
         <CountTable kind="node" :names="['Crude Oil']" />
         <h3>Resource well satellites</h3>
         <CountTable kind="well" :names="['Crude Oil', 'Nitrogen Gas']" />
+        <LeaveOut
+          :tables="[
+            { kind: 'node', names: ['Crude Oil'], heading: 'Crude oil nodes' },
+            {
+              kind: 'well',
+              names: ['Crude Oil', 'Nitrogen Gas'],
+              heading: 'Resource well satellites',
+            },
+          ]"
+        />
         <div class="notice info">
           <ItemIcon name="Water" /> <b>Water is not counted.</b> Extractors sit on any lake or ocean
           and there is far more coastline than a factory can draw on, so a node count would be a
@@ -218,8 +246,9 @@ function submit() {
       <template v-else-if="page.step === 4">
         <h2>Your budgets</h2>
         <p>
-          What those nodes yield, less anything already committed to factories this plan does not
-          include. That deduction is what makes a budget mean <em>free for this plan to use</em>.
+          What those nodes yield, less the nodes you leave out of this plan and anything already
+          committed to factories this plan does not include. That deduction is what makes a budget
+          mean <em>free for this plan to use</em>.
           <HelpTip name="extractionUsed" />
         </p>
         <div class="table-wrap">
@@ -228,6 +257,7 @@ function submit() {
               <tr>
                 <th>Resource</th>
                 <th>Whole pool</th>
+                <th v-if="page.leaving">Left out</th>
                 <th>Already committed</th>
                 <th>Budget</th>
               </tr>
@@ -238,6 +268,7 @@ function submit() {
                   <ItemIcon :name="budget.name" /><span>{{ budget.name }}</span>
                 </td>
                 <td class="number">{{ budget.pool }}</td>
+                <td v-if="page.leaving" class="number">{{ budget.leftOut }}</td>
                 <td>
                   <span class="used-field"
                     ><input
@@ -263,6 +294,12 @@ function submit() {
           {{ page.empty.names }}. A zero budget means this plan may not use that resource at all — a
           fine answer for something you have genuinely not found, but if you simply have not counted
           them yet, go back and fill them in or the plan will not fit.
+        </div>
+        <div v-if="page.allOut" class="notice warn" data-all-left-out>
+          <b>Every node left out:</b> {{ page.allOut }}. This plan cannot mine
+          {{ page.allOut.includes(',') ? 'them' : 'it' }}, so a phase that needs
+          {{ page.allOut.includes(',') ? 'one' : 'it' }} will not fit. Put some nodes back on the
+          counting screens if the plan should use them.
         </div>
         <p class="small muted">
           Production you already run is a different question, asked separately: that one credits

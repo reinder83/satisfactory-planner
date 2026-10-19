@@ -82,6 +82,8 @@ export const helpText: Record<string, string> = {
     'Resource wells are a pressurizer plus its satellite nodes; count the satellites, not the pressurizers. A normal satellite gives 60 a minute before overclocking.',
   extractionUsed:
     'Extraction already committed to factories that are not part of this plan. It is taken off the pool, because the planner’s budgets mean what is free for this plan to use.',
+  extractionLeftOut:
+    'Nodes this plan must not use: one far from where you build, or one already feeding a factory the plan does not include. Leave out at most the nodes counted above. The budgets come from the other nodes, the plan never draws more than they give, and the build plan only taps them. Leaving out every node of a resource means the plan cannot mine it at all. Already committed, on the last screen, takes a rate off what is left instead.',
   // The node presets (presets.ts).
   nodePresets:
     'The two World Randomization settings you chose when you created the save. Node counts are known for the default distribution, and for Random too — Random shuffles which resource sits where, not how many of each there are — so picking a purity fills the counts in. Random does shuffle the purities as well, so under Random only the uniform purities (All Pure, Average, All Impure) are complete. A resource-rich distribution changes how many nodes each resource has, by an amount that depends on your seed, so there is no table for those. Nitrogen wells are filled only on the default distribution: well randomization applies to a whole well, and the map’s wells hold different numbers of satellites, so a shuffle can still leave you more or less nitrogen than the default map.',

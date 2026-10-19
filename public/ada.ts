@@ -47,6 +47,9 @@ export interface AdaFacts {
   // does not count ("8 Coal Generators"); each absent for none.
   ownedGenerators?: string;
   idleGenerators?: string;
+  // The nodes the open plan's node survey leaves out of it (#1183), in words ("2 pure Iron Ore
+  // nodes"); absent when it leaves none out.
+  leftOutNodes?: string;
   // The recipe part cost multiplier the open plan was calculated with (#1161); absent at 1×.
   recipeCost?: number;
   // The objective the open plan was calculated with in words (#1180, "least power"); absent for
@@ -434,6 +437,16 @@ const RULES: AdaRule[] = [
       ]
         .filter(Boolean)
         .join(' '),
+  },
+  {
+    // The nodes the plan's node survey leaves out of it (#1183): the plan's budgets and node
+    // counts already use only the rest, and only Edit settings changes them.
+    id: 'left-out-nodes',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.leftOutNodes,
+    text: facts =>
+      `Your node survey leaves ${facts.leftOutNodes} out of this plan: its budgets and the nodes it taps use only the rest, and every number here already counts it. What the plan cannot see, it cannot covet.`,
   },
   {
     // The game mode's recipe part cost (#1161): the plan's numbers already count it, and only

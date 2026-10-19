@@ -10,8 +10,8 @@
 // nodes each resource has, per seed, and no authoritative per-purity table for
 // them exists — only approximate community observations. Inventing one would be
 // worse than asking, so for those the survey points at the map upload instead.
-import type { NodeCounts, Survey } from '../types/index.ts';
-import { blankCounts, blankExtraction } from './extraction.ts';
+import type { FullSurvey, NodeCounts, Survey } from '../types/index.ts';
+import { blankCounts, blankExtraction, withinCounts } from './extraction.ts';
 import { nodeCounts, purities } from './world.ts';
 
 // The purity settings the known node table can be rearranged into. Random and
@@ -89,7 +89,7 @@ export function presetSurvey(
   purity: string,
   base?: Survey | null,
   distribution = 'original',
-): Required<Survey> {
+): FullSurvey {
   const survey = { ...blankExtraction(), ...(base || {}) };
   survey.nodes = { ...survey.nodes };
   survey.wells = { ...survey.wells };
@@ -98,7 +98,8 @@ export function presetSurvey(
     if (name !== 'Nitrogen Gas') survey.nodes[name] = row;
     else if (distribution === 'original') survey.wells[name] = row;
   }
-  return survey;
+  // Nodes left out of the plan (#1183) stay, within the new counts.
+  return withinCounts(survey);
 }
 
 // Which preset, if any, the counts in a survey currently are. Used to show the
@@ -129,7 +130,7 @@ export function matchingPreset(extraction: Survey | null | undefined): string {
 // no table to start from, so it starts empty and asks.
 export function startingSurvey(
   settings: { purity?: string; distribution?: string } = {},
-): Required<Survey> {
+): FullSurvey {
   const distribution = settings.distribution || 'original';
   return knownWorld(settings.purity, distribution)
     ? presetSurvey(settings.purity as string, null, distribution)
