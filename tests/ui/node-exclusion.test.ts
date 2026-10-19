@@ -93,9 +93,15 @@ test('the ore screen folds "Leave nodes out of this plan" under its counts, a ro
   assert.equal(pure.getAttribute('aria-label'), 'Pure Iron Ore nodes left out of this plan, of 46');
   assert.deepEqual(
     [...leaveOutRow('Iron Ore')!.querySelectorAll('.count-cell > span')].map(s => s.textContent),
-    ['Impure of 39', 'Normal of 42', 'Pure of 46'],
+    ['Impure of 39', 'Normal of 42', 'Pure of 46'],
   );
   assert.equal(leaveOutRow('Iron Ore')!.querySelector('.count-total')!.textContent, '—');
+  // A purity with none counted has nothing to leave out.
+  assert.equal(pure.disabled, false);
+  assert.equal(
+    $<HTMLInputElement>('input[name="exclude-node:Caterium Ore:impure"]')!.disabled,
+    true,
+  );
   // Leaving 6 pure nodes out keeps them in the survey, with the rate they give taken off.
   await change('input[name="exclude-node:Iron Ore:pure"]', '6');
   assert.deepEqual(wizard!.extraction!.excludedNodes, {

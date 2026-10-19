@@ -5,7 +5,8 @@
   "well:<name>:<purity>", which readExtraction in wizard/extraction.ts reads back.
   With `leaveOut` (#1183, LeaveOut.vue) it asks instead how many of the counted ones to leave out
   of the plan: a row per resource with nodes counted, each input "exclude-node:<name>:<purity>" or
-  "exclude-well:…" up to the count beside its label, and the rate the left-out ones give.
+  "exclude-well:…" up to the count beside its label (disabled where none is counted), and the
+  rate the left-out ones give.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -41,7 +42,8 @@ const rows = computed(() =>
           counted: purities3.some(([purity]) => Number(counted[purity]) > 0),
           cells: purities3.map(([key, label]) => ({
             key,
-            label: props.leaveOut ? `${label} of ${num(Number(counted[key]) || 0)}` : label,
+            // A no-break space keeps the count with its "of" when the label wraps.
+            label: props.leaveOut ? `${label} of ${num(Number(counted[key]) || 0)}` : label,
             value: counts[key] || 0,
             max: props.leaveOut ? Number(counted[key]) || 0 : 10000,
           })),
@@ -72,6 +74,7 @@ const noun = computed(() => (props.kind === 'well' ? 'well satellites' : 'nodes'
           :max="cell.max"
           step="1"
           :value="cell.value"
+          :disabled="leaveOut && !cell.max"
           :aria-label="
             leaveOut
               ? `${cell.key[0]!.toUpperCase() + cell.key.slice(1)} ${row.name} ${noun} left out of this plan, of ${cell.max}`
