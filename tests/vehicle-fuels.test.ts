@@ -220,7 +220,7 @@ test('a link on a new fuel is state version 17; going back to a first fuel resto
       // It loads again as it was, and a newer version is refused with the update message.
       const round = validateState(json(next));
       assert.deepEqual(round, next);
-      assert.throws(() => validateState({ ...json(round), version: 18 }), /newer planner version/);
+      assert.throws(() => validateState({ ...json(round), version: 19 }), /newer planner version/);
     }
   state = mutate(state, link('truck', 'Battery'));
   assert.equal(state.version, 17);

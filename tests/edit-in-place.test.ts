@@ -38,6 +38,7 @@ interface Recalculated {
   profileId: string;
   backupId: string;
   reviewCount: number;
+  grownCount: number;
 }
 
 // Every calc- check of a context's plan, as its tick key.
@@ -121,8 +122,9 @@ test('the Docker server recalculates a profile in place, carries its ticks and k
     assertBackup(profiles[1]!, storedBefore, 'Minimal (before edit)');
     assert.equal(file.saves[0]!.activeProfile, first.profileId);
 
-    // Changed settings: ticks whose lines the new plan still has are carried (kept unticked for
-    // review where the line grew), world records stay, and the backup is the version before.
+    // Changed settings: ticks whose lines the new plan still has are carried (unticked where the
+    // line grew: a line with more machines keeps the ones built, #1174, any other is left for
+    // review), world records stay, and the backup is the version before.
     const storedMiddle = profiles[0]!;
     const changed = await ok<Recalculated>(
       await send(
@@ -143,11 +145,14 @@ test('the Docker server recalculates a profile in place, carries its ticks and k
     const kept = rowKeys(after).filter(key => ticks.includes(key));
     assert.ok(kept.length > 0, 'some lines are in both plans');
     for (const key of kept) assert.equal(typeof after.state.checks[key], 'boolean', key);
+    const unticked = kept.filter(key => after.state.checks[key] === false),
+      grown = unticked.filter(key => after.state.builtMachines?.[key]);
     assert.equal(
-      kept.filter(key => after.state.checks[key] === false).length,
+      unticked.length - grown.length,
       changed.reviewCount,
-      'the ticks not kept are the ones left for review',
+      'the ticks not kept or grown are the ones left for review',
     );
+    assert.equal(grown.length, changed.grownCount, 'grown lines keep their built machines');
     assert.equal(after.state.checks['unlock-Schematic_1-1_C'], true);
     assert.equal(after.state.notes.global, 'Keep me');
     file = await stored();

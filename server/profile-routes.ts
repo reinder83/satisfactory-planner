@@ -89,7 +89,7 @@ export function profileRoutes({
         reviewedReplacement(reviewed, user.id, input.settings, input.planCreatedAt) ??
         calculate(input.settings),
       backupId = randomId();
-    let carried = { reviewCount: 0, carried: 0 };
+    let carried = { reviewCount: 0, grownCount: 0, carried: 0 };
     await commit(draft => {
       const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
       const index = draftSave?.profiles.findIndex(p => p.id === profile.id) ?? -1;
@@ -116,6 +116,7 @@ export function profileRoutes({
       profileId: profile.id,
       backupId,
       reviewCount: carried.reviewCount,
+      grownCount: carried.grownCount,
       carriedChecks: carried.carried,
       workspace: currentSummary(user),
     });

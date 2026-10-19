@@ -20,6 +20,8 @@ export interface RecalculatedProfile {
   backupId: string;
   carriedChecks: number;
   reviewCount: number;
+  // Grown lines that keep their built machines (#1174); absent from an older server's reply.
+  grownCount?: number;
 }
 
 // What POST /api/recalculate is sent: the profile it recalculates, the name it keeps and the
@@ -60,11 +62,18 @@ export function postRecalculation(
   );
 }
 
-// The toast after a recalculation in place: the lines left for review, and where the previous
-// version is kept.
-export function recalculatedText(reviewCount: number, kept: string): string {
+// The grown production lines a carry kept the built machines of (#1174), for the toasts: "1 grown
+// production line keeps its built machines", "2 grown production lines keep their built machines".
+export const grownText = (grownCount: number): string =>
+  plural(grownCount, 'grown production line') +
+  (grownCount === 1 ? ' keeps its built machines' : ' keep their built machines');
+
+// The toast after a recalculation in place: the grown lines that keep their built machines, the
+// lines left for review, and where the previous version is kept.
+export function recalculatedText(reviewCount: number, kept: string, grownCount = 0): string {
+  const grown = grownCount ? ' ' + grownText(grownCount) + '.' : '';
   const review = reviewCount
     ? ' ' + plural(reviewCount, 'production line') + ' left unticked for review.'
     : '';
-  return `Recalculated in place.${review} The previous version is kept as “${kept}” under Profiles.`;
+  return `Recalculated in place.${grown}${review} The previous version is kept as “${kept}” under Profiles.`;
 }

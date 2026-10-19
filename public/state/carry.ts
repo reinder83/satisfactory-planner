@@ -73,8 +73,8 @@ export const carryOptions: [key: string, label: string, description: string][] =
   ],
   [
     'factories',
-    'Progress on unchanged production lines',
-    'Production lines stay ticked where the new plan needs no more machines and no more input.',
+    'Progress on production lines',
+    'Production lines stay ticked where the new plan needs no more machines and no more input. A line that needs more machines keeps the ones you built, and its step says how many to add.',
   ],
   [
     'picked',
@@ -166,9 +166,10 @@ const builtKeys = (raw: unknown, plan: RowsPlan | null): string[] => {
 //
 // plan is the new profile's calculation (null for an original-handbook profile), source and
 // sourcePlan the sibling profile's state and plan to carry from, raw the carry choices and
-// built the guided start's finished-work keys. Returns { state, reviewCount, carried }: the
-// validated state, how many carried 'calc-' ticks were unticked for review, and how many
-// checks start ticked. The source is only read. Called by calculatedProfile below, which
+// built the guided start's finished-work keys. Returns { state, reviewCount, grownCount,
+// carried }: the validated state, how many carried 'calc-' ticks were unticked for review, how
+// many grown lines keep their built machines (carryLines, #1174), and how many checks start
+// ticked. The source is only read. Called by calculatedProfile below, which
 // /api/profiles uses in save-routes.ts and in browser-api.ts.
 export function newProfileState(
   plan: RowsPlan | null,
@@ -176,7 +177,7 @@ export function newProfileState(
   sourcePlan: RowsPlan | null | undefined,
   raw: unknown,
   built: unknown,
-): { state: ProgressState; reviewCount: number; carried: number } {
+): { state: ProgressState; reviewCount: number; grownCount: number; carried: number } {
   const state = initialState();
   state.settings.phase = plan?.settings?.phase || '3';
   if (plan) state.factoryGroups = defaultFactoryGroups(plan);
@@ -189,6 +190,7 @@ export function newProfileState(
     return {
       state: clean,
       reviewCount: 0,
+      grownCount: 0,
       carried: Object.values(clean.checks).filter(Boolean).length,
     };
   }
@@ -223,24 +225,12 @@ export function newProfileState(
     state.taskEdits = validateTaskEdits(source.taskEdits);
     state.factoryGroups = mergeGroups(state.factoryGroups, source.factoryGroups, plan);
   }
-  // A row ticked in the source stays ticked only if the old plan had the same row with at
-  // least as many machines and inputs. Otherwise it is stored as false, the same review
-  // rule /api/round-up applies. Rows the source never ticked are left alone.
-  let reviewCount = 0;
+  // Production lines (carryLines): ticks that stay, grown lines that keep their built machines,
+  // and the rest unticked for review.
+  let reviewCount = 0,
+    grownCount = 0;
   if (picks.factories && plan) {
-    const previous = planRows(sourcePlan);
-    for (const [key, row] of planRows(plan)) {
-      if (!source.checks?.[key] || !safeKey(key)) continue;
-      const old = previous.get(key);
-      const grown =
-        !old ||
-        row.machines > old.machines ||
-        Object.entries(row.inputs || {}).some(
-          ([item, rate]) => rate > (old.inputs?.[item] || 0) + 0.001,
-        );
-      state.checks[key] = !grown;
-      if (grown) reviewCount++;
-    }
+    ({ reviewCount, grownCount } = carryLines(state, plan, source, sourcePlan));
     reviewCount += keepSiteTicks(state, plan, source, sourcePlan);
   }
   // What a handbook migration could not place is kept for review and never deleted (#485), so a
@@ -251,7 +241,57 @@ export function newProfileState(
   const review = validateOnSiteReview(source.onSiteReview);
   if (review) state.onSiteReview = { checks: { ...review.checks, ...state.onSiteReview?.checks } };
   const clean = validateState(state);
-  return { state: clean, reviewCount, carried: Object.values(clean.checks).filter(Boolean).length };
+  return {
+    state: clean,
+    reviewCount,
+    grownCount,
+    carried: Object.values(clean.checks).filter(Boolean).length,
+  };
+}
+// The source's production line ticks on the new plan's lines. A line ticked in the source stays
+// ticked only if the old plan had the same row with at least as many machines and inputs. A grown
+// line (#1174), the same row with more machines, is unticked but keeps the machines it had as
+// built (`builtMachines`, version 18): its step says how many stand and how many to add. Any
+// other change unticks it for review, stored as false, the rule /api/round-up applies. Rows the
+// source never ticked are left alone, except that a line the source has partly built (its own
+// `builtMachines`) keeps that count while the new plan still needs more. A central line that
+// lines made on site split (siteTicksForReview) is not grown: which machines stand is not known,
+// so keepSiteTicks keeps its tick for review. Returns how many lines were unticked for review and
+// how many grew.
+function carryLines(
+  state: ProgressState,
+  plan: RowsPlan,
+  source: Pick<SavedState, 'checks' | 'builtMachines'>,
+  sourcePlan: RowsPlan | null | undefined,
+): { reviewCount: number; grownCount: number } {
+  const previous = planRows(sourcePlan),
+    split = new Set(siteTicksForReview(plan, source, sourcePlan)),
+    built: Record<string, number> = {};
+  let reviewCount = 0,
+    grownCount = 0;
+  for (const [key, row] of planRows(plan)) {
+    const old = previous.get(key);
+    if (!safeKey(key)) continue;
+    if (!source.checks?.[key]) {
+      const standing = source.builtMachines?.[key] ?? 0;
+      if (old && !split.has(key) && standing >= 1 && standing < row.machines) built[key] = standing;
+      continue;
+    }
+    const grown =
+      !old ||
+      row.machines > old.machines ||
+      Object.entries(row.inputs || {}).some(
+        ([item, rate]) => rate > (old.inputs?.[item] || 0) + 0.001,
+      );
+    state.checks[key] = !grown;
+    if (!grown) continue;
+    if (old && !split.has(key) && old.machines >= 1 && row.machines > old.machines) {
+      built[key] = old.machines;
+      grownCount++;
+    } else reviewCount++;
+  }
+  if (Object.keys(built).length) state.builtMachines = built;
+  return { reviewCount, grownCount };
 }
 // The unlocks behind the source's ticked old recipe steps (UNLOCKED_WITH, #1044): a new profile
 // that carries the unlocks starts with each such unlock's step ticked, since its plan lists that
@@ -417,6 +457,7 @@ export function calculatedProfile<P extends RowsPlan>(
       state: started.state,
     },
     reviewCount: started.reviewCount,
+    grownCount: started.grownCount,
     carried: started.carried,
   };
 }
@@ -526,7 +567,8 @@ export function checkPlan(
 // The in-place recalculation both editions write (#1071): the profile keeps its id and gets the
 // new plan, `name` and the progress calculatedProfile carries from its own previous version
 // (the same carry rules and picks as a new profile carried from it, so ticks whose rows still
-// need no more machines and no more input stay ticked and the rest are kept for review). Its
+// need no more machines and no more input stay ticked, grown lines keep their built machines and
+// the rest are kept for review). Its
 // revision moves past the previous one, so a whole-value write from a tab that still shows the
 // previous version is refused (checkBase). The previous version is kept whole as `backup`: a
 // copy of the stored profile (plan, progress, payoff ranking) under `backupId` and `backupName`,
@@ -574,6 +616,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
       backupOf: previous.id,
     },
     reviewCount: started.reviewCount,
+    grownCount: started.grownCount,
     carried: Object.values(state.checks).filter(Boolean).length,
   };
 }
@@ -644,5 +687,7 @@ export function shareState(state: SavedState): ProgressState {
   // Its unmapped ticks and notes are progress too (#485), and so are ticks kept for review (#876).
   delete clean.handbookOrigin;
   delete clean.onSiteReview;
+  // And so are the machines that stand on a grown line (#1174).
+  delete clean.builtMachines;
   return validateState(clean);
 }

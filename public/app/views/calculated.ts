@@ -14,6 +14,7 @@ import {
   type PhaseCarry,
 } from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
+import { builtLine, builtNote, builtShare, builtTable, type BuiltLine } from '../built-lines.ts';
 import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
 import { burnNote, COAL_GENERATOR_FUELS } from '../sink-cause.ts';
@@ -61,6 +62,8 @@ export interface PlanStepData {
   // The body as a table or a list (#1136, step-table.ts).
   table?: StepTable;
   list?: StepList;
+  // A grown line's built machines under its title, "5 of 6 built" (#1174, built-lines.ts).
+  built?: string;
 }
 
 // A step's inputs or outputs as "Heavy Oil Residue 46.6 m³/min, Iron Ore 30/min": each item
@@ -120,25 +123,50 @@ const calcTasksOf = perRedraw(stepInputs, (shownPhase: Phase): PlanStepData[] =>
 // (burnNotes, #1063), then the factory dialog's byproduct advice in
 // `snapshot`, the stage of the phase the step is in (#1022). With advice, the same words as a list
 // (#1136): the text before the advice above it, and each paragraph of the advice (one byproduct or
-// input, adviceLineText in recycle.ts) as an item, as the dialog shows them.
+// input, adviceLineText in recycle.ts) as an item, as the dialog shows them. A grown line (#1174,
+// grownLine) opens with what stands and what to add, as a table of its machines and inputs (built,
+// needed, to add) with the rest of the text under it, and its built machines under its title; it
+// says that rather than what ran in the phase before (carriedStepText), which it replaces.
 function rowStep(
   row: CalcRow,
   snapshot: StoredStage | undefined,
   shownPhase: Phase,
   title: string,
-): Pick<PlanStepData, 'body' | 'list'> {
+): Pick<PlanStepData, 'body' | 'list' | 'table' | 'built'> {
   const burn = burnNotes(row, snapshot);
+  const grown = grownLine(row, shownPhase);
   const lead =
-    carriedStepText(row, shownPhase) +
+    (grown ? '' : carriedStepText(row, shownPhase)) +
     ownedGeneratorsText(row, snapshot) +
     rowLineText(row) +
     burn.map(note => ' ' + note).join('');
+  const table = grown ? builtTable(grown, row, itemRate, title, lead) : undefined;
+  const text = table ? table.intro + ' ' + lead : lead;
+  const extra = grown && table ? { table, built: builtNote(grown) } : {};
   const advice = rowAdvice(row, snapshot).map(adviceLineText);
-  if (!advice.length) return { body: lead };
+  if (!advice.length) return { body: text, ...extra };
   return {
-    body: lead + ' ' + advice.join(' '),
-    list: { intro: lead, items: advice, label: `${title}: byproducts and inputs` },
+    body: text + ' ' + advice.join(' '),
+    // Under a grown line's table, the advice alone.
+    list: { intro: table ? '' : lead, items: advice, label: `${title}: byproducts and inputs` },
+    ...extra,
   };
+}
+
+// A line of phase `shownPhase` a recalculation grew (#1174): the machines that stand on it, the
+// ones its plan needs and the ones to add, while its step is not ticked; null for any other line.
+// Post Phase 5 reads Phase 5's, as it shares its steps and checks.
+export function grownLine(row: CalcRow, shownPhase: Phase = phase()): BuiltLine | null {
+  const stageKey = shownPhase === 'post' ? '5' : shownPhase;
+  return builtLine(state?.builtMachines, state?.checks || {}, stageKey, row);
+}
+
+// A grown line's card state (#1174): "5 of 6 machines built: add 1", else ''.
+export function grownCard(row: CalcRow): string {
+  const grown = grownLine(row);
+  return grown
+    ? `${num(grown.built)} of ${num(grown.needed)} machines built: add ${num(grown.add)}`
+    : '';
 }
 
 // The opening sentence of a generator line's step where the player already has generators of its
@@ -583,8 +611,9 @@ export function currentBuildStatus(): BuildStatus | null {
   const prefix = 'calc-' + stage() + '-';
   // The rows in the build plan's order, which a change of factory groups can change (#869).
   const ordered = groupedRows(snapshot.rows, state.factoryGroups);
-  // The lines still running from the phase before, at the share they make (#1069).
-  const carried = currentCarry()?.shares || new Map<string, number>();
+  // The lines still running from the phase before, at the share they make (#1069), and the grown
+  // lines at the share their built machines make (#1174).
+  const carried = new Map([...(currentCarry()?.shares || []), ...grownShares(snapshot.rows)]);
   // Where the lines made on site send their items, by the profile's groups (#907).
   const sites = siteRouting(snapshot, factoryGroupsState(), calculated.settings.onSite);
   const key =
@@ -606,6 +635,17 @@ export function currentBuildStatus(): BuildStatus | null {
     };
   }
   return buildCache.status;
+}
+
+// The grown lines of the phase shown (#1174, grownLine) with the share their built machines make
+// (builtShare), which the build status runs them at until their steps are ticked.
+export function grownShares(rows: readonly CalcRow[]): Map<string, number> {
+  const shares = new Map<string, number>();
+  for (const row of rows) {
+    const grown = grownLine(row);
+    if (grown) shares.set(row.id, builtShare(grown, row));
+  }
+  return shares;
 }
 
 // A row of the open plan named as its build-plan step is (rowStepTitle): "Wire for Alpha" for a

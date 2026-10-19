@@ -9,6 +9,7 @@ import { laterVehicleFuels, vehicleFuels } from '../preferences.ts';
 import { ALTERNATE_RECIPE_IDS } from './alternates.ts';
 import { ITEM_NAMES } from './items.ts';
 import type {
+  BuiltMachines,
   CustomTask,
   ExactClocks,
   FactoryGroups,
@@ -466,6 +467,29 @@ export function validateOnSiteReview(raw: unknown): OnSiteReview | undefined {
   // Only kept with an entry, so a state without one keeps its old shape and version.
   return Object.keys(checks).length ? { checks } : undefined;
 }
+// Returns a clean copy of builtMachines (#1174), or undefined when absent or empty: the machines
+// that stand on a production line a recalculation grew, by the line's check key
+// ('calc-<phase>-<rowId>', a planned phase), each a whole count from 1 to MAX_BUILT_MACHINES.
+const MAX_BUILT_MACHINES = 100000;
+export function validateBuiltMachines(raw: unknown): BuiltMachines | undefined {
+  if (raw === undefined) return undefined;
+  const bad = () => fail('Invalid count of built machines.');
+  if (!plain(raw) || Object.keys(raw).length > 20000) bad();
+  const out: BuiltMachines = {};
+  for (const [key, count] of Object.entries(raw as Raw)) {
+    if (
+      !safeKey(key) ||
+      !/^calc-[1-5]-./.test(key) ||
+      !Number.isSafeInteger(count) ||
+      (count as number) < 1 ||
+      (count as number) > MAX_BUILT_MACHINES
+    )
+      bad();
+    out[key] = count as number;
+  }
+  // Only kept with an entry, so a state without one keeps its old shape and version.
+  return Object.keys(out).length ? out : undefined;
+}
 // Returns a clean copy of exactClocks (#1066), or undefined when absent: the production lines the
 // user asked to run at exact clocks, { phase: [row id] }. Row ids are record-key safe and never an
 // amplified twin ('amp:'), which is always whole machines; duplicates go, ids are sorted and an
@@ -705,7 +729,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–17 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–18 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -716,11 +740,13 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].includes(state.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(
+      state.version as number,
+    )
   )
     fail(
-      // Compared as the old code did, so a version given as "18" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 17
+      // Compared as the old code did, so a version given as "19" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 18
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -778,6 +804,8 @@ export function validateState(state: unknown): ProgressState {
   if (review) clean.onSiteReview = review;
   const exact = validateExactClocks(state.exactClocks);
   if (exact) clean.exactClocks = exact;
+  const standing = validateBuiltMachines(state.builtMachines);
+  if (standing) clean.builtMachines = standing;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -803,40 +831,44 @@ export function validateState(state: unknown): ProgressState {
   // at exact clocks (exactClocks, #1066) are 16: an older release would drop the choice. A link
   // whose vehicles burn Packaged Oil, Packaged Heavy Oil Residue, Battery or Petroleum Coke
   // (laterVehicleFuels, #1165) is 17: an older release would refuse that fuel as malformed instead
-  // of asking for an update.
-  clean.version = linksNeedV17(clean.factoryGroups)
-    ? 17
-    : clean.exactClocks
-      ? 16
-      : clean.onSiteReview
-        ? 15
-        : clean.factoryGroups.local
-          ? 14
-          : clean.handbookOrigin?.mapping
-            ? 13
-            : clean.handbookOrigin
-              ? 12
-              : linksNeedV11(clean.factoryGroups)
-                ? 11
-                : clean.storageEdits.bayOrder
-                  ? 10
-                  : linksNeedV9(clean.factoryGroups)
-                    ? 9
-                    : clean.storageEdits.bayFloors
-                      ? 8
-                      : clean.factoryGroups.links
-                        ? 7
-                        : clean.storageEdits.hiddenFloors.length
-                          ? 6
-                          : clean.storageEdits.hiddenBays.length
-                            ? 5
-                            : hasAddedSlots(clean.storageEdits)
-                              ? 4
-                              : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                                ? 3
-                                : hasEdits(clean.storageEdits)
-                                  ? 2
-                                  : 1;
+  // of asking for an update. The machines that stand on a production line a recalculation grew
+  // (builtMachines, #1174) are 18: an older release would drop them and show the line as if none
+  // of it were built.
+  clean.version = clean.builtMachines
+    ? 18
+    : linksNeedV17(clean.factoryGroups)
+      ? 17
+      : clean.exactClocks
+        ? 16
+        : clean.onSiteReview
+          ? 15
+          : clean.factoryGroups.local
+            ? 14
+            : clean.handbookOrigin?.mapping
+              ? 13
+              : clean.handbookOrigin
+                ? 12
+                : linksNeedV11(clean.factoryGroups)
+                  ? 11
+                  : clean.storageEdits.bayOrder
+                    ? 10
+                    : linksNeedV9(clean.factoryGroups)
+                      ? 9
+                      : clean.storageEdits.bayFloors
+                        ? 8
+                        : clean.factoryGroups.links
+                          ? 7
+                          : clean.storageEdits.hiddenFloors.length
+                            ? 6
+                            : clean.storageEdits.hiddenBays.length
+                              ? 5
+                              : hasAddedSlots(clean.storageEdits)
+                                ? 4
+                                : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                                  ? 3
+                                  : hasEdits(clean.storageEdits)
+                                    ? 2
+                                    : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

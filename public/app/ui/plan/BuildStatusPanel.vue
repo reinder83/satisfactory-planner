@@ -1,6 +1,7 @@
 <!--
   "Built so far" on a calculated profile's plan page (#66): from the factory rows ticked as
-  built and the lines running from the phase before at their earlier size (#1069),
+  built, the lines running from the phase before at their earlier size (#1069) and the grown
+  lines at the machines built on them (#1174),
   how much of each Space Elevator part reaches the elevator now, the step to build next,
   built rows held back by a missing supplier, and a power warning. The numbers come from
   currentBuildStatus() (views/calculated.ts, build-status.ts); nothing here recalculates the plan.
@@ -8,7 +9,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { buildRowName, currentBuildStatus, currentCarry } from '../../views/calculated.ts';
+import { calcStage } from '../../session.ts';
+import {
+  buildRowName,
+  currentBuildStatus,
+  currentCarry,
+  grownShares,
+} from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import { factoryLink } from '../actions.ts';
@@ -38,10 +45,13 @@ const view = computed(() =>
             ? `gets ${num(status.next.unblocks)} built machine${status.next.unblocks === 1 ? '' : 's'} running`
             : 'is the next unbuilt step in build order',
     };
+    // Grown lines not ticked yet, at their built machines (#1174), counted apart.
+    const grown = grownShares(calcStage()?.rows || []).size;
     return {
       built: status.builtCount,
       // Lines not ticked here that run from the phase before, at that size (#1069).
-      carried: status.carriedCount,
+      carried: status.carriedCount - grown,
+      grown,
       from: currentCarry()?.from || '',
       total: status.rowCount,
       share: percent(status.deliveryShare),
@@ -71,6 +81,10 @@ const view = computed(() =>
         {{ view.from }}, counted at {{ view.carried === 1 ? 'its' : 'their' }} Phase
         {{ view.from }} size.</span
       >
+      <span v-if="view.grown" data-build-grown
+        >{{ view.grown }} more {{ view.grown === 1 ? 'is' : 'are' }} partly built, counted at
+        {{ view.grown === 1 ? 'its' : 'their' }} built machines.</span
+      >
       Raw resources count as mined; the rest follows from what is built.
     </p>
     <div v-for="delivery in view.delivery" :key="delivery.item" class="delivery">
@@ -78,7 +92,11 @@ const view = computed(() =>
       <div class="progress-track"><span :style="{ width: delivery.width + '%' }"></span></div>
       <span class="small muted" data-build-rate>{{ delivery.text }}</span>
     </div>
-    <p v-if="(view.built || view.carried) && !view.share" class="small" data-build-none>
+    <p
+      v-if="(view.built || view.carried || view.grown) && !view.share"
+      class="small"
+      data-build-none
+    >
       Nothing reaches the elevator yet.
     </p>
     <p v-else-if="view.delivery.length" class="small">
