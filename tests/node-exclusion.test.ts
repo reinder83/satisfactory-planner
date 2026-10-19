@@ -381,13 +381,15 @@ test('Review, the sidebar, a profile card and ADA say which nodes a plan leaves 
     'vanilla purity · 1× elevator · 1× power',
   );
   for (const view of ['plan', 'resources']) {
-    const line = (leftOutNodes?: string) =>
-      adaRemarks({
+    const line = (leftOutNodes?: string) => {
+      const facts: Partial<AdaFacts> = {
         view,
         kind: 'calculated',
         steps: { done: 0, total: 1 },
         ...(leftOutNodes ? { leftOutNodes } : {}),
-      } as unknown as AdaFacts).find(remark => remark.id === 'left-out-nodes');
+      };
+      return adaRemarks(facts).find(remark => remark.id === 'left-out-nodes');
+    };
     assert.equal(line(), undefined);
     assert.equal(line('46 pure Iron Ore nodes')!.tone, 'calm');
     assert.equal(
