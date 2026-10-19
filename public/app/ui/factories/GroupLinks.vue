@@ -48,7 +48,7 @@ import {
   carrierTransport,
   DEFAULT_TRIP_MIN,
   EXTRACT_BADGE,
-  FLUID_TRUCK_LATER,
+  fluidTruckLater,
   fluidTruckUnlocked,
   linkBeltBadge,
   linkCarrier,
@@ -127,7 +127,7 @@ const view = computed(() =>
         mode,
         modes: linkModeOptions(link.items, FLUIDS, mode, stageKey()),
         // A link saved on Fluid Trucks shown in a phase before them (#1177).
-        fluidTruckLater: mode === 'fluidTruck' && !fluidTruckUnlocked(stageKey()),
+        later: mode === 'fluidTruck' && !fluidTruckUnlocked(stageKey()) ? fluidTruckLater() : '',
         fuelled: !!transport && fuelledModes.includes(transport.mode),
         items,
         packed: items.filter(item => item.pack),
@@ -461,8 +461,8 @@ function recalculate(event: Event) {
                   <p v-for="(line, i) in link.load" :key="i" class="small" data-link-load>
                     {{ line }}
                   </p>
-                  <p v-if="link.fluidTruckLater" class="small muted" data-fluid-truck-later>
-                    {{ FLUID_TRUCK_LATER }}: until then, package the fluids for a road vehicle.
+                  <p v-if="link.later" class="small muted" data-fluid-truck-later>
+                    {{ link.later }}
                   </p>
                   <p v-if="link.packed.length" class="small muted">
                     Packaged for the trip:

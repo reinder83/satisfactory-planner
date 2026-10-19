@@ -67,12 +67,15 @@ export const FLUID_TRUCK_M3 = 3200;
 // The HUB tier whose milestones bring the Fluid Truck (#1177); phaseForTier maps it to Phase 3.
 // progression.json (the 1.1 data) has no milestone that unlocks it, so the phase alone decides.
 export const FLUID_TRUCK_TIER = 5;
-export const FLUID_TRUCK_PHASE = phaseForTier(FLUID_TRUCK_TIER);
+// Its phase, worked out when asked rather than when the module loads: the interface tests supply
+// the shared modules' names to the app as it starts (as flow.ts reads the lane marks).
+export const fluidTruckPhase = (): number => phaseForTier(FLUID_TRUCK_TIER);
 // Whether phase `stageKey` has the Fluid Truck: Phase 3 (Tier 5) on.
 export const fluidTruckUnlocked = (stageKey: string): boolean =>
-  Number(stageKey) >= FLUID_TRUCK_PHASE;
-// "Fluid Trucks come with Tier 5 (Phase 3)": said where the phase shown has none yet.
-export const FLUID_TRUCK_LATER = `Fluid Trucks come with Tier ${FLUID_TRUCK_TIER} (Phase ${FLUID_TRUCK_PHASE})`;
+  Number(stageKey) >= fluidTruckPhase();
+// "Fluid Trucks come with Tier 5 (Phase 3): …", said where the phase shown has none yet.
+export const fluidTruckLater = (): string =>
+  `Fluid Trucks come with Tier ${FLUID_TRUCK_TIER} (Phase ${fluidTruckPhase()}): until then, package the fluids for a road vehicle.`;
 // Full tanks per minute a fluid flow fills (#1177): 160 m³/min is 0.05 Fluid Truck loads a minute,
 // whatever the round trip; the trucks a link needs are this times the round trip, rounded up.
 export const fluidTruckLoads = (rate: number): number => rate / FLUID_TRUCK_M3;
@@ -111,7 +114,7 @@ export function linkModeOptions(
     mode === 'fluidTruck' && !unlocked
       ? {
           mode,
-          label: `${label} (Tier ${FLUID_TRUCK_TIER}, from Phase ${FLUID_TRUCK_PHASE})`,
+          label: `${label} (Tier ${FLUID_TRUCK_TIER}, from Phase ${fluidTruckPhase()})`,
           disabled: current !== mode,
         }
       : { mode, label, disabled: false },

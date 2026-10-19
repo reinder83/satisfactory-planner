@@ -15,9 +15,10 @@ import { calculate, catalog } from '../planner.ts';
 import { phaseForTier } from '../public/preferences.ts';
 import {
   FLUID_TRUCK_M3,
-  FLUID_TRUCK_PHASE,
   FLUID_TRUCK_TIER,
+  fluidTruckLater,
   fluidTruckLoads,
+  fluidTruckPhase,
   fluidTruckUnlocked,
   linkItemWords,
   linkLoad,
@@ -207,8 +208,12 @@ test('packaging for a road vehicle stays as it was', () => {
 
 test('the Fluid Truck comes with Tier 5: offered from Phase 3, on links that carry a fluid', () => {
   assert.equal(FLUID_TRUCK_TIER, 5);
-  assert.equal(FLUID_TRUCK_PHASE, phaseForTier(5));
-  assert.equal(FLUID_TRUCK_PHASE, 3);
+  assert.equal(fluidTruckPhase(), phaseForTier(5));
+  assert.equal(fluidTruckPhase(), 3);
+  assert.equal(
+    fluidTruckLater(),
+    'Fluid Trucks come with Tier 5 (Phase 3): until then, package the fluids for a road vehicle.',
+  );
   assert.deepEqual(['1', '2', '3', '4', '5'].map(fluidTruckUnlocked), [
     false,
     false,
