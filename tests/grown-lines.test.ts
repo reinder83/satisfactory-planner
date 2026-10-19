@@ -149,8 +149,9 @@ test('grown lines follow the carry picks, the lines made on site and a partly bu
   // The Smelter and Plastic lines this plan no longer has are kept as no longer needed (#1175).
   assert.deepEqual(site.state.builtMachines, { [key(SMELTER)]: 4, [key(PLASTIC)]: 2 });
   assert.deepEqual(site.state.onSiteReview, { checks: { [key(REFINERY)]: true } });
-  // A line still partly built in the source keeps its count, also once the plan needs no more
-  // than stand (#1175: its step then says they are all built).
+  // A line still partly built in the source keeps its count while the plan needs more. Once the
+  // plan needs no more than stand, all its machines stand, so it comes out ticked (#1181), with
+  // any beyond the plan's kept as spare (#1175); it is never dropped.
   const partly = newProfileState(next, from.state, from.plan, undefined, undefined).state;
   const bigger = planWith([refinery(8, 7.5), smelter(4), plastic(2, 60)]);
   assert.deepEqual(
@@ -161,8 +162,12 @@ test('grown lines follow the carry picks, the lines made on site and a partly bu
   );
   const smaller = planWith([refinery(5), smelter(4), plastic(2, 60)]);
   const back = newProfileState(smaller, partly, next, undefined, undefined).state;
-  assert.deepEqual(back.builtMachines, { [key(REFINERY)]: 5 });
-  assert.equal(back.checks[key(REFINERY)], undefined, 'an untick of the source is not a tick');
+  assert.equal(back.checks[key(REFINERY)], true, 'all 5 stand: ticked');
+  assert.equal(back.builtMachines, undefined, 'exactly as many as needed: nothing to say');
+  const fewer = planWith([refinery(4), smelter(4), plastic(2, 60)]);
+  const spare = newProfileState(fewer, partly, next, undefined, undefined).state;
+  assert.equal(spare.checks[key(REFINERY)], true);
+  assert.deepEqual(spare.builtMachines, { [key(REFINERY)]: 5 }, 'one of the 5 is spare');
   // Ticked again, all its machines stand: the next growth counts from all of them.
   const ticked = mutate(partly, { type: 'check', key: key(REFINERY), value: true });
   assert.deepEqual(
@@ -171,6 +176,59 @@ test('grown lines follow the carry picks, the lines made on site and a partly bu
       [key(REFINERY)]: 6,
     },
   );
+});
+
+test('grown lines recalculated back to the earlier plan come out ticked, never dropped (#1181)', () => {
+  // The default plan with every production line of Phases 2-4 ticked.
+  const first = calculate({});
+  const state = initialState();
+  for (const phase of ['2', '3', '4'] as const)
+    for (const row of first.stages[phase].rows || [])
+      state.checks['calc-' + phase + '-' + row.id] = true;
+  const profile = (plan: StoredCalculatedPlan, progress: typeof state): StoredProfile => ({
+    id: 'p',
+    name: 'World',
+    kind: 'calculated',
+    plan,
+    state: progress,
+  });
+  // Recalculated in place with a storage rate of 5/min and every alternate: lines grow.
+  const bigger = calculate({ storageRate: 5, recipes: 'all' });
+  const grown = recalculatedProfile(
+    profile(first, validateState(state)),
+    bigger,
+    'World',
+    undefined,
+    undefined,
+    'b1',
+    'World (before)',
+  );
+  const counted = Object.keys(grown.profile.state.builtMachines || {}).filter(
+    check => grown.profile.state.checks[check] === false,
+  );
+  assert.equal(grown.grownCount, 11, 'the repro of #1181: 11 lines grow');
+  assert.equal(counted.length, 11);
+  // Recalculated back to the default settings, nothing ticked since: every one of them needs no
+  // more machines than stand, so all of them come out ticked.
+  const back = recalculatedProfile(
+    profile(bigger, grown.profile.state),
+    calculate({}),
+    'World',
+    undefined,
+    undefined,
+    'b2',
+    'World (before, 2)',
+  );
+  for (const check of counted) {
+    assert.equal(back.profile.state.checks[check], true, check + ' is ticked again');
+    const row = check.match(/^calc-([1-5])-(.+)$/)!;
+    const machines = back.profile.plan.stages[row[1] as '2' | '3' | '4'].rows!.find(
+      line => line.id === row[2],
+    )!.machines;
+    const kept = back.profile.state.builtMachines?.[check];
+    // Exactly as many as needed: nothing to keep; more: the spare ones are kept.
+    assert.ok(kept === undefined || kept > machines, check + ' keeps only spare machines');
+  }
 });
 
 test('a recalculation in place keeps the built machines and the backup keeps the ticks', () => {

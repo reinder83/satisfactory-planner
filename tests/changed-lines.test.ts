@@ -221,7 +221,9 @@ test('a line switched to another recipe gets an adjust task naming both recipes'
   // More built than the new line needs: the rest are spare.
   const few = planWith([refinery(5), cast(3), coated(3)]);
   const fewer = newProfileState(few, from.state, from.plan, undefined, undefined, book).state;
-  const three = builtLineChanges(fewer.builtMachines, fewer.checks, '4', few, book).changed.get(CAST)!;
+  const three = builtLineChanges(fewer.builtMachines, fewer.checks, '4', few, book).changed.get(
+    CAST,
+  )!;
   assert.equal(
     changedIntro(three, rowOf(few, CAST)),
     'Switch 3 Constructors from Screws to Cast Screws. The other 1 Constructor on Screws is ' +
@@ -351,16 +353,16 @@ test('a recalculation in place keeps the changes, the backup keeps the ticks, an
   const later = newProfileState(plan, switched, plan, undefined, undefined, book).state;
   assert.equal(later.builtMachines?.[key(SCREWS)], undefined);
   assert.equal(later.checks[key(CAST)], true);
-  // Back to the first plan: the lines no longer needed or still to switch are there again, with
-  // their machines and unticked. The shrunk line needs its 6 again: all of them stand, but they
-  // ran at 5's rates, so it is unticked with its 6 and its step says to tick it once they run.
+  // Back to the first plan: the lines no longer needed or still to switch are there again, and the
+  // shrunk line needs its 6 again. All their machines stand, so they come out ticked (#1181), with
+  // nothing left to say; the change is counted.
   const back = newProfileState(from.plan, state, plan, undefined, undefined, book);
-  assert.equal(back.state.builtMachines?.[key(TURBO)], 3);
-  assert.equal(back.state.checks[key(TURBO)], undefined);
-  assert.equal(back.state.builtMachines?.[key(SCREWS)], 4);
-  assert.equal(back.state.checks[key(REFINERY)], false);
-  assert.equal(back.state.builtMachines?.[key(REFINERY)], 6);
-  const all = spareLine(back.state.builtMachines, back.state.checks, '4', refinery(6))!;
+  for (const id of [REFINERY, SCREWS, PLATE, TURBO])
+    assert.equal(back.state.checks[key(id)], true, id + ' is ticked again');
+  assert.equal(back.state.builtMachines, undefined);
+  assert.equal(back.changedCount, 3, 'Screws, Iron Plate and Turbofuel are back');
+  // A user's untick of a line with spare machines: its step says when to tick it again.
+  const all = spareLine({ [key(REFINERY)]: 6 }, {}, '4', refinery(6))!;
   assert.equal(
     spareIntro(all, 'Refinery'),
     'All 6 Refineries this line needs are built. Tick this step once they run.',

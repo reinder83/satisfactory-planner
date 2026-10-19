@@ -321,7 +321,8 @@ function standingLines(
 // stand and how many to add. Any other change unticks it for review, stored as false, the rule
 // /api/round-up applies. Rows the source never ticked are left alone, except that a line with
 // machines standing on it (standingLines: a grown line partly built, or a line an earlier plan
-// had left and this one has again) keeps that count, unticked. A central line that lines made on
+// had left and this one has again) is ticked when they are enough, else keeps that count unticked
+// (keepStanding). A central line that lines made on
 // site split (siteTicksForReview) is not grown: which machines stand is not known, so
 // keepSiteTicks keeps its tick for review. Returns how many lines were unticked for review, how
 // many grew and how many otherwise changed (shrunk, or back in the plan).
@@ -343,9 +344,7 @@ function carryLines(
     if (!safeKey(key)) continue;
     const stands = split.has(key) ? 0 : (standing.get(key) ?? 0);
     if (!source.checks?.[key] || (!old && stands >= 1)) {
-      if (stands >= 1) built[key] = stands;
-      // A line an earlier plan had left (no longer needed, or to switch) is back in this one.
-      if (!old && stands >= 1) changedCount++;
+      if (stands >= 1) changedCount += keepStanding(state, built, key, row, stands, !old);
       continue;
     }
     const grown =
@@ -363,12 +362,37 @@ function carryLines(
       continue;
     }
     if (old && !split.has(key) && old.machines >= 1 && row.machines > old.machines) {
-      built[key] = stands;
-      grownCount++;
+      // More machines than the old plan's, but as many stand (a shrunk line's spares): all of
+      // them stand, so it stays ticked.
+      if (stands >= row.machines)
+        changedCount += keepStanding(state, built, key, row, stands, false);
+      else {
+        built[key] = stands;
+        grownCount++;
+      }
     } else reviewCount++;
   }
   if (Object.keys(built).length) state.builtMachines = built;
   return { reviewCount, grownCount, changedCount };
+}
+// A line of the new plan with `stands` machines standing on it that its source did not tick as
+// it is now (a grown line partly built, a shrunk line's spares, a line an earlier plan had left):
+// with at least as many as the plan needs, all of them stand, so it is ticked (#1181), keeping
+// any beyond the plan's as spare (#1175); with fewer it keeps its count, unticked, and its step
+// says how many to add. Never dropped. Returns 1 when it counts as a changed built line (spare
+// machines, or `back` in the plan after an earlier plan had left it), else 0.
+function keepStanding(
+  state: ProgressState,
+  built: Record<string, number>,
+  key: string,
+  row: CalcRow,
+  stands: number,
+  back: boolean,
+): number {
+  const enough = stands >= row.machines;
+  if (enough) state.checks[key] = true;
+  if (!enough || stands > row.machines) built[key] = stands;
+  return back || stands > row.machines ? 1 : 0;
 }
 // The source's built lines the new plan no longer has (#1175), in a phase it plans: each keeps
 // its machines in `builtMachines` under its own check key. With a successor (built-match.ts: a
