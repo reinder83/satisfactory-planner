@@ -10,7 +10,7 @@ import { builtSoAdd, formatNumber } from '../progression.ts';
 import {
   calcKeyParts,
   lineFacts,
-  lineName,
+  builtLineName,
   sameProduct,
   stageRowsOf,
   successorOf,
@@ -123,7 +123,7 @@ export function builtTable(
 // They read the stored plan and the saved state: nothing is ticked, stored or recalculated.
 
 // A machine count's word when the machine may not be known (a line no catalog names).
-const machinesWord = (count: number, machine: string): string =>
+const builtMachinesWord = (count: number, machine: string): string =>
   machine ? machineWord(count, machine) : count === 1 ? 'machine' : 'machines';
 const itThem = (count: number) => (count === 1 ? 'it' : 'them');
 
@@ -154,9 +154,9 @@ export function spareLine(
 export function spareIntro(line: SpareLine, machine: string): string {
   const { built, needed, spare } = line;
   if (!spare)
-    return `All ${formatNumber(needed)} ${machinesWord(needed, machine)} this line needs are built. Tick this step once they run.`;
+    return `All ${formatNumber(needed)} ${builtMachinesWord(needed, machine)} this line needs are built. Tick this step once they run.`;
   return (
-    `${formatNumber(built)} ${machinesWord(built, machine)} built, ${formatNumber(needed)} needed: ` +
+    `${formatNumber(built)} ${builtMachinesWord(built, machine)} built, ${formatNumber(needed)} needed: ` +
     `${formatNumber(spare)} ${spare === 1 ? 'is' : 'are'} spare. Switch ${itThem(spare)} off or ` +
     `dismantle ${itThem(spare)}, or underclock all ${formatNumber(built)} to share the work.` +
     (line.ticked ? '' : ` Tick this step once the ${formatNumber(needed)} needed run.`)
@@ -181,7 +181,7 @@ export function spareTable(
     columns: ['Machines', 'Built', 'Needed', 'Spare'],
     rows: [
       [
-        machinesWord(2, machine),
+        builtMachinesWord(2, machine),
         formatNumber(line.built),
         formatNumber(line.needed),
         formatNumber(line.spare),
@@ -229,7 +229,7 @@ export interface PhaseChanges {
 // its successor while there is one not ticked, is done once every line making its product is
 // ticked, and is no longer needed when no line of the phase makes it. `book` names a line no plan
 // row does (the catalog's recipes).
-export function phaseChanges(
+export function builtLineChanges(
   builtMachines: Readonly<Record<string, number>> | undefined,
   checks: Readonly<Record<string, boolean>>,
   stageKey: string,
@@ -277,16 +277,16 @@ export function phaseChanges(
 export function changedIntro(line: ChangedLine, row: Pick<CalcRow, 'name' | 'machine'>): string {
   const sentences: string[] = [],
     { standing, add, needed } = line,
-    name = lineName(row.name);
+    name = builtLineName(row.name);
   if (standing)
     sentences.push(
-      `${formatNumber(standing)} ${machinesWord(standing, row.machine)} built for ${name}.`,
+      `${formatNumber(standing)} ${builtMachinesWord(standing, row.machine)} built for ${name}.`,
     );
   const switches = line.from
     .filter(from => from.switched > 0)
     .map(
       from =>
-        `${formatNumber(from.switched)} ${machinesWord(from.switched, from.machine)} from ${from.name}`,
+        `${formatNumber(from.switched)} ${builtMachinesWord(from.switched, from.machine)} from ${from.name}`,
     );
   if (switches.length)
     sentences.push(
@@ -296,13 +296,13 @@ export function changedIntro(line: ChangedLine, row: Pick<CalcRow, 'name' | 'mac
     sentences.push(
       standing
         ? `Add ${formatNumber(add)}.`
-        : `Build ${formatNumber(add)} ${machinesWord(add, row.machine)} for ${name}.`,
+        : `Build ${formatNumber(add)} ${builtMachinesWord(add, row.machine)} for ${name}.`,
     );
   for (const from of line.from) {
-    const what = `${formatNumber(from.left)} ${machinesWord(from.left, from.machine)}`;
+    const what = `${formatNumber(from.left)} ${builtMachinesWord(from.left, from.machine)}`;
     if (!from.sameMachine)
       sentences.push(
-        `${name} replaces ${from.name} on ${machinesWord(2, row.machine)}: the ${what} built for ${from.name} can be dismantled or kept.`,
+        `${name} replaces ${from.name} on ${builtMachinesWord(2, row.machine)}: the ${what} built for ${from.name} can be dismantled or kept.`,
       );
     else if (from.left)
       sentences.push(
@@ -332,7 +332,7 @@ export function changedTable(
   title: string,
   after: string,
 ): StepTable {
-  const name = lineName(row.name);
+  const name = builtLineName(row.name);
   const change = (from: SwitchFrom) =>
     !from.sameMachine
       ? `dismantle or keep ${formatNumber(from.built)}`
@@ -348,14 +348,14 @@ export function changedTable(
     rows: [
       ...line.from.map(from => [
         from.name,
-        machinesWord(2, from.machine),
+        builtMachinesWord(2, from.machine),
         formatNumber(from.built),
         '0',
         change(from),
       ]),
       [
         name,
-        machinesWord(2, row.machine),
+        builtMachinesWord(2, row.machine),
         formatNumber(line.standing),
         formatNumber(line.needed),
         line.add ? `add ${formatNumber(line.add)}` : 'none to add',
@@ -377,7 +377,7 @@ export function formerTable(lines: readonly FormerLine[], phaseName: string): St
     columns: ['Production line', 'Machines', 'Built', 'Needed'],
     rows: lines.map(line => [
       line.name,
-      machinesWord(2, line.machine),
+      builtMachinesWord(2, line.machine),
       formatNumber(line.built),
       '0',
     ]),

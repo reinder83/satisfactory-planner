@@ -23,7 +23,7 @@ import {
   changedIntro,
   changedNote,
   changedTable,
-  phaseChanges,
+  builtLineChanges,
   spareIntro,
   spareLine,
   spareNote,
@@ -245,13 +245,13 @@ function catalogBook(): RecipeBook {
   return bookOf.book;
 }
 
-// The built lines of a phase ('1'-'5') the plan no longer has (#1175, phaseChanges): the lines
+// The built lines of a phase ('1'-'5') the plan no longer has (#1175, builtLineChanges): the lines
 // they switch to and the ones no longer needed. Worked out once per redraw.
 const changesOf = perRedraw(
   stepInputs,
   (stageKey: string): PhaseChanges =>
     calculated
-      ? phaseChanges(state?.builtMachines, state?.checks || {}, stageKey, calculated, catalogBook())
+      ? builtLineChanges(state?.builtMachines, state?.checks || {}, stageKey, calculated, catalogBook())
       : { changed: new Map(), removed: [] },
 );
 

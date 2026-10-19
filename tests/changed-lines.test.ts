@@ -35,7 +35,7 @@ import {
   changedNote,
   changedTable,
   formerTable,
-  phaseChanges,
+  builtLineChanges,
   spareIntro,
   spareLine,
   spareNote,
@@ -178,7 +178,7 @@ test('a line switched to another recipe gets an adjust task naming both recipes'
   assert.equal(state.checks[key(PLATE)], undefined);
   assert.equal(state.builtMachines?.[key(PLATE)], 4);
   assert.equal(state.checks[key(CAST)], undefined, 'the new line is not ticked');
-  const changes = phaseChanges(state.builtMachines, state.checks, '4', plan, book);
+  const changes = builtLineChanges(state.builtMachines, state.checks, '4', plan, book);
   // Same machine: switch the 4 Constructors and add 1.
   const toCast = changes.changed.get(CAST)!;
   assert.deepEqual(toCast, {
@@ -221,7 +221,7 @@ test('a line switched to another recipe gets an adjust task naming both recipes'
   // More built than the new line needs: the rest are spare.
   const few = planWith([refinery(5), cast(3), coated(3)]);
   const fewer = newProfileState(few, from.state, from.plan, undefined, undefined, book).state;
-  const three = phaseChanges(fewer.builtMachines, fewer.checks, '4', few, book).changed.get(CAST)!;
+  const three = builtLineChanges(fewer.builtMachines, fewer.checks, '4', few, book).changed.get(CAST)!;
   assert.equal(
     changedIntro(three, rowOf(few, CAST)),
     'Switch 3 Constructors from Screws to Cast Screws. The other 1 Constructor on Screws is ' +
@@ -229,7 +229,7 @@ test('a line switched to another recipe gets an adjust task naming both recipes'
   );
   // Once the new line is ticked, the switch is done and nothing is left to say.
   const done = mutate(structuredClone(state), { type: 'check', key: key(CAST), value: true });
-  const after = phaseChanges(done.builtMachines, done.checks, '4', plan, book);
+  const after = builtLineChanges(done.builtMachines, done.checks, '4', plan, book);
   assert.equal(after.changed.has(CAST), false);
   assert.deepEqual(
     after.removed.map(line => line.key),
@@ -244,7 +244,7 @@ test('a line the plan no longer has is kept as no longer needed, never dropped',
   const started = newProfileState(plan, from.state, from.plan, undefined, undefined, book);
   assert.equal(started.state.checks[key(TURBO)], true, 'its tick survives');
   assert.equal(started.state.builtMachines?.[key(TURBO)], 3);
-  const { removed } = phaseChanges(
+  const { removed } = builtLineChanges(
     started.state.builtMachines,
     started.state.checks,
     '4',
@@ -267,7 +267,7 @@ test('a line the plan no longer has is kept as no longer needed, never dropped',
   const bare = newProfileState(plan, from.state, from.plan, undefined, undefined);
   assert.equal(bare.state.builtMachines?.[key(TURBO)], 3);
   assert.deepEqual(
-    phaseChanges(bare.state.builtMachines, bare.state.checks, '4', plan, undefined).removed.map(
+    builtLineChanges(bare.state.builtMachines, bare.state.checks, '4', plan, undefined).removed.map(
       line => line.name,
     ),
     ['Turbofuel'],
@@ -415,7 +415,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
     assert.equal(reply.state.notes[key(TURBO)], 'Four stand');
     assert.equal(reply.state.version, 19);
     // The build plan's view of it, named by the catalog.
-    const changes = phaseChanges(
+    const changes = builtLineChanges(
       reply.state.builtMachines,
       reply.state.checks,
       '4',

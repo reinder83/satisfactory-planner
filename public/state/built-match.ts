@@ -23,7 +23,7 @@ export interface LineFacts {
 export type RecipeBook = ReadonlyMap<string, LineFacts>;
 
 // A line's name in a change task: a plan row's without "Alternate: ", as the catalog names it.
-export const lineName = (name: string): string => name.replace(/^Alternate: /, '');
+export const builtLineName = (name: string): string => name.replace(/^Alternate: /, '');
 
 const AMP = 'amp:';
 const AMP_NAME = ' (somersloop amplified)';
@@ -50,7 +50,7 @@ export const mainProduct = (row: Pick<CalcRow, 'outputs' | 'power' | 'machine'>)
   row.power < 0 ? 'power:' + row.machine : Object.keys(row.outputs || {})[0];
 
 const factsOfRow = (row: CalcRow): LineFacts => ({
-  name: lineName(row.name),
+  name: builtLineName(row.name),
   machine: row.machine,
   product: mainProduct(row),
 });

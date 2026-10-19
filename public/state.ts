@@ -124,7 +124,7 @@ export { ITEM_NAMES } from './state/items.ts';
 export {
   calcKeyParts,
   lineFacts,
-  lineName,
+  builtLineName,
   recipeBook,
   sameProduct,
   stageRowsOf,
