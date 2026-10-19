@@ -3,7 +3,7 @@
 // weighted mix of the three. The goal sets how fast each phase delivers; the objective sets what
 // the LP minimises while it does (lineCost and sourceCost in planner/model.ts). settings() in
 // planner/settings.ts keeps a valid choice and refuses anything else.
-import type { ObjectiveWeights, PlanObjective } from '../types/index.ts';
+import type { ObjectiveKind, ObjectiveWeights, PlanObjective } from '../types/index.ts';
 
 // The choices All settings step 3 offers, in order: [id, label, what it does]. 'buildings' is
 // stored as no field, 'weighted' as the weights themselves.
@@ -29,7 +29,6 @@ export const OBJECTIVES: [id: ObjectiveKind, label: string, line: string][] = [
     'Your own weights from 0 to 10: one building counts as much as 10 MW of power or 10 raw resources per minute, each times its weight.',
   ],
 ];
-export type ObjectiveKind = 'buildings' | 'power' | 'raw' | 'weighted';
 // The largest weight of a weighted mix; each is a whole number from 0, at least one above 0.
 export const OBJECTIVE_WEIGHT_MAX = 10;
 // What one building weighs against power and raw resources in the LP's cost: 10 MW, and 10 raw

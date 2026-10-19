@@ -357,6 +357,7 @@ export function readWizard(form: HTMLFormElement) {
     settings = wizardDraft.settings,
     oldPreset = worldPreset(settings);
   readFields(data, wizardDraft);
+  readObjective(data, settings);
   readSloops(form, data, settings);
   readAlternates(form, data, settings);
   readOwnedAlternates(form, data, settings);
@@ -437,6 +438,23 @@ function readRecipeCost(settings: WizardSettings, value: FormDataEntryValue) {
   const cost = Number(value);
   if (cost === 1) delete settings.recipeCost;
   else settings.recipeCost = cost;
+}
+
+// What the plan keeps lowest (#1180, All settings step 3, ui/wizard/ObjectiveChoice.vue): the
+// fewest buildings leaves the field out, as settings() stores it, so a draft from a plan made
+// before the setting keeps settings without it; a weighted mix takes its three boxes as numbers,
+// which settings() checks. A screen without the cards changes nothing.
+function readObjective(data: FormData, settings: WizardSettings) {
+  const kind = data.get('objective');
+  if (kind === null) return;
+  if (kind === 'power' || kind === 'raw') settings.objective = kind;
+  else if (kind === 'weighted')
+    settings.objective = {
+      buildings: Number(data.get('objectiveWeight:buildings')),
+      power: Number(data.get('objectiveWeight:power')),
+      raw: Number(data.get('objectiveWeight:raw')),
+    };
+  else delete settings.objective;
 }
 
 // A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:

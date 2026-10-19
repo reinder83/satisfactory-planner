@@ -93,6 +93,8 @@ export interface ObjectiveWeights {
 }
 // What a plan keeps lowest besides the fewest buildings (#1180): `settings.objective`.
 export type PlanObjective = 'power' | 'raw' | ObjectiveWeights;
+// The choice an objective is (objectiveKind in public/preferences/objective.ts).
+export type ObjectiveKind = 'buildings' | 'power' | 'raw' | 'weighted';
 
 // Normalised settings, as settings() in planner.ts returns them. Units: GW for power,
 // % for utilityPercent, per minute for rates and limits, hours per phase.
