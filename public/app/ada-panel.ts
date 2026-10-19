@@ -38,6 +38,9 @@ import {
   workspace,
 } from './session.ts';
 import { groupsReorder } from './group-order.ts';
+import { groupLinks } from './group-links.ts';
+import { carrierTransport, linkCarrier } from './logistics.ts';
+import { FLUIDS } from './flow.ts';
 import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort, rankedPhases } from './payoff.ts';
@@ -221,6 +224,19 @@ function miningFacts(): Pick<AdaFacts, 'mining' | 'ownedBelt'> {
       ? { ownedBelt: `${stagePlan.mining.belt.mark} belts (${num(stagePlan.mining.belt.cap)}/min)` }
       : {}),
   };
+}
+
+// The links of the open phase that send a fluid by Fluid Truck (#1177), as the Logistics page
+// draws them (groupLinks, linkCarrier); none without groups.
+function fluidTruckFacts(): Pick<AdaFacts, 'fluidTruckLinks'> {
+  const stagePlan = calcStage(),
+    groupsState = factoryGroupsState();
+  if (!calculated || !stagePlan?.rows?.length || !groupsState.links) return {};
+  const count = groupLinks(stagePlan, groupsState, calculated.settings.onSite).filter(link => {
+    const transport = carrierTransport(linkCarrier(groupsState.links, link.from, link.to));
+    return transport?.mode === 'fluidTruck' && link.items.some(entry => FLUIDS.has(entry.item));
+  }).length;
+  return count ? { fluidTruckLinks: count } : {};
 }
 
 // The generators the phase before built that the open phase keeps (#1064, the stage's grid), as
@@ -449,6 +465,7 @@ function adaFacts(): AdaFacts {
     ...waterFacts(),
     ...handoverFacts(),
     ...miningFacts(),
+    ...fluidTruckFacts(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,

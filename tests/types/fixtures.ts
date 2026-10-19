@@ -232,12 +232,26 @@ export const version17 = {
   },
 } satisfies SavedState;
 
-// Version 18: the machines that stand on a production line a recalculation grew (#1174): 5 of the
-// Residual Fuel line's Refineries in Phase 4, whose step is unticked until all of them stand.
+// Version 18: a link on Fluid Trucks (#1177, mode 'fluidTruck'): Crude Oil driven from its
+// source to the plates group in tanks, burning Packaged Fuel.
 export const version18 = {
   ...version17,
   version: 18,
-  checks: { ...version17.checks, 'calc-4-Recipe_ResidualFuel_C': false },
+  factoryGroups: {
+    ...version17.factoryGroups,
+    links: {
+      ...version17.factoryGroups.links,
+      'supply/Crude Oil:fg-plates1': { mode: 'fluidTruck', roundTripMin: 6, fuel: 'Packaged Fuel' },
+    },
+  },
+} satisfies SavedState;
+
+// Version 19: the machines that stand on a production line a recalculation grew (#1174): 5 of the
+// Residual Fuel line's Refineries in Phase 4, whose step is unticked until all of them stand.
+export const version19 = {
+  ...version18,
+  version: 19,
+  checks: { ...version18.checks, 'calc-4-Recipe_ResidualFuel_C': false },
   builtMachines: { 'calc-4-Recipe_ResidualFuel_C': 5 },
 } satisfies SavedState;
 
@@ -262,6 +276,7 @@ export const states: [SavedState, number][] = [
   [version16, 16],
   [version17, 17],
   [version18, 18],
+  [version19, 19],
 ];
 
 export const backup = {

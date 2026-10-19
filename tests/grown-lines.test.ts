@@ -1,7 +1,7 @@
 // Grown production lines keep their progress (#1174, slice 1 of #1172): when a new profile carries
 // progress, or a plan is recalculated in place, a production line ticked as built that now needs
 // more machines (same row, more machines) is unticked but keeps the machines that stand, in the
-// progress state's `builtMachines` (version 18), so its step reads "5 Refineries built, so add 1"
+// progress state's `builtMachines` (version 19), so its step reads "5 Refineries built, so add 1"
 // instead of the whole line again. An unchanged line stays ticked, a shrunk one keeps today's
 // rule (ticked), any other change is unticked for review as before. Old saves load unchanged, and
 // both editions (the Docker server over workspace.json, the browser edition over IndexedDB) keep
@@ -28,7 +28,7 @@ import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
 import { builtLine, builtShare, builtTable } from '../public/app/built-lines.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
-import { states, version17, version18 } from './types/fixtures.ts';
+import { states, version17, version19 } from './types/fixtures.ts';
 import type {
   CalcRow,
   Catalog,
@@ -106,7 +106,7 @@ test('a ticked line that needs more machines keeps its built machines (new profi
   assert.equal(started.state.checks[key(SMELTER)], true, 'a shrunk line stays ticked, as before');
   assert.equal(started.state.checks[key(PLASTIC)], false, 'more input alone: left for review');
   assert.equal(started.reviewCount, 1, 'only the changed line is left for review');
-  assert.equal(started.state.version, 18);
+  assert.equal(started.state.version, 19);
   // Notes are carried as before.
   assert.equal(started.state.notes.global, 'Keep me');
   assert.equal(started.state.notes['factory-' + REFINERY], 'Five stand by the oil field');
@@ -227,19 +227,19 @@ test('the step reads built, needed and to add, with the extra input the added ma
   assert.equal(builtLine(undefined, checks, '4', row), null);
 });
 
-test('builtMachines is version 18, checked, and older releases are told to update', () => {
+test('builtMachines is version 19, checked, and older releases are told to update', () => {
   for (const [state, version] of states) {
     const clean = validateState(json(state));
     assert.equal(clean.version, version, 'every released state keeps its version');
     assert.deepEqual(clean.checks, state.checks, 'and its ticks');
     assert.deepEqual(clean.notes, state.notes, 'and its notes');
-    if (version < 18) assert.equal(clean.builtMachines, undefined);
+    if (version < 19) assert.equal(clean.builtMachines, undefined);
   }
-  assert.deepEqual(validateState(json(version18)).builtMachines, version18.builtMachines);
-  // A version-17 state given a built count is marked 18; one without keeps its version.
+  assert.deepEqual(validateState(json(version19)).builtMachines, version19.builtMachines);
+  // A version-17 state given a built count is marked 19; one without keeps its version.
   const marked = validateState({ ...json(version17), builtMachines: { [key(REFINERY)]: 2 } });
-  assert.equal(marked.version, 18);
-  assert.equal(validateState({ ...json(version18), builtMachines: {} }).version, 17);
+  assert.equal(marked.version, 19);
+  assert.equal(validateState({ ...json(version17), builtMachines: {} }).version, 17);
   for (const bad of [
     { [key(REFINERY)]: 0 },
     { [key(REFINERY)]: 1.5 },
@@ -249,12 +249,30 @@ test('builtMachines is version 18, checked, and older releases are told to updat
     [],
   ])
     assert.throws(
-      () => validateState({ ...json(version18), builtMachines: bad }),
+      () => validateState({ ...json(version19), builtMachines: bad }),
       /Invalid count of built machines/,
     );
-  assert.throws(() => validateState({ ...json(version18), version: 19 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(version19), version: 20 }), /newer planner version/);
   // A share leaves it out with the rest of the progress.
-  assert.equal(shareState(validateState(json(version18))).builtMachines, undefined);
+  assert.equal(shareState(validateState(json(version19))).builtMachines, undefined);
+});
+
+test('a state with a Fluid Truck link and built machines is 19, and drops as each goes', () => {
+  // version19 holds both: version18's link on Fluid Trucks (#1177) and a built count (#1174).
+  const FLUID = 'supply/Crude Oil:fg-plates1';
+  assert.equal(version19.factoryGroups.links[FLUID].mode, 'fluidTruck');
+  assert.equal(validateState(json(version19)).version, 19);
+  // Without the built count, the Fluid Truck link alone needs 18.
+  const { builtMachines: _built, ...linkOnly } = json(version19);
+  assert.equal(validateState(linkOnly).version, 18);
+  assert.equal(validateState({ ...json(version19), builtMachines: {} }).version, 18);
+  // Without both, the state needs only what its other content needs: 17 or lower (here 17, for
+  // version17's link burning a later fuel).
+  const { [FLUID]: _fluid, ...otherLinks } = linkOnly.factoryGroups.links;
+  const neither = { ...linkOnly, factoryGroups: { ...linkOnly.factoryGroups, links: otherLinks } };
+  const version = validateState(neither).version;
+  assert.ok(version <= 17, `version ${version}`);
+  assert.equal(version, 17);
 });
 
 // Both editions, through their own API: a profile of a real plan with its Residual Fuel line
@@ -307,7 +325,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
   assert.equal(sibling.grownCount, 1);
   assert.equal(carried.state.checks[GROWN], false);
   assert.deepEqual(carried.state.builtMachines, { [GROWN]: 5 });
-  assert.equal(carried.state.version, 18);
+  assert.equal(carried.state.version, 19);
   assert.equal(carried.state.notes['factory-' + REFINERY], 'Five stand');
   assert.deepEqual((await context(own)).state, ticked.state, 'the source is untouched');
 

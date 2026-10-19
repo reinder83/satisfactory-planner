@@ -1,6 +1,6 @@
 // Grown production lines (#1174, slice 1 of #1172): a line ticked as built that a recalculation
 // (in place, or into a new profile carried from it) grew to more machines keeps the machines that
-// stand (`builtMachines` in the progress state, version 18, set by carryLines in
+// stand (`builtMachines` in the progress state, version 19, set by carryLines in
 // public/state/carry.ts). Until its step is ticked again, the step and the line's card say how
 // many stand, how many the plan needs and how many to add, with the extra input the added
 // machines take, and the build status counts the built part. Everything here reads the stored
