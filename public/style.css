@@ -5618,8 +5618,10 @@ button.rail-tile:hover {
   color: var(--muted);
 }
 /* Why a step is done by its own condition (#1070): an inline-block, so the done title's
-   line-through does not run through the reason. */
-.task-idle[data-satisfied-note] {
+   line-through does not run through the reason. So is a shrunk line's spare machines (#1175),
+   which a ticked step shows too. */
+.task-idle[data-satisfied-note],
+.task-idle[data-step-spare] {
   display: inline-block;
   width: 100%;
 }

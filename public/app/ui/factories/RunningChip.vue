@@ -3,7 +3,8 @@
   ◐ Held back for a calculated row marked running that a missing supplier holds back (the card
   shows the reason above its footer), or ◑ From Phase N for a line not ticked in this phase that
   runs from the phase before (#1069; the card says how many machines run), or ◑ Partly built for
-  a line a recalculation grew (#1174; the card says how many stand). It only shows state:
+  a line a recalculation grew (#1174; the card says how many stand), or ◑ To switch for a line
+  built lines of another recipe switch to (#1175; the card says how many). It only shows state:
   the card's Running box stays the one control, and the chip follows it. The glyph and the word
   both say the state, so it reads without colour. The chip is hidden from screen readers, which
   already hear the Running box ("Running, checkbox, checked"), the held-back reason and the
@@ -13,7 +14,7 @@
 import { computed } from 'vue';
 
 const props = defineProps<{
-  status: 'running' | 'idle' | 'held' | 'carried' | 'partly';
+  status: 'running' | 'idle' | 'held' | 'carried' | 'partly' | 'switch';
   from?: string;
 }>();
 
@@ -23,6 +24,7 @@ const CHIPS = {
   held: { glyph: '◐', text: 'Held back', tone: 'orange held' },
   carried: { glyph: '◑', text: 'From Phase', tone: 'carried' },
   partly: { glyph: '◑', text: 'Partly built', tone: 'carried' },
+  switch: { glyph: '◑', text: 'To switch', tone: 'carried' },
 } as const;
 
 const chip = computed(() => {

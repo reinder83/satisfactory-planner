@@ -57,6 +57,7 @@ import {
 import { backupDays } from './views/backup.ts';
 import {
   buildRowName,
+  changedLineCount,
   currentBuildStatus,
   grownShares,
   ownedTicksNotice,
@@ -468,6 +469,7 @@ function adaFacts(): AdaFacts {
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     grownLines: grownShares(calcStage()?.rows || []).size,
+    changedLines: changedLineCount(calcStage()?.rows || []),
     ...onSitePendingFacts(),
     ...exactClockFacts(),
     ...ownedTicksFacts(),

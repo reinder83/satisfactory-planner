@@ -48,7 +48,9 @@ export function offerQuestion(name: string, change: string, kept: string, transc
   return (
     `Recalculates “${name}” ${change}. Its progress is carried: a production line marked ` +
     'running that now needs more machines keeps the ones you built and says how many to add, ' +
-    'and one that changed otherwise is left unticked for review. The ' +
+    'one with fewer machines or another recipe says what is spare or what to switch, one the ' +
+    'new plan no longer has is listed as no longer needed, and one that changed otherwise is ' +
+    'left unticked for review. The ' +
     `current version is kept as “${kept}” under Profiles, with all of its progress.` +
     (transcribed ? ' ' + RESOLVE_WARNING : '')
   );
@@ -78,7 +80,7 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
       setWorkspace(done.workspace);
       await loadContext(done.saveId, done.profileId);
       render();
-      toast(recalculatedText(done.reviewCount, kept, done.grownCount));
+      toast(recalculatedText(done.reviewCount, kept, done.grownCount, done.changedCount));
       void refocus();
     } catch (error) {
       button.textContent = offer.label;

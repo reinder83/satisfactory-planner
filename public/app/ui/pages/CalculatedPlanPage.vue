@@ -5,7 +5,8 @@
   storage and power, each linking to its page, and the delivery time, what is left of it once a
   delivery count is saved, #1062; SP-43), the next phase once the delivery is complete
   (ui/plan/NextPhase.vue, #1069) or Post Phase 5's finish card, the handover from the phase before
-  (ui/plan/HandoverSummary.vue, #1069), why it opened on an
+  (ui/plan/HandoverSummary.vue, #1069), the production lines built under an earlier plan that this
+  one no longer needs (ui/plan/FormerLines.vue, #1175), why it opened on an
   earlier phase than the saved one when it did (ui/plan/OpenedEarlierNotice.vue, #666), the checklist
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
@@ -49,6 +50,7 @@ import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
 import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
+import FormerLines from '../plan/FormerLines.vue';
 import HandoverSummary from '../plan/HandoverSummary.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import NextPhase from '../plan/NextPhase.vue';
@@ -191,6 +193,7 @@ const page = computed(() =>
     <OpenedEarlierNotice />
     <MilestoneOnlyNotice />
     <HandoverSummary />
+    <FormerLines v-if="!page.milestones" />
     <PayoffPanel />
     <div :class="page.milestones ? undefined : 'split'">
       <section>

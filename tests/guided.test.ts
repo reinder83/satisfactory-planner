@@ -37,6 +37,13 @@ import {
   slotPosition,
   newProfileState,
   initialState,
+  builtLineName,
+  calcKeyParts,
+  lineFacts,
+  recipeBook,
+  sameProduct,
+  stageRowsOf,
+  successorOf,
 } from '../public/state.ts';
 import {
   droneFuels,
@@ -164,6 +171,14 @@ function ui() {
     carryOptions,
     pickedRecipeUnlocks,
     bayCapacity,
+    // The built lines a recalculation changed (#1175, state/built-match.ts).
+    builtLineName,
+    calcKeyParts,
+    lineFacts,
+    recipeBook,
+    sameProduct,
+    stageRowsOf,
+    successorOf,
     bayOfSlot,
     slotPosition,
     droneFuels,

@@ -21,7 +21,14 @@ import { num } from '../../format.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import { rowTotal } from '../../group-order.ts';
 import { calculated, checked, factoryEditing, stage, state } from '../../session.ts';
-import { carriedCard, grownCard, heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
+import {
+  carriedCard,
+  changedLine,
+  grownCard,
+  heldBack,
+  machineSetup,
+  rowIcon,
+} from '../../views/calculated.ts';
 import {
   allocationText,
   factoryGroupsState,
@@ -103,8 +110,11 @@ const card = computed(() =>
       // A line not ticked here that runs from the phase before: "Running since Phase 1: 2 of 5
       // machines" (#1069), and that phase for the chip.
       carried: carriedCard(row),
-      // A line a recalculation grew, not ticked yet: "5 of 6 machines built: add 1" (#1174).
+      // A line a recalculation grew, not ticked yet: "5 of 6 machines built: add 1" (#1174); or
+      // shrunk, "6 machines built, 5 needed: 1 spare", or switched to from built lines of another
+      // recipe, "4 to switch from Iron Plate, 1 to add" (#1175, the chip's To switch).
       grown: grownCard(row),
+      switched: !!changedLine(row),
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
         const hold = heldBack(row.id);
@@ -123,11 +133,13 @@ const card = computed(() =>
           ? 'held'
           : card.done
             ? 'running'
-            : card.grown
-              ? 'partly'
-              : card.carried
-                ? 'carried'
-                : 'idle'
+            : card.switched
+              ? 'switch'
+              : card.grown
+                ? 'partly'
+                : card.carried
+                  ? 'carried'
+                  : 'idle'
       "
       :from="card.carried?.from"
     />

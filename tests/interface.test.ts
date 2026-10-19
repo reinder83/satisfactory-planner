@@ -81,6 +81,13 @@ import {
   bayCapacity,
   bayOfSlot,
   slotPosition,
+  builtLineName,
+  calcKeyParts,
+  lineFacts,
+  recipeBook,
+  sameProduct,
+  stageRowsOf,
+  successorOf,
 } from '../public/state.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { calculate, catalog } from '../planner.ts';
@@ -126,6 +133,14 @@ function ui() {
     initialState,
     pickedRecipeUnlocks,
     bayCapacity,
+    // The built lines a recalculation changed (#1175, state/built-match.ts).
+    builtLineName,
+    calcKeyParts,
+    lineFacts,
+    recipeBook,
+    sameProduct,
+    stageRowsOf,
+    successorOf,
     bayOfSlot,
     slotPosition,
     droneFuels,

@@ -39,6 +39,7 @@ import {
   currentPayoff,
   phaseProgress,
   rankScope,
+  recipeBook,
   roundUpSettings,
   wholeMachineProfile,
 } from './state.ts';
@@ -141,6 +142,9 @@ export function createBrowserApi(
   // Each profile's per-phase counts, kept until its plan or progress changes, as the server keeps
   // them (profilePhasesCache, #804).
   const cachedPhases = profilePhasesCache();
+  // The catalog's recipes, which name the built lines a new plan no longer has (#1175), as the
+  // server's recipeBookData does.
+  const book = recipeBook(catalog);
   // Mirrors summary() in server/scope.ts: profile lists without plans or progress. Adds
   // `browser: true` and `lastBackup`, the last full export, which the Backup page and ADA show.
   const summary = (workspace: BrowserWorkspace): WorkspaceSummary => ({
@@ -239,6 +243,7 @@ export function createBrowserApi(
         source,
         body.carry,
         body.built,
+        book,
       );
       save.profiles.push(started.profile);
       save.activeProfile = profileId;
@@ -248,6 +253,7 @@ export function createBrowserApi(
         profileId,
         reviewCount: started.reviewCount,
         grownCount: started.grownCount,
+        changedCount: started.changedCount,
         carriedChecks: started.carried,
         workspace: summary(data),
       };
@@ -355,6 +361,7 @@ export function createBrowserApi(
         backupId,
         backupName,
         progression,
+        book,
       );
       save.profiles.splice(save.profiles.indexOf(profile), 1, next.profile, next.backup);
       save.activeProfile = profile.id;
@@ -365,6 +372,7 @@ export function createBrowserApi(
         backupId,
         reviewCount: next.reviewCount,
         grownCount: next.grownCount,
+        changedCount: next.changedCount,
         carriedChecks: next.carried,
         workspace: summary(data),
       };
