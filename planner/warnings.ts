@@ -75,6 +75,17 @@ function existingSupplyWarnings({ stages }: FinishedPlan): string[] {
     );
   return warnings;
 }
+// Built production lines (#1176): phases that could not keep them as standing machines.
+function builtLineWarnings({ stages }: FinishedPlan): string[] {
+  const lost = Object.entries(stages)
+    .filter(([, stage]) => stage.builtDropped)
+    .map(([phase]) => phase);
+  return lost.length
+    ? [
+        `${lost.length > 1 ? 'Phases' : 'Phase'} ${listNames(lost)} could not be fitted to whole machines while keeping the production lines you built, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if none of them stood. Their steps say what changed. Precise balancing instead of whole machines usually keeps them.`,
+      ]
+    : [];
+}
 // Vehicle fuel for the factory-group links (#206): what each phase plans for, and fuel a phase
 // cannot make yet, which is left out there.
 function vehicleFuelWarnings({ config, stages }: FinishedPlan): string[] {
@@ -436,6 +447,7 @@ const WARNING_GROUPS: WarningGroup[] = [
   somersloopWarnings,
   amplificationWarnings,
   existingSupplyWarnings,
+  builtLineWarnings,
   vehicleFuelWarnings,
   onSiteWarnings,
   augmenterFuelWarnings,

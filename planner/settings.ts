@@ -19,6 +19,7 @@ import type {
   CurrentSettings,
   Distribution,
   DroneFuel,
+  BuiltLines,
   ExactClocks,
   ExtractionRecord,
   ItemRates,
@@ -222,6 +223,32 @@ const exactClockLines = (raw: unknown): { exactClocks?: ExactClocks } => {
     if (clean.length) out[phase as StageKey] = clean;
   }
   return Object.keys(out).length ? { exactClocks: out } : {};
+};
+// The production lines that already stand (#1176): `{ builtLines: { phase: { rowId: machines } } }`
+// with row ids as a plan names them and whole counts from 1 to 100,000 (the limits of the
+// progress state's `builtMachines`), at most 1000 per phase; nothing when none stand, so settings
+// without them, and every plan stored before them, calculate exactly as before. Anything else is
+// refused, never corrected. Keys are sorted, so equal lines always give equal settings.
+const BUILT_REFUSAL = 'Invalid built production lines.';
+const builtLinesSetting = (raw: unknown): { builtLines?: BuiltLines } => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) fail(BUILT_REFUSAL);
+  const out: BuiltLines = {};
+  for (const phase of Object.keys(raw).sort()) {
+    const lines = raw[phase];
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(lines)) fail(BUILT_REFUSAL);
+    const ids = Object.keys(lines).sort();
+    if (ids.length > 1000) fail(BUILT_REFUSAL);
+    const clean: Record<string, number> = {};
+    for (const id of ids) {
+      const count = lines[id];
+      if (!ROW_ID.test(id) || !Number.isInteger(count) || !(count >= 1 && count <= 100000))
+        fail(BUILT_REFUSAL);
+      clean[id] = count as number;
+    }
+    if (ids.length) out[phase as StageKey] = clean;
+  }
+  return Object.keys(out).length ? { builtLines: out } : {};
 };
 // A known item that is not a raw resource: what existing supply and settings.onSite may name. The
 // interface applies the same rule to the marks it sends (onSitePlannable in
@@ -431,6 +458,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     transportFuel: transportFuelRates(input.transportFuel),
     ...onSiteSetting(input.onSite),
     ...exactClockLines(input.exactClocks),
+    // The production lines that already stand (#1176): absent unless a recalculation carries
+    // them, so settings without them, and every plan stored before them, stay as they were.
+    ...builtLinesSetting(input.builtLines),
     // Mining and belts per phase (#1065): only `true` turns it on, and the field is absent
     // otherwise, so settings without it, and every plan stored before it, stay as they were.
     ...(input.phaseMining === true ? { phaseMining: true } : {}),

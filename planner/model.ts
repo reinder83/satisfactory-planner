@@ -37,7 +37,7 @@ import {
 } from './recipes.ts';
 import { twoStepFit } from './fit.ts';
 import { withinLoad } from './load.ts';
-import { readStage } from './stage.ts';
+import { BUILT, readStage } from './stage.ts';
 import {
   BYPRODUCT_FIRST,
   feedCap,
@@ -103,6 +103,33 @@ import {
 // and public/app/ui/wizard/. Only calculate() calls run, through its phase helpers (solvePhase,
 // draftStage, resolveEarlierPhases, solveUnfueled) and the two-step fit (fit.ts).
 export function run(config: CurrentSettings, phase: number, options: RunOptions = {}): RunResult {
+  const result = planRun(config, phase, options);
+  // Counting the built lines as standing (#1176) only adds cheaper ways to make what the phase
+  // needs, so it never makes the exact plan infeasible; but the network the exact solve then picks
+  // can leave the whole-machine fit less room to round, as existing supply can (supplyFallback in
+  // fit.ts). Telling the planner what you built must never cost you a plan: plan the phase as if
+  // none stood, marked `builtDropped`. Only the outer call does this (not the two-step fit's inner
+  // solves, nor a diagnostic or a draft's measurement), so a phase is solved at most twice.
+  if (
+    result.feasible ||
+    options.recipeIds ||
+    options.ignoreLimits ||
+    options.overBudget ||
+    !config.builtLines?.[String(phase) as StageKey]
+  )
+    return result;
+  const without = planRun(withoutBuiltLines(config, phase), phase, options);
+  return without.feasible ? { ...without, builtDropped: true } : result;
+}
+// The settings without the built lines of one phase (#1176).
+function withoutBuiltLines(config: CurrentSettings, phase: number): CurrentSettings {
+  const { builtLines, ...others } = config;
+  const rest = Object.fromEntries(
+    Object.entries(builtLines || {}).filter(([key]) => key !== String(phase)),
+  );
+  return Object.keys(rest).length ? { ...others, builtLines: rest } : others;
+}
+function planRun(config: CurrentSettings, phase: number, options: RunOptions): RunResult {
   const context = phaseContext(config, phase, options);
   // The inner calls of the two-step fit pass `recipeIds`, so they skip it and plan the phase.
   // context.config, since a phase before the Production Amplifier research has no budget.
@@ -219,7 +246,11 @@ export function phasePool({
     ...(config.amplifySloops > 0 && recipeIds
       ? selected
           .filter(
-            recipe => amplifiable(recipe) && !recipe.onSite && baseline?.[recipe.id] !== undefined,
+            recipe =>
+              amplifiable(recipe) &&
+              !recipe.onSite &&
+              (baseline?.[recipe.id] !== undefined ||
+                !!config.builtLines?.[String(phase) as StageKey]?.['amp:' + recipe.id]),
           )
           .map(amplified)
       : []),
@@ -372,6 +403,7 @@ export function buildModel(
   addSiteOverflows(model, sites.overflows);
   addSources(model, context, allItems, demands.delivery);
   const period = roundNuclear(model, context, pool, demands.demand);
+  addBuiltLines(model, context, pool);
   return { model, period };
 }
 // One balance constraint per item, 'item:<name>': production minus consumption (including the
@@ -567,6 +599,41 @@ export function sourceCost(
     (item === 'Water' ? 0 : weights.raw / OBJECTIVE_EXCHANGE.raw) +
     (weights.power * Math.max(0, powerMW)) / OBJECTIVE_EXCHANGE.mw
   );
+}
+// Production lines that already stand (#1176, settings.builtLines): each pool recipe with machines
+// built on its line in this phase gets a second variable, 'built:<recipe id>', with every
+// coefficient of the recipe's own (its items, power, somersloops, caps, floors, whole machines)
+// but held to at most the machines that stand (the 'built:<recipe id>' constraint) and costing
+// KEEP_SHARE of what the recipe's own variable costs. So what they make is credited, the ore and
+// power they draw still count against the budgets (they are already spent there), and the solve
+// adds machines to a built line, or switches it, only where that pays. readStage folds the two
+// variables into one row (foldBuilt in stage.ts). In a solve without a built amplified line's
+// twin (the exact step of the two-step fit, or a fit without amplification), that line counts as
+// twice its machines of the recipe, since one amplified machine makes what two do; the fit then
+// offers the twin (phasePool), so the somersloops stay on the line they are in.
+//
+// KEEP_SHARE is the threshold of "keep the built recipe if switching saves little" (#1175): at a
+// tenth of a new machine, switching a built line to another recipe (or moving its somersloops)
+// must save more new machines elsewhere than the switch builds, less a tenth of those standing;
+// machines that stand elsewhere count a tenth too, so a built chain is never redesigned to save
+// a few buildings. It stays above 0, so a built machine the new plan has no use for is not run
+// for nothing: the line shrinks, and its step says which machines are spare.
+export const KEEP_SHARE = 0.1;
+function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: PoolRecipe[]) {
+  const lines = config.builtLines?.[String(phase) as StageKey];
+  if (!lines) return;
+  const ids = new Set(pool.map(recipe => recipe.id));
+  for (const recipe of pool) {
+    const twin = 'amp:' + recipe.id;
+    const count =
+      (lines[recipe.id] ?? 0) + (recipe.slots || ids.has(twin) ? 0 : 2 * (lines[twin] ?? 0));
+    const own = model.variables[recipe.id];
+    if (!own || !(count >= 1)) continue;
+    const name = BUILT + recipe.id;
+    model.variables[name] = { ...own, cost: (own.cost ?? 0) * KEEP_SHARE, [name]: 1 };
+    model.constraints[name] = { max: count };
+    if (model.ints?.[recipe.id]) model.ints[name] = 1;
+  }
 }
 // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
 // a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,

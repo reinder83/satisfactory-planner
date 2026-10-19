@@ -83,6 +83,9 @@ export interface Survey {
   used?: ItemRates;
 }
 
+// The machines that stand on each production line, per phase (#1176, settings.builtLines):
+// { phase: { rowId: machines } }, whole counts from 1.
+export type BuiltLines = Partial<Record<StageKey, Record<string, number>>>;
 // The weights of a weighted objective (#1180): whole numbers from 0 to 10, at least one above 0.
 // One building weighs as much as 10 MW or 10 raw resources per minute, each times its weight
 // (OBJECTIVE_EXCHANGE in public/preferences/objective.ts).
@@ -144,6 +147,13 @@ export interface CurrentSettings {
   // Absent unless a recalculation the user started asked for it (the progress state's
   // `exactClocks`, saved from a line's dialog), so a plan without it calculates exactly as before.
   exactClocks?: ExactClocks;
+  // Production lines that already stand (#1176, slice 3 of #1172): per phase, the machines built
+  // on each row id, from the lines ticked as built (or partly built, `builtMachines`) in the
+  // profile a recalculation carries progress from (builtLinesOf in public/app/built-capacity.ts).
+  // The solve counts them as existing capacity (addBuiltLines in planner/model.ts): it keeps and
+  // extends them rather than replacing them. Absent unless a recalculation the user started
+  // carries production lines, so a plan without it calculates exactly as before.
+  builtLines?: BuiltLines;
   // Mining and belts per phase (#1065): each phase plans with the miner, clock, belts and pipes
   // its HUB tiers unlock, and budgets that follow from them (phaseMining in
   // public/preferences/mining.ts). Set by the wizard for new plans; absent from every plan made
@@ -499,6 +509,9 @@ export interface StageResult {
   exactPlan?: ExactPlan;
   fuelVerdict?: FuelVerdict;
   supplyDropped?: boolean;
+  // The phase could not be fitted while counting the built lines as standing (#1176), so it is
+  // planned as if none stood.
+  builtDropped?: boolean;
   amplificationDropped?: boolean;
   // Whole machines (#370): the recycle chain's period when the uranium plants came in multiples
   // of it, and whether whole nuclear plants did not fit and the phase kept them fractional.
