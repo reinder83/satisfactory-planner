@@ -4,6 +4,7 @@
 // sharing a profile without its progress (shareState).
 // Re-exported by ../state.ts.
 import type {
+  BuiltLines,
   CalcRow,
   FactoryGroups,
   GroupAssignment,
@@ -82,7 +83,7 @@ export const carryOptions: [key: string, label: string, description: string][] =
   [
     'factories',
     'Progress on production lines',
-    'Production lines stay ticked where the new plan needs no more machines and no more input. A line that needs more machines keeps the ones you built, and its step says how many to add; one with fewer machines or another recipe says what is spare or what to switch, and one the new plan no longer has is listed as no longer needed.',
+    'The new plan counts the lines you built as standing, so it keeps and extends them rather than replacing them. Production lines stay ticked where the new plan needs no more machines and no more input. A line that needs more machines keeps the ones you built, and its step says how many to add; one with fewer machines or another recipe says what is spare or what to switch, and one the new plan no longer has is listed as no longer needed.',
   ],
   [
     'picked',
@@ -284,7 +285,7 @@ export function newProfileState(
 // no longer has keeps its count (built-match.ts): ticked, no longer needed; not ticked, to be
 // switched, until every line of its phase making its product is ticked, when the switch is done
 // and its machines stand on those lines.
-function standingLines(
+export function standingLines(
   source: Pick<SavedState, 'checks' | 'builtMachines'>,
   sourcePlan: RowsPlan | null | undefined,
   book: RecipeBook | undefined,
@@ -312,6 +313,30 @@ function standingLines(
     standing.set(key, count);
   }
   return standing;
+}
+// The production lines that stand in `source` (standingLines) as the planner's
+// `settings.builtLines` (#1176): { phase: { rowId: machines } }, row ids and phases sorted;
+// undefined when none stand. A recalculation that carries production lines sends it, so the solve
+// keeps and extends them (addBuiltLines in planner/model.ts); the carry then matches the new
+// plan's lines to the same counts.
+export function builtLinesOf(
+  source: Pick<SavedState, 'checks' | 'builtMachines'>,
+  sourcePlan: RowsPlan | null | undefined,
+  book: RecipeBook | undefined,
+): BuiltLines | undefined {
+  const lines: BuiltLines = {};
+  const standing = [...standingLines(source, sourcePlan, book)].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  for (const [key, count] of standing) {
+    const parts = calcKeyParts(key);
+    if (!parts || !safeKey(key) || !Number.isInteger(count) || count > 100000) continue;
+    // The row ids the planner accepts (ROW_ID in planner/settings.ts).
+    if (!/^[a-zA-Z0-9:_-]{1,160}$/.test(parts[1])) continue;
+    const [stageKey, rowId] = parts;
+    (lines[stageKey as StageKey] ??= {})[rowId] = count;
+  }
+  return Object.keys(lines).length ? lines : undefined;
 }
 // The source's production line ticks on the new plan's lines. A line ticked in the source stays
 // ticked only if the old plan had the same row with at least as many machines and inputs; a

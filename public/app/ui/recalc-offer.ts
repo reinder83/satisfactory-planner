@@ -16,7 +16,9 @@
 // another tab or on another device is refused (409, the plan the offer was made on is named):
 // nothing changes, and the tab opens the plan the profile has now.
 import { allowSwitch, toast, writeQueue } from '../api.ts';
+import { builtCount, openBuiltLines, withBuiltLines } from '../built-capacity.ts';
 import { isBusy, whileBusy } from '../busy.ts';
+import { plural } from '../format.ts';
 import { keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
 import { calculated, currentProfile, currentSave, loadContext, setWorkspace } from '../session.ts';
 import { render } from '../shell.ts';
@@ -44,9 +46,20 @@ export interface RecalcOffer {
 
 // The confirmation's text: what is recalculated, how the progress is carried and where the
 // current version is kept.
-export function offerQuestion(name: string, change: string, kept: string, transcribed: boolean) {
+export function offerQuestion(
+  name: string,
+  change: string,
+  kept: string,
+  transcribed: boolean,
+  builtLines = 0,
+) {
   return (
-    `Recalculates “${name}” ${change}. Its progress is carried: a production line marked ` +
+    `Recalculates “${name}” ${change}. ` +
+    // The lines that stand count as built (#1176): the solve keeps and extends them.
+    (builtLines
+      ? `${builtLines === 1 ? 'The production line' : 'The ' + plural(builtLines, 'production line')} you built ${builtLines === 1 ? 'is' : 'are'} kept and extended rather than replaced. `
+      : '') +
+    'Its progress is carried: a production line marked ' +
     'running that now needs more machines keeps the ones you built and says how many to add, ' +
     'one with fewer machines or another recipe says what is spare or what to switch, one the ' +
     'new plan no longer has is listed as no longer needed, and one that changed otherwise is ' +
@@ -62,10 +75,19 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     profileId = currentProfile.id,
     name = currentProfile.name,
     planCreatedAt = calculated.createdAt,
-    kept = keptName(saveId, name);
+    kept = keptName(saveId, name),
+    // The lines that stand now (#1176): every carry pick is on, so they count as built.
+    builtLines = openBuiltLines(),
+    settings = withBuiltLines(offer.settings, builtLines);
   const confirmed = await confirmAction({
     title: 'Recalculate this profile in place?',
-    body: offerQuestion(name, offer.change, kept, isTranscribed(calculated)),
+    body: offerQuestion(
+      name,
+      offer.change,
+      kept,
+      isTranscribed(calculated),
+      builtCount(builtLines).lines,
+    ),
     confirmLabel: 'Recalculate in place',
   });
   if (!confirmed || !(await allowSwitch())) return;
@@ -74,7 +96,7 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     try {
       await writeQueue;
       const done = await postRecalculation(
-        { saveId, profileId, name, backupName: kept, settings: offer.settings, planCreatedAt },
+        { saveId, profileId, name, backupName: kept, settings, planCreatedAt },
         calcProgress(button, 'Recalculating…'),
       );
       setWorkspace(done.workspace);

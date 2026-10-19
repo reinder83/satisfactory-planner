@@ -88,6 +88,8 @@ export {
   pickedRecipeUnlocks,
   recalculatedElsewhere,
   recalculatedProfile,
+  builtLinesOf,
+  standingLines,
   recalculateNeedsCalculated,
   retiredProfileType,
   roundUpNeedsCalculated,

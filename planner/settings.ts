@@ -242,7 +242,12 @@ const builtLinesSetting = (raw: unknown): { builtLines?: BuiltLines } => {
     const clean: Record<string, number> = {};
     for (const id of ids) {
       const count = lines[id];
-      if (!ROW_ID.test(id) || !Number.isInteger(count) || !(count >= 1 && count <= 100000))
+      if (
+        !ROW_ID.test(id) ||
+        !Number.isInteger(count) ||
+        (count as number) < 1 ||
+        (count as number) > 100000
+      )
         fail(BUILT_REFUSAL);
       clean[id] = count as number;
     }
