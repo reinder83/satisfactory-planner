@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–17). Later versions only add optional sections, so an older
+//                  version (1–18). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -18,7 +18,8 @@ import type { ExactClocks } from './calculated.ts';
 // migration mapped (handbookOrigin.mapping), 14 a group that makes items on site
 // (factoryGroups.local), 15 ticks a recalculation kept for review because of lines made on site
 // (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks), 17 a
-// factory-group link whose vehicles burn a fuel added in #1165 (laterVehicleFuels).
+// factory-group link whose vehicles burn a fuel added in #1165 (laterVehicleFuels), 18 a
+// factory-group link on Fluid Trucks (mode 'fluidTruck', #1177).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -39,7 +40,8 @@ export type StateVersion =
   | 14
   | 15
   | 16
-  | 17;
+  | 17
+  | 18;
 
 // Ticks a recalculation into a new profile could not carry onto one line of the new plan, because
 // of factory groups' own lines made on site (#876, newProfileState in state/carry.ts): a tick on a
@@ -148,12 +150,14 @@ export interface FactoryGroups {
   local?: Record<string, string[]>;
 }
 
-export type LinkMode = 'truck' | 'tractor' | 'explorer' | 'train' | 'drone';
+// 'fluidTruck' (#1177, game version 1.2): the link's fluids go unpackaged in Fluid Trucks' tanks;
+// a link on it is state version 18.
+export type LinkMode = 'truck' | 'tractor' | 'explorer' | 'train' | 'drone' | 'fluidTruck';
 export interface LinkTransport {
   mode: LinkMode;
   // Minutes for one vehicle there and back, loading included.
   roundTripMin: number;
-  // What a truck, tractor or explorer burns (preferences.ts vehicleFuels; one of
+  // What a truck, Fluid Truck, tractor or explorer burns (preferences.ts vehicleFuels; one of
   // laterVehicleFuels makes the state version 17); absent for a train
   // (electric) and a drone.
   fuel?: string;

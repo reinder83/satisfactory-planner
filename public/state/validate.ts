@@ -397,10 +397,11 @@ export const linkPlaces = [
 ];
 // The mines and existing supply as one place (group-links.ts MINES), as links were keyed before #231.
 export const MINES_PLACE = 'mines';
-const linkModes: LinkMode[] = ['truck', 'tractor', 'explorer', 'train', 'drone'];
+const linkModes: LinkMode[] = ['truck', 'tractor', 'explorer', 'train', 'drone', 'fluidTruck'];
 // The vehicles that burn fuel from their own slot; a train is electric and a drone's fuel
-// depends on the flight distance, which the planner does not know.
-export const fuelledModes: LinkMode[] = ['truck', 'tractor', 'explorer'];
+// depends on the flight distance, which the planner does not know. A Fluid Truck (#1177) burns
+// what a truck burns.
+export const fuelledModes: LinkMode[] = ['truck', 'tractor', 'explorer', 'fluidTruck'];
 // Link places added after version 7 introduced links, with the version that knows them: a new
 // place is new content an older release cannot read (#220).
 const laterPlaces = ['vehicles'];
@@ -431,6 +432,10 @@ const linksNeedV17 = (factoryGroups: FactoryGroups) =>
   Object.values(factoryGroups.links || {}).some(
     transport => !!transport.fuel && laterVehicleFuels.includes(transport.fuel),
   );
+// A link on Fluid Trucks (#1177, game version 1.2) is 18: a release before it refuses the mode
+// as malformed.
+const linksNeedV18 = (factoryGroups: FactoryGroups) =>
+  Object.values(factoryGroups.links || {}).some(transport => transport.mode === 'fluidTruck');
 // A link's transport as saved: a vehicle mode, a round trip of up to a day in minutes, and a
 // fuel for the vehicles that burn one.
 export function linkTransport(value: unknown): LinkTransport {
@@ -705,7 +710,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–17 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–18 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -716,11 +721,13 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].includes(state.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(
+      state.version as number,
+    )
   )
     fail(
-      // Compared as the old code did, so a version given as "18" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 17
+      // Compared as the old code did, so a version given as "19" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 18
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -803,40 +810,43 @@ export function validateState(state: unknown): ProgressState {
   // at exact clocks (exactClocks, #1066) are 16: an older release would drop the choice. A link
   // whose vehicles burn Packaged Oil, Packaged Heavy Oil Residue, Battery or Petroleum Coke
   // (laterVehicleFuels, #1165) is 17: an older release would refuse that fuel as malformed instead
-  // of asking for an update.
-  clean.version = linksNeedV17(clean.factoryGroups)
-    ? 17
-    : clean.exactClocks
-      ? 16
-      : clean.onSiteReview
-        ? 15
-        : clean.factoryGroups.local
-          ? 14
-          : clean.handbookOrigin?.mapping
-            ? 13
-            : clean.handbookOrigin
-              ? 12
-              : linksNeedV11(clean.factoryGroups)
-                ? 11
-                : clean.storageEdits.bayOrder
-                  ? 10
-                  : linksNeedV9(clean.factoryGroups)
-                    ? 9
-                    : clean.storageEdits.bayFloors
-                      ? 8
-                      : clean.factoryGroups.links
-                        ? 7
-                        : clean.storageEdits.hiddenFloors.length
-                          ? 6
-                          : clean.storageEdits.hiddenBays.length
-                            ? 5
-                            : hasAddedSlots(clean.storageEdits)
-                              ? 4
-                              : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                                ? 3
-                                : hasEdits(clean.storageEdits)
-                                  ? 2
-                                  : 1;
+  // of asking for an update. A link on Fluid Trucks (mode 'fluidTruck', #1177) is 18: an older
+  // release would refuse that mode as malformed.
+  clean.version = linksNeedV18(clean.factoryGroups)
+    ? 18
+    : linksNeedV17(clean.factoryGroups)
+      ? 17
+      : clean.exactClocks
+        ? 16
+        : clean.onSiteReview
+          ? 15
+          : clean.factoryGroups.local
+            ? 14
+            : clean.handbookOrigin?.mapping
+              ? 13
+              : clean.handbookOrigin
+                ? 12
+                : linksNeedV11(clean.factoryGroups)
+                  ? 11
+                  : clean.storageEdits.bayOrder
+                    ? 10
+                    : linksNeedV9(clean.factoryGroups)
+                      ? 9
+                      : clean.storageEdits.bayFloors
+                        ? 8
+                        : clean.factoryGroups.links
+                          ? 7
+                          : clean.storageEdits.hiddenFloors.length
+                            ? 6
+                            : clean.storageEdits.hiddenBays.length
+                              ? 5
+                              : hasAddedSlots(clean.storageEdits)
+                                ? 4
+                                : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                                  ? 3
+                                  : hasEdits(clean.storageEdits)
+                                    ? 2
+                                    : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

@@ -12,7 +12,8 @@
 //   taskEdits      build-plan step edits (blankTaskEdits), version 3
 //   factoryGroups  named production areas and row assignments (blankGroups), version 3;
 //                  links, the vehicle picked per group link, version 7; a link burning a
-//                  fuel added in #1165 (laterVehicleFuels), version 17
+//                  fuel added in #1165 (laterVehicleFuels), version 17; a link on Fluid
+//                  Trucks (mode 'fluidTruck', #1177), version 18
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
 //                  not place (validateOrigin), version 12; with what the migration mapped
 //                  (mapping, #606), version 13; no update op edits it

@@ -121,6 +121,9 @@ export interface AdaFacts {
   // The open phase's belt when it is one the player already has (#1068), better than its milestones
   // give: "Mk.6 belts (1,200/min)". Absent otherwise.
   ownedBelt?: string;
+  // Links between factories of the open phase that send their fluids by Fluid Truck (#1177);
+  // absent for none.
+  fluidTruckLinks?: number;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -594,6 +597,15 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.ownedBelt,
     text: facts =>
       `${facts.phaseLabel} carries its nodes on the ${facts.ownedBelt} you already have, better than its milestones give: its budgets and the belt advice count on them. Belts you already own are the cheapest upgrade there is.`,
+  },
+  {
+    // Links sending their fluids by Fluid Truck (#1177), as the Logistics page sets them.
+    id: 'fluid-trucks',
+    on: ['logistics'],
+    tone: 'calm',
+    when: facts => !!facts.fluidTruckLinks,
+    text: facts =>
+      `${facts.phaseLabel} sends fluids by Fluid Truck on ${facts.fluidTruckLinks === 1 ? '1 link' : `${facts.fluidTruckLinks} links`}: unpackaged, 3,200 m³ a tank, one fluid per tank. Fewer canisters, same round trips.`,
   },
   {
     id: 'on-site-pending',

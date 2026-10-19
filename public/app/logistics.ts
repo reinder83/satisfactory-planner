@@ -3,6 +3,7 @@
 // works out how many vehicles carry the link's items and what they burn. The choice is saved
 // per link in factoryGroups.links (state.ts); the flows come from group-links.ts.
 import { fuelledModes } from '../state.ts';
+import { phaseForTier } from '../preferences.ts';
 import { num, plural } from './format.ts';
 import { groupLinks, isSource, linkTransportFor, MINES, sourceItem } from './group-links.ts';
 import type { GroupLink } from './group-links.ts';
@@ -47,8 +48,12 @@ export const EXTRACT_BADGE = 'Water Extractors on site';
 // burnMW from its metadata powerConsumption, the fuel energy it uses while driving. A train is
 // electric (the Electric Locomotive draws 25-110 MW from the grid while moving) and a drone's
 // fuel depends on the distance flown, so neither has a burn figure here.
+// The Fluid Truck (#1177) came with game version 1.2, after that revision, so the dataset has
+// no figures for it: it carries FLUID_TRUCK_M3 in a tank instead of slots, and burns what the
+// Truck burns (75 MW), the issue's rule for a figure the repository lacks.
 export const VEHICLES: Record<LinkMode, { name: string; slots: number; burnMW: number }> = {
   truck: { name: 'Truck', slots: 48, burnMW: 75 },
+  fluidTruck: { name: 'Fluid Truck', slots: 0, burnMW: 75 },
   tractor: { name: 'Tractor', slots: 25, burnMW: 55 },
   explorer: { name: 'Explorer', slots: 12, burnMW: 90 },
   train: { name: 'Freight train', slots: 32, burnMW: 0 },
@@ -56,6 +61,24 @@ export const VEHICLES: Record<LinkMode, { name: string; slots: number; burnMW: n
 };
 // What one Fluid Freight Car holds, in m³.
 export const FLUID_CAR_M3 = 1600;
+// What one Fluid Truck's tank holds, in m³ (#1177): a tank takes one fluid, so each fluid of a
+// link has trucks of its own.
+export const FLUID_TRUCK_M3 = 3200;
+// The HUB tier whose milestones bring the Fluid Truck (#1177); phaseForTier maps it to Phase 3.
+// progression.json (the 1.1 data) has no milestone that unlocks it, so the phase alone decides.
+export const FLUID_TRUCK_TIER = 5;
+// Its phase, worked out when asked rather than when the module loads: the interface tests supply
+// the shared modules' names to the app as it starts (as flow.ts reads the lane marks).
+export const fluidTruckPhase = (): number => phaseForTier(FLUID_TRUCK_TIER);
+// Whether phase `stageKey` has the Fluid Truck: Phase 3 (Tier 5) on.
+export const fluidTruckUnlocked = (stageKey: string): boolean =>
+  Number(stageKey) >= fluidTruckPhase();
+// "Fluid Trucks come with Tier 5 (Phase 3): …", said where the phase shown has none yet.
+export const fluidTruckLater = (): string =>
+  `Fluid Trucks come with Tier ${FLUID_TRUCK_TIER} (Phase ${fluidTruckPhase()}): until then, package the fluids for a road vehicle.`;
+// Full tanks per minute a fluid flow fills (#1177): 160 m³/min is 0.05 Fluid Truck loads a minute,
+// whatever the round trip; the trucks a link needs are this times the round trip, rounded up.
+export const fluidTruckLoads = (rate: number): number => rate / FLUID_TRUCK_M3;
 // Freight cars per Electric Locomotive (#232): the owner's rule of thumb of one locomotive per
 // four cars. The wiki's Freight Car weight table has one locomotive pulling 5 fully loaded cars
 // up the steepest buildable incline (2 m ramps) and 13 up 1 m ramps, so four leaves a margin.
@@ -64,14 +87,39 @@ export const CARS_PER_LOCOMOTIVE = 4;
 // loaded and unloaded through both, so it moves at most two belts (or pipes) of a flow.
 export const PLATFORM_PORTS = 2;
 // The choices a link offers, in menu order; 'belt' is the default belt or pipe.
+// The Fluid Truck is offered only on a link that carries a fluid (linkModeOptions).
 export const LINK_MODES: ['belt' | LinkMode, string][] = [
   ['belt', 'Belt or pipe'],
   ['truck', 'Truck'],
+  ['fluidTruck', 'Fluid Truck'],
   ['tractor', 'Tractor'],
   ['explorer', 'Explorer'],
   ['train', 'Train'],
   ['drone', 'Drone'],
 ];
+// The menu of one link (#1177): every mode of LINK_MODES, the Fluid Truck only when the link
+// carries a fluid or is saved on it. Before its phase (fluidTruckUnlocked) it is listed disabled
+// with when it comes, unless the link is saved on it, so a saved choice always shows as picked.
+export function linkModeOptions(
+  items: { item: string }[],
+  fluids: Set<string>,
+  current: 'belt' | LinkMode,
+  stageKey: string,
+): { mode: 'belt' | LinkMode; label: string; disabled: boolean }[] {
+  const carriesFluid = items.some(entry => fluids.has(entry.item)),
+    unlocked = fluidTruckUnlocked(stageKey);
+  return LINK_MODES.filter(
+    ([mode]) => mode !== 'fluidTruck' || carriesFluid || current === mode,
+  ).map(([mode, label]) =>
+    mode === 'fluidTruck' && !unlocked
+      ? {
+          mode,
+          label: `${label} (Tier ${FLUID_TRUCK_TIER}, from Phase ${fluidTruckPhase()})`,
+          disabled: current !== mode,
+        }
+      : { mode, label, disabled: false },
+  );
+}
 
 export interface LinkLoad {
   // Vehicles on the link (trucks, tractors, explorers or drones), or 1 train.
@@ -96,6 +144,11 @@ export interface LinkLoad {
   fuelPerMin: number;
   // Fluids a truck, tractor, explorer or drone cannot carry: no packaged form.
   unpackable: string[];
+  // On Fluid Trucks (#1177): each fluid's trucks, the m³ each carries per trip (of
+  // FLUID_TRUCK_M3) and the full tanks its flow fills a minute (fluidTruckLoads); and the solid
+  // items, which a Fluid Truck cannot carry. Both empty for any other vehicle.
+  tanks: { item: string; vehicles: number; m3: number; loadsPerMin: number }[];
+  notFluid: string[];
 }
 
 // The load for items [{ item, rate }] (items/min, or m³/min for a fluid) on `transport`.
@@ -103,7 +156,8 @@ export interface LinkLoad {
 // holds); a slot holds one item type, so every item takes whole slots, and the vehicle count is
 // the smallest that fits each vehicle's share of a round trip's load into its slots. `lanes` is
 // the best belt (items/min) and pipe (m³/min) unlocked, which cap what one freight car moves
-// through its platform's two ports (PLATFORM_PORTS).
+// through its platform's two ports (PLATFORM_PORTS). Fluid Trucks (#1177) carry the fluids
+// unpackaged instead (fluidTruckLoad).
 export function linkLoad(
   items: { item: string; rate: number }[],
   transport: LinkTransport,
@@ -124,7 +178,17 @@ export function linkLoad(
     locomotives: 0,
     fuelPerMin: 0,
     unpackable: [],
+    tanks: [],
+    notFluid: [],
   };
+  const energyMJ = catalog.vehicleFuels?.find(f => f.name === transport.fuel)?.mj || 0;
+  const burn = (vehicles: number) =>
+    vehicle.burnMW && energyMJ ? (vehicles * vehicle.burnMW * 60) / energyMJ : 0;
+  if (transport.mode === 'fluidTruck') {
+    fluidTruckLoad(load, items, fluids, trip);
+    load.fuelPerMin = burn(load.vehicles);
+    return load;
+  }
   // [amount per round trip, amount per slot] for each item a slot can hold.
   const perTrip: [number, number][] = [];
   let solidRate = 0;
@@ -188,10 +252,29 @@ export function linkLoad(
     );
     load.slotsUsed = vehicle.slots;
   }
-  const vehicles = load.vehicles;
-  const energyMJ = catalog.vehicleFuels?.find(f => f.name === transport.fuel)?.mj || 0;
-  if (vehicle.burnMW && energyMJ) load.fuelPerMin = (vehicles * vehicle.burnMW * 60) / energyMJ;
+  load.fuelPerMin = burn(load.vehicles);
   return load;
+}
+
+// A link on Fluid Trucks (#1177): each fluid fills trucks of its own, as few as carry a round
+// trip's flow in tanks of FLUID_TRUCK_M3, unpackaged; a solid item cannot go in a tank.
+function fluidTruckLoad(
+  load: LinkLoad,
+  items: { item: string; rate: number }[],
+  fluids: Set<string>,
+  trip: number,
+) {
+  for (const { item, rate } of items) {
+    if (rate <= 0) continue;
+    if (!fluids.has(item)) {
+      load.notFluid.push(item);
+      continue;
+    }
+    const amount = rate * trip,
+      vehicles = Math.max(1, Math.ceil(amount / FLUID_TRUCK_M3 - 1e-9));
+    load.tanks.push({ item, vehicles, m3: amount / vehicles, loadsPerMin: fluidTruckLoads(rate) });
+    load.vehicles += vehicles;
+  }
 }
 
 // The fuel the links' vehicles burn in each phase of a plan, from the profile's start phase on
@@ -283,13 +366,30 @@ export function linkVehicleText(
         : load.fuelPerMin
           ? ` Up to ${num(load.fuelPerMin)} ${transport.fuel}/min if they never stop.`
           : '';
-    lines.push(
-      `${plural(load.vehicles, vehicle.name.toLowerCase())}, ${load.slotsUsed} of ${vehicle.slots} slots each trip.${fuel}`,
-    );
+    if (transport.mode === 'fluidTruck') lines.push(...tankLines(load, fuel));
+    else
+      lines.push(
+        `${plural(load.vehicles, vehicle.name.toLowerCase())}, ${load.slotsUsed} of ${vehicle.slots} slots each trip.${fuel}`,
+      );
   }
   for (const item of load.unpackable)
     lines.push(`${item} cannot be packaged: keep it on a pipe, or send it by train.`);
+  for (const item of load.notFluid)
+    lines.push(`${item} is not a fluid: a Fluid Truck carries only fluids, so keep it on a belt.`);
   return { lines, badge };
+}
+
+// The lines of a link on Fluid Trucks (#1177): "2 fluid trucks, 2,500 of 3,200 m³ each trip
+// (0.78 tank loads/min). Up to 12 Packaged Fuel/min if they never stop." for one fluid; with
+// several, a line per fluid and the total with the fuel.
+function tankLines(load: LinkLoad, fuel: string): string[] {
+  const tank = (entry: LinkLoad['tanks'][number]) =>
+    `${plural(entry.vehicles, 'fluid truck')}, ${num(entry.m3)} of ${num(FLUID_TRUCK_M3)} m³ each trip (${num(entry.loadsPerMin)} tank loads/min)`;
+  if (load.tanks.length === 1) return [`${tank(load.tanks[0]!)}.${fuel}`];
+  return [
+    ...load.tanks.map(entry => `${entry.item}: ${tank(entry)}.`),
+    `${plural(load.vehicles, 'fluid truck')} in all, one fluid each.${fuel}`,
+  ];
 }
 
 // How one rate travels on belts or pipes of the best mark (flow.ts lanePlan): the lane's mark and
@@ -367,6 +467,9 @@ export function linkItemWords(
   if (carrier.kind === 'extract') return () => 'Water Extractors here';
   if (carrier.kind === 'vehicle') {
     const words = 'by ' + VEHICLES[carrier.transport.mode].name.toLowerCase();
+    // A Fluid Truck carries only the fluids (#1177); a solid item stays on its belt.
+    if (carrier.transport.mode === 'fluidTruck')
+      return (item, rate) => (fluids.has(item) ? words : belts(item, rate));
     return () => words;
   }
   const trickle = trickleItems(link.items, fluids, lanes);
