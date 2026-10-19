@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../browser-api.ts';
-import { purities, recipeCostOf } from '../../preferences.ts';
+import { objectiveWords, purities, recipeCostOf } from '../../preferences.ts';
 import { allowSwitch, notesNotSaved, pending, save, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
@@ -250,6 +250,10 @@ function profileFooter() {
       ...(leftOutNote(settings.extraction) ? [leftOutNote(settings.extraction)] : []),
       // The recipe part cost the plan was calculated with (#1161), named only when not 1×.
       ...(recipeCostOf(settings) === 1 ? [] : [`${num(recipeCostOf(settings))}× recipe part cost`]),
+      // The objective it was calculated with (#1180), named only when not the fewest buildings.
+      ...(settings.objective === undefined
+        ? []
+        : ['Objective: ' + objectiveWords(settings.objective, true)]),
       ...(Number.isNaN(date.getTime())
         ? []
         : [

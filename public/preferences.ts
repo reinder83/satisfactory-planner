@@ -16,6 +16,7 @@
 //   presets.ts     node counts prefilled from the world settings
 //   mining.ts      mining and belts per phase (#1065): each phase's miner, clock, belts and
 //                  pipes, the budgets they give and the nodes a phase's draw taps
+//   objective.ts   what a plan keeps lowest (#1180): buildings, power, raw resources or a mix
 // build.ts ships each module to both editions as preferences/<name>.js; the Dockerfile copies
 // their sources for the server, which reaches this file through the planner.
 export {
@@ -47,6 +48,15 @@ export {
   vehicleFuels,
 } from './preferences/fuels.ts';
 export { helpText } from './preferences/help.ts';
+export {
+  OBJECTIVE_EXCHANGE,
+  OBJECTIVE_WEIGHT_MAX,
+  OBJECTIVE_WEIGHTS,
+  OBJECTIVES,
+  objectiveKind,
+  objectiveWeights,
+  objectiveWords,
+} from './preferences/objective.ts';
 export { firstTerms, glossary, termParts } from './preferences/glossary.ts';
 export {
   GUIDED_TOPUP_RATE,
