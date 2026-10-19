@@ -14,7 +14,14 @@ import {
   type PhaseCarry,
 } from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
-import { builtLine, builtNote, builtShare, builtTable, type BuiltLine } from '../built-lines.ts';
+import {
+  builtIntro,
+  builtLine,
+  builtNote,
+  builtShare,
+  builtTable,
+  type BuiltLine,
+} from '../built-lines.ts';
 import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
 import { burnNote, COAL_GENERATOR_FUELS } from '../sink-cause.ts';
@@ -553,8 +560,12 @@ export function calcExpansion(id: string) {
 
 // What a line the phase before marked running already does in the phase shown, and what this
 // phase changes on it (carriedText in handover.ts, #1069), for the production line dialog under
-// its expansion table; '' for any other line.
-export const carriedLineText = (row: CalcRow): string => carriedStepText(row, phase()).trim();
+// its expansion table; for a line a recalculation grew, its step's opening sentence instead
+// (builtIntro, #1174); '' for any other line.
+export function carriedLineText(row: CalcRow): string {
+  const grown = grownLine(row);
+  return grown ? builtIntro(grown, row, itemRate) : carriedStepText(row, phase()).trim();
+}
 
 // The lines of the phase shown that run from the phase before and are not ticked here yet, with
 // the share of each that already runs (phaseCarry in handover.ts, #1069). It reads the saved
