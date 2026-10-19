@@ -20,6 +20,10 @@
   mixed belts and says so under its badge.
   A Space Elevator part delivered in full (its saved count at the target, #1062) is dimmed on its
   link to the elevator and marked "delivered"; the link stays, as the plan has it.
+  Fluid Trucks (#1177, game version 1.2): a link carrying a fluid also offers the Fluid Truck
+  (linkModeOptions in logistics.ts), which takes the fluids unpackaged, 3,200 m³ a tank; before
+  Tier 5 (Phase 3) the option is listed disabled with when it comes, and a link saved on it says
+  so under its figures.
   Mining and belts per phase (#1065): a mined resource's card names the nodes the phase's draw
   taps (stageMiningAdvice in public/mining.ts), and while the best belt or pipe mark's milestone is
   not ticked a line under the intro says which one and the mark to plan with until then
@@ -44,9 +48,11 @@ import {
   carrierTransport,
   DEFAULT_TRIP_MIN,
   EXTRACT_BADGE,
-  LINK_MODES,
+  FLUID_TRUCK_LATER,
+  fluidTruckUnlocked,
   linkBeltBadge,
   linkCarrier,
+  linkModeOptions,
   linkSiblings,
   linkTotal,
   linkTransportUpdate,
@@ -96,7 +102,7 @@ const view = computed(() =>
       const items = link.items.map(({ item, rate }) => {
         const fluid = FLUIDS.has(item),
           pack =
-            fluid && transport && transport.mode !== 'train'
+            fluid && transport && transport.mode !== 'train' && transport.mode !== 'fluidTruck'
               ? workspace.catalog.packaged?.[item]?.item
               : '',
           done = link.to === OUTSIDE.delivery && delivered.has(item);
@@ -119,6 +125,9 @@ const view = computed(() =>
         toName: name(link.to),
         transport,
         mode,
+        modes: linkModeOptions(link.items, FLUIDS, mode, stageKey()),
+        // A link saved on Fluid Trucks shown in a phase before them (#1177).
+        fluidTruckLater: mode === 'fluidTruck' && !fluidTruckUnlocked(stageKey()),
         fuelled: !!transport && fuelledModes.includes(transport.mode),
         items,
         packed: items.filter(item => item.pack),
@@ -402,8 +411,13 @@ function recalculate(event: Event) {
                         })
                       "
                     >
-                      <option v-for="[mode, label] in LINK_MODES" :key="mode" :value="mode">
-                        {{ label }}
+                      <option
+                        v-for="option in link.modes"
+                        :key="option.mode"
+                        :value="option.mode"
+                        :disabled="option.disabled"
+                      >
+                        {{ option.label }}
                       </option>
                     </select></label
                   >
@@ -446,6 +460,9 @@ function recalculate(event: Event) {
                 <template v-if="link.transport">
                   <p v-for="(line, i) in link.load" :key="i" class="small" data-link-load>
                     {{ line }}
+                  </p>
+                  <p v-if="link.fluidTruckLater" class="small muted" data-fluid-truck-later>
+                    {{ FLUID_TRUCK_LATER }}: until then, package the fluids for a road vehicle.
                   </p>
                   <p v-if="link.packed.length" class="small muted">
                     Packaged for the trip:

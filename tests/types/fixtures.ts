@@ -232,6 +232,20 @@ export const version17 = {
   },
 } satisfies SavedState;
 
+// Version 18: a link on Fluid Trucks (#1177, mode 'fluidTruck'): Crude Oil driven from its
+// source to the plates group in tanks, burning Packaged Fuel.
+export const version18 = {
+  ...version17,
+  version: 18,
+  factoryGroups: {
+    ...version17.factoryGroups,
+    links: {
+      ...version17.factoryGroups.links,
+      'supply/Crude Oil:fg-plates1': { mode: 'fluidTruck', roundTripMin: 6, fuel: 'Packaged Fuel' },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -252,6 +266,7 @@ export const states: [SavedState, number][] = [
   [version15, 15],
   [version16, 16],
   [version17, 17],
+  [version18, 18],
 ];
 
 export const backup = {
