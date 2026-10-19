@@ -296,14 +296,15 @@ test('every node of a resource left out: the phase does not fit, and its draft s
 
 test('a plan that leaves nothing out is the plan it was, byte for byte', () => {
   const plain = planFor(SURVEY);
-  for (const none of [
+  const nothing: Partial<Survey>[] = [
     {},
     { excludedNodes: {} },
     {
       excludedNodes: { 'Iron Ore': { impure: 0, normal: 0, pure: 0 } },
       excludedWells: { 'Crude Oil': { impure: 0, normal: 0, pure: 0 } },
     },
-  ]) {
+  ];
+  for (const none of nothing) {
     const again = planFor({ ...SURVEY, ...none });
     assert.equal('excludedNodes' in again.settings.extraction!, false);
     assert.equal('excludedWells' in again.settings.extraction!, false);

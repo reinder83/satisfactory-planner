@@ -428,7 +428,7 @@ test('the oil screen totals its fluid rows in m³/min, an ore row in /min (#363)
   survey(3, { purity: 'vanilla', distribution: 'original' }, { extraction });
   // The counting tables, not the folded "Leave nodes out of this plan" ones (#1183).
   const totals = () =>
-    $('.count-table:not(.leave-out-table) .count-row').map(row => [
+    $$('.count-table:not(.leave-out-table) .count-row').map(row => [
       row.querySelector('.count-name')!.textContent,
       row.querySelector('.count-total')!.textContent.replace(/ /g, ' '),
     ]);

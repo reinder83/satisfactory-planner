@@ -20,13 +20,7 @@ import {
   waterClock,
 } from './preferences.ts';
 import { listNames, localeNumber, powerAmount } from './wording.ts';
-import type {
-  ItemRates,
-  MiningSource,
-  StageMining,
-  StoredSettings,
-  StoredStage,
-} from './types/index.ts';
+import type { ItemRates, MiningSource, StageMining, StoredStage } from './types/index.ts';
 import type { MiningAdvice, MiningRun, MiningSettings } from './preferences/mining.ts';
 import type { ExtractorOption } from './preferences/extraction.ts';
 import type { StepTable } from './step-table.ts';
@@ -48,7 +42,7 @@ const MINED_FLUIDS = ['Crude Oil', 'Nitrogen Gas'];
 // nodes the node survey does not leave out of the plan (budgetLimit, #1183).
 export const stageBudget = (
   stage: Pick<StoredStage, 'mining'> | undefined,
-  settings: Pick<StoredSettings, 'limits'> & Partial<Pick<StoredSettings, 'extraction'>>,
+  settings: Pick<MiningSettings, 'limits' | 'extraction'>,
   resource: string,
 ): number => stage?.mining?.budgets[resource] ?? budgetLimit(settings, resource);
 
@@ -909,5 +903,5 @@ export const budgetShareWords = (row: Pick<PhaseBudgetRow, 'low' | 'high'>): str
 // Each resource's budget in a stage, for a quick lookup: { resource: budget }.
 export const stageBudgets = (
   stage: Pick<StoredStage, 'mining'> | undefined,
-  settings: Pick<StoredSettings, 'limits'> & Partial<Pick<StoredSettings, 'extraction'>>,
+  settings: Pick<MiningSettings, 'limits' | 'extraction'>,
 ): ItemRates => ({ ...budgetLimits(settings), ...(stage?.mining?.budgets ?? {}) });
