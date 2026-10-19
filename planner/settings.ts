@@ -8,6 +8,8 @@ import {
   distributions,
   purities,
   ownedGeneratorCounts,
+  OBJECTIVE_WEIGHT_MAX,
+  OBJECTIVE_WEIGHTS,
   powerOptions,
   RECIPE_COSTS,
   resourceDefaults,
@@ -339,6 +341,29 @@ const recipeCostSetting = (value: unknown): { recipeCost?: number } => {
     fail('Choose a recipe part cost from 0.25× to 2×.');
   return { recipeCost: value };
 };
+// What the plan keeps lowest (#1180): `{ objective }` for 'power', 'raw' or a weighted mix of
+// whole weights from 0 to OBJECTIVE_WEIGHT_MAX for buildings, power and raw resources, at least one
+// above 0 (a new object with just those three, in that order); nothing for 'buildings' or absent,
+// so a plan for the fewest buildings, and every plan stored before it, has no field and
+// calculates exactly as before. Any other value is refused, never corrected.
+const OBJECTIVE_REFUSAL = `Choose what the plan keeps lowest: buildings, power, raw resources, or a weighted mix with whole weights from 0 to ${OBJECTIVE_WEIGHT_MAX}, at least one above 0.`;
+const objectiveSetting = (value: unknown): Pick<CurrentSettings, 'objective'> => {
+  if (value === undefined || value === 'buildings') return {};
+  if (value === 'power' || value === 'raw') return { objective: value };
+  if (!isRecord(value) || Object.keys(value).length !== OBJECTIVE_WEIGHTS.length)
+    fail(OBJECTIVE_REFUSAL);
+  const weight = (name: (typeof OBJECTIVE_WEIGHTS)[number]): number => {
+    const given = value[name];
+    return Number.isInteger(given) &&
+      (given as number) >= 0 &&
+      (given as number) <= OBJECTIVE_WEIGHT_MAX
+      ? (given as number)
+      : fail(OBJECTIVE_REFUSAL);
+  };
+  const weights = { buildings: weight('buildings'), power: weight('power'), raw: weight('raw') };
+  if (!OBJECTIVE_WEIGHTS.some(name => weights[name] > 0)) fail(OBJECTIVE_REFUSAL);
+  return { objective: weights };
+};
 // The generators the player already has (#1068): `{ ownedGenerators: { building: count } }` with
 // only the known kinds (OWNED_GENERATORS in public/preferences/fuels.ts) and whole counts from 1,
 // or nothing, so the field is absent unless one is entered.
@@ -439,6 +464,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     sloopReserved: reservedUses(input.sloopReserved),
     amplifySloops: number(input.amplifySloops, 0, 106, 0),
     goal: choice(input.goal, ['minimal', 'balanced', 'timed', 'maximum'], 'balanced'),
+    // What the plan keeps lowest (#1180): absent for the fewest buildings, so settings without
+    // it, and every plan stored before it, stay as they were.
+    ...objectiveSetting(input.objective),
     phaseTime: choice(input.phaseTime, ['every', 'final'], 'every'),
     hours: number(input.hours, 0.25, 2000, 8),
     roundRates: input.roundRates !== false,

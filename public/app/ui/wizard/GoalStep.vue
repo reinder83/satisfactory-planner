@@ -1,6 +1,7 @@
 <!--
   All settings step 3, goal: the goal cards (radio "goal", with the one these settings suggest
-  marked), the profile name (blank until one is typed: the profile is then named after its goal,
+  marked), what the plan keeps lowest (ObjectiveChoice.vue, #1180), the profile name (blank until
+  one is typed: the profile is then named after its goal,
   what changed and the date, profileNameOf in wizard/wizard.ts, #1071), hours per phase, what the
   target time applies to, and the rounding and whole-machine checkboxes. readWizard reads the
   two checkboxes only on this step, since an unticked box is absent from the form. Under the
@@ -18,6 +19,7 @@ import { estimate } from '../../wizard/estimate.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
+import ObjectiveChoice from './ObjectiveChoice.vue';
 import SelectField from '../form/SelectField.vue';
 import StepHeading from '../form/StepHeading.vue';
 import Term from '../Term.vue';
@@ -38,6 +40,7 @@ const view = computed(() =>
       recommended: settings.multiplier > 5 ? 'timed' : 'balanced',
       // The goal is always one of the catalog's.
       name: wizardDraft.name,
+      objective: settings.objective,
       hours: settings.hours,
       phaseTime: settings.phaseTime || 'every',
       roundRates: !!settings.roundRates,
@@ -78,6 +81,7 @@ const view = computed(() =>
       <p>{{ goal.description }}</p></label
     >
   </div>
+  <ObjectiveChoice :objective="view.objective" />
   <div class="form-grid">
     <InputField
       label="Profile name"

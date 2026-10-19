@@ -83,6 +83,19 @@ export interface Survey {
   used?: ItemRates;
 }
 
+// The weights of a weighted objective (#1180): whole numbers from 0 to 10, at least one above 0.
+// One building weighs as much as 10 MW or 10 raw resources per minute, each times its weight
+// (OBJECTIVE_EXCHANGE in public/preferences/objective.ts).
+export interface ObjectiveWeights {
+  buildings: number;
+  power: number;
+  raw: number;
+}
+// What a plan keeps lowest besides the fewest buildings (#1180): `settings.objective`.
+export type PlanObjective = 'power' | 'raw' | ObjectiveWeights;
+// The choice an objective is (objectiveKind in public/preferences/objective.ts).
+export type ObjectiveKind = 'buildings' | 'power' | 'raw' | 'weighted';
+
 // Normalised settings, as settings() in planner.ts returns them. Units: GW for power,
 // % for utilityPercent, per minute for rates and limits, hours per phase.
 export interface CurrentSettings {
@@ -105,6 +118,11 @@ export interface CurrentSettings {
   // planner/recipes.ts). One of RECIPE_COSTS in public/preferences/world.ts other than 1. Absent
   // at 1× and from every plan made before it, which therefore calculates exactly as before.
   recipeCost?: number;
+  // What the plan keeps lowest (#1180, All settings step 3): 'power', 'raw' or a weighted mix
+  // (ObjectiveWeights). Absent means the fewest buildings, as every plan made before it, which
+  // therefore calculates exactly as before (objectiveWeights in public/preferences/objective.ts,
+  // read by the LP's costs in planner/model.ts).
+  objective?: PlanObjective;
   availablePowerGW: number;
   recipes: 'standard' | 'all' | 'custom';
   pureIngots: boolean;
