@@ -6808,6 +6808,47 @@ th.resource-cell {
   vertical-align: middle;
   margin-right: 6px;
 }
+/* The node survey's "Leave nodes out of this plan" (#1183, survey/LeaveOut.vue): folded under a
+   counting screen's tables, framed like the alternates you already own. */
+.leave-out {
+  margin: 16px 0 4px;
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+}
+.leave-out > summary {
+  padding: 10px 13px;
+  cursor: pointer;
+  font-family: var(--head);
+  letter-spacing: 0.06em;
+  color: var(--bright);
+}
+.leave-out[open] > summary {
+  border-bottom: 1px solid var(--line2);
+}
+.leave-out > p,
+.leave-out > .count-table,
+.leave-out > .leave-out-heading {
+  margin-left: 13px;
+  margin-right: 13px;
+}
+.leave-out > p {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+.leave-out > .count-table:last-child {
+  margin-bottom: 13px;
+}
+.leave-out-heading {
+  margin-top: 14px;
+  margin-bottom: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.leave-out-table .count-row {
+  background: var(--panel);
+}
 @media (max-width: 860px) {
   .count-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));

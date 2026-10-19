@@ -426,8 +426,9 @@ test('the oil screen totals its fluid rows in m³/min, an ore row in /min (#363)
     'Nitrogen Gas': { impure: 1, normal: 0, pure: 0 },
   };
   survey(3, { purity: 'vanilla', distribution: 'original' }, { extraction });
+  // The counting tables, not the folded "Leave nodes out of this plan" ones (#1183).
   const totals = () =>
-    $$('.count-row').map(row => [
+    $('.count-table:not(.leave-out-table) .count-row').map(row => [
       row.querySelector('.count-name')!.textContent,
       row.querySelector('.count-total')!.textContent.replace(/ /g, ' '),
     ]);

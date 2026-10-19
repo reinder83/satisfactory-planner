@@ -67,6 +67,8 @@ import { handoverLines } from './handover.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
+// The nodes a plan's node survey leaves out of it (#1183).
+import { leftOutWords } from '../mining.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
 import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
@@ -433,6 +435,10 @@ function adaFacts(): AdaFacts {
     requiredOnly,
     ...keptFacts(storedStage),
     ...ownedGeneratorFacts(storedStage),
+    // The nodes the open plan's node survey leaves out of it (#1183), only when it leaves some.
+    ...(leftOutWords(calculated?.settings.extraction)
+      ? { leftOutNodes: leftOutWords(calculated?.settings.extraction) }
+      : {}),
     // The recipe part cost the open plan was calculated with (#1161), only when not 1×.
     ...(calculated?.settings.recipeCost && calculated.settings.recipeCost !== 1
       ? { recipeCost: calculated.settings.recipeCost }

@@ -2,6 +2,7 @@
 // constraints and variables, the solve and the check of its result.
 // Re-exported by ../planner.ts.
 import {
+  budgetLimit,
   droneSupply,
   extractionMWPerUnit,
   phaseMining,
@@ -166,9 +167,11 @@ export const phaseContext = (
   power: phasePower(config, phase),
   mining: config.phaseMining ? phaseMining(config, phase) : null,
 });
-// The phase's budget for a raw resource: its mining's (#1065), else the settings'.
+// The phase's budget for a raw resource: its mining's (#1065), else the settings', held to the
+// nodes the node survey does not leave out of the plan (budgetLimit, #1183; the entered budget
+// itself when it leaves none out).
 export const phaseBudget = (context: Pick<PhaseContext, 'config' | 'mining'>, item: string) =>
-  context.mining ? context.mining.budgets[item]! : context.config.limits[item]!;
+  context.mining ? context.mining.budgets[item]! : budgetLimit(context.config, item);
 // The phase's power figures (see phasePower).
 interface PhasePower {
   utilityFactor: number;

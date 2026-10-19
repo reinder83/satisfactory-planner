@@ -55,6 +55,10 @@ import {
   phaseMining,
   OWNED_GENERATORS,
   ownedGeneratorCounts,
+  budgetLimit,
+  budgetLimits,
+  leftOutCounts,
+  withinCounts,
 } from '../public/preferences.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -185,6 +189,12 @@ function ui() {
     // The generators the player already has (#1068): ADA and the wizard reader.
     OWNED_GENERATORS,
     ownedGeneratorCounts,
+    // The nodes a node survey leaves out of the plan (#1183): the budgets, the words and the
+    // survey reader.
+    budgetLimit,
+    budgetLimits,
+    leftOutCounts,
+    withinCounts,
   });
   vm.runInContext(source, context);
   context.catalogData = catalog();
