@@ -52,6 +52,7 @@ const SHARED = [
   'preferences/guided.ts',
   'preferences/help.ts',
   'preferences/mining.ts',
+  'preferences/objective.ts',
   'preferences/presets.ts',
   'preferences/storage.ts',
   'preferences/world.ts',

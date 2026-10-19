@@ -596,6 +596,25 @@ test('ADA names the recipe part cost a plan was calculated with, when not 1× (#
   }
 });
 
+test('ADA names the objective a plan was calculated with, when not the fewest buildings (#1180)', () => {
+  for (const view of ['plan', 'resources']) {
+    const line = (objective?: string) =>
+      adaRemarks(facts({ view, ...(objective === undefined ? {} : { objective }) })).find(
+        r => r.id === 'objective',
+      );
+    assert.equal(line('least power')!.tone, 'calm');
+    assert.equal(
+      line('least power')!.text,
+      "This plan's objective is least power, not the fewest buildings: it may build more machines to keep that low, and every number here already counts it. Efficiency has many definitions; you picked one.",
+    );
+    assert.match(
+      line('weighted mix (buildings 2, power 1, raw 0)')!.text,
+      /objective is weighted mix \(buildings 2, power 1, raw 0\), not/,
+    );
+    assert.equal(line(), undefined, 'absent means the fewest buildings');
+  }
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

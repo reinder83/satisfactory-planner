@@ -4,6 +4,8 @@
 import {
   droneSupply,
   extractionMWPerUnit,
+  OBJECTIVE_EXCHANGE,
+  objectiveWeights,
   phaseMining,
   sourceMWPerUnit,
   sourceYield,
@@ -348,8 +350,9 @@ export function buildModel(
   );
   Object.keys(demands.demand).forEach(item => allItems.add(item));
   // The objective. Normally minimise `cost`: one per machine-equivalent, plus a tiny power term
-  // that breaks ties towards lower consumption. Under `maximum`, maximise `gain`, the goal
-  // variable's level, then re-solve for cost (see solveModel).
+  // that breaks ties towards lower consumption, or what the plan's objective prices (#1180,
+  // lineCost and sourceCost). Under `maximum`, maximise `gain`, the goal variable's level, then
+  // re-solve for cost (see solveModel).
   const model: LpModel = {
     optimize: context.maximum ? 'gain' : 'cost',
     opType: context.maximum ? 'max' : 'min',
@@ -509,12 +512,13 @@ function recipeCoefficients(
   { config, power, loadBound }: PhaseContext,
   routes: Routes,
 ) {
+  const powerMW =
+    recipe.power < 0
+      ? recipe.power * (1 + power.boost)
+      : recipe.power * config.powerFactor * power.utilityFactor;
   const coefficients: Record<string, number> = {
-    cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
-    power:
-      recipe.power < 0
-        ? recipe.power * (1 + power.boost)
-        : recipe.power * config.powerFactor * power.utilityFactor,
+    cost: lineCost(config, recipe, powerMW),
+    power: powerMW,
   };
   // A capped solve (#1086, load.ts) bounds the non-nuclear generators' output.
   if (loadBound && recipe.power < 0 && recipe.machine !== 'Nuclear Power Plant')
@@ -526,6 +530,43 @@ function recipeCoefficients(
     for (const [balance, part] of routes(recipe, item, 'in'))
       coefficients[balance] = (coefficients[balance] || 0) - rate * part;
   return coefficients;
+}
+// The objective (#1180, settings.objective, objectiveWeights in public/preferences/objective.ts).
+// For the fewest buildings (no field, every plan made before it) a line costs one per
+// machine-equivalent plus a tiny power term that breaks ties towards lower consumption, and a raw
+// resource almost nothing, exactly as before. Otherwise a line costs its buildings weight, plus
+// its power weight per OBJECTIVE_EXCHANGE.mw of the MW it draws (`powerMW`, its power
+// coefficient; a generator's is negative and counts as none), and a raw source its raw weight per
+// OBJECTIVE_EXCHANGE.raw items it mines (Water never runs out, so it costs none) plus its power
+// weight for its extraction power. A buildings weight of 0 still charges TIE_BUILDING per
+// machine-equivalent, so of two plans with the same power or raw draw the one with fewer
+// buildings wins.
+const TIE_BUILDING = 0.01;
+export function lineCost(config: CurrentSettings, recipe: PoolRecipe, powerMW: number): number {
+  const tie = recipe.power > 0 ? recipe.power / 100000 : 0;
+  const weights = objectiveWeights(config.objective);
+  if (!weights) return 1 + tie;
+  return (
+    (weights.buildings || TIE_BUILDING) +
+    tie +
+    (weights.power * Math.max(0, powerMW)) / OBJECTIVE_EXCHANGE.mw
+  );
+}
+// A raw source's cost per item: `base` (its tiny cost, which taps the best nodes first) and, under
+// another objective, its raw and power weights (see lineCost). `powerMW` is its power coefficient.
+export function sourceCost(
+  config: CurrentSettings,
+  item: string,
+  powerMW: number,
+  base: number,
+): number {
+  const weights = objectiveWeights(config.objective);
+  if (!weights) return base;
+  return (
+    base +
+    (item === 'Water' ? 0 : weights.raw / OBJECTIVE_EXCHANGE.raw) +
+    (weights.power * Math.max(0, powerMW)) / OBJECTIVE_EXCHANGE.mw
+  );
 }
 // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
 // a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,
@@ -578,15 +619,17 @@ function addSources(
     model.constraints['limit:' + item] = { max: ignoreLimits ? 1e7 : budget };
     const kinds = mining?.sources[item];
     if (mining && kinds) addNodeKinds(model, context, item, kinds);
-    else
+    else {
+      const powerMW =
+        (mining ? waterMWPerUnit(waterClock(mining)) : extractionMWPerUnit(item, equipment)) *
+        config.powerFactor;
       model.variables['raw:' + item] = {
-        cost: 0.0001,
+        cost: sourceCost(config, item, powerMW, 0.0001),
         ['item:' + item]: 1,
         ['limit:' + item]: 1,
-        power:
-          (mining ? waterMWPerUnit(waterClock(mining)) : extractionMWPerUnit(item, equipment)) *
-          config.powerFactor,
+        power: powerMW,
       };
+    }
     // A draft's measurement (#1066): how far the budget must be raised, at a cost that outweighs
     // the machines it could save, up to the budget again plus 600/min (the modest bound that
     // keeps the integer search stable, as the doubled budgets it replaces did).
@@ -649,11 +692,12 @@ function addNodeKinds(
   );
   ordered.forEach((kind, rank) => {
     const name = item + '@' + kind.kind;
+    const powerMW = sourceMWPerUnit(kind, clock) * config.powerFactor;
     model.variables['raw:' + name] = {
-      cost: 0.0001 * (1 + rank / 100),
+      cost: sourceCost(config, item, powerMW, 0.0001 * (1 + rank / 100)),
       ['item:' + item]: 1,
       ['limit:' + item]: 1,
-      power: sourceMWPerUnit(kind, clock) * config.powerFactor,
+      power: powerMW,
       ...(ignoreLimits || overBudget ? {} : { ['nodes:' + name]: 1 }),
     };
     if (!ignoreLimits && !overBudget)
