@@ -195,7 +195,9 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
       ticksPhase(context.plan, context.state?.settings.phase),
       alternates,
     );
-  const settings = structuredClone(context.plan.settings);
+  // The built lines the plan counted are worked out again before each calculation
+  // (withDraftBuiltLines, #1176), from the profile as it is then.
+  const settings = withBuiltLines(structuredClone(context.plan.settings), undefined);
   const wizardDraft = newDraft(
     saveId,
     existing,
@@ -244,7 +246,10 @@ function startingSettings(existing: SaveSummary | undefined): WizardSettings {
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
   const previous: WizardSettings | undefined = selected?.settings;
   return previous
-    ? { ...structuredClone(previous), mamRecipes: mamRecipesShown(previous) }
+    ? {
+        ...withBuiltLines(structuredClone(previous), undefined),
+        mamRecipes: mamRecipesShown(previous),
+      }
     : freshSettings();
 }
 
@@ -313,9 +318,7 @@ function newDraft(
     name: '',
     // A plan the wizard calculates fills protected storage from surplus first (#1061), also when
     // it starts from a profile calculated before.
-    // The built lines of the plan it starts from are worked out again before each calculation
-    // (withDraftBuiltLines, #1176), from the profile it carries from as it is then.
-    settings: { ...withBuiltLines(settings, undefined), storageFromSurplus: true },
+    settings: { ...settings, storageFromSurplus: true },
     preview: null,
     carryFrom: existing?.activeProfile || null,
     carry: Object.fromEntries(carryOptions.map(([key]) => [key, true])),
