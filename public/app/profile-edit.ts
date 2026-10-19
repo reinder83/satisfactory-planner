@@ -345,6 +345,8 @@ export function settingsChanges(
     'mamRecipes',
     'recipeCost',
     'objective',
+    // The lines that stand (#1176) are no setting the user changed: Review says they are kept.
+    'builtLines',
     ...SETTING_LABELS.map(([key]) => key),
   ]);
   const others = Object.keys(after).filter(

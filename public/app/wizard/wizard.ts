@@ -18,6 +18,7 @@ import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../prog
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { beginnerMode, beginnerStock } from '../beginner.ts';
+import { sourceBuiltLines, withBuiltLines } from '../built-capacity.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { defaultProfileName } from '../profile-edit.ts';
@@ -194,7 +195,9 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
       ticksPhase(context.plan, context.state?.settings.phase),
       alternates,
     );
-  const settings = structuredClone(context.plan.settings);
+  // The built lines the plan counted are worked out again before each calculation
+  // (withDraftBuiltLines, #1176), from the profile as it is then.
+  const settings = withBuiltLines(structuredClone(context.plan.settings), undefined);
   const wizardDraft = newDraft(
     saveId,
     existing,
@@ -243,7 +246,10 @@ function startingSettings(existing: SaveSummary | undefined): WizardSettings {
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
   const previous: WizardSettings | undefined = selected?.settings;
   return previous
-    ? { ...structuredClone(previous), mamRecipes: mamRecipesShown(previous) }
+    ? {
+        ...withBuiltLines(structuredClone(previous), undefined),
+        mamRecipes: mamRecipesShown(previous),
+      }
     : freshSettings();
 }
 
@@ -693,6 +699,7 @@ export function wizardError(form: HTMLFormElement | null, error: Error) {
 export async function createProfile(form: HTMLFormElement, button: HTMLElement | null) {
   const wizardDraft = draft();
   readCarry(form);
+  await withDraftBuiltLines(wizardDraft);
   const created = await post<CreatedProfile>(
     '/api/profiles',
     {
@@ -748,6 +755,7 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   // An edit always has a save: Edit settings opens one of its profiles.
   const saveId = wizardDraft.saveId!,
     kept = keptName(saveId, edit.name);
+  await withDraftBuiltLines(wizardDraft);
   const done = await postRecalculation(
     {
       saveId,
@@ -825,6 +833,20 @@ export async function moveWizard(target: number) {
   await calculateWizard(form);
 }
 
+// The draft's settings with the production lines that stand in the profile it carries from
+// (#1176, built-capacity.ts), when it carries progress on production lines; without them
+// otherwise. Review's preview, Create profile and Recalculate in place each send them, so the
+// solve keeps and extends what stands, and Create stores the plan Review showed while the carry
+// panel's choices are as they were then.
+async function withDraftBuiltLines(wizardDraft: WizardDraft) {
+  const lines = await sourceBuiltLines(
+    wizardDraft.saveId,
+    wizardDraft.carryFrom,
+    wizardDraft.carry,
+  );
+  wizardDraft.settings = withBuiltLines(wizardDraft.settings, lines);
+}
+
 // Shared by both modes: the guided questions and the five-step wizard reach the
 // same Review with the same settings, so they calculate through one path.
 // Posts the settings to /api/preview (server, or the browser worker in the
@@ -842,6 +864,7 @@ export async function calculateWizard(form: HTMLFormElement | null) {
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]'),
     label = submit?.textContent ?? '';
   try {
+    await withDraftBuiltLines(wizardDraft);
     wizardDraft.preview = await post<StoredCalculatedPlan>(
       '/api/preview',
       { settings: wizardDraft.settings },

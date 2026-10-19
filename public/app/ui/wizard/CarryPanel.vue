@@ -11,6 +11,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { carryOptions, pickedRecipeUnlocks } from '../../../state.ts';
+import { builtKeptText } from '../../built-capacity.ts';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
@@ -27,6 +28,9 @@ const view = computed(() =>
       picked = pickedRecipeUnlocks(wizardDraft!.preview).length;
     return {
       editing: !!wizardDraft!.edit,
+      // A new profile's preview keeps the lines that stand in the profile it carries from (#1176);
+      // Edit settings says so in What changes (EditDiff.vue).
+      built: wizardDraft!.edit ? '' : builtKeptText(wizardDraft!.preview?.settings.builtLines),
       profiles: save.profiles.map(p => ({ id: p.id, name: p.name })),
       source: source.id,
       // The source is a transcribed handbook, which the new plan solves afresh (#480).
@@ -79,6 +83,7 @@ const view = computed(() =>
         ></label
       >
     </div>
+    <p v-if="view.built" class="small" data-carry-built>{{ view.built }}</p>
     <p class="small muted">
       Production lines this plan expands are carried unticked for review.
       {{

@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num, plural } from '../../format.ts';
+import { builtKeptText } from '../../built-capacity.ts';
 import { phaseChanges, settingsChanges } from '../../profile-edit.ts';
 import { draft, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
@@ -22,6 +23,8 @@ const view = computed(() =>
     return {
       settings: settings.changes,
       others: settings.others ? plural(settings.others, 'other setting') + ' changed' : '',
+      // The lines that stand count as built (#1176): the preview keeps and extends them.
+      built: builtKeptText(preview.settings.builtLines),
       phases: phaseChanges(edit.plan, preview).map(change => ({
         phase: change.phase,
         lines:
@@ -59,6 +62,9 @@ const view = computed(() =>
     </ul>
     <p v-else class="muted" data-edit-no-settings>
       No settings changed: the plan is calculated again with the same settings.
+    </p>
+    <p v-if="view.built" data-edit-built>
+      <b>Built production lines are kept.</b> {{ view.built }}
     </p>
     <h4>Per phase</h4>
     <div class="table-wrap">

@@ -24,6 +24,7 @@ export function readStage(
   if (maximum)
     for (const part of Object.values(delivery))
       part.rate = ((solved.values.goal || 0) * part.target) / 1000;
+  foldBuilt(solved);
   deliverAll(model, solved, delivery);
   const rows = stageRows(config, pool, solved);
   const supplied = Object.fromEntries(
@@ -72,6 +73,21 @@ export function readStage(
     // The phase's miner, belts, pipes, budgets and nodes (#1065); absent without mining per phase.
     ...(mining ? { mining } : {}),
   };
+}
+// The prefix of a built line's variable (#1176, addBuiltLines in model.ts): 'built:<recipe id>',
+// the machines that already stand on the recipe's line, beside the recipe's own variable for the
+// machines to add.
+export const BUILT = 'built:';
+// Folds each built line's machines into its recipe's variable, so the stage has one row per line
+// (built and added machines together) and the stage reads exactly as one solved without them.
+// Run once the solution is checked against its model, whose constraints count both variables.
+export function foldBuilt(solved: Solution) {
+  for (const [name, value] of Object.entries(solved.values)) {
+    if (!name.startsWith(BUILT)) continue;
+    const id = name.slice(BUILT.length);
+    solved.values[id] = (solved.values[id] || 0) + (value || 0);
+    delete solved.values[name];
+  }
 }
 // What the phase draws of a raw resource: its one source, or with mining per phase (#1065) its
 // node kinds' sources ('raw:<item>@<kind>', addNodeKinds in model.ts) together.
