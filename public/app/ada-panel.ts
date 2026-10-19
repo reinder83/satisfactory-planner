@@ -55,7 +55,12 @@ import {
   taskEditsState,
 } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
-import { buildRowName, currentBuildStatus, ownedTicksNotice } from './views/calculated.ts';
+import {
+  buildRowName,
+  currentBuildStatus,
+  grownShares,
+  ownedTicksNotice,
+} from './views/calculated.ts';
 import { foundList, foundWords } from './owned-ticks.ts';
 import { byproductCount } from './recycle.ts';
 import { handoverLines } from './handover.ts';
@@ -456,6 +461,7 @@ function adaFacts(): AdaFacts {
     ...mergedFacts(),
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
+    grownLines: grownShares(calcStage()?.rows || []).size,
     ...onSitePendingFacts(),
     ...exactClockFacts(),
     ...ownedTicksFacts(),

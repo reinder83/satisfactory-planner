@@ -21,6 +21,9 @@
 //                  (validateOnSiteReview, #876), version 15; no update op edits it
 //   exactClocks    { phase: [rowId] } production lines asked to run at exact clocks
 //                  (validateExactClocks, #1066), version 16; absent means the plan's own
+//   builtMachines  { 'calc-<phase>-<rowId>': count } machines that stand on a production line a
+//                  recalculation grew (validateBuiltMachines, #1174), version 19; only a
+//                  carry sets it (carryLines), no update op edits it
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),

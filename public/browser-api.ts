@@ -247,6 +247,7 @@ export function createBrowserApi(
         saveId: save.id,
         profileId,
         reviewCount: started.reviewCount,
+        grownCount: started.grownCount,
         carriedChecks: started.carried,
         workspace: summary(data),
       };
@@ -363,6 +364,7 @@ export function createBrowserApi(
         profileId: profile.id,
         backupId,
         reviewCount: next.reviewCount,
+        grownCount: next.grownCount,
         carriedChecks: next.carried,
         workspace: summary(data),
       };

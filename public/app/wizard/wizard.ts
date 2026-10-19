@@ -21,7 +21,7 @@ import { beginnerMode, beginnerStock } from '../beginner.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { defaultProfileName } from '../profile-edit.ts';
-import { keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
+import { grownText, keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
 import {
   calculated,
   currentProfile,
@@ -122,6 +122,8 @@ interface CreatedProfile {
   profileId: string;
   carriedChecks: number;
   reviewCount: number;
+  // Grown lines that keep their built machines (#1174); absent from an older server's reply.
+  grownCount?: number;
 }
 
 // Copy the carry panel's choices into wizard.carryFrom / wizard.carry. Does
@@ -708,6 +710,7 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
     created.carriedChecks
       ? plural(created.carriedChecks, 'step') + (carriedFrom ? ' carried over' : ' start ticked')
       : '',
+    created.grownCount ? grownText(created.grownCount) : '',
     created.reviewCount
       ? plural(created.reviewCount, 'expanded production line') + ' left for review'
       : '',
@@ -753,7 +756,7 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   await loadContext(done.saveId, done.profileId);
   setWizard(null);
   navigate('plan');
-  toast(recalculatedText(done.reviewCount, kept));
+  toast(recalculatedText(done.reviewCount, kept, done.grownCount));
 }
 
 // The unlock steps (`recipe-unlock-<recipe>`) of the alternates the player already has (#1068):

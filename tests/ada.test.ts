@@ -466,6 +466,21 @@ test('ADA points at ticks a recalculation kept for review because of lines made 
   assert.match(one.text, /^1 tick from/);
 });
 
+test('ADA points at the lines a recalculation grew, on the plan and factories pages (#1174)', () => {
+  for (const view of ['plan', 'factories']) {
+    const line = adaRemarks(facts({ view, grownLines: 2 })).find(r => r.id === 'grown-lines')!;
+    assert.equal(line.tone, 'calm');
+    assert.match(
+      line.text,
+      /^2 production lines in .* need more machines than you built under the earlier plan. Their steps say how many stand and how many to add./,
+    );
+    assert.ok(!ids(facts({ view, grownLines: 0 })).includes('grown-lines'));
+    assert.ok(!ids(facts({ view })).includes('grown-lines'), 'absent means none');
+  }
+  const one = adaRemarks(facts({ view: 'plan', grownLines: 1 })).find(r => r.id === 'grown-lines')!;
+  assert.match(one.text, /^1 production line in .* needs more machines .* Its step says/);
+});
+
 test("ADA counts the phase's byproducts on the factories page, calmly, and points at the dialogs (#1022)", () => {
   const line = adaRemarks(facts({ view: 'factories', byproducts: 3 })).find(
     r => r.id === 'recycle-byproducts',
