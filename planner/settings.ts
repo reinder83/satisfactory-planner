@@ -274,7 +274,7 @@ const leftOutCounts = (
     if (!isRecord(counts)) fail(LEFT_OUT_REFUSAL);
     const row = blankNodeCounts();
     for (const purity of ['impure', 'normal', 'pure'] as const) {
-      const count = counts[purity] ?? 0;
+      const count = counts[purity] === undefined ? 0 : counts[purity];
       if (!Number.isInteger(count) || (count as number) < 0) fail(LEFT_OUT_REFUSAL);
       const most = counted[name]?.[purity] ?? 0;
       if ((count as number) > most)

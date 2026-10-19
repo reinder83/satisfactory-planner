@@ -251,7 +251,7 @@ export function stageMiningAdvice(
       // A draft's draw from a resource whose nodes the survey all leaves out (#1183) taps none.
       words: fluid
         ? fluidWords(rate, sources, mining.miner.clock) + beyond
-        : advice.runs.length
+        : advice.nodes + advice.satellites
           ? `Tap ${adviceWords(advice, false)}.${beyond}`
           : `No nodes to tap.${beyond}`,
     });
@@ -827,8 +827,11 @@ function nodeCells(runs: MiningRun[]): string {
 // resource well's "about 1 Resource Well Pressurizer at 85%", a fluid's other clocks after it
 // ("At 100%: 16 at 100% and 1 at 20.44%"), and what the nodes cannot give.
 function machineCells(entry: ResourceMining, mining: StageMining): string {
-  const nodeRuns = entry.advice.runs.filter(run => !isWellKind(run.kind)),
-    wellRuns = entry.advice.runs.filter(run => isWellKind(run.kind));
+  // Runs that tap a node: a draft's draw from a resource whose nodes are all left out (#1183)
+  // has runs of none.
+  const runs = entry.advice.runs.filter(run => run.full > 0 || run.last !== null);
+  const nodeRuns = runs.filter(run => !isWellKind(run.kind)),
+    wellRuns = runs.filter(run => isWellKind(run.kind));
   const parts: string[] = [];
   if (nodeRuns.length)
     parts.push(`${nodeRuns[0]!.machine}: ${clockRunWords(nodeRuns, entry.fluid)}`);
