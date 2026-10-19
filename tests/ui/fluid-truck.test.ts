@@ -10,7 +10,7 @@ import { render } from '../../public/app/shell.ts';
 import { FLUIDS } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
 import { $, $$, applyUpdate, catalog, generated, go, open, page, stubFetch } from './setup.ts';
-import type { FactoryGroups, LinkTransport, UpdateOp } from '../../public/types/index.ts';
+import type { FactoryGroups, LinkTransport, Phase, UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
 // Phase 2 as a copy of Phase 3's lines, planned from Phase 2, so a fluid link shows in a phase
@@ -38,7 +38,7 @@ const between = groupLinks(plan.stages['3'], groups()).filter(
 );
 const fluidLink = between.find(l => l.items.some(i => FLUIDS.has(i.item)))!;
 const KEY = fluidLink.from + ':' + fluidLink.to;
-const openLogistics = async (phase: string, links?: Record<string, LinkTransport>) => {
+const openLogistics = async (phase: Phase, links?: Record<string, LinkTransport>) => {
   open({
     calculated: plan,
     phase,
