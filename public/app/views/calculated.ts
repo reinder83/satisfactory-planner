@@ -251,7 +251,13 @@ const changesOf = perRedraw(
   stepInputs,
   (stageKey: string): PhaseChanges =>
     calculated
-      ? builtLineChanges(state?.builtMachines, state?.checks || {}, stageKey, calculated, catalogBook())
+      ? builtLineChanges(
+          state?.builtMachines,
+          state?.checks || {},
+          stageKey,
+          calculated,
+          catalogBook(),
+        )
       : { changed: new Map(), removed: [] },
 );
 
