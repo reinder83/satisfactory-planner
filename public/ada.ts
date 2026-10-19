@@ -49,6 +49,9 @@ export interface AdaFacts {
   idleGenerators?: string;
   // The recipe part cost multiplier the open plan was calculated with (#1161); absent at 1×.
   recipeCost?: number;
+  // The objective the open plan was calculated with in words (#1180, "least power"); absent for
+  // the fewest buildings.
+  objective?: string;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -438,6 +441,16 @@ const RULES: AdaRule[] = [
     // The game's steps (RECIPE_COSTS) are short decimals, so the number is written as it is.
     text: facts =>
       `This plan was calculated with a ${facts.recipeCost}× recipe part cost: every recipe takes ${facts.recipeCost} times its usual inputs for the same outputs, and every number here already counts it. ${(facts.recipeCost ?? 1) > 1 ? 'Your patience is not included.' : 'Enjoy the discount.'}`,
+  },
+  {
+    // What the plan keeps lowest (#1180): the plan's numbers already follow it, and only Edit
+    // settings changes it, so nothing here waits for a recalculation.
+    id: 'objective',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.objective,
+    text: facts =>
+      `This plan's objective is ${facts.objective}, not the fewest buildings: it may build more machines to keep that low, and every number here already counts it. Efficiency has many definitions; you picked one.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {

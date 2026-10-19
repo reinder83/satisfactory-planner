@@ -70,7 +70,7 @@ import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
 import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
-import { OWNED_GENERATORS, phaseBelt } from '../preferences.ts';
+import { OWNED_GENERATORS, objectiveWords, phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
@@ -437,6 +437,10 @@ function adaFacts(): AdaFacts {
     ...(calculated?.settings.recipeCost && calculated.settings.recipeCost !== 1
       ? { recipeCost: calculated.settings.recipeCost }
       : {}),
+    // The objective the open plan was calculated with (#1180), only when not the fewest buildings.
+    ...(calculated?.settings.objective === undefined
+      ? {}
+      : { objective: objectiveWords(calculated.settings.objective, true) }),
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,

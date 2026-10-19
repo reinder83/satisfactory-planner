@@ -8,12 +8,12 @@
 // "<name> (before edit, Oct 7, 2:05 PM)" (backupName), which "Restore this version" can swap back
 // (app/restore-version.ts). Review lists what the edit changes
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
-import { distributions, purities, recipeCostOf } from '../preferences.ts';
+import { distributions, objectiveWords, purities, recipeCostOf } from '../preferences.ts';
 import { ALLOWANCE_SETTING, powerView } from '../power.ts';
 import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
 import { power } from './wizard/fields.ts';
-import type { Choice, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
+import type { Choice, PlanObjective, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
 
 // The settings a name compares, as the planner reads them; any other field is left out.
 type NameSettings = Record<string, unknown> & { goal?: string };
@@ -52,15 +52,19 @@ const NAME_PARTS: [key: string, words: (value: unknown) => string][] = [
   ['powerFactor', value => `${num(Number(value))}× power`],
   // Present in settings only when not 1× (#1161).
   ['recipeCost', value => `${num(Number(value))}× recipe parts`],
+  // Present in settings only when not the fewest buildings (#1180).
+  ['objective', value => objectiveWords(value as PlanObjective, true)],
 ];
 
 // A profile card's line of the game settings its plan was calculated with (Saves & profiles):
-// "vanilla purity · 1× elevator · 1× power", and the recipe part cost when not 1× (#1161).
+// "vanilla purity · 1× elevator · 1× power", the recipe part cost when not 1× (#1161) and the
+// objective when not the fewest buildings (#1180).
 export function profileSummary(settings: {
   purity: string;
   multiplier: number;
   powerFactor: number;
   recipeCost?: number;
+  objective?: PlanObjective;
 }): string {
   const cost = recipeCostOf(settings);
   return [
@@ -68,6 +72,7 @@ export function profileSummary(settings: {
     `${num(settings.multiplier)}× elevator`,
     `${num(settings.powerFactor)}× power`,
     ...(cost === 1 ? [] : [`${num(cost)}× recipe parts`]),
+    ...(settings.objective === undefined ? [] : [objectiveWords(settings.objective, true)]),
   ].join(' · ');
 }
 
@@ -188,6 +193,11 @@ const onOff = (value: unknown) => (value ? 'On' : 'Off');
 const recipeCostWords = (settings: NameSettings): string =>
   `${num(recipeCostOf(settings as { recipeCost?: number }))}×`;
 
+// The objective (#1180) in words, absent as the fewest buildings: a plan made before the setting
+// was planned for them, so an edit to least power is named, and a draft that keeps them is not.
+const objectiveChange = (settings: NameSettings): string =>
+  objectiveWords(settings.objective as PlanObjective | undefined);
+
 // The settings Review names when an edit changes them, with the words for their values.
 const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => string][] = [
   ['phase', 'Start phase', value => `Phase ${value}`],
@@ -301,6 +311,9 @@ export function settingsChanges(
           },
         ]
       : []),
+    ...(objectiveChange(before) !== objectiveChange(after)
+      ? [{ label: 'Objective', before: objectiveChange(before), after: objectiveChange(after) }]
+      : []),
     // Absent means what the plan did before the box (#1058), so a plan without it is compared too.
     ...(mamWords(before) !== mamWords(after)
       ? [{ label: 'MAM recipes', before: mamWords(before), after: mamWords(after) }]
@@ -310,6 +323,7 @@ export function settingsChanges(
     'goal',
     'mamRecipes',
     'recipeCost',
+    'objective',
     ...SETTING_LABELS.map(([key]) => key),
   ]);
   const others = Object.keys(after).filter(key => !named.has(key) && changed(key)).length;

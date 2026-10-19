@@ -14,7 +14,8 @@ const modules = fs
 // extraction power the plan's power model charges (#1064), and the mining and belts per phase
 // (#1065), with the belt you already have (phaseBelt, #1068), and the generators you already have
 // (OWNED_GENERATORS, ownedGeneratorCounts, #1068), and the recipe part cost steps (RECIPE_COSTS,
-// recipeCostChoices, recipeCostOf, #1161).
+// recipeCostChoices, recipeCostOf, #1161), and what a plan keeps lowest (OBJECTIVES and its
+// helpers, #1180).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_MARKS',
@@ -28,6 +29,10 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'MINER_BASE',
     'MINER_MARKS',
     'MINER_MW',
+    'OBJECTIVES',
+    'OBJECTIVE_EXCHANGE',
+    'OBJECTIVE_WEIGHTS',
+    'OBJECTIVE_WEIGHT_MAX',
     'OIL_BASE',
     'OIL_EXTRACTOR_MW',
     'OVERCLOCK',
@@ -79,6 +84,9 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'nodeCounts',
     'nodePresets',
     'nodeYield',
+    'objectiveKind',
+    'objectiveWeights',
+    'objectiveWords',
     'oilNodeResources',
     'ownedGeneratorCounts',
     'phaseBelt',
