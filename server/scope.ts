@@ -5,8 +5,10 @@ import { isTranscribed } from '../public/handbook-migration.ts';
 import {
   cachedPlanFigures,
   profilePhasesCache,
+  recipeBook,
   renameOfferFields,
   restoreFields,
+  type RecipeBook,
 } from '../public/state.ts';
 import { catalog } from '../planner.ts';
 import { publicUser } from './accounts.ts';
@@ -23,6 +25,11 @@ export const progressionData = (): Progression =>
   (progression ??= JSON.parse(
     readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   ) as Progression);
+
+// The catalog's recipes by id (recipeBook in public/state/built-match.ts, #1175): a carry names
+// the built lines a new plan no longer has by them (save-routes.ts, profile-routes.ts). Made once.
+let book: RecipeBook | undefined;
+export const recipeBookData = (): RecipeBook => (book ??= recipeBook(catalog()));
 
 // Each profile's per-phase counts, kept until its plan or progress changes (#804): the summary is
 // asked for at boot, when Saves & profiles opens and after every save or profile change, and

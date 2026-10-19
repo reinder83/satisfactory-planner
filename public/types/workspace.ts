@@ -114,6 +114,9 @@ export interface Catalog {
   engine: string;
   alternates: CatalogRecipe[];
   standardRecipes: CatalogRecipe[];
+  // Every generator line a plan can build (#1175), by its row id ('power-coal'); absent from a
+  // catalog of an earlier release.
+  generatorLines?: { id: string; name: string; machine: string }[];
   storageOptions: Choice[];
   supplyItems: string[];
   // What a storage container can hold, offered when one is added (#295): every item but fluids.

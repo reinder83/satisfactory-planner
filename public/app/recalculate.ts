@@ -22,6 +22,8 @@ export interface RecalculatedProfile {
   reviewCount: number;
   // Grown lines that keep their built machines (#1174); absent from an older server's reply.
   grownCount?: number;
+  // Built lines changed otherwise (#1175): shrunk, switched or no longer needed; absent likewise.
+  changedCount?: number;
 }
 
 // What POST /api/recalculate is sent: the profile it recalculates, the name it keeps and the
@@ -68,10 +70,28 @@ export const grownText = (grownCount: number): string =>
   plural(grownCount, 'grown production line') +
   (grownCount === 1 ? ' keeps its built machines' : ' keep their built machines');
 
+// The built production lines a carry gave a change task (#1175): "1 built production line
+// changed: its step or the note above the plan says what to switch, spare or dismantle".
+export const changedText = (changedCount: number): string =>
+  plural(changedCount, 'built production line') +
+  ' changed: ' +
+  (changedCount === 1
+    ? 'its step or the note above the plan says'
+    : 'their steps and the note above the plan say') +
+  ' what to switch, spare or dismantle';
+
 // The toast after a recalculation in place: the grown lines that keep their built machines, the
-// lines left for review, and where the previous version is kept.
-export function recalculatedText(reviewCount: number, kept: string, grownCount = 0): string {
-  const grown = grownCount ? ' ' + grownText(grownCount) + '.' : '';
+// built lines that changed otherwise, the lines left for review, and where the previous version
+// is kept.
+export function recalculatedText(
+  reviewCount: number,
+  kept: string,
+  grownCount = 0,
+  changedCount = 0,
+): string {
+  const grown =
+    (grownCount ? ' ' + grownText(grownCount) + '.' : '') +
+    (changedCount ? ' ' + changedText(changedCount) + '.' : '');
   const review = reviewCount
     ? ' ' + plural(reviewCount, 'production line') + ' left unticked for review.'
     : '';

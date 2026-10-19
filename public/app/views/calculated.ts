@@ -20,8 +20,21 @@ import {
   builtNote,
   builtShare,
   builtTable,
+  changedIntro,
+  changedNote,
+  changedTable,
+  builtLineChanges,
+  spareIntro,
+  spareLine,
+  spareNote,
+  spareTable,
   type BuiltLine,
+  type ChangedLine,
+  type FormerLine,
+  type PhaseChanges,
+  type SpareLine,
 } from '../built-lines.ts';
+import { recipeBook, type RecipeBook } from '../../state.ts';
 import { siteItems } from '../group-links.ts';
 import { num } from '../format.ts';
 import { burnNote, COAL_GENERATOR_FUELS } from '../sink-cause.ts';
@@ -69,8 +82,12 @@ export interface PlanStepData {
   // The body as a table or a list (#1136, step-table.ts).
   table?: StepTable;
   list?: StepList;
-  // A grown line's built machines under its title, "5 of 6 built" (#1174, built-lines.ts).
+  // A grown line's built machines under its title, "5 of 6 built" (#1174, built-lines.ts), or
+  // a switched line's change, "4 to switch from Iron Plate, 1 to add" (#1175); shown while the
+  // step is not ticked.
   built?: string;
+  // A shrunk line's spare machines under its title, "6 built, 1 spare" (#1175), shown ticked too.
+  spare?: string;
 }
 
 // A step's inputs or outputs as "Heavy Oil Residue 46.6 m³/min, Iron Ore 30/min": each item
@@ -139,22 +156,22 @@ function rowStep(
   snapshot: StoredStage | undefined,
   shownPhase: Phase,
   title: string,
-): Pick<PlanStepData, 'body' | 'list' | 'table' | 'built'> {
+): Pick<PlanStepData, 'body' | 'list' | 'table' | 'built' | 'spare'> {
   const burn = burnNotes(row, snapshot);
-  const grown = grownLine(row, shownPhase);
+  const built = builtView(row, shownPhase);
   const lead =
-    (grown ? '' : carriedStepText(row, shownPhase)) +
+    (built ? '' : carriedStepText(row, shownPhase)) +
     ownedGeneratorsText(row, snapshot) +
     rowLineText(row) +
     burn.map(note => ' ' + note).join('');
-  const table = grown ? builtTable(grown, row, itemRate, title, lead) : undefined;
+  const table = built?.table(title, lead);
   const text = table ? table.intro + ' ' + lead : lead;
-  const extra = grown && table ? { table, built: builtNote(grown) } : {};
+  const extra = built && table ? { table, ...built.notes } : {};
   const advice = rowAdvice(row, snapshot).map(adviceLineText);
   if (!advice.length) return { body: text, ...extra };
   return {
     body: text + ' ' + advice.join(' '),
-    // Under a grown line's table, the advice alone.
+    // Under a built line's table, the advice alone.
     list: { intro: table ? '' : lead, items: advice, label: `${title}: byproducts and inputs` },
     ...extra,
   };
@@ -168,12 +185,98 @@ export function grownLine(row: CalcRow, shownPhase: Phase = phase()): BuiltLine 
   return builtLine(state?.builtMachines, state?.checks || {}, stageKey, row);
 }
 
-// A grown line's card state (#1174): "5 of 6 machines built: add 1", else ''.
-export function grownCard(row: CalcRow): string {
-  const grown = grownLine(row);
-  return grown
-    ? `${num(grown.built)} of ${num(grown.needed)} machines built: add ${num(grown.add)}`
-    : '';
+// What the machines built on a line of phase `shownPhase` come to under its plan, for its step,
+// card and dialog: a line built lines of other recipes switch to (#1175), else a grown line
+// (#1174), else one with machines to spare (#1175); null for any other line. A switched line's
+// step is not ticked (built-match.ts); a shrunk one may be.
+interface BuiltView {
+  table: (title: string, after: string) => StepTable;
+  intro: string;
+  notes: Pick<PlanStepData, 'built' | 'spare'>;
+  card: string;
+}
+function builtView(row: CalcRow, shownPhase: Phase = phase()): BuiltView | null {
+  const changed = changedLine(row, shownPhase);
+  if (changed)
+    return {
+      table: (title, after) => changedTable(changed, row, title, after),
+      intro: changedIntro(changed, row),
+      notes: { built: changedNote(changed) },
+      card: changedNote(changed),
+    };
+  const grown = grownLine(row, shownPhase);
+  if (grown)
+    return {
+      table: (title, after) => builtTable(grown, row, itemRate, title, after),
+      intro: builtIntro(grown, row, itemRate),
+      notes: { built: builtNote(grown) },
+      card: `${num(grown.built)} of ${num(grown.needed)} machines built: add ${num(grown.add)}`,
+    };
+  const spare = spareLineOf(row, shownPhase);
+  if (spare)
+    return {
+      table: (title, after) => spareTable(spare, row.machine, title, after),
+      intro: spareIntro(spare, row.machine),
+      notes: { spare: spareNote(spare) },
+      card: spare.spare
+        ? `${num(spare.built)} machines built, ${num(spare.needed)} needed: ${num(spare.spare)} spare`
+        : `${num(spare.built)} of ${num(spare.needed)} machines built: tick once they run`,
+    };
+  return null;
+}
+
+// A built line's card state (builtView): "5 of 6 machines built: add 1", "6 machines built, 5
+// needed: 1 spare", "4 to switch from Iron Plate, 1 to add"; else ''.
+export const grownCard = (row: CalcRow): string => builtView(row)?.card ?? '';
+
+// A line of phase `shownPhase` with at least the machines it needs standing (#1175, spareLine):
+// shrunk lines, ticked or not. Post Phase 5 reads Phase 5's.
+export function spareLineOf(row: CalcRow, shownPhase: Phase = phase()): SpareLine | null {
+  const stageKey = shownPhase === 'post' ? '5' : shownPhase;
+  return spareLine(state?.builtMachines, state?.checks || {}, stageKey, row);
+}
+
+// The catalog's recipes (recipeBook, built-match.ts), which name the built lines the plan no
+// longer has; worked out again only when the workspace brings another catalog.
+let bookOf: { catalog: unknown; book: RecipeBook } | undefined;
+function catalogBook(): RecipeBook {
+  const catalog = workspace?.catalog;
+  if (bookOf?.catalog !== catalog) bookOf = { catalog, book: recipeBook(catalog) };
+  return bookOf.book;
+}
+
+// The built lines of a phase ('1'-'5') the plan no longer has (#1175, builtLineChanges): the lines
+// they switch to and the ones no longer needed. Worked out once per redraw.
+const changesOf = perRedraw(
+  stepInputs,
+  (stageKey: string): PhaseChanges =>
+    calculated
+      ? builtLineChanges(
+          state?.builtMachines,
+          state?.checks || {},
+          stageKey,
+          calculated,
+          catalogBook(),
+        )
+      : { changed: new Map(), removed: [] },
+);
+
+// The line of phase `shownPhase` built lines of other recipes switch to (#1175), with what to
+// switch and add; null for any other line.
+export function changedLine(row: CalcRow, shownPhase: Phase = phase()): ChangedLine | null {
+  return changesOf(shownPhase === 'post' ? '5' : shownPhase).changed.get(row.id) ?? null;
+}
+
+// The built lines of phase `shownPhase` no longer needed (#1175): they can be dismantled or kept.
+export const formerLines = (shownPhase: Phase = phase()): FormerLine[] =>
+  changesOf(shownPhase === 'post' ? '5' : shownPhase).removed;
+
+// How many lines of the phase shown have a change task (#1175, ADA's changed-lines): switched
+// lines, lines with spare machines and lines no longer needed.
+export function changedLineCount(rows: readonly CalcRow[]): number {
+  return (
+    rows.filter(row => changedLine(row) || spareLineOf(row)?.spare).length + formerLines().length
+  );
 }
 
 // The opening sentence of a generator line's step where the player already has generators of its
@@ -563,8 +666,8 @@ export function calcExpansion(id: string) {
 // its expansion table; for a line a recalculation grew, its step's opening sentence instead
 // (builtIntro, #1174); '' for any other line.
 export function carriedLineText(row: CalcRow): string {
-  const grown = grownLine(row);
-  return grown ? builtIntro(grown, row, itemRate) : carriedStepText(row, phase()).trim();
+  const built = builtView(row);
+  return built ? built.intro : carriedStepText(row, phase()).trim();
 }
 
 // The lines of the phase shown that run from the phase before and are not ticked here yet, with

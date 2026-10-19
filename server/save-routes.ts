@@ -13,6 +13,7 @@ import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { migrationData, type Save } from './persistence.ts';
 import { response } from './routing.ts';
+import { recipeBookData } from './scope.ts';
 import type { UserRequest, WorkspaceContext } from './routing.ts';
 
 // A save or profile name from a request, trimmed.
@@ -177,6 +178,7 @@ export function saveRoutes({
         source,
         input.carry,
         input.built,
+        recipeBookData(),
       );
       save.profiles.push(started.profile);
       save.activeProfile = profileId;
@@ -189,6 +191,7 @@ export function saveRoutes({
         profileId,
         reviewCount: carried.reviewCount,
         grownCount: carried.grownCount,
+        changedCount: carried.changedCount,
         carriedChecks: carried.carried,
         workspace: currentSummary(user),
       },

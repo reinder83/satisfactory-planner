@@ -21,7 +21,13 @@ import { beginnerMode, beginnerStock } from '../beginner.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { defaultProfileName } from '../profile-edit.ts';
-import { grownText, keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
+import {
+  changedText,
+  grownText,
+  keptName,
+  postRecalculation,
+  recalculatedText,
+} from '../recalculate.ts';
 import {
   calculated,
   currentProfile,
@@ -124,6 +130,8 @@ interface CreatedProfile {
   reviewCount: number;
   // Grown lines that keep their built machines (#1174); absent from an older server's reply.
   grownCount?: number;
+  // Built lines changed otherwise (#1175); absent from an older server's reply.
+  changedCount?: number;
 }
 
 // Copy the carry panel's choices into wizard.carryFrom / wizard.carry. Does
@@ -711,6 +719,7 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
       ? plural(created.carriedChecks, 'step') + (carriedFrom ? ' carried over' : ' start ticked')
       : '',
     created.grownCount ? grownText(created.grownCount) : '',
+    created.changedCount ? changedText(created.changedCount) : '',
     created.reviewCount
       ? plural(created.reviewCount, 'expanded production line') + ' left for review'
       : '',
@@ -756,7 +765,7 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   await loadContext(done.saveId, done.profileId);
   setWizard(null);
   navigate('plan');
-  toast(recalculatedText(done.reviewCount, kept, done.grownCount));
+  toast(recalculatedText(done.reviewCount, kept, done.grownCount, done.changedCount));
 }
 
 // The unlock steps (`recipe-unlock-<recipe>`) of the alternates the player already has (#1068):
