@@ -232,7 +232,9 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
   const exported = (await request('/api/export-saves')) as SaveExport;
   const named = (data: SaveExport, name: string) =>
     data.saves.flatMap(save => save.profiles).filter(profile => profile.name === name);
-  const valid = named(validateTransfer(exported), 'Standard, cast')[0];
+  const valid = validateTransfer(exported)
+    .saves.flatMap(save => save.profiles)
+    .find(profile => profile.name === 'Standard, cast');
   assert.deepEqual((valid?.plan as StoredCalculatedPlan | undefined)?.settings.builtLines, lines);
   await request('/api/import-saves', exported);
   await reload();
