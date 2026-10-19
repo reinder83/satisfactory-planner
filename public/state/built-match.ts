@@ -4,7 +4,7 @@
 // shows is the one the carry counted.
 //
 // The machines that stand on a line the new plan no longer has stay in `builtMachines` under that
-// line's own check key (`calc-<phase>-<row id>`, state version 18, no new field): ticked, it is no
+// line's own check key (`calc-<phase>-<row id>`, state version 19, no new field): ticked, it is no
 // longer needed ("can be dismantled or kept"); not ticked, its machines are to be switched to the
 // successor, the first line of the same phase that makes the same main product and is not ticked
 // yet (same machine first, then plan order). Once every such line is ticked, the switch is done.

@@ -19,7 +19,7 @@ const plan = () => structuredClone((made ??= generatedWith({ storageRate: 5 })))
 const ROW = 'Recipe_ResidualFuel_C';
 const KEY = 'calc-4-' + ROW;
 const GROWN: Partial<ProgressState> = {
-  version: 18,
+  version: 19,
   checks: { [KEY]: false },
   builtMachines: { [KEY]: 5 },
 };

@@ -22,7 +22,7 @@ const SCREWS = 'calc-4-Recipe_Screw_C';
 const STEEL = 'calc-4-Recipe_Alternate_Screw_2_C';
 const FINE = 'calc-4-Recipe_Alternate_Concrete_C';
 const CHANGED: Partial<ProgressState> = {
-  version: 18,
+  version: 19,
   checks: { [REFINERY]: true, [FINE]: true },
   notes: { [STEEL]: 'Twenty by the steel mill', [FINE]: 'Three on the hill' },
   builtMachines: { [REFINERY]: 6, [STEEL]: 20, [FINE]: 3 },

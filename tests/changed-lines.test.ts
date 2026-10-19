@@ -1,6 +1,6 @@
 // Shrunk, switched and removed production lines (#1175, slice 2 of #1172): when a new profile
 // carries progress, or a plan is recalculated in place, a line ticked as built that the new plan
-// changed keeps the machines that stand on it in `builtMachines` (state version 18, no new field):
+// changed keeps the machines that stand on it in `builtMachines` (state version 19, no new field):
 // - shrunk (same row, fewer machines): stays ticked, with its built count, so its step says how
 //   many are spare and never to build them again;
 // - switched (the plan makes its product with another recipe in that phase): its machines are
@@ -289,7 +289,7 @@ test('ticks and notes survive, the count says what changed, and the source is on
   assert.equal(started.changedCount, 4);
   assert.equal(started.reviewCount, 0);
   assert.equal(started.grownCount, 0);
-  assert.equal(started.state.version, 18, 'builtMachines keeps its version: no new one');
+  assert.equal(started.state.version, 19, 'builtMachines keeps its version: no new one');
   assert.equal(started.state.notes.global, 'Keep me');
   assert.equal(started.state.notes[key(SCREWS)], 'By the iron field');
   assert.equal(started.state.notes[key(TURBO)], 'Three by the oil');
@@ -413,7 +413,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
     assert.equal(reply.state.checks[key(SCREWS)], undefined, 'to switch: not ticked');
     assert.equal(reply.state.checks[key(TURBO)], true, 'no longer needed: still ticked');
     assert.equal(reply.state.notes[key(TURBO)], 'Four stand');
-    assert.equal(reply.state.version, 18);
+    assert.equal(reply.state.version, 19);
     // The build plan's view of it, named by the catalog.
     const changes = phaseChanges(
       reply.state.builtMachines,

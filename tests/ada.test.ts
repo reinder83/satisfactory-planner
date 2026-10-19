@@ -569,6 +569,20 @@ test('ADA says when a phase carries its nodes on belts you already have (#1068)'
   assert.ok(!ids(facts({ view: 'resources' })).includes('owned-belt'), 'absent means none');
 });
 
+test('ADA counts the links that send their fluids by Fluid Truck (#1177)', () => {
+  const line = (count: number) =>
+    adaRemarks(facts({ view: 'logistics', fluidTruckLinks: count })).find(
+      r => r.id === 'fluid-trucks',
+    )!;
+  assert.equal(line(1).tone, 'calm');
+  assert.equal(
+    line(1).text,
+    'Phase 3 sends fluids by Fluid Truck on 1 link: unpackaged, 3,200 m³ a tank, one fluid per tank. Fewer canisters, same round trips.',
+  );
+  assert.match(line(3).text, /^Phase 3 sends fluids by Fluid Truck on 3 links: /);
+  assert.ok(!ids(facts({ view: 'logistics' })).includes('fluid-trucks'), 'absent means none');
+});
+
 test('ADA counts the generators you already have, or says the phase does not (#1068)', () => {
   for (const view of ['plan', 'resources']) {
     const line = (over: Partial<AdaFacts>) =>

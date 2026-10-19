@@ -316,7 +316,7 @@ function standingLines(
 // The source's production line ticks on the new plan's lines. A line ticked in the source stays
 // ticked only if the old plan had the same row with at least as many machines and inputs; a
 // shrunk one (#1175), which needs fewer machines than stand, keeps them in `builtMachines`
-// (version 18), so its step says how many are spare. A grown line (#1174), the same row with more
+// (version 19), so its step says how many are spare. A grown line (#1174), the same row with more
 // machines, is unticked but keeps the machines that stand on it as built: its step says how many
 // stand and how many to add. Any other change unticks it for review, stored as false, the rule
 // /api/round-up applies. Rows the source never ticked are left alone, except that a line with

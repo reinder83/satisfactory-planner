@@ -121,7 +121,7 @@ test('the first eight fuels and the default stay exactly as they were', () => {
   assert.equal((picked as { fuel?: string }).fuel, 'Packaged Fuel');
   assert.deepEqual(
     LINK_MODES.map(([mode]) => mode),
-    ['belt', 'truck', 'tractor', 'explorer', 'train', 'drone'],
+    ['belt', 'truck', 'fluidTruck', 'tractor', 'explorer', 'train', 'drone'],
   );
 });
 
@@ -220,7 +220,7 @@ test('a link on a new fuel is state version 17; going back to a first fuel resto
       // It loads again as it was, and a newer version is refused with the update message.
       const round = validateState(json(next));
       assert.deepEqual(round, next);
-      assert.throws(() => validateState({ ...json(round), version: 19 }), /newer planner version/);
+      assert.throws(() => validateState({ ...json(round), version: 20 }), /newer planner version/);
     }
   state = mutate(state, link('truck', 'Battery'));
   assert.equal(state.version, 17);
