@@ -748,7 +748,9 @@ export function miningStep(
   const upgraded = upgradedWords(upgrade);
   // The nodes the plan's node survey leaves out (#1183), which none of these counts tap.
   const leftOut = leftOutWords(settings?.extraction);
-  const skipped = leftOut ? ` Left out of this plan in your node survey, never tapped here: ${leftOut}.` : '';
+  const skipped = leftOut
+    ? ` Left out of this plan in your node survey, never tapped here: ${leftOut}.`
+    : '';
   const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.${upgraded}${skipped}`;
   const ofUpgrade = (resource: string) =>
     upgrade?.resources.find(each => each.resource === resource);

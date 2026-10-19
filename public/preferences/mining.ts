@@ -375,7 +375,10 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
     const none = leftOutCap(settings, resource) === 0;
     const mix = nodeMix(
       none && settings.extraction
-        ? { ...settings, extraction: { ...settings.extraction, excludedNodes: {}, excludedWells: {} } }
+        ? {
+            ...settings,
+            extraction: { ...settings.extraction, excludedNodes: {}, excludedWells: {} },
+          }
         : settings,
       resource,
     );

@@ -190,8 +190,7 @@ function leftOutWords(config: CurrentSettings, names: string[]): string {
       const nodes = sum(survey.nodes) > 0,
         wells = sum(survey.wells) > 0;
       const one = nodes && wells ? 'node and well satellite' : wells ? 'well satellite' : 'node',
-        many =
-          nodes && wells ? 'nodes and well satellites' : wells ? 'well satellites' : 'nodes';
+        many = nodes && wells ? 'nodes and well satellites' : wells ? 'well satellites' : 'nodes';
       return left >= all
         ? ` Your node survey leaves every ${name} ${one} out of this plan, so it has none to mine.`
         : ` Your node survey leaves ${left} of the ${all} ${name} ${many} out of this plan.`;

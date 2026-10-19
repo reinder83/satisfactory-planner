@@ -260,7 +260,8 @@ const countsByResource = (raw: unknown): Record<string, NodeCounts> => {
 // from 0 up to the survey's own count of that resource and purity (`counted`), rows of none
 // dropped. Anything else is refused, never corrected: a count it does not hold, a part of a node,
 // more than the survey counts.
-const LEFT_OUT_REFUSAL = 'Leave out whole numbers of nodes, from 0 up to the ones your survey counts.';
+const LEFT_OUT_REFUSAL =
+  'Leave out whole numbers of nodes, from 0 up to the ones your survey counts.';
 const leftOutCounts = (
   raw: unknown,
   counted: Record<string, NodeCounts>,

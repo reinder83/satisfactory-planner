@@ -132,10 +132,12 @@ test('settings keep the nodes a survey leaves out, within its counts, and refuse
   const whole = 'Leave out whole numbers of nodes, from 0 up to the ones your survey counts.';
   for (const count of [-1, 1.5, '2', null, Number.NaN, Infinity, [1], { n: 1 }])
     refused({ excludedNodes: { 'Iron Ore': { impure: 0, normal: 0, pure: count } } }, whole);
-  for (const map of ['Iron Ore', [], 3, null])
-    refused({ excludedNodes: map }, whole);
+  for (const map of ['Iron Ore', [], 3, null]) refused({ excludedNodes: map }, whole);
   refused({ excludedNodes: { 'Iron Ore': 4 } }, whole);
-  refused({ excludedNodes: { Gold: { impure: 1, normal: 0, pure: 0 } } }, 'Gold is not a raw resource.');
+  refused(
+    { excludedNodes: { Gold: { impure: 1, normal: 0, pure: 0 } } },
+    'Gold is not a raw resource.',
+  );
   // More than the survey counts, never cut down to it.
   refused(
     { excludedNodes: { 'Iron Ore': { impure: 0, normal: 0, pure: 47 } } },
@@ -254,9 +256,10 @@ test('every node of a resource left out: the phase does not fit, and its draft s
     const stage = plan.stages[phase];
     assert.equal(stage.feasible, false);
     assert.equal(stage.mining!.budgets['Iron Ore'], 0);
-    assert.deepEqual(stage.shortfalls?.map(shortfall => [shortfall.name, shortfall.budget]), [
-      ['Iron Ore', 0],
-    ]);
+    assert.deepEqual(
+      stage.shortfalls?.map(shortfall => [shortfall.name, shortfall.budget]),
+      [['Iron Ore', 0]],
+    );
     assert.match(
       String(stage.reason),
       /^This phase needs more Iron Ore than the entered budgets provide\. Your node survey leaves every Iron Ore node out of this plan, so it has none to mine\./,

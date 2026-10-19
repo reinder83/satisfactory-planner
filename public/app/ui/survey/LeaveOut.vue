@@ -29,9 +29,9 @@ const startOpen = props.tables.some(table =>
   <details class="leave-out" data-leave-out :open="startOpen">
     <summary>Leave nodes out of this plan</summary>
     <p class="small">
-      For a node too far from where you build, or one already feeding a factory this plan does
-      not include. The plan never taps a node you leave out: its budgets and the build plan's
-      "Tap the resource nodes" use only the others.
+      For a node too far from where you build, or one already feeding a factory this plan does not
+      include. The plan never taps a node you leave out: its budgets and the build plan's "Tap the
+      resource nodes" use only the others.
       <HelpTip name="extractionLeftOut" />
     </p>
     <template v-for="table in tables" :key="table.kind + table.names.join()">

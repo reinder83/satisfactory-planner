@@ -247,7 +247,8 @@ function submit() {
         <h2>Your budgets</h2>
         <p>
           What those nodes yield, less the nodes you leave out of this plan and anything already
-          committed to factories this plan does not include. That deduction is what makes a budget mean <em>free for this plan to use</em>.
+          committed to factories this plan does not include. That deduction is what makes a budget
+          mean <em>free for this plan to use</em>.
           <HelpTip name="extractionUsed" />
         </p>
         <div class="table-wrap">
