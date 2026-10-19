@@ -10,7 +10,9 @@
   (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done. A
   line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
   dimmed, with its note under the title; a line at exact clocks, or one whose clocks a
-  recalculation would change (`step.clocks`, #1066), says so there too. Its text marks the glossary
+  recalculation would change (`step.clocks`, #1066), says so there too, and so does a line a
+  recalculation grew (`step.built`, #1174: "5 of 6 built"), whose table says what to add; a step
+  with both a table and a list (a grown line's byproduct advice) draws the table first. Its text marks the glossary
   terms in `step.terms` (#1076, ui/TermText.vue); the words stay the step's `body`. A step just ticked is
   `held` in place for a few seconds (tick-hold.ts, #1054), and `leaving` as it fades out of it.
 -->
@@ -53,9 +55,16 @@ const idleId = computed(() => 'step-idle-' + props.step.id);
 // The note of a step done by its own condition (#1070), which also describes the checkbox: with no
 // tick to clear, the checkbox is disabled while the condition holds.
 const satisfiedId = computed(() => 'step-satisfied-' + props.step.id);
+// A grown line's built machines (#1174), which also describe the checkbox: ticking it says all
+// of them stand.
+const builtId = computed(() => 'step-built-' + props.step.id);
 const describedBy = computed(
   () =>
-    [props.step.idle ? idleId.value : '', props.step.satisfied ? satisfiedId.value : '']
+    [
+      props.step.idle ? idleId.value : '',
+      props.step.satisfied ? satisfiedId.value : '',
+      props.step.built && !props.step.done ? builtId.value : '',
+    ]
       .filter(Boolean)
       .join(' ') || undefined,
 );
@@ -238,12 +247,17 @@ async function deletePersonal(event: Event) {
         ><span v-if="step.satisfied" :id="satisfiedId" class="task-idle" data-satisfied-note>{{
           step.satisfied
         }}</span
-        ><span v-if="step.clocks" class="task-idle" data-step-clocks>{{ step.clocks }}</span>
+        ><span v-if="step.clocks" class="task-idle" data-step-clocks>{{ step.clocks }}</span
+        ><span v-if="step.built && !step.done" :id="builtId" class="task-idle" data-step-built>{{
+          step.built
+        }}</span>
       </summary>
       <StepTable v-if="step.table" :table="step.table" :terms="step.terms ?? []" />
-      <StepList v-else-if="step.list" :list="step.list" />
-      <p v-else-if="step.body"><TermText :text="step.body" :terms="step.terms ?? []" /></p>
-      <p v-else>Your own task for this phase.</p>
+      <StepList v-if="step.list" :list="step.list" />
+      <p v-if="!step.table && !step.list && step.body">
+        <TermText :text="step.body" :terms="step.terms ?? []" />
+      </p>
+      <p v-if="!step.table && !step.list && !step.body">Your own task for this phase.</p>
       <button
         v-if="lead"
         type="button"

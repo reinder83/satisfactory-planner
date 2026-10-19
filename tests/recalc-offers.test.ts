@@ -56,6 +56,7 @@ interface Recalculated {
   profileId: string;
   backupId: string;
   reviewCount: number;
+  grownCount: number;
 }
 
 // One edition: a request (a refusal rejects with its status) and the save's stored profiles.
@@ -144,7 +145,8 @@ async function pressEachOffer(edition: Edition) {
     assert.notEqual(after.plan!.createdAt, before.plan!.createdAt, 'a new plan');
     offer.planned(after.plan!);
     // Progress carried from itself: world records stay; a production line the new plan still
-    // has keeps a tick or is left unticked for review.
+    // has keeps a tick, keeps its built machines where it grew (#1174) or is left unticked for
+    // review.
     assert.equal(after.state.checks[UNLOCK], true, offer.name);
     assert.equal(after.state.notes.global, 'Keep me', offer.name);
     const kept = after
@@ -153,9 +155,12 @@ async function pressEachOffer(edition: Edition) {
     assert.ok(kept.length > 0, offer.name);
     for (const check of kept)
       assert.equal(typeof after.state.checks[check], 'boolean', `${offer.name}: ${check}`);
+    const unticked = kept.filter(check => after.state.checks[check] === false),
+      grown = unticked.filter(check => after.state.builtMachines?.[check]);
+    assert.equal(grown.length, done.grownCount, `${offer.name}: grown lines are counted`);
     assert.ok(
-      kept.filter(check => after.state.checks[check] === false).length <= done.reviewCount,
-      `${offer.name}: every tick not kept is counted for review`,
+      unticked.length - grown.length <= done.reviewCount,
+      `${offer.name}: every other tick not kept is counted for review`,
     );
     // The previous version, whole, right after the profile.
     backups.unshift(done.backupId);

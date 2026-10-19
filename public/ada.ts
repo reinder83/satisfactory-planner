@@ -80,6 +80,9 @@ export interface AdaFacts {
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
   siteReview?: number;
+  // Lines of the phase shown that a recalculation grew, not ticked yet (#1174, grownShares in
+  // app/views/calculated.ts): their built machines stand, the rest is to add.
+  grownLines?: number;
   // The group lines made on site that the factory groups' marks would give are not the ones the
   // plan has (onSiteChange in app/on-site-picker.ts, #877, #938): the plan waits for a
   // recalculation the user starts.
@@ -555,6 +558,14 @@ const RULES: AdaRule[] = [
     when: facts => (facts.siteReview ?? 0) > 0,
     text: facts =>
       `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines your factories make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
+  },
+  {
+    id: 'grown-lines',
+    on: ['plan', 'factories'],
+    tone: 'calm',
+    when: facts => (facts.grownLines ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.grownLines!, 'production line')} in ${facts.phaseLabel} ${facts.grownLines === 1 ? 'needs' : 'need'} more machines than you built under the earlier plan. ${facts.grownLines === 1 ? 'Its step says' : 'Their steps say'} how many stand and how many to add. I kept count, so you do not have to.`,
   },
   {
     id: 'recycle-byproducts',

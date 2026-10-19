@@ -5,7 +5,8 @@
 // through the request Edit settings' "Recalculate in place" sends (POST /api/recalculate,
 // recalculate.ts): same id and name, the new plan, the progress carried from itself with every
 // carry pick (as the new profile these offers used to create was carried), so a line marked
-// running that now needs more machines or more input is left unticked for review and ticks with
+// running that now needs more machines keeps the ones built (#1174), one that changed otherwise is
+// left unticked for review and ticks with
 // no single line to land on are kept for review (onSiteReview). The previous version is kept whole
 // as "<name> (before edit, <date>)". Nothing happens until the user presses the button and
 // confirms; the confirmation names that backup. Then the unsaved-notes check (allowSwitch), the
@@ -46,7 +47,8 @@ export interface RecalcOffer {
 export function offerQuestion(name: string, change: string, kept: string, transcribed: boolean) {
   return (
     `Recalculates “${name}” ${change}. Its progress is carried: a production line marked ` +
-    'running that now needs more machines or more input is left unticked for review. The ' +
+    'running that now needs more machines keeps the ones you built and says how many to add, ' +
+    'and one that changed otherwise is left unticked for review. The ' +
     `current version is kept as “${kept}” under Profiles, with all of its progress.` +
     (transcribed ? ' ' + RESOLVE_WARNING : '')
   );
@@ -76,7 +78,7 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
       setWorkspace(done.workspace);
       await loadContext(done.saveId, done.profileId);
       render();
-      toast(recalculatedText(done.reviewCount, kept));
+      toast(recalculatedText(done.reviewCount, kept, done.grownCount));
       void refocus();
     } catch (error) {
       button.textContent = offer.label;

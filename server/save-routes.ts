@@ -188,6 +188,7 @@ export function saveRoutes({
         saveId,
         profileId,
         reviewCount: carried.reviewCount,
+        grownCount: carried.grownCount,
         carriedChecks: carried.carried,
         workspace: currentSummary(user),
       },

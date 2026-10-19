@@ -21,7 +21,7 @@ import { num } from '../../format.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import { rowTotal } from '../../group-order.ts';
 import { calculated, checked, factoryEditing, stage, state } from '../../session.ts';
-import { carriedCard, heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
+import { carriedCard, grownCard, heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
 import {
   allocationText,
   factoryGroupsState,
@@ -103,6 +103,8 @@ const card = computed(() =>
       // A line not ticked here that runs from the phase before: "Running since Phase 1: 2 of 5
       // machines" (#1069), and that phase for the chip.
       carried: carriedCard(row),
+      // A line a recalculation grew, not ticked yet: "5 of 6 machines built: add 1" (#1174).
+      grown: grownCard(row),
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
         const hold = heldBack(row.id);
@@ -116,7 +118,17 @@ const card = computed(() =>
 <template>
   <article :class="['factory-card', card.done ? 'done' : '', card.generator ? 'generator' : '']">
     <RunningChip
-      :status="card.held ? 'held' : card.done ? 'running' : card.carried ? 'carried' : 'idle'"
+      :status="
+        card.held
+          ? 'held'
+          : card.done
+            ? 'running'
+            : card.grown
+              ? 'partly'
+              : card.carried
+                ? 'carried'
+                : 'idle'
+      "
       :from="card.carried?.from"
     />
     <div class="card-top">
@@ -141,7 +153,8 @@ const card = computed(() =>
     <div v-if="card.clocks" class="small allocation" data-exact-clocks>{{ card.clocks }}</div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
-    <div v-if="card.carried" class="small build-carried" data-carried>
+    <div v-if="card.grown" class="small build-carried" data-grown>{{ card.grown }}</div>
+    <div v-else-if="card.carried" class="small build-carried" data-carried>
       {{ card.carried.text }}
     </div>
     <footer>

@@ -1871,6 +1871,13 @@ function closingAdvice(verb: string, previous: number): string {
   return `Check the actual maximum consumption with the utility allowance, and commission more capacity before connecting the next factory.${previous ? ' Keep the previous plant online until the replacement is stable.' : ''}`;
 }
 
+// How many machines of a line already stand and how many to add: "5 built in Phase 2, so add 1"
+// for a generator line the phase before built (generatorParts), "5 Refineries built, so add 1" for
+// a production line a recalculation grew (#1174, builtIntro in app/built-lines.ts). `what` names
+// the machines, `where` says where they were built.
+export const builtSoAdd = (built: number, add: number, what = '', where = ''): string =>
+  `${formatNumber(built)}${what ? ' ' + what : ''} built${where}, so add ${formatNumber(add)}`;
+
 // One generator line in the step's text: its count and name as its build step shows them, what
 // it adds to the previous phase's line, and the fuel it burns with the lines that make it; and the
 // same as a row of the step's table (#1136): the line, its machines, what this phase adds and the
@@ -1888,7 +1895,7 @@ function generatorParts(
   const added = !builtBefore
     ? 'new in this phase'
     : row.machines > builtBefore
-      ? `${formatNumber(builtBefore)} built in Phase ${previous}, so add ${formatNumber(row.machines - builtBefore)}`
+      ? builtSoAdd(builtBefore, row.machines - builtBefore, '', ` in Phase ${previous}`)
       : `already built in Phase ${previous}`;
   const from = makers.length
     ? ` from the ${listNames(makers)} step${makers.length > 1 ? 's' : ''}`

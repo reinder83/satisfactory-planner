@@ -43,6 +43,8 @@ export interface Step {
   // is edited.
   table?: StepTable;
   list?: StepList;
+  // A grown line's built machines, "5 of 6 built" (#1174), under the title.
+  built?: string;
 }
 
 // The production line a step links to (taskLink): its "Production line ↗" button opens the

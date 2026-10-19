@@ -246,6 +246,15 @@ export const version18 = {
   },
 } satisfies SavedState;
 
+// Version 19: the machines that stand on a production line a recalculation grew (#1174): 5 of the
+// Residual Fuel line's Refineries in Phase 4, whose step is unticked until all of them stand.
+export const version19 = {
+  ...version18,
+  version: 19,
+  checks: { ...version18.checks, 'calc-4-Recipe_ResidualFuel_C': false },
+  builtMachines: { 'calc-4-Recipe_ResidualFuel_C': 5 },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -267,6 +276,7 @@ export const states: [SavedState, number][] = [
   [version16, 16],
   [version17, 17],
   [version18, 18],
+  [version19, 19],
 ];
 
 export const backup = {
