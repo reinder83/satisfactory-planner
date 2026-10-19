@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
-import { state } from '../../public/app/session.ts';
+import { state, type View } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, $$, generatedWith, go, open, page } from './setup.ts';
 import type { CurrentCalculatedPlan, ProgressState } from '../../public/types/index.ts';
@@ -28,7 +28,7 @@ const step = (id: string) => $(`[data-check="${id}"]`)!.closest<HTMLElement>('.t
 const text = (element: Element | null | undefined) =>
   (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-async function show(progress: Partial<ProgressState>, route = 'plan') {
+async function show(progress: Partial<ProgressState>, route: View = 'plan') {
   open({ calculated: plan(), phase: '4', state: progress });
   go(route);
   render();
