@@ -467,10 +467,10 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
   const exported = (await request('/api/export-saves')) as SaveExport;
   const profileOf = (data: SaveExport, name: string) =>
     data.saves.flatMap(save => save.profiles).filter(profile => profile.name === name);
-  assert.deepEqual(
-    profileOf(validateTransfer(exported), 'Standard, cast')[0]!.state.builtMachines,
-    expected,
-  );
+  const valid = validateTransfer(exported)
+    .saves.flatMap(save => save.profiles)
+    .find(profile => profile.name === 'Standard, cast');
+  assert.deepEqual(valid?.state.builtMachines, expected);
   const share = (await request(
     `/api/export-saves?save=${first.saveId}&profile=${first.profileId}&share=1`,
   )) as SaveExport;
