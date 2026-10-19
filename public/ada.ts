@@ -574,7 +574,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.changedLines ?? 0) > 0,
     text: facts =>
-      `${plural(facts.changedLines!, 'production line')} you built in ${facts.phaseLabel} ${facts.changedLines === 1 ? 'differs' : 'differ'} from the plan now: machines to switch to another recipe, machines to spare, or a line no longer needed. The steps and the note above them say which. Nothing gets dismantled until you do it.`,
+      `${plural(facts.changedLines!, 'production line')} you built in ${facts.phaseLabel} ${facts.changedLines === 1 ? 'differs' : 'differ'} from the plan now: machines to switch to another recipe, machines to spare, or a line no longer needed. The steps say what to switch or what is spare, and the build plan lists the lines no longer needed. Dismantling is your call; I only count.`,
   },
   {
     id: 'recycle-byproducts',
