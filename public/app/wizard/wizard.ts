@@ -445,14 +445,15 @@ function readRecipeCost(settings: WizardSettings, value: FormDataEntryValue) {
 // before the setting keeps settings without it; a weighted mix takes its three boxes as numbers,
 // which settings() checks. A screen without the cards changes nothing.
 function readObjective(data: FormData, settings: WizardSettings) {
-  const kind = data.get('objective');
-  if (kind === null) return;
+  if (!data.has('objective')) return;
+  const [kind] = data.getAll('objective');
+  const weight = (name: string) => Number(data.getAll('objectiveWeight:' + name)[0]);
   if (kind === 'power' || kind === 'raw') settings.objective = kind;
   else if (kind === 'weighted')
     settings.objective = {
-      buildings: Number(data.get('objectiveWeight:buildings')),
-      power: Number(data.get('objectiveWeight:power')),
-      raw: Number(data.get('objectiveWeight:raw')),
+      buildings: weight('buildings'),
+      power: weight('power'),
+      raw: weight('raw'),
     };
   else delete settings.objective;
 }
