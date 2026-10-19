@@ -50,6 +50,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'bestMark',
     'blankCounts',
     'blankExtraction',
+    'budgetLimit',
+    'budgetLimits',
     'clockChoices',
     'constructionItems',
     'distributions',
@@ -75,6 +77,10 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'isWellKind',
     'knownWorld',
     'laterVehicleFuels',
+    'leavesNodesOut',
+    'leftOutCap',
+    'leftOutCounts',
+    'leftOutPool',
     'matchingPreset',
     'minedResources',
     'minerMarks',
@@ -105,6 +111,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'rawResources',
     'recipeCostChoices',
     'recipeCostOf',
+    'remainingSurvey',
     'resourceAvailable',
     'resourceDefaults',
     'resourcePool',
@@ -128,6 +135,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'waterMWPerUnit',
     'wellResources',
     'wellYield',
+    'withinCounts',
   ]);
 });
 

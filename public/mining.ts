@@ -8,8 +8,11 @@ import {
   EXTRACTOR_OPTIONS,
   OVERCLOCK,
   WATER_EXTRACTOR,
+  budgetLimit,
+  budgetLimits,
   extractorOption,
   isWellKind,
+  leftOutCounts,
   miningAdvice,
   phaseBelt,
   phaseMiner,
@@ -17,13 +20,7 @@ import {
   waterClock,
 } from './preferences.ts';
 import { listNames, localeNumber, powerAmount } from './wording.ts';
-import type {
-  ItemRates,
-  MiningSource,
-  StageMining,
-  StoredSettings,
-  StoredStage,
-} from './types/index.ts';
+import type { ItemRates, MiningSource, StageMining, StoredStage } from './types/index.ts';
 import type { MiningAdvice, MiningRun, MiningSettings } from './preferences/mining.ts';
 import type { ExtractorOption } from './preferences/extraction.ts';
 import type { StepTable } from './step-table.ts';
@@ -41,12 +38,33 @@ const clockWords = (clock: number, fluid: boolean) => {
 // The raw resources that come out of a pipe: crude oil and nitrogen gas (Water has no nodes).
 const MINED_FLUIDS = ['Crude Oil', 'Nitrogen Gas'];
 
-// A stage's budget for a raw resource: its mining's (#1065), else the settings'.
+// A stage's budget for a raw resource: its mining's (#1065), else the settings', held to the
+// nodes the node survey does not leave out of the plan (budgetLimit, #1183).
 export const stageBudget = (
   stage: Pick<StoredStage, 'mining'> | undefined,
-  settings: Pick<StoredSettings, 'limits'>,
+  settings: Pick<MiningSettings, 'limits' | 'extraction'>,
   resource: string,
-): number => stage?.mining?.budgets[resource] ?? settings.limits[resource] ?? 0;
+): number => stage?.mining?.budgets[resource] ?? budgetLimit(settings, resource);
+
+// The nodes a node survey leaves out of the plan (#1183), in words: "2 pure Iron Ore nodes and
+// 1 normal Crude Oil well satellite"; '' when it leaves none out.
+export function leftOutWords(survey: MiningSettings['extraction']): string {
+  return listNames(
+    leftOutCounts(survey).map(
+      ([resource, purity, count, well]) =>
+        `${miningNumber(count)} ${purity} ${resource} ${well ? 'well satellite' : 'node'}${count === 1 ? '' : 's'}`,
+    ),
+  );
+}
+// How many nodes and well satellites a node survey leaves out of the plan (#1183), in all.
+export const leftOutTotal = (survey: MiningSettings['extraction']): number =>
+  leftOutCounts(survey).reduce((sum, [, , count]) => sum + count, 0);
+// "3 resource nodes left out", "1 resource node left out": the short note the sidebar footer and
+// a profile card give a plan whose node survey leaves nodes out (#1183); '' when it leaves none.
+export function leftOutNote(survey: MiningSettings['extraction']): string {
+  const total = leftOutTotal(survey);
+  return total ? `${miningNumber(total)} resource node${total === 1 ? '' : 's'} left out` : '';
+}
 
 // "Miner Mk.2 at 100%".
 export const minerWords = ({ mark, clock }: { mark: number; clock: number }): string =>
@@ -224,9 +242,12 @@ export function stageMiningAdvice(
       budget: mining.budgets[resource] ?? 0,
       fluid,
       advice,
+      // A draft's draw from a resource whose nodes the survey all leaves out (#1183) taps none.
       words: fluid
         ? fluidWords(rate, sources, mining.miner.clock) + beyond
-        : `Tap ${adviceWords(advice, false)}.${beyond}`,
+        : advice.nodes + advice.satellites
+          ? `Tap ${adviceWords(advice, false)}.${beyond}`
+          : `No nodes to tap.${beyond}`,
     });
   }
   return out;
@@ -719,7 +740,12 @@ export function miningStep(
     : '';
   const advice = overclockAdviceWords(overclockSaving(stage, Number(phase), settings));
   const upgraded = upgradedWords(upgrade);
-  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.${upgraded}`;
+  // The nodes the plan's node survey leaves out (#1183), which none of these counts tap.
+  const leftOut = leftOutWords(settings?.extraction);
+  const skipped = leftOut
+    ? ` Left out of this plan in your node survey, never tapped here: ${leftOut}.`
+    : '';
+  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.${upgraded}${skipped}`;
   const ofUpgrade = (resource: string) =>
     upgrade?.resources.find(each => each.resource === resource);
   const body = [
@@ -797,8 +823,11 @@ function nodeCells(runs: MiningRun[]): string {
 // resource well's "about 1 Resource Well Pressurizer at 85%", a fluid's other clocks after it
 // ("At 100%: 16 at 100% and 1 at 20.44%"), and what the nodes cannot give.
 function machineCells(entry: ResourceMining, mining: StageMining): string {
-  const nodeRuns = entry.advice.runs.filter(run => !isWellKind(run.kind)),
-    wellRuns = entry.advice.runs.filter(run => isWellKind(run.kind));
+  // Runs that tap a node: a draft's draw from a resource whose nodes are all left out (#1183)
+  // has runs of none.
+  const runs = entry.advice.runs.filter(run => run.full > 0 || run.last !== null);
+  const nodeRuns = runs.filter(run => !isWellKind(run.kind)),
+    wellRuns = runs.filter(run => isWellKind(run.kind));
   const parts: string[] = [];
   if (nodeRuns.length)
     parts.push(`${nodeRuns[0]!.machine}: ${clockRunWords(nodeRuns, entry.fluid)}`);
@@ -816,7 +845,7 @@ function machineCells(entry: ResourceMining, mining: StageMining): string {
         text += `. At ${miningNumber(at * 100)}%: ${clockRunWords(runs, true)} (${powerAmount(option.mw)})`;
     }
   if (entry.advice.short)
-    text += `. ${miningNumber(entry.advice.short)}${entry.fluid ? ' m³' : ''}/min more than this phase's nodes give`;
+    text += `${text ? '. ' : ''}${miningNumber(entry.advice.short)}${entry.fluid ? ' m³' : ''}/min more than this phase's nodes give`;
   return text;
 }
 
@@ -874,5 +903,5 @@ export const budgetShareWords = (row: Pick<PhaseBudgetRow, 'low' | 'high'>): str
 // Each resource's budget in a stage, for a quick lookup: { resource: budget }.
 export const stageBudgets = (
   stage: Pick<StoredStage, 'mining'> | undefined,
-  settings: Pick<StoredSettings, 'limits'>,
-): ItemRates => ({ ...settings.limits, ...(stage?.mining?.budgets ?? {}) });
+  settings: Pick<MiningSettings, 'limits' | 'extraction'>,
+): ItemRates => ({ ...budgetLimits(settings), ...(stage?.mining?.budgets ?? {}) });

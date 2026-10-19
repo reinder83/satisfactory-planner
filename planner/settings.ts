@@ -258,9 +258,44 @@ const countsByResource = (raw: unknown): Record<string, NodeCounts> => {
   }
   return out;
 };
+// The nodes or well satellites a survey leaves out of the plan (#1183): per resource, whole counts
+// from 0 up to the survey's own count of that resource and purity (`counted`), rows of none
+// dropped. Anything else is refused, never corrected: a count it does not hold, a part of a node,
+// more than the survey counts.
+const LEFT_OUT_REFUSAL =
+  'Leave out whole numbers of nodes, from 0 up to the ones your survey counts.';
+const leftOutCounts = (
+  raw: unknown,
+  counted: Record<string, NodeCounts>,
+  what: string,
+): Record<string, NodeCounts> => {
+  const out: Record<string, NodeCounts> = {};
+  if (raw === undefined) return out;
+  if (!isRecord(raw) || Object.keys(raw).length > 40) fail(LEFT_OUT_REFUSAL);
+  for (const [name, counts] of Object.entries(raw)) {
+    if (!RAW.includes(name)) fail(`${name} is not a raw resource.`);
+    if (!isRecord(counts)) fail(LEFT_OUT_REFUSAL);
+    const row = blankNodeCounts();
+    for (const purity of ['impure', 'normal', 'pure'] as const) {
+      const count = counts[purity] === undefined ? 0 : counts[purity];
+      if (!Number.isInteger(count) || (count as number) < 0) fail(LEFT_OUT_REFUSAL);
+      const most = counted[name]?.[purity] ?? 0;
+      if ((count as number) > most)
+        fail(
+          `Your survey counts ${most} ${purity} ${name} ${what}, so it cannot leave out ${count as number}.`,
+        );
+      row[purity] = count as number;
+    }
+    if (row.impure || row.normal || row.pure) out[name] = row;
+  }
+  return out;
+};
+const blankNodeCounts = (): NodeCounts => ({ impure: 0, normal: 0, pure: 0 });
 // How the resource budgets were arrived at: the nodes the world holds, the
 // miner they will be worked with, and whatever is already spoken for. Recorded
-// so the survey can be reopened; the plan itself still runs on `limits`.
+// so the survey can be reopened; the plan itself still runs on `limits`, held to the nodes it
+// does not leave out of the plan (#1183, budgetLimit in public/preferences/mining.ts), which are
+// kept only when it leaves some out, so a survey without them is the record it always was.
 const extractionRecord = (raw: unknown): ExtractionRecord | null => {
   if (raw === undefined || raw === null) return null;
   if (!isRecord(raw)) fail('Invalid extraction survey.');
@@ -273,6 +308,10 @@ const extractionRecord = (raw: unknown): ExtractionRecord | null => {
       if (perMinute > 0) used[name] = perMinute;
     }
   }
+  const nodes = countsByResource(raw.nodes),
+    wells = countsByResource(raw.wells);
+  const excludedNodes = leftOutCounts(raw.excludedNodes, nodes, 'nodes'),
+    excludedWells = leftOutCounts(raw.excludedWells, wells, 'well satellites');
   return {
     mark:
       raw.mark === undefined
@@ -281,9 +320,11 @@ const extractionRecord = (raw: unknown): ExtractionRecord | null => {
           ? (raw.mark as 1 | 2 | 3)
           : fail('Invalid miner mark.'),
     clock: number(raw.clock, 0.01, 2.5, 2.5),
-    nodes: countsByResource(raw.nodes),
-    wells: countsByResource(raw.wells),
+    nodes,
+    wells,
     used,
+    ...(Object.keys(excludedNodes).length ? { excludedNodes } : {}),
+    ...(Object.keys(excludedWells).length ? { excludedWells } : {}),
   };
 };
 // Per-item protected storage rates, items/min, 0 to 300. Resolved by storageRateFor.

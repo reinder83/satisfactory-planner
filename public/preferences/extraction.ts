@@ -9,7 +9,7 @@
 // clock; impure is half and pure is double. A test pins the whole table by
 // rebuilding the shipped DEFAULT_LIMITS from the known node counts, so a wrong
 // number here cannot pass unnoticed.
-import type { ItemRates, NodeCounts, Survey } from '../types/index.ts';
+import type { FullSurvey, ItemRates, NodeCounts, NodeExclusions, Survey } from '../types/index.ts';
 
 // The purities a node count is kept for.
 type NodePurity = keyof NodeCounts;
@@ -65,7 +65,7 @@ export const uncountedResources: string[] = ['Water'];
 // `wells` hold per-resource { impure, normal, pure } counts, `used` the items/min already
 // committed elsewhere.
 export const blankCounts = (): NodeCounts => ({ impure: 0, normal: 0, pure: 0 });
-export const blankExtraction = (): Required<Survey> => ({
+export const blankExtraction = (): FullSurvey => ({
   mark: 3,
   clock: 2.5,
   nodes: {},
@@ -111,11 +111,111 @@ export function resourcePool(extraction: Survey | null | undefined, resource: st
   }
   return total;
 }
-// The pool less whatever is already committed to factories this plan does not
-// include, which is what the planner's budgets are supposed to mean.
+// The pool less the nodes the survey leaves out of the plan (#1183) and whatever is already
+// committed to factories this plan does not include, which is what the planner's budgets are
+// supposed to mean. The committed extraction comes off the nodes the plan may tap.
 export function resourceAvailable(extraction: Survey | null | undefined, resource: string): number {
   const used = Number(extraction?.used?.[resource]) || 0;
-  return Math.max(0, resourcePool(extraction, resource) - used);
+  return Math.max(0, resourcePool(remainingSurvey(extraction), resource) - used);
+}
+
+// --- Nodes left out of the plan (#1183) ---
+//
+// A survey may leave some of the nodes it counts out of the plan: a node far away, or one already
+// feeding something the plan does not include. `excludedNodes` and `excludedWells` hold them as
+// counts per resource and purity, beside the `nodes` and `wells` they are taken from, each at
+// most the count it is taken from (settings() refuses more). The plan never taps them: the
+// budgets the survey writes leave them out (resourceAvailable), each phase's node kinds are the
+// rest (phaseMining in mining.ts), and a resource with nodes left out never plans with more than
+// the rest give (leftOutCap). A survey that leaves none out has neither map.
+
+// The counts of a survey and the nodes it leaves out, as each reader has them.
+type Counted = {
+  nodes?: Record<string, NodeCounts>;
+  wells?: Record<string, NodeCounts>;
+} & NodeExclusions;
+// [counted map, left-out map] of a survey.
+const EXCLUSIONS = [
+  ['nodes', 'excludedNodes'],
+  ['wells', 'excludedWells'],
+] as const;
+// Whether a survey leaves any node or well satellite out of the plan.
+export const leavesNodesOut = (survey: Counted | null | undefined): boolean =>
+  EXCLUSIONS.some(([, left]) => Object.keys(survey?.[left] ?? {}).length > 0);
+// A count as a whole number from 0.
+const whole = (value: unknown): number => Math.max(0, Math.floor(Number(value) || 0));
+// The survey with the nodes it leaves out taken off its counts, and no left-out maps: what the
+// plan may tap. The survey itself when it leaves none out.
+export function remainingSurvey<T extends Counted | null | undefined>(survey: T): T {
+  if (!survey || !leavesNodesOut(survey)) return survey;
+  const rest: Counted = { ...survey };
+  delete rest.excludedNodes;
+  delete rest.excludedWells;
+  for (const [counted, left] of EXCLUSIONS) {
+    const map: Record<string, NodeCounts> = {};
+    for (const [name, counts] of Object.entries(survey[counted] ?? {})) {
+      const out = survey[left]?.[name];
+      map[name] = out
+        ? {
+            impure: Math.max(0, (Number(counts.impure) || 0) - whole(out.impure)),
+            normal: Math.max(0, (Number(counts.normal) || 0) - whole(out.normal)),
+            pure: Math.max(0, (Number(counts.pure) || 0) - whole(out.pure)),
+          }
+        : counts;
+    }
+    rest[counted] = map;
+  }
+  return rest as T;
+}
+// The survey with each count it leaves out a whole number within the count it is taken from, rows
+// of none dropped and a map of none left out: what the wizard keeps after counts change (a
+// lowered count, a preset filled in). The survey itself when it leaves none out.
+export function withinCounts<T extends Survey>(survey: T): T {
+  if (!leavesNodesOut(survey)) return survey;
+  const kept: T = { ...survey };
+  for (const [counted, left] of EXCLUSIONS) {
+    const map: Record<string, NodeCounts> = {};
+    for (const [name, out] of Object.entries(survey[left] ?? {})) {
+      const counts = countsOf(survey[counted], name);
+      const row = {
+        impure: Math.min(whole(out.impure), whole(counts.impure)),
+        normal: Math.min(whole(out.normal), whole(counts.normal)),
+        pure: Math.min(whole(out.pure), whole(counts.pure)),
+      };
+      if (row.impure || row.normal || row.pure) map[name] = row;
+    }
+    if (Object.keys(map).length) kept[left] = map;
+    else delete kept[left];
+  }
+  return kept;
+}
+// What the nodes a survey leaves out of `resource` give at its miner and clock, per minute.
+export const leftOutPool = (survey: Survey | null | undefined, resource: string): number =>
+  leavesNodesOut(survey)
+    ? resourcePool(survey, resource) - resourcePool(remainingSurvey(survey), resource)
+    : 0;
+// Each count a survey leaves out, in the survey screens' order (ores, then crude oil and
+// nitrogen; nodes before well satellites, impure to pure): [resource, purity, count, well].
+export function leftOutCounts(
+  survey: Counted | null | undefined,
+): [resource: string, purity: keyof NodeCounts, count: number, well: boolean][] {
+  const out: [string, keyof NodeCounts, number, boolean][] = [];
+  if (!survey || !leavesNodesOut(survey)) return out;
+  for (const [, left] of EXCLUSIONS) {
+    const map = survey[left] ?? {};
+    const names = [
+      ...[...minedResources, ...wellResources].filter(name => map[name]),
+      ...Object.keys(map)
+        .filter(name => !minedResources.includes(name) && !wellResources.includes(name))
+        .sort(),
+    ];
+    for (const name of names)
+      for (const [purity] of purities3) {
+        const count = whole(map[name]?.[purity]);
+        if (count) out.push([name, purity, count, left === 'excludedWells']);
+      }
+  }
+  return out;
 }
 // Every counted resource as a budget, rounded to whole items per minute.
 // Water and anything else uncounted keeps whatever the profile already had.

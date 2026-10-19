@@ -1,6 +1,6 @@
 // The draft of a phase that does not fit, and the reason it gives.
 import { listNames } from '../public/wording.ts';
-import { phaseMining } from '../public/preferences.ts';
+import { budgetLimits, leftOutCap, phaseMining } from '../public/preferences.ts';
 import { amplifiesIn } from '../public/somersloops.ts';
 import type { CurrentSettings, CurrentStage, ItemRates, Shortfall } from '../public/types/index.ts';
 import type { Solved, RunResult, RunOptions } from './types.ts';
@@ -63,9 +63,10 @@ export function draftStage(
   }
   return stage;
 }
-// The budgets a phase is planned with: the settings', or with mining per phase its own (#1065).
+// The budgets a phase is planned with: the settings', or with mining per phase its own (#1065),
+// each held to the nodes the node survey does not leave out (budgetLimits, #1183).
 const phaseBudgets = (config: CurrentSettings, phase: number): ItemRates =>
-  config.phaseMining ? phaseMining(config, phase).budgets : config.limits;
+  config.phaseMining ? phaseMining(config, phase).budgets : budgetLimits(config);
 // The draft's exact LP: `plain` without whole machines. Protected storage is left out of it where
 // the whole-machine solve leaves it out (#1100), so the draft explains the phase that was solved.
 const exactRun = (plain: CurrentSettings, phase: number, options: RunOptions) =>
@@ -172,6 +173,30 @@ function raisedSettings(config: CurrentSettings, shortfalls: Shortfall[]): Curre
   }
   return { ...config, limits };
 }
+// What the node survey leaves out of the plan of the short resources (#1183), a sentence each,
+// so a resource whose nodes are all left out says why its budget is none: " Your node survey
+// leaves every Iron Ore node out of this plan, so it has none to mine." or " Your node survey
+// leaves 3 of the 40 Iron Ore nodes out of this plan." '' for resources it leaves none out of.
+function leftOutWords(config: CurrentSettings, names: string[]): string {
+  const survey = config.extraction;
+  if (!survey) return '';
+  return names
+    .filter(name => leftOutCap(config, name) !== null)
+    .map(name => {
+      const sum = (map?: Record<string, { impure: number; normal: number; pure: number }>) =>
+        (map?.[name]?.impure ?? 0) + (map?.[name]?.normal ?? 0) + (map?.[name]?.pure ?? 0);
+      const left = sum(survey.excludedNodes) + sum(survey.excludedWells),
+        all = sum(survey.nodes) + sum(survey.wells);
+      const nodes = sum(survey.nodes) > 0,
+        wells = sum(survey.wells) > 0;
+      const one = nodes && wells ? 'node and well satellite' : wells ? 'well satellite' : 'node',
+        many = nodes && wells ? 'nodes and well satellites' : wells ? 'well satellites' : 'nodes';
+      return left >= all
+        ? ` Your node survey leaves every ${name} ${one} out of this plan, so it has none to mine.`
+        : ` Your node survey leaves ${left} of the ${all} ${name} ${many} out of this plan.`;
+    })
+    .join('');
+}
 // A real budget shortfall: what the diagnostic draws beyond the budgets, and the time at which
 // the phase would fit them. Sets `shortfalls` and `minHours` on the draft.
 function shortfallReason(
@@ -206,7 +231,8 @@ function shortfallReason(
   const storage = stockedFromSurplus(config) ? '' : 'protected storage, ';
   return (
     (names.length
-      ? `This phase needs more ${listNames(names)} than the entered budgets provide.`
+      ? `This phase needs more ${listNames(names)} than the entered budgets provide.` +
+        leftOutWords(config, names)
       : 'The goal exceeds the available resource or power budgets.') +
     (stage.minHours
       ? ` It fits the current budgets at ${warningDuration(stage.minHours)} for this phase.`

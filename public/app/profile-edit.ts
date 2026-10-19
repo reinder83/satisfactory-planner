@@ -12,6 +12,9 @@ import { distributions, objectiveWords, purities, recipeCostOf } from '../prefer
 import { ALLOWANCE_SETTING, powerView } from '../power.ts';
 import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
+import { leftOutNote, leftOutWords } from '../mining.ts';
+import type { MiningSettings } from '../preferences/mining.ts';
+import type { NodeExclusions } from '../types/index.ts';
 import { power } from './wizard/fields.ts';
 import type { Choice, PlanObjective, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
 
@@ -63,14 +66,18 @@ export function profileSummary(settings: {
   purity: string;
   multiplier: number;
   powerFactor: number;
+  // The node survey (#1183): its left-out nodes are named.
+  extraction?: MiningSettings['extraction'];
   recipeCost?: number;
   objective?: PlanObjective;
 }): string {
   const cost = recipeCostOf(settings);
+  const leftOut = leftOutNote(settings.extraction);
   return [
     `${settings.purity} purity`,
     `${num(settings.multiplier)}× elevator`,
     `${num(settings.powerFactor)}× power`,
+    ...(leftOut ? [leftOut] : []),
     ...(cost === 1 ? [] : [`${num(cost)}× recipe parts`]),
     ...(settings.objective === undefined ? [] : [objectiveWords(settings.objective, true)]),
   ].join(' · ');
@@ -188,6 +195,17 @@ function stable(value: unknown): string {
 }
 
 const onOff = (value: unknown) => (value ? 'On' : 'Off');
+// The nodes a plan's node survey leaves out of it (#1183) in words, "None" when it leaves none
+// out, as every plan made before them.
+const leftOutChange = (settings: NameSettings): string =>
+  leftOutWords(settings.extraction as MiningSettings['extraction']) || 'None';
+// The node survey without the nodes it leaves out, so a change of only those is not counted again
+// among the other settings Review counts.
+const surveyCounts = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object') return value;
+  const { excludedNodes: _nodes, excludedWells: _wells, ...rest } = value as NodeExclusions;
+  return rest;
+};
 // The recipe part cost (#1161) in words, absent as 1×: a plan made before the setting was planned
 // at 1×, so an edit to 2× is named, and a draft that keeps 1× is no change.
 const recipeCostWords = (settings: NameSettings): string =>
@@ -302,6 +320,9 @@ export function settingsChanges(
       before: words(before[key]),
       after: words(after[key]),
     })),
+    ...(leftOutChange(before) !== leftOutChange(after)
+      ? [{ label: 'Nodes left out', before: leftOutChange(before), after: leftOutChange(after) }]
+      : []),
     ...(recipeCostWords(before) !== recipeCostWords(after)
       ? [
           {
@@ -326,7 +347,15 @@ export function settingsChanges(
     'objective',
     ...SETTING_LABELS.map(([key]) => key),
   ]);
-  const others = Object.keys(after).filter(key => !named.has(key) && changed(key)).length;
+  const others = Object.keys(after).filter(
+    key =>
+      !named.has(key) &&
+      (key === 'extraction'
+        ? before.extraction !== undefined &&
+          after.extraction !== undefined &&
+          differs(surveyCounts(before.extraction), surveyCounts(after.extraction))
+        : changed(key)),
+  ).length;
   return { changes, others };
 }
 

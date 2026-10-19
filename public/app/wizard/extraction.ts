@@ -14,6 +14,7 @@ import {
   presetSurvey,
   purities3,
   startingSurvey,
+  withinCounts,
 } from '../../preferences.ts';
 import { toast } from '../api.ts';
 import { $ } from '../format.ts';
@@ -101,7 +102,10 @@ export function undoExtractionReset() {
 // what was typed even before the budgets are applied.
 // Exception: purity and distribution are the step 1 settings themselves, so they
 // are written to wizard.settings at once, even if the survey is left unapplied.
-// Counts are whole and non-negative; an all-zero row is dropped from the map.
+// Counts are whole and non-negative; an all-zero row is dropped from the map. The nodes left out
+// of the plan (#1183, "exclude-node:<name>:<purity>" and "exclude-well:…", the "Leave nodes out of
+// this plan" tables) are kept within the counts they are taken from (withinCounts), and a map
+// that leaves none out is dropped, so a survey without them is the one it always was.
 export function readExtraction(form: HTMLFormElement) {
   const wizardDraft = draft(),
     survey = extractionOf(wizardDraft),
@@ -122,6 +126,16 @@ export function readExtraction(form: HTMLFormElement) {
       row[purity as keyof NodeCounts] = Math.max(0, Math.floor(Number(value) || 0));
       if (row.impure || row.normal || row.pure) map[name] = row;
       else delete map[name];
+    } else if (field.startsWith('exclude-node:') || field.startsWith('exclude-well:')) {
+      const [kind = '', name = '', purity = ''] = field.split(':');
+      if (!raw.has(name) || !purities3.some(([p]) => p === purity)) continue;
+      const key = kind === 'exclude-well' ? 'excludedWells' : 'excludedNodes';
+      const map = (survey[key] ??= {});
+      const row: NodeCounts = map[name] || blankCounts();
+      row[purity as keyof NodeCounts] = Math.max(0, Math.floor(Number(value) || 0));
+      if (row.impure || row.normal || row.pure) map[name] = row;
+      else delete map[name];
+      if (!Object.keys(map).length) delete survey[key];
     } else if (field.startsWith('used:')) {
       const name = field.slice(5);
       if (!raw.has(name)) continue;
@@ -131,6 +145,7 @@ export function readExtraction(form: HTMLFormElement) {
       else delete survey.used?.[name];
     }
   }
+  wizardDraft.extraction = withinCounts(survey);
 }
 
 // Go to survey screen `target`. Below 1 leaves without applying; past the last
