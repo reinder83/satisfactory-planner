@@ -56,6 +56,7 @@ const SHARED = [
   'preferences/storage.ts',
   'preferences/world.ts',
   'state/alternates.ts',
+  'state/built-match.ts',
   'state/carry.ts',
   'state/factory-groups.ts',
   'state/figures.ts',

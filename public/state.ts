@@ -21,8 +21,9 @@
 //   exactClocks    { phase: [rowId] } production lines asked to run at exact clocks
 //                  (validateExactClocks, #1066), version 16; absent means the plan's own
 //   builtMachines  { 'calc-<phase>-<rowId>': count } machines that stand on a production line a
-//                  recalculation grew (validateBuiltMachines, #1174), version 18; only a
-//                  carry sets it (carryLines), no update op edits it
+//                  recalculation grew (validateBuiltMachines, #1174), version 18; or shrunk,
+//                  or no longer has (#1175, state/built-match.ts); only a carry sets it
+//                  (carryLines, carryFormerLines), no update op edits it
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -49,6 +50,8 @@
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 //   state/alternates.ts      ALTERNATE_RECIPE_IDS, every alternate recipe id the game data has held
 //   state/items.ts           ITEM_NAMES, every item name the game data has held
+//   state/built-match.ts     built lines a plan changed (#1175): what a line was (lineFacts,
+//                            recipeBook) and the line it switches to (successorOf)
 export {
   bayCapacity,
   bayOfSlot,
@@ -117,3 +120,14 @@ export { renameOfferFields } from './state/rename-offer.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
 export { ALTERNATE_RECIPE_IDS } from './state/alternates.ts';
 export { ITEM_NAMES } from './state/items.ts';
+export {
+  calcKeyParts,
+  lineFacts,
+  lineName,
+  recipeBook,
+  sameProduct,
+  stageRowsOf,
+  successorOf,
+  type LineFacts,
+  type RecipeBook,
+} from './state/built-match.ts';

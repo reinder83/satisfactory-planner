@@ -11,7 +11,9 @@
   line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
   dimmed, with its note under the title; a line at exact clocks, or one whose clocks a
   recalculation would change (`step.clocks`, #1066), says so there too, and so does a line a
-  recalculation grew (`step.built`, #1174: "5 of 6 built"), whose table says what to add; a step
+  recalculation grew (`step.built`, #1174: "5 of 6 built"), whose table says what to add, or that
+  built lines of another recipe switch to (#1175: "4 to switch from Iron Plate, 1 to add"), and a
+  shrunk line's spare machines (`step.spare`, #1175: "6 built, 1 spare"), ticked or not; a step
   with both a table and a list (a grown line's byproduct advice) draws the table first. Its text marks the glossary
   terms in `step.terms` (#1076, ui/TermText.vue); the words stay the step's `body`. A step just ticked is
   `held` in place for a few seconds (tick-hold.ts, #1054), and `leaving` as it fades out of it.
@@ -58,12 +60,15 @@ const satisfiedId = computed(() => 'step-satisfied-' + props.step.id);
 // A grown line's built machines (#1174), which also describe the checkbox: ticking it says all
 // of them stand.
 const builtId = computed(() => 'step-built-' + props.step.id);
+// A shrunk line's spare machines (#1175), which also describe the checkbox, ticked or not.
+const spareId = computed(() => 'step-spare-' + props.step.id);
 const describedBy = computed(
   () =>
     [
       props.step.idle ? idleId.value : '',
       props.step.satisfied ? satisfiedId.value : '',
       props.step.built && !props.step.done ? builtId.value : '',
+      props.step.spare ? spareId.value : '',
     ]
       .filter(Boolean)
       .join(' ') || undefined,
@@ -250,6 +255,9 @@ async function deletePersonal(event: Event) {
         ><span v-if="step.clocks" class="task-idle" data-step-clocks>{{ step.clocks }}</span
         ><span v-if="step.built && !step.done" :id="builtId" class="task-idle" data-step-built>{{
           step.built
+        }}</span
+        ><span v-if="step.spare" :id="spareId" class="task-idle" data-step-spare>{{
+          step.spare
         }}</span>
       </summary>
       <StepTable v-if="step.table" :table="step.table" :terms="step.terms ?? []" />

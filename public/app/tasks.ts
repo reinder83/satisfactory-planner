@@ -43,8 +43,11 @@ export interface Step {
   // is edited.
   table?: StepTable;
   list?: StepList;
-  // A grown line's built machines, "5 of 6 built" (#1174), under the title.
+  // A grown line's built machines, "5 of 6 built" (#1174), or a switched line's change, "4 to
+  // switch from Iron Plate, 1 to add" (#1175), under the title while it is not ticked.
   built?: string;
+  // A shrunk line's spare machines, "6 built, 1 spare" (#1175), under the title, ticked too.
+  spare?: string;
 }
 
 // The production line a step links to (taskLink): its "Production line ↗" button opens the

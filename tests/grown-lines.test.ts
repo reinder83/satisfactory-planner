@@ -101,9 +101,13 @@ test('a ticked line that needs more machines keeps its built machines (new profi
   const next = planWith([refinery(6, 5.5), smelter(3), plastic(2, 90)]);
   const started = newProfileState(next, from.state, from.plan, undefined, undefined);
   assert.equal(started.state.checks[key(REFINERY)], false, 'the grown line is unticked');
-  assert.deepEqual(started.state.builtMachines, { [key(REFINERY)]: 5 }, 'its 5 Refineries stand');
+  assert.deepEqual(
+    started.state.builtMachines,
+    { [key(REFINERY)]: 5, [key(SMELTER)]: 4 },
+    'its 5 Refineries stand, and so do the 4 Smelters of the shrunk line (#1175)',
+  );
   assert.equal(started.grownCount, 1);
-  assert.equal(started.state.checks[key(SMELTER)], true, 'a shrunk line stays ticked, as before');
+  assert.equal(started.state.checks[key(SMELTER)], true, 'a shrunk line stays ticked');
   assert.equal(started.state.checks[key(PLASTIC)], false, 'more input alone: left for review');
   assert.equal(started.reviewCount, 1, 'only the changed line is left for review');
   assert.equal(started.state.version, 18);
@@ -142,10 +146,11 @@ test('grown lines follow the carry picks, the lines made on site and a partly bu
     { ...refinery(1, 1, REFINERY + ':fg-oil1'), onSite: { group: 'fg-oil1', recipe: REFINERY } },
   ]);
   const site = newProfileState(split, from.state, from.plan, undefined, undefined);
-  assert.equal(site.state.builtMachines, undefined);
+  // The Smelter and Plastic lines this plan no longer has are kept as no longer needed (#1175).
+  assert.deepEqual(site.state.builtMachines, { [key(SMELTER)]: 4, [key(PLASTIC)]: 2 });
   assert.deepEqual(site.state.onSiteReview, { checks: { [key(REFINERY)]: true } });
-  // A line still partly built in the source keeps its count while the plan needs more, and
-  // drops it once the plan needs no more than stand (shrunk lines are #1175).
+  // A line still partly built in the source keeps its count, also once the plan needs no more
+  // than stand (#1175: its step then says they are all built).
   const partly = newProfileState(next, from.state, from.plan, undefined, undefined).state;
   const bigger = planWith([refinery(8, 7.5), smelter(4), plastic(2, 60)]);
   assert.deepEqual(
@@ -156,7 +161,7 @@ test('grown lines follow the carry picks, the lines made on site and a partly bu
   );
   const smaller = planWith([refinery(5), smelter(4), plastic(2, 60)]);
   const back = newProfileState(smaller, partly, next, undefined, undefined).state;
-  assert.equal(back.builtMachines, undefined);
+  assert.deepEqual(back.builtMachines, { [key(REFINERY)]: 5 });
   assert.equal(back.checks[key(REFINERY)], undefined, 'an untick of the source is not a tick');
   // Ticked again, all its machines stand: the next growth counts from all of them.
   const ticked = mutate(partly, { type: 'check', key: key(REFINERY), value: true });

@@ -22,7 +22,7 @@ import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { frozenMapping } from './persistence.ts';
 import { response } from './routing.ts';
-import { progressionData } from './scope.ts';
+import { progressionData, recipeBookData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
 import type { ProgressState, StageKey, StoredPayoff, UpdateOp } from '../public/types/index.ts';
 
@@ -89,7 +89,7 @@ export function profileRoutes({
         reviewedReplacement(reviewed, user.id, input.settings, input.planCreatedAt) ??
         calculate(input.settings),
       backupId = randomId();
-    let carried = { reviewCount: 0, grownCount: 0, carried: 0 };
+    let carried = { reviewCount: 0, grownCount: 0, changedCount: 0, carried: 0 };
     await commit(draft => {
       const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
       const index = draftSave?.profiles.findIndex(p => p.id === profile.id) ?? -1;
@@ -105,6 +105,7 @@ export function profileRoutes({
         backupId,
         backupName,
         progressionData(),
+        recipeBookData(),
       );
       carried = next;
       draftSave.profiles.splice(index, 1, next.profile, next.backup);
@@ -117,6 +118,7 @@ export function profileRoutes({
       backupId,
       reviewCount: carried.reviewCount,
       grownCount: carried.grownCount,
+      changedCount: carried.changedCount,
       carriedChecks: carried.carried,
       workspace: currentSummary(user),
     });

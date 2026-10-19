@@ -83,6 +83,10 @@ export interface AdaFacts {
   // Lines of the phase shown that a recalculation grew, not ticked yet (#1174, grownShares in
   // app/views/calculated.ts): their built machines stand, the rest is to add.
   grownLines?: number;
+  // Lines of the phase shown whose built machines a recalculation changed otherwise (#1175,
+  // changedLineCount in app/views/calculated.ts): lines to switch from another recipe, lines with
+  // spare machines and lines no longer needed.
+  changedLines?: number;
   // The group lines made on site that the factory groups' marks would give are not the ones the
   // plan has (onSiteChange in app/on-site-picker.ts, #877, #938): the plan waits for a
   // recalculation the user starts.
@@ -563,6 +567,14 @@ const RULES: AdaRule[] = [
     when: facts => (facts.grownLines ?? 0) > 0,
     text: facts =>
       `${plural(facts.grownLines!, 'production line')} in ${facts.phaseLabel} ${facts.grownLines === 1 ? 'needs' : 'need'} more machines than you built under the earlier plan. ${facts.grownLines === 1 ? 'Its step says' : 'Their steps say'} how many stand and how many to add. I kept count, so you do not have to.`,
+  },
+  {
+    id: 'changed-lines',
+    on: ['plan', 'factories'],
+    tone: 'calm',
+    when: facts => (facts.changedLines ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.changedLines!, 'production line')} you built in ${facts.phaseLabel} ${facts.changedLines === 1 ? 'differs' : 'differ'} from the plan now: machines to switch to another recipe, machines to spare, or a line no longer needed. The steps and the note above them say which. Nothing gets dismantled until you do it.`,
   },
   {
     id: 'recycle-byproducts',

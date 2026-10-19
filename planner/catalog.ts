@@ -19,8 +19,8 @@ import {
   DEFAULT_LIMITS,
   PURE_LIMITS,
 } from './data.ts';
-import { storable, SLOOP_USES } from './settings.ts';
-import { pureNames } from './recipes.ts';
+import { settings, storable, SLOOP_USES } from './settings.ts';
+import { generators, pureNames } from './recipes.ts';
 
 // What a storage container can be named after when one is added (#295): every item the game
 // has that is not a fluid, since a fluid does not go in a container, and not the two entries
@@ -65,6 +65,12 @@ export const catalog = (): Catalog => ({
       inputs: recipe.inputs,
       outputs: recipe.outputs,
     })),
+  // Every generator line a plan can build (#1175): Phase 5's with every fuel and nuclear waste
+  // strategy, so a built line no plan at hand has can still be named (recipeBook in
+  // public/state/built-match.ts).
+  generatorLines: generators({ ...settings({}), nuclear: 'recycle', mainPower: 'auto' }, 5).map(
+    ({ id, name, machine }) => ({ id, name, machine }),
+  ),
   storageOptions,
   supplyItems: [
     ...new Set(DATA.recipes.filter(r => r.phase <= 5).flatMap(r => Object.keys(r.outputs))),
