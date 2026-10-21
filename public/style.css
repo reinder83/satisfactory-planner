@@ -5674,17 +5674,6 @@ button.rail-tile:hover {
     margin-bottom: 8px;
   }
 }
-@media print {
-  .session-build,
-  .session-note {
-    break-inside: avoid;
-  }
-  .session-note-text {
-    resize: none;
-    background: white;
-    color: #1c2328;
-  }
-}
 /* A line that only made a Space Elevator part already delivered in full (#1062): dimmed like a
    finished step but not struck through, since nobody ticked it, with a note under its title that
    says why, in the body font (the title's own is the heading font). */
@@ -6060,6 +6049,14 @@ button.rail-tile:hover {
   }
   .step-table tbody tr:nth-child(even) {
     background: none;
+  }
+  /* Today's session (#1073) prints each build and the To-Do note whole. */
+  .session-build,
+  .session-note {
+    break-inside: avoid;
+  }
+  .session-note-text {
+    resize: none;
   }
   /* On paper the lanes would not line up with the printed cards, so the rows' own words
      ("from 01 Iron Ingot", "to 02, 03") carry the links, and the cards stay whole. */

@@ -85,4 +85,6 @@ test('a grown line counts the machines to add, without the extractors of the who
 test('a line with machines to spare has nothing to build', async () => {
   await show({ version: 19, checks: { [PLATE]: true }, builtMachines: { [PLATE]: 8 } });
   assert.equal(step(PLATE).querySelector('[data-step-materials]'), null);
+  // The other lines still say what they take.
+  assert.match(materials(PLASTIC), /^To build: 2 Refineries /);
 });
