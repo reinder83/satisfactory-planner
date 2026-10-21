@@ -17,6 +17,7 @@ import { builtLinesOf, initialState, recipeBook } from '../public/state.ts';
 import { validateTransfer } from '../public/transfer.ts';
 import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
+import { solve } from '../optimizer.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
 // The settings as the interface sends them (withBuiltLines in public/app/built-capacity.ts).
 const withBuiltLines = (settings: object, lines: BuiltLines | undefined) =>
@@ -126,10 +127,93 @@ test('a recalculation keeps and extends the built lines instead of switching the
   assert.equal(credited.stages['4'].builtDropped, undefined);
 });
 
+// #1188: the issue's world under every objective (#1180). Under the raw resources objective a
+// machine costs only TIE_BUILDING, so the few machines a switch to Cast Screws saves were worth
+// less than the Crude Oil their power burns: the solve switched the built Screws, while Review
+// said they were kept. Their raw resources and power are already spent too (#1172), so under
+// every objective the built lines stay unless a switch saves clearly more than it builds.
+const OBJECTIVES: [string, object][] = [
+  ['the fewest buildings', {}],
+  ['least power', { objective: 'power' }],
+  ['least raw resources', { objective: 'raw' }],
+  ['raw resources weighted alone', { objective: { buildings: 0, power: 0, raw: 1 } }],
+  ['an even mix', { objective: { buildings: 1, power: 1, raw: 1 } }],
+];
+const SCREW_LINES: BuiltLines = { '4': { [SCREWS]: 35, [ROD]: 38 } };
+
+test('every objective keeps the built Screws rather than switching to Cast Screws', () => {
+  for (const [name, objective] of OBJECTIVES) {
+    const plain = machinesOf(calculate({ ...TO, ...objective }));
+    assert.equal(plain[CAST], 28, `${name}: on its own the solve switches`);
+    const kept = calculate({ ...TO, ...objective, builtLines: SCREW_LINES });
+    const machines = machinesOf(kept);
+    assert.equal(machines[SCREWS], 35, `${name}: the Screws line is kept`);
+    assert.equal(machines[CAST], undefined, `${name}: no Cast Screws line`);
+    assert.equal(machines[ROD], 38, `${name}: the Iron Rods stay`);
+    assert.equal(kept.stages['4'].builtDropped, undefined, name);
+    // With only the Screws built, the Iron Rods they take are new machines, as is the power that
+    // runs them; the built Screws stay all the same, as under the fewest buildings. Under least
+    // power the Screws were switched, since the fuel lines behind their power draw power too.
+    const alone = machinesOf(
+      calculate({ ...TO, ...objective, builtLines: { '4': { [SCREWS]: 35 } } }),
+    );
+    assert.equal(alone[SCREWS], 35, `${name}: the Screws line alone is kept`);
+    assert.equal(alone[CAST], undefined, `${name}: no Cast Screws beside it`);
+  }
+});
+
+test('under every objective a switch that saves clearly more still wins', () => {
+  // Steel Screws make 260 Screws a minute in one Constructor from 5 Steel Beams: the 35 built
+  // Screws and most of the 38 Iron Rods give way to 6 Steel Screws under every objective, as in
+  // the plan with nothing built (#1175's change task carries the Constructors).
+  const STEEL = 'Recipe_Alternate_Screw_2_C';
+  const NEW = { recipes: 'custom', alternateRecipes: [STEEL] };
+  for (const [name, objective] of OBJECTIVES) {
+    const plain = machinesOf(calculate({ ...NEW, ...objective }));
+    const switched = machinesOf(calculate({ ...NEW, ...objective, builtLines: SCREW_LINES }));
+    assert.equal(switched[SCREWS], undefined, `${name}: the Screws line is switched`);
+    assert.equal(switched[STEEL], plain[STEEL], `${name}: to the Steel Screws of the plain plan`);
+    assert.ok(switched[ROD]! < 38, `${name}: and the Iron Rods shrink`);
+  }
+});
+
+test('the solver gives the shadow price the credit reads, only when asked', () => {
+  // Make 10 widgets at 2 each from a line that also draws 3 MW of the 'power' row, whose 5 MW
+  // more come from a generator at 0.5 a MW: a MW drawn costs 0.5, so the power row's price is -0.5.
+  const model = {
+    optimize: 'cost',
+    opType: 'min' as const,
+    constraints: { widgets: { min: 10 }, power: { max: 0 } },
+    variables: {
+      line: { cost: 2, widgets: 1, power: 3 },
+      generator: { cost: 0.5, power: -1 },
+    },
+  };
+  assert.equal(solve(model).duals, undefined);
+  const priced = solve(model, { duals: true });
+  assert.ok(Math.abs(priced.duals!.power! + 0.5) < 1e-9, String(priced.duals!.power));
+  assert.ok(Math.abs(priced.duals!.widgets! - 3.5) < 1e-9, String(priced.duals!.widgets));
+  assert.equal(solve({ ...model, ints: { line: 1 } }, { duals: true }).duals, undefined);
+});
+
+test('a plan with nothing built is the plan it was under every objective', () => {
+  const bytes = (plan: object) => JSON.stringify({ ...plan, createdAt: undefined });
+  for (const [name, objective] of OBJECTIVES) {
+    const plain = bytes(calculate({ ...TO, ...objective }));
+    assert.equal(bytes(calculate({ ...TO, ...objective, builtLines: {} })), plain, name);
+    assert.equal(bytes(calculate(withBuiltLines({ ...TO, ...objective }, undefined))), plain, name);
+  }
+});
+
 test('a built line the new plan has no use for is not run for nothing', () => {
   // Built far beyond what the plan needs: the line keeps only what it needs.
   const credited = machinesOf(calculate({ builtLines: { '4': { [SCREWS]: 200 } } }));
   assert.equal(credited[SCREWS], machinesOf(base)[SCREWS]);
+  // Also where the built line's power is credited (#1188): the credit never pays for running it.
+  for (const [name, objective] of OBJECTIVES.slice(1)) {
+    const run = machinesOf(calculate({ ...objective, builtLines: { '4': { [SCREWS]: 200 } } }));
+    assert.equal(run[SCREWS], machinesOf(calculate(objective))[SCREWS], name);
+  }
 });
 
 test('the somersloops stay on the built amplified line', () => {
@@ -150,13 +234,23 @@ test('the somersloops stay on the built amplified line', () => {
 
 // Both editions, through their own API: the default plan's Phase 4 with Residual Fuel and Screws
 // ticked, recalculated in place (and into a new profile carried from it) with Cast Screws, sending
-// the built lines as the interface does (builtLinesOf on the profile's context).
+// the built lines as the interface does (builtLinesOf on the profile's context). `to` is what it
+// recalculates to and `ticked` the lines ticked: under another objective (#1188), the issue's
+// Screws and Iron Rods.
 type Request = (
   route: string,
   body?: unknown,
   headers?: Record<string, string>,
 ) => Promise<unknown>;
-async function checkEdition(request: Request, reload: () => Promise<void>) {
+interface EditionCase {
+  to?: object;
+  ticked?: string[];
+}
+async function checkEdition(
+  request: Request,
+  reload: () => Promise<void>,
+  { to = TO, ticked: tickedIds = [REFINERY, SCREWS] }: EditionCase = {},
+) {
   const scoped = (saveId: string, profileId: string) => ({
     'X-Save-Id': saveId,
     'X-Profile-Id': profileId,
@@ -175,25 +269,28 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
   const plainProfile = (await request('/api/profiles', {
     saveId: first.saveId,
     name: 'Plain',
-    settings: withBuiltLines(TO, builtLinesOf(untouched.state, untouched.plan, book)),
+    settings: withBuiltLines(to, builtLinesOf(untouched.state, untouched.plan, book)),
     carryFrom: first.profileId,
   })) as { profileId: string };
   const plain = await context(scoped(first.saveId, plainProfile.profileId));
   assert.equal(plain.plan!.settings.builtLines, undefined);
   assert.equal(machinesOf(plain.plan!)[CAST], 28);
 
-  for (const id of [REFINERY, SCREWS])
+  for (const id of tickedIds)
     await request('/api/update', { type: 'check', key: key(id), value: true }, own);
   const ticked = await context(own);
   const lines = builtLinesOf(ticked.state, ticked.plan, book)!;
-  assert.deepEqual(lines, { '4': { [REFINERY]: 5, [SCREWS]: 35 } });
+  const standing = machinesOf(ticked.plan!);
+  assert.deepEqual(lines, { '4': Object.fromEntries(tickedIds.map(id => [id, standing[id]])) });
+  assert.equal(lines['4']![SCREWS], 35);
   const checkKept = (reply: ContextReply) => {
     const machines = machinesOf(reply.plan!);
     assert.equal(machines[SCREWS], 35, 'Screws stay on their recipe');
     assert.equal(machines[CAST], undefined);
-    assert.equal(machines[REFINERY], 5);
-    assert.equal(reply.state.checks[key(SCREWS)], true, 'and stay ticked');
-    assert.equal(reply.state.checks[key(REFINERY)], true);
+    for (const id of tickedIds) {
+      assert.equal(machines[id], lines['4']![id], id + ' keeps its machines');
+      assert.equal(reply.state.checks[key(id)], true, id + ' stays ticked');
+    }
     assert.equal(reply.state.builtMachines, undefined, 'nothing to switch or spare');
     assert.deepEqual(reply.plan!.settings.builtLines, lines);
   };
@@ -202,7 +299,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
   const sibling = (await request('/api/profiles', {
     saveId: first.saveId,
     name: 'Cast',
-    settings: withBuiltLines(TO, lines),
+    settings: withBuiltLines(to, lines),
     carryFrom: first.profileId,
   })) as { profileId: string; changedCount: number; reviewCount: number };
   assert.equal(sibling.changedCount, 0);
@@ -216,7 +313,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
     {
       name: 'Standard, cast',
       backupName: 'Standard (before edit)',
-      settings: withBuiltLines(TO, lines),
+      settings: withBuiltLines(to, lines),
       planCreatedAt: ticked.plan!.createdAt,
     },
     own,
@@ -250,7 +347,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
       {
         name: 'Bad',
         backupName: 'Bad (before edit)',
-        settings: { ...TO, builtLines: { '4': { [SCREWS]: -1 } } },
+        settings: { ...to, builtLines: { '4': { [SCREWS]: -1 } } },
         planCreatedAt: now.plan!.createdAt,
       },
       own,
@@ -260,7 +357,7 @@ async function checkEdition(request: Request, reload: () => Promise<void>) {
   assert.deepEqual(await context(own), now);
 }
 
-test('the Docker server stores the built lines a recalculation counted', async () => {
+async function dockerEdition(edition: EditionCase = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-1176-'));
   let server: Awaited<ReturnType<typeof createApp>> | undefined;
   let url = '';
@@ -281,17 +378,22 @@ test('the Docker server stores the built lines a recalculation counted', async (
   };
   await listen();
   try {
-    await checkEdition(request, async () => {
-      await close();
-      await listen();
-    });
+    await checkEdition(
+      request,
+      async () => {
+        await close();
+        await listen();
+      },
+      edition,
+    );
   } finally {
     await close();
     await fs.rm(dir, { recursive: true, force: true });
   }
-});
+}
+test('the Docker server stores the built lines a recalculation counted', () => dockerEdition());
 
-test('the browser edition stores the built lines a recalculation counted', async () => {
+async function browserEdition(edition: EditionCase = {}) {
   const records = new Map<string, unknown>();
   const open = () =>
     createBrowserApi(
@@ -311,5 +413,16 @@ test('the browser edition stores the built lines a recalculation counted', async
     async () => {
       api = open();
     },
+    edition,
   );
-});
+}
+test('the browser edition stores the built lines a recalculation counted', () => browserEdition());
+
+// #1188: under the raw resources objective the recalculation in place switched the built Screws
+// to Cast Screws and cut the Iron Rods from 38 to 15, while Review said they were kept. Both
+// editions now keep them, as under the fewest buildings.
+const RAW_CASE: EditionCase = { to: { ...TO, objective: 'raw' }, ticked: [SCREWS, ROD] };
+test('the Docker server keeps the built lines under the raw resources objective', () =>
+  dockerEdition(RAW_CASE));
+test('the browser edition keeps the built lines under the raw resources objective', () =>
+  browserEdition(RAW_CASE));

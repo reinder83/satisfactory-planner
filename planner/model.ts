@@ -626,6 +626,7 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
   const lines = config.builtLines?.[String(phase) as StageKey];
   if (!lines) return;
   const ids = new Set(pool.map(recipe => recipe.id));
+  const built: PoolRecipe[] = [];
   for (const recipe of pool) {
     const twin = 'amp:' + recipe.id;
     const count =
@@ -636,6 +637,46 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
     model.variables[name] = { ...own, cost: (own.cost ?? 0) * KEEP_SHARE, [name]: 1 };
     model.constraints[name] = { max: count };
     if (model.ints?.[recipe.id]) model.ints[name] = 1;
+    built.push(recipe);
+  }
+  creditSpentShare(model, config, built);
+}
+// What a built line draws outside its own variable (#1188). Under a chosen objective (#1180) a
+// line's own variable holds only part of what it costs: its buildings and its own power, which
+// KEEP_SHARE discounts. The rest is priced elsewhere: the raw resources it draws on the raw
+// sources (their raw weight and their extraction power), and the power it draws on the
+// generators and the fuel lines behind them (the fuel's raw resources under a raw weight, the
+// fuel lines' own power under a power weight). #1172 says the ore and power of built lines are
+// already spent, so that share counts at KEEP_SHARE too: each built variable is credited
+// (1 - KEEP_SHARE) of it, its direct raw inputs at their sources' cost (sourceCost without its
+// tiny base, plus their extraction power) and its power at what one more MW costs this phase, the
+// power row's shadow price in a linear solve of the model as it stands. Without it, under the raw
+// objective a switch to a line that draws a little less power (a few machines fewer, burning a
+// little less Crude Oil) outweighed keeping a built line, since a machine there costs only
+// TIE_BUILDING. A switch still wins where it saves more than it builds and a tenth of the built
+// line's share, as under the fewest buildings. The credit is at most nine tenths of what the
+// line's raw inputs and power cost at those prices, and its other inputs are not credited, so a
+// built line the plan has no use for is still not run for nothing. The fewest-buildings
+// objective (no field) is left exactly as #1176 made it: there the outside share is the
+// generators' and fuel lines' buildings, a few hundredths of a machine per built machine.
+function creditSpentShare(model: LpModel, config: CurrentSettings, built: PoolRecipe[]) {
+  if (!built.length || !objectiveWeights(config.objective)) return;
+  // Relaxed, and always for cost: under `maximum` the model may still be set to maximise its gain.
+  const linear = { ...model, optimize: 'cost', opType: 'min' as const, ints: {} };
+  const priced = solve(linear, { duals: true });
+  // Drawing a MW lowers what the power row may still take, so it costs minus its shadow price.
+  const perMW = Math.max(0, -(priced.duals?.power ?? 0));
+  const rawPrice = (item: string) => {
+    const mw = Math.max(0, model.variables['raw:' + item]?.power ?? 0);
+    return sourceCost(config, item, mw, 0) + mw * perMW;
+  };
+  for (const recipe of built) {
+    const variable = model.variables[BUILT + recipe.id]!;
+    const raw = Object.entries(recipe.inputs)
+      .filter(([item]) => RAW.includes(item))
+      .reduce((sum, [item, rate]) => sum + rate * rawPrice(item), 0);
+    const credit = (1 - KEEP_SHARE) * (raw + Math.max(0, variable.power ?? 0) * perMW);
+    variable.cost = (variable.cost ?? 0) - credit;
   }
 }
 // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
