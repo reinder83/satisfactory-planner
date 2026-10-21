@@ -5585,6 +5585,17 @@ button.rail-tile:hover {
   display: block;
   margin-top: 6px;
 }
+/* What a line's step takes to build (#1073): its buildings, belts and pipes, then the parts. */
+.step-materials {
+  margin: 8px 0 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line2);
+  color: var(--ink);
+}
+.step-materials b {
+  color: var(--bright);
+  font-weight: 600;
+}
 /* A line that only made a Space Elevator part already delivered in full (#1062): dimmed like a
    finished step but not struck through, since nobody ticked it, with a note under its title that
    says why, in the body font (the title's own is the heading font). */

@@ -28,6 +28,7 @@ import {
 } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
+import type { StepMaterialWords } from './views/step-materials.ts';
 import { listText, tableText, type StepList, type StepTable } from '../step-table.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
@@ -84,6 +85,9 @@ export interface PlanStepView extends Step {
   clocks?: string;
   // The glossary terms its text marks (#1076): those no step above it on screen marked first.
   terms?: string[];
+  // What a production line's own step takes to build (#1073, stepMaterialWords in
+  // views/step-materials.ts): its buildings, belts and pipes, and the parts they cost.
+  materials?: StepMaterialWords | null;
   icon: StepIconData;
   link: StepLink | null;
   custom?: boolean;
