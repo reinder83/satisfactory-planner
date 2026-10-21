@@ -227,6 +227,10 @@ To move between the browser edition and a self-hosted server, see [self-hosting]
 
 Tick **New to Satisfactory** on the guided start’s first screen, or above the build plan’s steps, to keep the planner simple while you learn the game. The guided start then skips the questions on alternate recipes and clock speeds while their answers are the simple ones (standard recipes, whole machines at 100%), and a new save starts with nothing stocked beyond the Space Elevator, which keeps Phase 1 to a few biomass burners. The build plan hides the hard-drive payoff and what whole machines cost. It is a view setting of this browser: it changes no saved profile and recalculates nothing, and All settings still has every setting. Untick it to see everything again.
 
+## Expert mode
+
+Tick **Expert mode** on the guided start’s first screen, above All settings’ steps, or above the build plan’s steps if you know the game. A new plan then opens straight on All settings, which shows every setting on three denser screens (game settings with preferences, goals with resources, and Review) without the explanatory paragraphs; the field labels and the ⓘ help tips stay, and **← Guided start** still takes you to the questions. The same answers give the same plan either way. On the build plan, the HUB milestones and MAM research are grouped by tier, each tier with its own tick (“Tier 3 done”) beside each unlock’s own: ticking a tier ticks every unlock in it that is not ticked yet, exactly as ticking each one would, and unticking it unticks only that tier’s unlocks. The toast offers Undo. Like New to Satisfactory, it is a view setting of this browser that changes no saved profile and recalculates nothing; the two are never on together, so ticking one unticks the other.
+
 ## Glossary
 
 The planner explains these game terms where they first appear on a page: hover over the dotted word, tab to it, or tap it.

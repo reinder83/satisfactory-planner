@@ -145,6 +145,87 @@ async function checkPerformance(browser: import('playwright').Browser) {
     await context.close();
   }
 }
+// Expert mode (#1197) on a phone-wide page (390 px): a new save opens on All settings' three
+// denser screens, none of which scrolls sideways; a Phase 3 profile opens on milestone-only Phase
+// 1, whose unlocks are grouped by tier. From the keyboard, Space on a group's tick ticks every
+// unlock in it and keeps focus there, a reload keeps the ticks (IndexedDB), and Space again
+// unticks that group's unlocks only.
+async function checkExpertMode(browser: import('playwright').Browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  try {
+    const page = await context.newPage();
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    await page.addInitScript(() => localStorage.setItem('planner-expert', 'on'));
+    const sideways = () =>
+      page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    await page.goto(base);
+    await page.locator('#wizard-form.compact').waitFor();
+    assert.equal(await page.locator('.guided-card').count(), 0, 'no guided start');
+    assert.equal(await page.locator('[data-wizard-step]').count(), 3, 'three screens');
+    assert.equal(await sideways(), 0, 'the first screen does not scroll sideways at 390 px');
+    await page.locator('[name=saveName]').fill('Expert');
+    await page.locator('[name=phase]').selectOption('3');
+    await page.locator('[data-wizard-step="3"]').click();
+    await page.locator('#wizard-form [name=phaseMining]').waitFor();
+    assert.equal(await sideways(), 0, 'the second screen does not scroll sideways at 390 px');
+    await page.locator('[data-wizard-step="5"]').click();
+    const create = page.getByRole('button', { name: 'Create profile', exact: true });
+    await create.waitFor({ timeout: 180000 });
+    await create.click();
+    const groups = page.locator('#main [data-unlock-group]');
+    await groups.first().waitFor({ timeout: 180000 });
+    assert.equal(await sideways(), 0, 'the grouped unlocks do not scroll sideways at 390 px');
+    await page.locator('#main [data-unlock-item] summary').first().click();
+    assert.equal(await sideways(), 0, 'nor with an unlock’s cost open');
+    // A tier with two or more unlocks: Phase 1 has Tier 1 and Tier 2 ones.
+    const tier = await groups.evaluateAll(
+      all =>
+        (all as HTMLElement[]).find(
+          group =>
+            group.dataset.unlockGroup !== 'mam' &&
+            group.querySelectorAll('[data-check]').length >= 2,
+        )!.dataset.unlockGroup!,
+    );
+    const group = page.locator(`#main [data-unlock-group="${tier}"]`);
+    const items = group.locator('[data-check]');
+    const tick = group.locator('[data-unlock-group-tick]');
+    await tick.focus();
+    await page.keyboard.press('Space');
+    await page
+      .locator('#toast')
+      .getByText(/ done: /)
+      .waitFor();
+    assert.ok(await tick.isChecked(), 'Space ticks the group');
+    assert.equal(
+      await tick.evaluate(box => box === document.activeElement),
+      true,
+      'focus stays on the group tick',
+    );
+    const count = await items.count();
+    for (let i = 0; i < count; i++) assert.ok(await items.nth(i).isChecked(), 'each item ticked');
+    await page.reload();
+    // A reload opens the working phase, Phase 3 (#1053): show Phase 1 again.
+    await page.locator('[data-plan-progress]').waitFor();
+    await showPhase(page, '1');
+    await group.waitFor();
+    for (let i = 0; i < count; i++) assert.ok(await items.nth(i).isChecked(), 'kept on reload');
+    const others = page.locator(
+      `#main [data-unlock-group]:not([data-unlock-group="${tier}"]) [data-check]:checked`,
+    );
+    assert.equal(await others.count(), 0, 'no other group ticked');
+    await tick.focus();
+    await page.keyboard.press('Space');
+    await page
+      .locator('#toast')
+      .getByText(/ not done: /)
+      .waitFor();
+    for (let i = 0; i < count; i++) assert.ok(!(await items.nth(i).isChecked()), 'each unticked');
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}
 // Edit settings → Review → Recalculate in place (#1138) on the open profile: Review calculates the
 // plan once, and the recalculation stores it without calculating again. How long each took.
 async function reviewedInPlace(page: Page, calculations: () => Promise<number | undefined>) {
@@ -1088,9 +1169,10 @@ try {
   assert.equal(reexport.saves.length, 2);
   assert.deepEqual(errors, []);
   await checkPerformance(browser);
+  await checkExpertMode(browser);
   await page.screenshot({ path: path.join(temp, 'browser-check.png'), fullPage: true });
   console.log(
-    'Browser checks passed: wizard, WASM calculator, IndexedDB reload, profile isolation, tabs, handbook upgrade, export/import, Docker roundtrip, performance budget.',
+    'Browser checks passed: wizard, WASM calculator, IndexedDB reload, profile isolation, tabs, handbook upgrade, export/import, Docker roundtrip, performance budget, expert mode.',
   );
 } finally {
   await browser?.close();
