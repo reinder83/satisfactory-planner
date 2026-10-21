@@ -7,11 +7,11 @@ import { allowSwitch } from '../api.ts';
 import { required } from '../format.ts';
 import DetailDialog from './detail/DetailDialog.vue';
 
-// What #detail shows: a calculated row, a storage container (by address) or an alternate recipe
-// (by recipe id). A factory group's build order is a page of its own, #factories/<group>/flow
-// (#895).
+// What #detail shows: a calculated row, a storage container (by address), an alternate recipe
+// (by recipe id) or a factory group's flow graph (by group id, #1192). A factory group's build
+// order is a page of its own, #factories/<group>/flow (#895).
 export interface DetailTarget {
-  kind: 'calc' | 'slot' | 'alt';
+  kind: 'calc' | 'slot' | 'alt' | 'graph';
   id: string;
 }
 
