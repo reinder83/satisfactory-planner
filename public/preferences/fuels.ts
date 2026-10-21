@@ -56,6 +56,19 @@ export const OWNED_GENERATORS: readonly {
 // The most of one kind the setting keeps.
 export const OWNED_GENERATORS_MAX = 10000;
 
+// What a Biomass Burner burns by hand (#1204, the burner bank's fuel totals in the build plan): the
+// fuels the bank can run on, each with its energy in MJ and its stack size, as recipes.json
+// `items` has them (a test keeps them equal). A burner draws BURNER_MW at full load, the 30 MW
+// OWNED_GENERATORS has for it.
+export const BURNER_MW = 30;
+export const BURNER_FUELS: readonly { name: string; mj: number; stack: number }[] = [
+  { name: 'Leaves', mj: 15, stack: 500 },
+  { name: 'Wood', mj: 100, stack: 200 },
+  { name: 'Mycelia', mj: 20, stack: 200 },
+  { name: 'Biomass', mj: 180, stack: 200 },
+  { name: 'Solid Biofuel', mj: 450, stack: 200 },
+];
+
 // The generators a player already has, normalised (#1068): only the known kinds, each a whole
 // count from 1 to OWNED_GENERATORS_MAX, in OWNED_GENERATORS' order, so equal choices give equal
 // settings. Anything else is dropped; null for none. settings() in planner/settings.ts stores it

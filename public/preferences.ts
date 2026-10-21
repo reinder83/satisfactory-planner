@@ -37,6 +37,8 @@ export {
   resourceDefaults,
 } from './preferences/world.ts';
 export {
+  BURNER_FUELS,
+  BURNER_MW,
   droneFuels,
   droneSupply,
   laterVehicleFuels,

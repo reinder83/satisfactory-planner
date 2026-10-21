@@ -19,6 +19,8 @@ const modules = fs
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_MARKS',
+    'BURNER_FUELS',
+    'BURNER_MW',
     'DEFAULT_EXTRACTION',
     'EXTRACTOR_CLOCK_DECIMALS',
     'EXTRACTOR_MIN_RATE',
