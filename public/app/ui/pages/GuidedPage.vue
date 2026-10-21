@@ -14,8 +14,9 @@
   step, Review (ReviewStep.vue, as All settings shows it), whose Create profile ends the flow:
   one flow, with no second set of steps (#1072). The form is keyed by screen, so each starts from the draft. A
   missing Save name stops Continue and All settings with a message beside the box
-  (form/NameField.vue, #622). The first question offers "New to Satisfactory" (#1076, app/beginner.ts),
-  and each question's lead marks its glossary terms (TermText.vue).
+  (form/NameField.vue, #622). The first question offers "New to Satisfactory" (#1076, app/beginner.ts)
+  and "Expert mode" (#1197, app/expert.ts), never both on; switching expert mode on goes on to All
+  settings with every answer kept, and each question's lead marks its glossary terms (TermText.vue).
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
@@ -23,11 +24,13 @@ import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { beginnerMode } from '../../beginner.ts';
+import { expertMode } from '../../expert.ts';
 import {
   guidedFlow,
   moveGuided,
   readGuidedForm,
   switchBeginner,
+  switchExpert,
   toAdvanced,
 } from '../../wizard/guided.ts';
 import { NAME_HINT, cancelWizard } from '../../wizard/wizard.ts';
@@ -97,6 +100,8 @@ const page = computed(() =>
       first: topics || wizardDraft.guidedStep <= 1,
       // "New to Satisfactory" (#1076), offered on the first question.
       beginner: !topics && !review && wizardDraft.guidedStep <= 1 ? beginnerMode() : null,
+      // "Expert mode" (#1197) beside it.
+      expert: expertMode(),
       // Review's All settings is the five steps' Review, with this plan (#1072).
       advancedStep: review ? 5 : question?.step || 1,
     };
@@ -113,6 +118,13 @@ function changed(event: Event) {
   const name = String((event.target as HTMLInputElement).name);
   if (name === 'beginner') {
     switchBeginner(
+      event.currentTarget as HTMLFormElement,
+      (event.target as HTMLInputElement).checked,
+    );
+    return;
+  }
+  if (name === 'expert') {
+    switchExpert(
       event.currentTarget as HTMLFormElement,
       (event.target as HTMLInputElement).checked,
     );
@@ -203,6 +215,19 @@ async function submit(event: Event) {
           Keeps it simple: skips the questions on alternate recipes and clock speeds, hides the
           hard-drive and clock details on the build plan, and starts a new save with nothing stocked
           beyond the Space Elevator. All settings still has everything.
+        </p>
+        <label class="check-row guided-expert"
+          ><input
+            type="checkbox"
+            name="expert"
+            data-expert-switch
+            aria-describedby="guided-expert-note"
+            :checked="page.expert"
+          />Expert mode</label
+        >
+        <p id="guided-expert-note" class="small muted">
+          For players who know the game: skips these questions for All settings on three denser
+          screens, and groups the build plan's unlocks by tier with a tick per tier.
         </p>
       </div>
       <ReviewStep v-if="page.review" />

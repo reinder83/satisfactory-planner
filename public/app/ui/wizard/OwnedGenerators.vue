@@ -41,7 +41,7 @@ const view = computed(() =>
 <template>
   <section class="owned-generators" data-owned-generators aria-labelledby="owned-generators-title">
     <h3 id="owned-generators-title">Generators you already have</h3>
-    <p class="small muted">
+    <p class="small muted" data-explain>
       Each phase counts these among the generators it runs where it plans that kind, so you build
       only the rest. They still burn fuel from your resource budgets. Biomass Burners count toward
       the start-up burner bank. Generators you keep fed outside this plan are spare power instead:

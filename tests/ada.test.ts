@@ -1029,3 +1029,13 @@ test('ADA counts today’s session on its page, and what waits upstream (#1073)'
   assert.match(line({ builds: 0, waiting: 0 }).text, /^Nothing left to build in this phase\./);
   assert.ok(!ids(facts({ view: 'session' })).includes('session'), 'absent means none');
 });
+
+test('in expert mode ADA counts the unlock groups done in the phase (#1197)', () => {
+  assert.ok(!ids(facts()).includes('expert-unlocks'), 'nothing outside expert mode');
+  const line = (done: number, total: number) =>
+    adaRemarks(facts({ unlockGroups: { done, total } })).find(r => r.id === 'expert-unlocks')!;
+  assert.equal(line(1, 4).tone, 'calm');
+  assert.match(line(1, 4).text, /^Expert mode: 1 of 4 unlock groups done in this phase\. Tick a/);
+  assert.match(line(0, 1).text, /^Expert mode: 0 of 1 unlock group done in this phase\./);
+  assert.ok(!ids(facts({ unlockGroups: { done: 0, total: 0 } })).includes('expert-unlocks'));
+});

@@ -18,15 +18,20 @@
   A step's text marks the glossary terms (#1076, ui/TermText.vue) the steps above it on screen have
   not marked yet, so each term is explained once. "New to Satisfactory" (app/beginner.ts) is a
   view preference beside "Hide completed": it hides the plan's hard-drive and clock details.
+  "Expert mode" (app/expert.ts, #1197) is the other view preference there, never on with it: outside
+  edit mode it takes the HUB milestones and MAM research out of the list and draws them grouped by
+  tier above it (ui/plan/UnlockGroups.vue), each group with its own tick.
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount } from 'vue';
 import { firstTerms } from '../../../preferences.ts';
-import { beginnerMode, setBeginnerMode } from '../../beginner.ts';
+import { beginnerMode } from '../../beginner.ts';
+import { expertMode, setExpertMode, switchBeginnerMode } from '../../expert.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import {
   calculated,
   checked as ticked,
+  progressionData,
   editingTask,
   hideDone,
   phase,
@@ -51,11 +56,13 @@ import {
 } from '../../tasks.ts';
 import { sharedRemovedNote, sharedStepPhases } from '../../shared-steps.ts';
 import { stepMaterialWords } from '../../views/step-materials.ts';
+import { unlockGroups, type UnlockGroupView } from '../../unlock-groups.ts';
 import { legacy } from '../bridge.ts';
 import { searchField } from '../search-field.ts';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
+import UnlockGroups from './UnlockGroups.vue';
 import { dropHold, isHeld, isLeaving } from './tick-hold.ts';
 import type { PlanStepView, RemovedStepView, Step } from '../../tasks.ts';
 
@@ -98,17 +105,23 @@ const list = computed(() =>
         form: planEditing && editingTask === task.id ? taskLinkChoices(task) : null,
       };
     });
+    // Expert mode, outside edit mode (#1197): the unlocks go into their groups above the list.
+    const groups = !planEditing && expertMode() ? groupViews(tasks, steps, checked) : [];
+    const grouped = new Set(groups.flatMap(group => group.items.map(item => item.id)));
+    const listed = steps.filter(s => !grouped.has(s.id));
     // Outside edit mode: the unfinished steps (the first leads) and the completed ones. The
     // steps of lines a delivered part leaves without work (#1062) come last among the
     // unfinished ones, dimmed, and never lead. A step just ticked is held in its place among
     // them for a few seconds (tick-hold.ts, #1054).
     const unfinished = [
-        ...steps.filter(s => open(s) && !s.idle),
-        ...steps.filter(s => open(s) && s.idle),
+        ...listed.filter(s => open(s) && !s.idle),
+        ...listed.filter(s => open(s) && s.idle),
       ],
-      finished = steps.filter(s => !open(s));
+      finished = listed.filter(s => !open(s));
     // Each glossary term is marked in the first step text on screen that has it (#1076).
-    const order = planEditing ? steps : [...unfinished, ...finished],
+    const order = planEditing
+        ? steps
+        : [...groups.flatMap(group => group.items), ...unfinished, ...finished],
       marks = firstTerms(
         order.map(s =>
           s.table ? `${s.table.intro} ${s.table.after ?? ''}` : s.list ? '' : s.body || '',
@@ -118,6 +131,7 @@ const list = computed(() =>
     return {
       total: tasks.length,
       beginner: beginnerMode(),
+      expert: expertMode(),
       query,
       hideDone,
       requiredOnly,
@@ -130,6 +144,7 @@ const list = computed(() =>
           ? 'No steps match this search.'
           : 'Every step of this phase is completed. Untick “Hide completed” to review them.',
       steps,
+      groups,
       open: unfinished,
       done: finished,
       // Every step of the phase is ticked (not only the ones the search shows).
@@ -145,6 +160,23 @@ const list = computed(() =>
 
 // Unfinished, or ticked a moment ago and still held in place.
 const open = (step: PlanStepView) => !step.done || isHeld(step.id);
+
+// The phase's unlocks in their groups (#1197): each group's keys are all its steps in the phase,
+// its items the ones the search and filters show; a group none of whose steps is shown is left
+// out.
+function groupViews(
+  tasks: Step[],
+  shown: PlanStepView[],
+  checked: (id: string) => boolean,
+): UnlockGroupView[] {
+  const views = new Map(shown.map(step => [step.id, step]));
+  return unlockGroups(tasks, progressionData).flatMap(group => {
+    const items = group.items.flatMap(task => views.get(task.id) ?? []);
+    if (!items.length) return [];
+    const keys = group.items.map(task => task.id);
+    return [{ key: group.key, label: group.label, keys, done: keys.filter(checked).length, items }];
+  });
+}
 
 // A page change drops the hold: the steps are drawn where their ticks put them when it comes back.
 onBeforeUnmount(dropHold);
@@ -189,8 +221,15 @@ function toggleHideDone(event: Event) {
 }
 
 // "New to Satisfactory" (#1076): a view preference like Hide completed, remembered in this browser.
+// On, it switches expert mode off (#1197).
 function toggleBeginner(event: Event) {
-  setBeginnerMode((event.target as HTMLInputElement).checked);
+  switchBeginnerMode((event.target as HTMLInputElement).checked);
+  render();
+}
+
+// "Expert mode" (#1197): the same kind of preference; on, it switches New to Satisfactory off.
+function toggleExpert(event: Event) {
+  setExpertMode((event.target as HTMLInputElement).checked);
   render();
 }
 
@@ -233,6 +272,14 @@ function toggleRequiredOnly(event: Event) {
         :aria-describedby="list.beginner ? 'beginner-note' : undefined"
         @change="toggleBeginner"
       />New to Satisfactory</label
+    ><label class="check-row small"
+      ><input
+        type="checkbox"
+        data-expert-switch
+        :checked="list.expert"
+        :aria-describedby="list.expert ? 'expert-note' : undefined"
+        @change="toggleExpert"
+      />Expert mode</label
     ><span class="small muted">{{ list.count }}</span>
   </div>
   <p
@@ -243,6 +290,10 @@ function toggleRequiredOnly(event: Event) {
   >
     New to Satisfactory: the hard-drive payoff and what whole machines cost are hidden. Untick it to
     see them.
+  </p>
+  <p v-if="list.total > 0 && list.expert" id="expert-note" class="small muted" data-expert-note>
+    Expert mode: HUB milestones and MAM research are grouped by tier. Tick a group to tick each of
+    its unlocks.
   </p>
   <div v-if="list.editing" class="checklist">
     <template v-if="list.steps.length">
@@ -259,6 +310,7 @@ function toggleRequiredOnly(event: Event) {
     <div v-else class="empty-state">{{ list.empty }}</div>
   </div>
   <template v-else>
+    <UnlockGroups v-if="list.groups.length" :groups="list.groups" />
     <div v-if="list.open.length" class="checklist" data-open-steps>
       <PlanStep
         v-for="(step, i) in list.open"
@@ -292,7 +344,7 @@ function toggleRequiredOnly(event: Event) {
         Only optional steps are left. Untick “Required steps only” to see them.
       </div>
     </div>
-    <div v-else-if="!list.done.length" class="checklist">
+    <div v-else-if="!list.done.length && !list.groups.length" class="checklist">
       <div class="empty-state">{{ list.empty }}</div>
     </div>
     <details v-if="list.done.length" class="done-group">
