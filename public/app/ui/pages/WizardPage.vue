@@ -12,13 +12,25 @@
   stops here, since nothing else handles the wizard form. Beside Goals and Resources is the live estimate
   (ui/wizard/EstimatePanel.vue, SP-33), which every edit there restarts; at 720px and below it
   sits under the form, with a one-line summary at the foot of the screen (#412).
+  In expert mode (#1197, app/expert.ts) the steps take three denser screens instead of five
+  (wizard/screens.ts): Game settings with Preferences, Goals with Resources, and Review, a tab
+  each, without the explanatory paragraphs (`data-explain`, hidden by style.css under .compact;
+  the ⓘ help tips stay). "Expert mode" is offered above the steps before Review: switching it reads
+  the screen first, so nothing typed is lost.
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
+import { expertMode } from '../../expert.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { toGuided } from '../../wizard/guided.ts';
+import { switchExpert, toGuided } from '../../wizard/guided.ts';
+import {
+  nextScreenStep,
+  previousScreenStep,
+  screenSteps,
+  wizardScreens,
+} from '../../wizard/screens.ts';
 import {
   cancelWizard,
   createProfile,
@@ -43,15 +55,23 @@ import TicksPrefill from '../wizard/TicksPrefill.vue';
 import { newSave } from '../actions.ts';
 import { focusNewStep } from '../refocus.ts';
 
-const STEPS = ['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'];
-
 const page = computed(() =>
   legacy(() => {
     const wizardDraft = wizard;
     if (!wizardDraft) return { draft: false as const };
+    const shown = screenSteps(wizardDraft.step);
     return {
       draft: true as const,
       step: wizardDraft.step,
+      // The steps drawn on this screen, and the tabs: one per screen, named by its first step.
+      shown,
+      first: shown[0]!,
+      tabs: wizardScreens().map((screen, i) => ({
+        step: screen.steps[0]!,
+        label: `${i + 1}. ${screen.title}`,
+        current: screen.steps.includes(wizardDraft.step),
+      })),
+      expert: expertMode(),
       eyebrow: wizardDraft.edit ? 'EDIT SETTINGS' : 'NEW PROFILE',
       title: wizardDraft.edit
         ? 'Edit the settings of ' + wizardDraft.edit.name
@@ -69,11 +89,15 @@ watch(() => page.value.draft && page.value.step, focusNewStep, { flush: 'post' }
 
 // Settings whose answer changes what the step shows: read the step and redraw.
 function changed(event: Event) {
-  if (
-    ['recipes', 'mainPower', 'pureIngots', 'droneFuel', 'nuclear'].includes(
-      (event.target as HTMLInputElement).name,
-    )
-  ) {
+  const name = (event.target as HTMLInputElement).name;
+  if (name === 'expert') {
+    switchExpert(
+      event.currentTarget as HTMLFormElement,
+      (event.target as HTMLInputElement).checked,
+    );
+    return;
+  }
+  if (['recipes', 'mainPower', 'pureIngots', 'droneFuel', 'nuclear'].includes(name)) {
     readWizard(event.currentTarget as HTMLFormElement);
     render();
   }
@@ -81,7 +105,9 @@ function changed(event: Event) {
 }
 
 // Goals and Resources estimate as they are edited (SP-33, wizard/estimate.ts).
-const estimating = computed(() => page.value.draft && [3, 4].includes(page.value.step));
+const estimating = computed(
+  () => page.value.draft && page.value.shown.some(step => step === 3 || step === 4),
+);
 function edited(event: Event) {
   if (estimating.value) scheduleEstimate(event.currentTarget as HTMLFormElement);
 }
@@ -92,7 +118,7 @@ async function submit(event: Event) {
     // Every step's form has its submit button.
     button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   if (wizardDraft.step < 5) {
-    await moveWizard(wizardDraft.step + 1);
+    await moveWizard(nextScreenStep(wizardDraft.step));
     return;
   }
   // Busy while it calculates (app/busy.ts): it keeps focus (#299), and Enter in a field submits
@@ -123,31 +149,36 @@ async function submit(event: Event) {
     <TicksPrefill />
     <div class="wizard-progress">
       <button
-        v-for="(title, i) in STEPS"
-        :key="title"
+        v-for="tab in page.tabs"
+        :key="tab.label"
         type="button"
-        :class="page.step === i + 1 ? 'current' : ''"
-        :data-wizard-step="i + 1"
-        :aria-current="page.step === i + 1 ? 'step' : undefined"
-        @click="moveWizard(i + 1)"
+        :class="tab.current ? 'current' : ''"
+        :data-wizard-step="tab.step"
+        :aria-current="tab.current ? 'step' : undefined"
+        @click="moveWizard(tab.step)"
       >
-        {{ i + 1 }}. {{ title }}
+        {{ tab.label }}
       </button>
     </div>
     <div :class="['wizard-body', estimating ? 'with-estimate' : '']">
       <form
         id="wizard-form"
         :key="page.step"
-        class="panel wizard-panel"
+        :class="['panel', 'wizard-panel', page.expert ? 'compact' : '']"
+        :data-wizard-screen="page.shown.join('-')"
         @change="changed"
         @input="edited"
         @submit.prevent.stop="submit"
       >
-        <SettingsStep v-if="page.step === 1" />
-        <PreferencesStep v-else-if="page.step === 2" />
-        <GoalStep v-else-if="page.step === 3" />
-        <ResourcesStep v-else-if="page.step === 4" />
-        <ReviewStep v-else-if="page.step === 5" />
+        <label v-if="page.step < 5" class="check-row small wizard-expert" data-wizard-expert
+          ><input type="checkbox" name="expert" data-expert-switch :checked="page.expert" />Expert
+          mode<span class="muted" data-explain>: All settings on three denser screens</span></label
+        >
+        <SettingsStep v-if="page.shown.includes(1)" />
+        <PreferencesStep v-if="page.shown.includes(2)" />
+        <GoalStep v-if="page.shown.includes(3)" />
+        <ResourcesStep v-if="page.shown.includes(4)" />
+        <ReviewStep v-if="page.shown.includes(5)" />
         <p
           id="wizard-error"
           class="form-error notice error"
@@ -157,7 +188,7 @@ async function submit(event: Event) {
         ></p>
         <div class="wizard-actions">
           <button
-            v-if="page.step === 1"
+            v-if="page.first === 1"
             type="button"
             class="btn"
             data-cancel-wizard
@@ -169,7 +200,7 @@ async function submit(event: Event) {
             type="button"
             class="btn"
             data-wizard-back
-            @click="moveWizard(page.step - 1)"
+            @click="moveWizard(previousScreenStep(page.step))"
           >
             Back</button
           ><span class="guided-escape"

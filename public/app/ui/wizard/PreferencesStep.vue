@@ -54,7 +54,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
 </script>
 
 <template>
-  <StepHeading :step="2" :total="5">How do you want to build?</StepHeading>
+  <StepHeading :all-settings="2">How do you want to build?</StepHeading>
   <div class="form-grid">
     <SelectField
       label="Recipe access"
@@ -200,12 +200,12 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
   <SloopLedger /><StorageRates /><MamRecipes /><AltPicker
     v-if="settings.recipes === 'custom'"
   /><OwnedAlternates v-else />
-  <div class="notice info">
+  <div class="notice info" data-explain>
     SAM conversion controls raw resource conversion, not SAM ingredients required by late-game
     parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have
     an unlimited automatic source.
   </div>
-  <p class="small muted">
+  <p class="small muted" data-explain>
     Each Main Portal consumes <b>2 Singularity Cells/min</b> to maintain its connection; the
     Satellite Portal does not consume cells. <b>10/min supplies five connections</b> (the standard
     recipe produces 10/min). Reserve portal operating power separately.

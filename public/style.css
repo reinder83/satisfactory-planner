@@ -1527,6 +1527,49 @@ textarea::placeholder {
 .site-group {
   scroll-margin-top: 16px;
 }
+/* "Mine only" and the player's name (#1199, ui/factories/MineOnly.vue), on the Factories page under
+   the toolbar and in the build plan under the checklist's tools; the note wraps under them. */
+.mine-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: -8px 0 18px;
+}
+.mine-bar .check-row {
+  white-space: nowrap;
+}
+.mine-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.mine-name input,
+.group-owner-field input {
+  width: 14em;
+  max-width: 100%;
+  min-width: 0;
+  background: #0f1214;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 5px 8px;
+}
+.mine-bar [data-mine-note] {
+  flex-basis: 100%;
+}
+/* A factory's owner under its name (#1199): a line outside edit mode, a field while editing. */
+.group-owner {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.group-owner-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--muted);
+}
 .site-title {
   display: flex;
   align-items: end;
@@ -5054,6 +5097,89 @@ button.rail-tile:hover {
 .guided-beginner p {
   margin: 4px 0 0;
 }
+.guided-beginner .guided-expert {
+  margin-top: 12px;
+}
+/* "Expert mode" (#1197, app/expert.ts): All settings on denser screens without the explanatory
+   paragraphs (data-explain); labels and the ⓘ help tips stay. */
+.wizard-expert {
+  display: flex;
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+.wizard-panel.compact [data-explain] {
+  display: none;
+}
+.wizard-panel.compact {
+  max-width: 1296px;
+}
+.wizard-panel.compact .form-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 6px 14px;
+}
+.wizard-panel.compact .field input,
+.wizard-panel.compact .field select {
+  margin-top: 4px;
+  padding: 7px 10px;
+}
+.wizard-panel.compact h2[data-step-heading] ~ h2[data-step-heading] {
+  margin-top: 24px;
+}
+/* Grouped unlocks on the build plan in expert mode (#1197, ui/plan/UnlockGroups.vue). */
+.unlock-groups {
+  margin: 0 0 14px;
+}
+.unlock-groups-title {
+  margin: 0 0 8px;
+}
+.unlock-group {
+  margin: 0 0 10px;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  min-width: 0;
+}
+.unlock-group legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 0 6px;
+}
+.unlock-group-tick {
+  font-weight: 700;
+  color: var(--bright);
+}
+.unlock-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 2px 16px;
+}
+.unlock-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+}
+.unlock-item > input {
+  margin-top: 3px;
+  flex: none;
+}
+.unlock-item details {
+  min-width: 0;
+  flex: 1;
+}
+.unlock-item summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.unlock-item.is-done summary {
+  color: var(--muted);
+}
 
 /* ── Responsive ────────────────────────────────────────── */
 @media (min-width: 1500px) {
@@ -6313,6 +6439,8 @@ button.rail-tile:hover {
   .dialog-head .close,
   .slot-remove,
   .bay-rename,
+  .mine-name input,
+  .group-owner-field input,
   .bay-actions .move-bay,
   .delivery input,
   .notes,
@@ -7038,5 +7166,11 @@ th.resource-cell {
   .count-total {
     grid-column: 1/-1;
     text-align: left;
+  }
+}
+@media (max-width: 720px) {
+  /* Expert mode's denser All settings (#1197): two fields a row on a phone. */
+  .wizard-panel.compact .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -136,7 +136,7 @@ const view = computed(() =>
         so earlier phases are planned without it.</span
       >
     </p>
-    <p v-else class="small muted">
+    <p v-else class="small muted" data-explain>
       Production amplification is off. Somersloops in your production lines cut ore and buildings,
       but finding and reaching them is a hunt — leave this at 0 to plan without it, exactly as
       before.
@@ -149,7 +149,7 @@ const view = computed(() =>
         }}</label
       >
     </div>
-    <p class="small muted">
+    <p class="small muted" data-explain>
       These double the output of a finite, hand-gathered input, so they are usually the best sloop
       you will ever spend: the world's power slugs are worth twice as many Power Shards through an
       amplified Constructor. Their inputs are carried in by hand, so they stay out of the production

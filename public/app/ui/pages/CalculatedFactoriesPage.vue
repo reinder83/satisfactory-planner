@@ -2,7 +2,9 @@
   #factories: the rows of the current phase matching the search and the status chips
   (`factoryFilter`, FilterChips.vue; Held back is a row ticked Running that a missing supplier
   holds back, and Local a row a plan guide builds beside its consumers), user groups first,
-  then a plan guide's shared sites (#468), then the ungrouped rows; Post Phase 5 adds a guide's
+  then a plan guide's shared sites (#468), then the ungrouped rows. "Mine only" (#1199,
+  ui/factories/MineOnly.vue under the toolbar) first keeps only the rows of the factories owned by
+  this device's name (app/mine.ts), outside edit mode; Post Phase 5 adds a guide's
   completion modules. Each factory, and the ungrouped lines, show their part of the handover from
   the phase before (FactoryHandover.vue, #1069). When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
@@ -37,11 +39,13 @@ import { render } from '../../shell.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { heldBack } from '../../views/calculated.ts';
 import {
+  activeMine,
   completionView,
   factoryGroupsState,
   filterEmptyText,
   groupJumps,
   membershipsOf,
+  mineKeeps,
   siteEntry,
   statusFilter,
   type StatusFilter,
@@ -63,6 +67,7 @@ import FactoryHandover from '../factories/FactoryHandover.vue';
 import FilterChips from '../factories/FilterChips.vue';
 import { UNGROUPED } from '../../group-order.ts';
 import JumpBar from '../factories/JumpBar.vue';
+import MineOnly from '../factories/MineOnly.vue';
 import OnSiteRecalc from '../factories/OnSiteRecalc.vue';
 import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
 import PageHeader from '../PageHeader.vue';
@@ -78,14 +83,21 @@ const SITE_SUBS = {
     'Build and balance this radioactive chain as one site at the power plants. Process buffers stay here; the general storage surplus does not apply.',
 };
 
+// What the page says when Mine only (#1199) leaves no production line in this phase.
+const MINE_EMPTY =
+  'None of your factories has a production line in this phase. Untick “Mine only” to see every factory.';
+
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
     if (!calculated) return null;
-    // The rows matching the search, then those the status chip keeps. The chips count what the
-    // search found.
-    const found = (calcStage()?.rows || []).filter(row =>
+    // The rows "Mine only" keeps (#1199: the lines of the factories owned by "me"; all while it
+    // does not apply), those matching the search, then those the status chip keeps. The chips
+    // count what the search found.
+    const mine = activeMine(factoryEditing);
+    const mineRows = (calcStage()?.rows || []).filter(row => mineKeeps(mine, row.id));
+    const found = mineRows.filter(row =>
       (row.name + ' ' + Object.keys(row.outputs).join(' '))
         .toLowerCase()
         .includes(query.toLowerCase()),
@@ -116,8 +128,9 @@ const page = computed(() =>
       )
       .filter(site => site !== null);
     const singles = ungrouped.filter(r => !siteOf(r));
-    // Post Phase 5 adds a guide's completion modules.
-    const post = phase() === 'post' && !!guide?.completion?.length;
+    // Post Phase 5 adds a guide's completion modules, which are in no factory, so Mine only hides
+    // them.
+    const post = phase() === 'post' && !!guide?.completion?.length && !mine;
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
       group =>
@@ -133,7 +146,11 @@ const page = computed(() =>
         ...groupJumps(found, rows, r => r.id, running, factoryEditing),
         ...sites.map(site => site.jump),
       ],
-      empty: filterEmptyText('production lines', status.active, query),
+      // Mine only can leave nothing before the search does: none of my factories has a line here.
+      empty:
+        mine && !mineRows.length
+          ? MINE_EMPTY
+          : filterEmptyText('production lines', status.active, query),
       editing: factoryEditing,
       rows,
       sites,
@@ -244,6 +261,7 @@ async function roundUp(event: Event) {
         @pick="value => pickFactoryFilter(value)"
       /><span>{{ page.rows.length }} production lines</span><EditGroupsToggle />
     </div>
+    <MineOnly where="factories" />
     <JumpBar :entries="page.jumps" />
     <GroupEditPanel v-if="page.editing" />
     <GroupSections :items="page.rows" :key-of="r => r.id">

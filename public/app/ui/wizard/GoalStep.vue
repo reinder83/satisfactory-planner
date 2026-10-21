@@ -63,8 +63,8 @@ const view = computed(() =>
 </script>
 
 <template>
-  <StepHeading :step="3" :total="5">Choose your production goal</StepHeading>
-  <p>
+  <StepHeading :all-settings="3">Choose your production goal</StepHeading>
+  <p data-explain>
     {{
       view.timed
         ? 'Your elevator multiplier makes completion time a useful starting point.'
@@ -120,16 +120,18 @@ const view = computed(() =>
     sink</label
   >
   <p id="whole-machines-cost" class="small muted">
-    Whole machines have a cost: every machine runs at 100%, so the lines that feed it run at full
-    speed too, which takes more buildings, power and raw resources than exact clocks (the last
-    machine of each line <Term term="underclock" text="underclocked" /> to the exact remainder).
-    Fluid, generator and nuclear lines always run at exact clocks, and single production lines can
-    be set to exact clocks later, in their dialog. Recipe choices are selected first, then
-    whole-machine counts are fitted within your budgets.<template v-if="view.cost"
+    <span data-explain
+      >Whole machines have a cost: every machine runs at 100%, so the lines that feed it run at full
+      speed too, which takes more buildings, power and raw resources than exact clocks (the last
+      machine of each line <Term term="underclock" text="underclocked" /> to the exact remainder).
+      Fluid, generator and nuclear lines always run at exact clocks, and single production lines can
+      be set to exact clocks later, in their dialog. Recipe choices are selected first, then
+      whole-machine counts are fitted within your budgets.</span
+    ><template v-if="view.cost"
       >{{ ' ' }}<span data-whole-machines-cost>{{ view.cost }}</span></template
     >
   </p>
-  <p class="small muted">
+  <p class="small muted" data-explain>
     Maximum output means fastest simultaneous elevator completion, within your resource budgets. It
     does not maximize sink points. Rounding is ignored for maximum output.
   </p>

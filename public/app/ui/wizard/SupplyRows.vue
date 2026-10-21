@@ -118,7 +118,7 @@ function remove(index: number, event: Event) {
         >
       </div>
     </div>
-    <p class="small muted">
+    <p class="small muted" data-explain>
       The plan credits these and builds only the remainder — and it does not build the chain behind
       them either. What you make it with is your business: the recipe and machine count do not have
       to match anything this plan would choose. Their ore and their power are already spent in your
