@@ -7,7 +7,8 @@
   page (#factories/<group>/flow, GroupFlowPage.vue, #895). It is a link, not a button: it goes to
   another page, so it can open in a new tab and the address can be shared. Before it, "Mark all
   running" marks every line of the group running at once, or its reverse (GroupRunning.vue,
-  #1163). Each group can be
+  #1163), and "Flow graph ↗", on any group with a line, opens the group's flow graph in the
+  #detail dialog (FlowGraphDialog.vue, #1192). Each group can be
   folded (CollapseToggle.vue, SP-17): its header stays, its cards go. Unfolded, a group shows its
   "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise what
   the open plan makes on site for it in this phase, its own lines, then the items it marks that give
@@ -28,6 +29,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { openFlowGraph } from '../../factory-detail.ts';
 import { legacy } from '../bridge.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
@@ -154,7 +156,16 @@ async function remove(event: Event, id: string) {
         Remove factory
       </button>
       <div v-else class="site-actions">
-        <GroupRunning :group-id="section.id" :group-name="section.name" /><a
+        <GroupRunning :group-id="section.id" :group-name="section.name" /><button
+          v-if="section.members.length"
+          type="button"
+          class="btn"
+          :data-group-graph="section.id"
+          :aria-label="'Flow graph of ' + section.name"
+          @click="openFlowGraph(section.id)"
+        >
+          Flow graph ↗</button
+        ><a
           v-if="section.members.length > 1"
           class="btn"
           :href="'#' + flowRoute(section.id)"

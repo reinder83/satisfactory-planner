@@ -2197,7 +2197,8 @@ test('the build-order dialog is gone: the flow page replaced it (#895)', async (
   const detail = fs.readFileSync('public/app/ui/detail/DetailDialog.vue', 'utf8');
   assert.doesNotMatch(detail, /GroupChain|kind === 'group'/);
   const opener = await import('../../public/app/factory-detail.ts');
-  assert.deepEqual(Object.keys(opener), ['openCalculatedFactory']);
+  // Its openers are the production line's dialog and the flow graph (#1192), no group chain.
+  assert.deepEqual(Object.keys(opener).sort(), ['openCalculatedFactory', 'openFlowGraph']);
   // No page or component opens it or styles it any more.
   const sources = fs
     .readdirSync('public', { recursive: true, encoding: 'utf8' })
