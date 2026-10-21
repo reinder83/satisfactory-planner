@@ -13,13 +13,22 @@ import LogisticsPage from './pages/LogisticsPage.vue';
 import NoSavePage from './pages/NoSavePage.vue';
 import NotesPage from './pages/NotesPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
+import SessionPage from './pages/SessionPage.vue';
 import StoragePage from './pages/StoragePage.vue';
 import SurveyPage from './pages/SurveyPage.vue';
 import WizardPage from './pages/WizardPage.vue';
 
 // The pages that show the open save's plan: with no save open (an empty workspace, #281) they
 // give way to NoSavePage, which offers to create one.
-const NEEDS_SAVE: View[] = ['plan', 'factories', 'logistics', 'storage', 'resources', 'notes'];
+const NEEDS_SAVE: View[] = [
+  'plan',
+  'factories',
+  'logistics',
+  'storage',
+  'resources',
+  'notes',
+  'session',
+];
 
 // The component for `view`, or null for an unknown one. #wizard depends on the draft
 // (`draft`, the wizard object): the node survey, the guided start (its questions and, once they
@@ -41,6 +50,7 @@ export function vuePage(
   if (view === 'profiles') return ProfilesPage;
   if (view === 'account') return AccountPage;
   if (view === 'notes') return NotesPage;
+  if (view === 'session') return SessionPage;
   if (view === 'backup') return BackupPage;
   if (view === 'resources') return CalculatedResourcesPage;
   if (view === 'wizard') {

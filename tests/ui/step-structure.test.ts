@@ -272,7 +272,11 @@ test('a production line with byproduct advice lists each byproduct and input on 
   assert.equal(drawn.intro, plain(step.list!.intro));
   assert.deepEqual(drawn.items, step.list!.items.map(plain));
   assert.equal(drawn.label, step.title + ': byproducts and inputs');
-  assert.equal($(`[data-task="${step.id}"]`)!.querySelector(':scope > p'), null);
+  // No body paragraph beside the list (the build materials under it are their own, #1073).
+  assert.equal(
+    $(`[data-task="${step.id}"]`)!.querySelector(':scope > p:not([data-step-materials])'),
+    null,
+  );
   // The search finds the step by an item's words, which are its body's.
   const words = step.list!.items[0]!.split(':')[0]!.toLowerCase();
   assert.ok(await found(step.id, words));

@@ -50,6 +50,7 @@ import {
   taskLinkChoices,
 } from '../../tasks.ts';
 import { sharedRemovedNote, sharedStepPhases } from '../../shared-steps.ts';
+import { stepMaterialWords } from '../../views/step-materials.ts';
 import { legacy } from '../bridge.ts';
 import { searchField } from '../search-field.ts';
 import PlanStep from './PlanStep.vue';
@@ -90,6 +91,7 @@ const list = computed(() =>
         idle: idle.get(task.id),
         satisfied: satisfied.get(task.id),
         clocks: clockNote(task.id, link?.id),
+        materials: stepMaterialWords(task.id),
         icon: taskIcon(task),
         link,
         custom: task.id.startsWith('custom-'),

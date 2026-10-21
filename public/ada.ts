@@ -79,6 +79,9 @@ export interface AdaFacts {
   // many steps it ticked and the file's name; absent when there was none since the page opened.
   merged?: number;
   mergedFrom?: string;
+  // Today's session (#1073), on its page: how many builds it lists and how many of them wait on
+  // lines not marked running or the open mining step; absent elsewhere.
+  session?: { builds: number; waiting: number };
   // Where the user's other tabs or devices moved while this tab shows another profile (#1052):
   // that profile's name in quotes, with its save's when it is another save; '' or absent otherwise.
   groupMoved?: string;
@@ -744,6 +747,20 @@ const RULES: AdaRule[] = [
     // Only after when() found a merge.
     text: facts =>
       `Your merge ticked ${plural(facts.merged!, 'step')} from ${facts.mergedFrom}. Nothing was unticked. Whether your co-op partner really built all that is between the two of you.`,
+  },
+  // Today's session (#1073): what it lists, and how many of its builds wait on something.
+  {
+    id: 'session',
+    on: ['session'],
+    tone: 'calm',
+    when: facts => !!facts.session,
+    // Only after when() found a session.
+    text: facts => {
+      const { builds, waiting } = facts.session!;
+      if (!builds)
+        return 'Nothing left to build in this phase. I would print that page and frame it.';
+      return `${plural(builds, 'build')} for today${waiting ? `, ${waiting} of them waiting on something upstream` : ', all of them fed'}. Print it, copy the note into the To-Do list, and tick each step in the build plan once it runs.`;
+    },
   },
   // Page-specific hints: the profile list, factories, the wizard and Resources.
   {
