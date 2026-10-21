@@ -20,7 +20,8 @@ import type { ExactClocks } from './calculated.ts';
 // (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks), 17 a
 // factory-group link whose vehicles burn a fuel added in #1165 (laterVehicleFuels), 18 a
 // factory-group link on Fluid Trucks (mode 'fluidTruck', #1177), 19 the machines that stand on a
-// production line a recalculation grew (builtMachines, #1174).
+// production line a recalculation grew (builtMachines, #1174), 20 a factory group's owner
+// (groups[].owner, #1199).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -43,7 +44,8 @@ export type StateVersion =
   | 16
   | 17
   | 18
-  | 19;
+  | 19
+  | 20;
 
 // The machines that already stand on a production line whose plan now needs more of them (#1174,
 // newProfileState in state/carry.ts): a line ticked as built that a recalculation, in place or
@@ -144,10 +146,18 @@ export interface GroupAssignment {
   rate: number | null;
 }
 
+// One named factory. `owner` (#1199, co-op) is the player who builds it, free text such as
+// "Anna", trimmed and never blank: absent means nobody (version 20 while any group has one).
+export interface FactoryGroup {
+  id: string;
+  name: string;
+  owner?: string;
+}
+
 // Named production areas and the plan rows assigned to them (version 3).
 export interface FactoryGroups {
-  // { id: 'fg-…', name }
-  groups: { id: string; name: string }[];
+  // { id: 'fg-…', name, owner? }
+  groups: FactoryGroup[];
   // Plan row id (not a 'calc-' key) to its group shares.
   assignments: Record<string, GroupAssignment[]>;
   // The transport picked for a link between two places (#205), keyed '<from>:<to>' with a
@@ -244,6 +254,8 @@ export type UpdateOp =
   | { type: 'factoryGroupAdd'; id: string; name: string }
   | { type: 'factoryGroupRename'; id: string; name: string }
   | { type: 'factoryGroupRemove'; id: string }
+  // The player who builds group `id` (#1199); a blank owner means nobody and drops the field.
+  | { type: 'factoryGroupOwner'; id: string; owner: string }
   | { type: 'factoryAssign'; key: string; groups: { group: string; rate?: number | null }[] }
   // The whole list of items group `id` makes on site (#877); an empty list drops its entry.
   | { type: 'factoryLocal'; id: string; items: string[] }

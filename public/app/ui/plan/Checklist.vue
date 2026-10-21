@@ -18,6 +18,9 @@
   A step's text marks the glossary terms (#1076, ui/TermText.vue) the steps above it on screen have
   not marked yet, so each term is explained once. "New to Satisfactory" (app/beginner.ts) is a
   view preference beside "Hide completed": it hides the plan's hard-drive and clock details.
+  "Mine only" (#1199, ui/factories/MineOnly.vue) sits under them while a factory has an owner: it
+  keeps only the steps linked to production lines in factories owned by the name this device goes
+  by, and when that leaves no open step the list says so.
   "Expert mode" (app/expert.ts, #1197) is the other view preference there, never on with it: outside
   edit mode it takes the HUB milestones and MAM research out of the list and draws them grouped by
   tier above it (ui/plan/UnlockGroups.vue), each group with its own tick.
@@ -59,6 +62,8 @@ import { stepMaterialWords } from '../../views/step-materials.ts';
 import { unlockGroups, type UnlockGroupView } from '../../unlock-groups.ts';
 import { legacy } from '../bridge.ts';
 import { searchField } from '../search-field.ts';
+import { activeMine } from '../../views/factories.ts';
+import MineOnly from '../factories/MineOnly.vue';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
@@ -151,6 +156,8 @@ const list = computed(() =>
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
       // "Required steps only" hides every step still open: only optional ones are left (#1070).
       optionalLeft: requiredOnly && tasks.some(t => t.optional && !checked(t.id)),
+      // "Mine only" (#1199) applies, so the open steps it hides are other people's or nobody's.
+      mine: !!activeMine(),
       // Post Phase 5 has no next phase to get ready for (#1069).
       post: phase() === 'post',
       removed: planEditing ? removedViews(removed) : [],
@@ -282,6 +289,7 @@ function toggleRequiredOnly(event: Event) {
       />Expert mode</label
     ><span class="small muted">{{ list.count }}</span>
   </div>
+  <MineOnly v-if="list.total > 0" where="plan" />
   <p
     v-if="list.total > 0 && list.beginner"
     id="beginner-note"
@@ -342,6 +350,12 @@ function toggleRequiredOnly(event: Event) {
     <div v-else-if="list.optionalLeft && !list.query.trim()" class="checklist">
       <div class="empty-state" data-optional-left>
         Only optional steps are left. Untick “Required steps only” to see them.
+      </div>
+    </div>
+    <div v-else-if="list.mine && !list.query.trim()" class="checklist">
+      <div class="empty-state" data-mine-left>
+        None of the open steps of this phase is in a factory you own. Untick “Mine only” to see
+        them.
       </div>
     </div>
     <div v-else-if="!list.done.length && !list.groups.length" class="checklist">

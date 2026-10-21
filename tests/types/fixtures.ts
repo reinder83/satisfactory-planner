@@ -255,6 +255,20 @@ export const version19 = {
   builtMachines: { 'calc-4-Recipe_ResidualFuel_C': 5 },
 } satisfies SavedState;
 
+// Version 20: a factory group with an owner (#1199, co-op): the plates group is Anna's; the wire
+// group has none, so it keeps its old shape.
+export const version20 = {
+  ...version19,
+  version: 20,
+  factoryGroups: {
+    ...version19.factoryGroups,
+    groups: [
+      { id: 'fg-plates1', name: 'Plates', owner: 'Anna' },
+      { id: 'fg-wires1', name: 'Wire' },
+    ],
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -277,6 +291,7 @@ export const states: [SavedState, number][] = [
   [version17, 17],
   [version18, 18],
   [version19, 19],
+  [version20, 20],
 ];
 
 export const backup = {
