@@ -205,6 +205,73 @@ test('a plan with nothing built is the plan it was under every objective', () =>
   }
 });
 
+// #1189: under Maximum output the leanest of the fastest plans switched the built Screws to Cast
+// Screws under every objective: the built Iron Rods go to the plan's other uses there, so keeping
+// the Screws needs new Iron Rods, and the switch saved about one machine of 5,000 while being no
+// faster. There a built line gives way only to speed (keepBuilt in planner/model.ts).
+const MAX = { goal: 'maximum', limitsConfirmed: true };
+const hoursOf = (plan: Pick<StoredCalculatedPlan, 'stages'>) => plan.stages['4'].hours!;
+
+test('maximum output keeps the built Screws and Iron Rods under every objective', () => {
+  for (const [name, objective] of OBJECTIVES) {
+    const plain = calculate({ ...TO, ...MAX, ...objective });
+    assert.equal(machinesOf(plain)[SCREWS], undefined, `${name}: on its own the solve switches`);
+    assert.equal(machinesOf(plain)[CAST], 297, name);
+    const kept = calculate({ ...TO, ...MAX, ...objective, builtLines: SCREW_LINES });
+    const machines = machinesOf(kept);
+    assert.equal(machines[SCREWS], 35, `${name}: the Screws line is kept`);
+    assert.equal(kept.stages['4'].rows!.find(row => row.id === SCREWS)!.lastClock, 100, name);
+    assert.ok(machines[ROD]! >= 38, `${name}: the Iron Rods stay, and grow`);
+    // The rest of the Screws come from Cast Screws, and keeping them costs no speed at all.
+    assert.ok(machines[CAST]! < 297, name);
+    assert.equal(hoursOf(kept), hoursOf(plain), `${name}: as fast as the plan without them`);
+    assert.equal(kept.stages['4'].builtDropped, undefined, name);
+  }
+  // Also with whole machines, through the two-step fit.
+  const whole = { ...TO, ...MAX, wholeMachines: true };
+  const plain = calculate(whole);
+  const kept = calculate({ ...whole, builtLines: SCREW_LINES });
+  assert.equal(machinesOf(plain)[SCREWS], undefined);
+  assert.equal(machinesOf(kept)[SCREWS], 35);
+  assert.equal(hoursOf(kept), hoursOf(plain));
+});
+
+test('under maximum output a clearly faster switch still wins', () => {
+  // With Iron Ore held to 15,000/min, iron sets the pace. The default plan makes its Screws on 345
+  // Screws Constructors fed by 374 on Iron Rods; Steel Screws make Screws from far less iron, so
+  // with them the phase is 8% faster. Keeping every built machine would cost that 8%, so the
+  // Screws line gives way to Steel Screws for as many machines as it takes to come within 1%
+  // (BUILT_SPEED_SHARE) of the fastest plan, and keeps the rest.
+  const IRON = { ...MAX, limits: { 'Iron Ore': 15000 } };
+  const first = calculate(IRON);
+  const standing = machinesOf(first);
+  const built: BuiltLines = { '4': { [SCREWS]: standing[SCREWS]!, [ROD]: standing[ROD]! } };
+  assert.deepEqual(built['4'], { [SCREWS]: 345, [ROD]: 374 });
+  const STEEL = 'Recipe_Alternate_Screw_2_C';
+  const NEW = { ...IRON, recipes: 'custom', alternateRecipes: [STEEL] };
+  for (const [name, objective] of OBJECTIVES) {
+    const plain = calculate({ ...NEW, ...objective });
+    assert.ok(hoursOf(first) > hoursOf(plain) * 1.07, `${name}: switching is clearly faster`);
+    const switched = calculate({ ...NEW, ...objective, builtLines: built });
+    const machines = machinesOf(switched);
+    assert.ok(machines[STEEL]! > 0, `${name}: Steel Screws come in`);
+    assert.ok(machines[SCREWS]! < 345, `${name}: the Screws line gives way`);
+    assert.ok(machines[SCREWS]! > 0, `${name}: for no more machines than the speed needs`);
+    assert.ok(hoursOf(switched) <= (hoursOf(plain) / 0.99) * (1 + 1e-6), `${name}: within 1%`);
+    assert.ok(hoursOf(switched) < hoursOf(first), name);
+  }
+});
+
+test('under maximum output a plan with nothing built is the plan it was', () => {
+  const bytes = (plan: object) => JSON.stringify({ ...plan, createdAt: undefined });
+  for (const [name, objective] of OBJECTIVES) {
+    const settings = { ...TO, ...MAX, ...objective };
+    const plain = bytes(calculate(settings));
+    assert.equal(bytes(calculate({ ...settings, builtLines: {} })), plain, name);
+    assert.equal(bytes(calculate(withBuiltLines(settings, undefined))), plain, name);
+  }
+});
+
 test('a built line the new plan has no use for is not run for nothing', () => {
   // Built far beyond what the plan needs: the line keeps only what it needs.
   const credited = machinesOf(calculate({ builtLines: { '4': { [SCREWS]: 200 } } }));
@@ -236,7 +303,8 @@ test('the somersloops stay on the built amplified line', () => {
 // ticked, recalculated in place (and into a new profile carried from it) with Cast Screws, sending
 // the built lines as the interface does (builtLinesOf on the profile's context). `to` is what it
 // recalculates to and `ticked` the lines ticked: under another objective (#1188), the issue's
-// Screws and Iron Rods.
+// Screws and Iron Rods. `plainCast` is the Cast Screws Constructors of the plan with nothing
+// built, and `kept` checks the plan that kept the built lines (#1189).
 type Request = (
   route: string,
   body?: unknown,
@@ -245,11 +313,33 @@ type Request = (
 interface EditionCase {
   to?: object;
   ticked?: string[];
+  plainCast?: number;
+  kept?: KeptCheck;
 }
+type KeptCheck = (reply: ContextReply, lines: BuiltLines, ticked: string[]) => void;
+// The built lines kept exactly: same recipe, same machines, still ticked, nothing to add or spare.
+const keptExactly: KeptCheck = (reply, lines, tickedIds) => {
+  const machines = machinesOf(reply.plan!);
+  assert.equal(machines[SCREWS], 35, 'Screws stay on their recipe');
+  assert.equal(machines[CAST], undefined);
+  for (const id of tickedIds) {
+    assert.equal(machines[id], lines['4']![id], id + ' keeps its machines');
+    assert.equal(reply.state.checks[key(id)], true, id + ' stays ticked');
+  }
+  assert.equal(reply.state.builtMachines, undefined, 'nothing to switch or spare');
+};
+// The carry's counts (lines unticked for review, lines otherwise changed) when they are kept so.
+const UNCHANGED = { reviewCount: 0, changedCount: 0 };
 async function checkEdition(
   request: Request,
   reload: () => Promise<void>,
-  { to = TO, ticked: tickedIds = [REFINERY, SCREWS] }: EditionCase = {},
+  {
+    to = TO,
+    ticked: tickedIds = [REFINERY, SCREWS],
+    plainCast = 28,
+    kept = keptExactly,
+  }: EditionCase = {},
+  carried: { reviewCount: number; changedCount: number } = UNCHANGED,
 ) {
   const scoped = (saveId: string, profileId: string) => ({
     'X-Save-Id': saveId,
@@ -274,7 +364,7 @@ async function checkEdition(
   })) as { profileId: string };
   const plain = await context(scoped(first.saveId, plainProfile.profileId));
   assert.equal(plain.plan!.settings.builtLines, undefined);
-  assert.equal(machinesOf(plain.plan!)[CAST], 28);
+  assert.equal(machinesOf(plain.plan!)[CAST], plainCast);
 
   for (const id of tickedIds)
     await request('/api/update', { type: 'check', key: key(id), value: true }, own);
@@ -284,14 +374,7 @@ async function checkEdition(
   assert.deepEqual(lines, { '4': Object.fromEntries(tickedIds.map(id => [id, standing[id]])) });
   assert.equal(lines['4']![SCREWS], 35);
   const checkKept = (reply: ContextReply) => {
-    const machines = machinesOf(reply.plan!);
-    assert.equal(machines[SCREWS], 35, 'Screws stay on their recipe');
-    assert.equal(machines[CAST], undefined);
-    for (const id of tickedIds) {
-      assert.equal(machines[id], lines['4']![id], id + ' keeps its machines');
-      assert.equal(reply.state.checks[key(id)], true, id + ' stays ticked');
-    }
-    assert.equal(reply.state.builtMachines, undefined, 'nothing to switch or spare');
+    kept(reply, lines, tickedIds);
     assert.deepEqual(reply.plan!.settings.builtLines, lines);
   };
 
@@ -302,8 +385,8 @@ async function checkEdition(
     settings: withBuiltLines(to, lines),
     carryFrom: first.profileId,
   })) as { profileId: string; changedCount: number; reviewCount: number };
-  assert.equal(sibling.changedCount, 0);
-  assert.equal(sibling.reviewCount, 0);
+  assert.equal(sibling.changedCount, carried.changedCount);
+  assert.equal(sibling.reviewCount, carried.reviewCount);
   checkKept(await context(scoped(first.saveId, sibling.profileId)));
   assert.deepEqual((await context(own)).state, ticked.state, 'the source is untouched');
 
@@ -317,8 +400,9 @@ async function checkEdition(
       planCreatedAt: ticked.plan!.createdAt,
     },
     own,
-  )) as { backupId: string; changedCount: number };
-  assert.equal(done.changedCount, 0);
+  )) as { backupId: string; changedCount: number; reviewCount: number };
+  assert.equal(done.changedCount, carried.changedCount);
+  assert.equal(done.reviewCount, carried.reviewCount);
   await reload();
   checkKept(await context(own));
   const backup = await context(scoped(first.saveId, done.backupId));
@@ -357,7 +441,7 @@ async function checkEdition(
   assert.deepEqual(await context(own), now);
 }
 
-async function dockerEdition(edition: EditionCase = {}) {
+async function dockerEdition(edition: EditionCase = {}, carried = UNCHANGED) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-1176-'));
   let server: Awaited<ReturnType<typeof createApp>> | undefined;
   let url = '';
@@ -385,6 +469,7 @@ async function dockerEdition(edition: EditionCase = {}) {
         await listen();
       },
       edition,
+      carried,
     );
   } finally {
     await close();
@@ -393,7 +478,7 @@ async function dockerEdition(edition: EditionCase = {}) {
 }
 test('the Docker server stores the built lines a recalculation counted', () => dockerEdition());
 
-async function browserEdition(edition: EditionCase = {}) {
+async function browserEdition(edition: EditionCase = {}, carried = UNCHANGED) {
   const records = new Map<string, unknown>();
   const open = () =>
     createBrowserApi(
@@ -414,6 +499,7 @@ async function browserEdition(edition: EditionCase = {}) {
       api = open();
     },
     edition,
+    carried,
   );
 }
 test('the browser edition stores the built lines a recalculation counted', () => browserEdition());
@@ -426,3 +512,26 @@ test('the Docker server keeps the built lines under the raw resources objective'
   dockerEdition(RAW_CASE));
 test('the browser edition keeps the built lines under the raw resources objective', () =>
   browserEdition(RAW_CASE));
+
+// #1189: under Maximum output the recalculation in place switched the built Screws to Cast Screws,
+// while Review said they were kept. Both editions now keep them: the Screws line keeps its 35
+// Constructors, its last one now at full clock, so the carry unticks it for review; the Iron Rods
+// grow, keeping the 38 that stand (#1174); Cast Screws make the rest.
+const MAX_CASE: EditionCase = {
+  to: { ...TO, ...MAX },
+  ticked: [SCREWS, ROD],
+  plainCast: 297,
+  kept: (reply, lines) => {
+    const machines = machinesOf(reply.plan!);
+    assert.equal(machines[SCREWS], 35, 'Screws stay on their recipe');
+    assert.ok(machines[ROD]! > lines['4']![ROD]!, 'the Iron Rods grow');
+    assert.ok(machines[CAST]! < 297, 'Cast Screws make the rest');
+    assert.equal(reply.state.checks[key(SCREWS)], false, 'its last machine changes clock');
+    assert.deepEqual(reply.state.builtMachines, { [key(ROD)]: 38 }, 'the Iron Rods that stand');
+  },
+};
+const MAX_CARRIED = { reviewCount: 1, changedCount: 0 };
+test('the Docker server keeps the built lines under maximum output', () =>
+  dockerEdition(MAX_CASE, MAX_CARRIED));
+test('the browser edition keeps the built lines under maximum output', () =>
+  browserEdition(MAX_CASE, MAX_CARRIED));

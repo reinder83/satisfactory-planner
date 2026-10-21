@@ -139,7 +139,7 @@ function planRun(config: CurrentSettings, phase: number, options: RunOptions): R
   const pool = phasePool(context);
   const demands = phaseDemands(context, reachableItems(context, pool));
   const { model, period } = buildModel(context, pool, demands);
-  const solved = solveModel(model, context.maximum);
+  const solved = solveModel(model, context.maximum, pool);
   // solverStatus lets calculate() tell a search stopped at its limit ('Unknown' at the node limit,
   // 'Time limit reached' at the clock's backstop) from a real shortage.
   if (!solved.feasible || !solved.bounded)
@@ -847,16 +847,103 @@ function roundNuclear(
   return period;
 }
 // Solve. Under `maximum`, a second solve fixes the goal at its optimum (less a hair for
-// numerical slack) and minimises machines, so the fastest plan is also the leanest one.
-function solveModel(model: LpModel, maximum: boolean): Solution {
+// numerical slack) and minimises machines, so the fastest plan is also the leanest one. With built
+// lines, keepBuilt may solve on, so they are kept unless that is clearly slower (#1189).
+function solveModel(model: LpModel, maximum: boolean, pool: PoolRecipe[]): Solution {
   const solved = solve(model);
   if (!maximum || !solved.feasible) return solved;
   model.constraints.keepGoal = { min: solved.values.goal! * (1 - 1e-8) };
   model.variables.goal!.keepGoal = 1;
-  model.optimize = 'cost';
-  model.opType = 'min';
+  setObjective(model, 'cost', 'min');
   const economical = solve(model);
-  return economical.feasible ? economical : solved;
+  if (!economical.feasible) return solved;
+  return keepBuilt(model, pool, economical) ?? economical;
+}
+function setObjective(model: LpModel, optimize: string, opType: 'max' | 'min') {
+  model.optimize = optimize;
+  model.opType = opType;
+}
+// Built lines under maximum output (#1189). The leanest of the fastest plans weighs a built line
+// in machines, as every other goal does (KEEP_SHARE), but at maximum output's scale the lines
+// around it are rarely where they were: the built Iron Rods that fed the issue's built Screws go
+// to the plan's other uses, so keeping the Screws needs new Iron Rods, and Cast Screws saved about
+// one machine of a 5,000-machine plan while being no faster at all. Maximum output asks for speed,
+// so there a built line gives way only to speed. When the leanest plan runs a built line below
+// what it can usefully keep (usefulBuilt), the phase is solved three more times, each step as
+// linear or integer as the model is:
+//   keep  the most built machines, each line at most its useful count, at no more than
+//         BUILT_SPEED_SHARE slower than the fastest plan;
+//   fast  the fastest plan that runs at least those machines;
+//   lean  the fewest machines (the objective's cost) at that speed, as before.
+// So a switch wins only when keeping the built lines would make the phase more than
+// BUILT_SPEED_SHARE (1%) slower, and then only for the machines that needs. A plan with nothing
+// built, or whose leanest plan already keeps every built line, is the plan it was. Should a step
+// not solve, the phase keeps that leanest plan, as before.
+const BUILT_SPEED_SHARE = 0.01;
+function keepBuilt(model: LpModel, pool: PoolRecipe[], economical: Solution): Solution | null {
+  const caps = usefulBuilt(model, pool, economical);
+  if (![...caps].some(([name, cap]) => (economical.values[name] || 0) < cap - 1e-6)) return null;
+  const goalBound = model.constraints.keepGoal!,
+    fastest = goalBound.min!;
+  const counts = new Map([...caps.keys()].map(name => [name, model.constraints[name]!.max!]));
+  // Back to the leanest plan's model, for a step that does not solve.
+  const restore = () => {
+    goalBound.min = fastest;
+    for (const [name, count] of counts) {
+      delete model.variables[name]!.keep;
+      model.constraints[name] = { max: count };
+    }
+    setObjective(model, 'cost', 'min');
+    return null;
+  };
+  goalBound.min = fastest * (1 - BUILT_SPEED_SHARE);
+  for (const [name, cap] of caps) {
+    model.variables[name]!.keep = 1;
+    model.constraints[name]!.max = cap;
+  }
+  setObjective(model, 'keep', 'max');
+  const kept = solve(model);
+  if (!kept.feasible) return restore();
+  for (const [name, count] of counts) {
+    delete model.variables[name]!.keep;
+    const level = kept.values[name] || 0;
+    // The kept level, at its useful count when it reached it, so a full line stays exactly full.
+    const floor = level >= caps.get(name)! - 1e-6 ? caps.get(name)! : level;
+    model.constraints[name] = floor > 1e-6 ? { min: floor, max: count } : { max: count };
+  }
+  setObjective(model, 'gain', 'max');
+  const fast = solve(model);
+  if (!fast.feasible) return restore();
+  goalBound.min = fast.values.goal! * (1 - 1e-8);
+  setObjective(model, 'cost', 'min');
+  const lean = solve(model);
+  return lean.feasible ? lean : restore();
+}
+// What each built line can usefully keep (keepBuilt): its built count, at most what the plan
+// `solved` makes of the line's product in machines of the line's recipe (whole ones for a
+// whole-machine line). The product is its recipe's first output, or a generator's power. So a
+// built line the plan has no use for is still not run for nothing.
+function usefulBuilt(model: LpModel, pool: PoolRecipe[], solved: Solution): Map<string, number> {
+  const product = (recipe: PoolRecipe): [string, number] => {
+    const item = primaryOutput(recipe);
+    return item ? [item, recipe.outputs[item]!] : ['', -recipe.power];
+  };
+  const made = new Map<string, number>();
+  for (const recipe of pool) {
+    const [item, rate] = product(recipe);
+    const level = (solved.values[recipe.id] || 0) + (solved.values[BUILT + recipe.id] || 0);
+    if (rate > 0) made.set(item, (made.get(item) ?? 0) + level * rate);
+  }
+  const caps = new Map<string, number>();
+  for (const recipe of pool) {
+    const name = BUILT + recipe.id,
+      count = model.constraints[name]?.max;
+    const [item, rate] = product(recipe);
+    if (count === undefined || !(rate > 0)) continue;
+    const useful = Math.min(count, (made.get(item) ?? 0) / rate);
+    caps.set(name, model.ints?.[name] ? Math.floor(useful + 1e-6) : useful);
+  }
+  return caps;
 }
 // Independently verify material, power and mining constraints before trusting a result.
 export function satisfiesModel(model: LpModel, solved: Solution): boolean {
