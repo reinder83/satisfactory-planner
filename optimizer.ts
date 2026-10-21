@@ -20,6 +20,10 @@ export interface LpSolution {
   feasible: boolean;
   bounded: boolean;
   values: Record<string, number>;
+  // Only when asked (solve's `duals` option) and only for a linear model HiGHS solved: each
+  // constraint's shadow price, how much the objective changes per unit its bound is raised (a row
+  // with both min and max adds its two rows' prices; a slack row's price is 0).
+  duals?: Record<string, number>;
 }
 
 // Loaded once, when the module is first imported (server start, or the browser worker's import).
@@ -68,13 +72,14 @@ function integerLimits(): typeof SEARCH_LIMITS | null {
 //   bounds       optional { name: upper bound }; every variable is otherwise just >= 0
 //   ints         optional { name: 1 } for integer (whole-machine or amplified) variables
 //
-// Returns { solverStatus, feasible, bounded, values }, with a variable HiGHS reports no value
+// Returns { solverStatus, feasible, bounded, values }, and with `duals` each constraint's shadow
+// price (linear models only), with a variable HiGHS reports no value
 // for read as 0. `feasible` and `bounded` are both simply "HiGHS said Optimal": a MIP stopped by
 // the node or time limit ('Unknown' or 'Time limit reached', also for one not run because the
 // phase's deadline had passed), even with a usable incumbent,
 // counts as not feasible, and `run`/`calculate` tell that case apart from a real shortage by
 // `solverStatus`.
-export function solve(model: LpModel): LpSolution {
+export function solve(model: LpModel, { duals = false } = {}): LpSolution {
   // Variables and constraints are renamed v0, v1, … and c0, c1, … because the planner's names
   // ('item:Iron Plate', 'raw:Crude Oil', 'amp:Recipe_…') are not valid LP-format names.
   const names = Object.keys(model.variables),
@@ -95,13 +100,16 @@ export function solve(model: LpModel): LpSolution {
     'objective: ' + expression(model.optimize),
     'Subject To',
   ];
-  let row = 0;
+  // The constraint each row belongs to, in row order.
+  const rows: string[] = [];
   for (const [key, bound] of Object.entries(model.constraints)) {
     const terms = expression(key);
-    if (bound.equal !== undefined) lines.push(`c${row++}: ${terms} = ${bound.equal}`);
+    const push = (relation: string, value: number) =>
+      lines.push(`c${rows.push(key) - 1}: ${terms} ${relation} ${value}`);
+    if (bound.equal !== undefined) push('=', bound.equal);
     else {
-      if (bound.min !== undefined) lines.push(`c${row++}: ${terms} >= ${bound.min}`);
-      if (bound.max !== undefined) lines.push(`c${row++}: ${terms} <= ${bound.max}`);
+      if (bound.min !== undefined) push('>=', bound.min);
+      if (bound.max !== undefined) push('<=', bound.max);
     }
   }
   lines.push(
@@ -130,10 +138,20 @@ export function solve(model: LpModel): LpSolution {
     const column = result.Columns?.[name];
     return (column && 'Primal' in column && column.Primal) || 0;
   };
-  return {
+  const solution: LpSolution = {
     solverStatus: result.Status,
     feasible: result.Status === 'Optimal',
     bounded: result.Status === 'Optimal',
     values: Object.fromEntries(names.map((name, i) => [name, primal(columns[i]!)])),
   };
+  if (duals && !integers.length && solution.feasible) {
+    const prices: Record<string, number> = {};
+    result.Rows.forEach((row, i) => {
+      const key = rows[i];
+      if (key !== undefined && 'Dual' in row && typeof row.Dual === 'number')
+        prices[key] = (prices[key] ?? 0) + row.Dual;
+    });
+    solution.duals = prices;
+  }
+  return solution;
 }
