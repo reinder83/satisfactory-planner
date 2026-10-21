@@ -139,7 +139,7 @@ function planRun(config: CurrentSettings, phase: number, options: RunOptions): R
   const pool = phasePool(context);
   const demands = phaseDemands(context, reachableItems(context, pool));
   const { model, period } = buildModel(context, pool, demands);
-  const solved = solveModel(model, context.maximum, pool);
+  const solved = solveModel(model, context, pool);
   // solverStatus lets calculate() tell a search stopped at its limit ('Unknown' at the node limit,
   // 'Time limit reached' at the clock's backstop) from a real shortage.
   if (!solved.feasible || !solved.bounded)
@@ -641,9 +641,16 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
     if (model.ints?.[recipe.id]) model.ints[name] = 1;
     built.push(recipe);
   }
-  if (objectiveWeights(config.objective)) creditSpentShare(model, config, built);
-  else creditUsedShare(model, built);
+  if (buildingsWeigh(config)) creditUsedShare(model, config, built);
+  else creditSpentShare(model, config, built);
 }
+// Whether buildings carry weight in the plan's objective: the fewest buildings, or a weighted mix
+// whose buildings weight is above 0. There KEEP_SHARE's discount on a built machine could buy the
+// plan what no new machine would be built for (creditUsedShare, and the raw rule in capBuiltRaw).
+const buildingsWeigh = (config: CurrentSettings) => {
+  const weights = objectiveWeights(config.objective);
+  return !weights || weights.buildings > 0;
+};
 // What a built line draws outside its own variable (#1188). Under a chosen objective (#1180) a
 // line's own variable holds only part of what it costs: its buildings and its own power, which
 // KEEP_SHARE discounts. The rest is priced elsewhere: the raw resources it draws on the raw
@@ -659,7 +666,9 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
 // TIE_BUILDING. A switch still wins where it saves more than it builds and a tenth of the built
 // line's share, as under the fewest buildings. The fewest-buildings objective (no field) gets no
 // such credit: there the outside share is the generators' and fuel lines' buildings, a few
-// hundredths of a machine per built machine. It caps its share as creditUsedShare says.
+// hundredths of a machine per built machine. It caps its share as creditUsedShare says, and so
+// does a weighted mix whose buildings weigh (#1198), with this outside credit added; this function
+// prices the objectives whose buildings weigh nothing (least power, least raw resources).
 //
 // The credit goes only to the share of the built lines the plan uses (#1190's review). Credited
 // on every machine that stands, a built machine the plan does not need could pay for itself by
@@ -680,19 +689,11 @@ function creditSpentShare(model: LpModel, config: CurrentSettings, built: PoolRe
   if (!built.length) return;
   const linear = relaxed(model);
   const priced = solve(linear, { duals: true });
-  // Drawing a MW lowers what the power row may still take, so it costs minus its shadow price.
-  const perMW = Math.max(0, -(priced.duals?.power ?? 0));
-  const rawPrice = (item: string) => {
-    const mw = Math.max(0, model.variables['raw:' + item]?.power ?? 0);
-    return sourceCost(config, item, mw, 0) + mw * perMW;
-  };
+  const outside = outsideCost(model, config, priced);
   for (const recipe of built) {
     const name = BUILT + recipe.id;
     const variable = model.variables[name]!;
-    const raw = Object.entries(recipe.inputs)
-      .filter(([item]) => RAW.includes(item))
-      .reduce((sum, [item, rate]) => sum + rate * rawPrice(item), 0);
-    const credit = (1 - KEEP_SHARE) * (raw + Math.max(0, variable.power ?? 0) * perMW);
+    const credit = (1 - KEEP_SHARE) * outside(recipe);
     if (!(credit > 0)) continue;
     const main = primaryOutput(recipe);
     const made = main === undefined ? 0 : itemTotal(variable, main);
@@ -704,6 +705,23 @@ function creditSpentShare(model: LpModel, config: CurrentSettings, built: PoolRe
     }
     addCredit(model, recipe, credit, made, () => itemUse(linear, priced.values, main!));
   }
+}
+// What one machine of a built line draws outside its own variable under a chosen objective
+// (creditSpentShare, and creditUsedShare under a weighted mix): its direct raw inputs at their sources' cost (sourceCost without its tiny
+// base, plus their extraction power) and its power at what one more MW costs this phase, minus the
+// power row's shadow price in `priced`, a linear solve of the phase model.
+function outsideCost(model: LpModel, config: CurrentSettings, priced: Solution) {
+  // Drawing a MW lowers what the power row may still take, so it costs minus its shadow price.
+  const perMW = Math.max(0, -(priced.duals?.power ?? 0));
+  const rawPrice = (item: string) => {
+    const mw = Math.max(0, model.variables['raw:' + item]?.power ?? 0);
+    return sourceCost(config, item, mw, 0) + mw * perMW;
+  };
+  return (recipe: PoolRecipe) =>
+    Object.entries(recipe.inputs)
+      .filter(([item]) => RAW.includes(item))
+      .reduce((sum, [item, rate]) => sum + rate * rawPrice(item), 0) +
+    Math.max(0, model.variables[BUILT + recipe.id]!.power ?? 0) * perMW;
 }
 // The model relaxed, and always for cost: under `maximum` it may still be set to maximise its gain.
 const relaxed = (model: LpModel): LpModel => ({
@@ -746,9 +764,18 @@ function addCredit(
 // nothing, so it credits little more than the phase's fixed demand, as creditSpentShare does
 // there: keepBuilt keeps the built lines that plan can use (#1189), and 48 Alumina Solution
 // Refineries built where 16 are needed no longer sink 5,706.8 Aluminum Scrap/min.
-function creditUsedShare(model: LpModel, built: PoolRecipe[]) {
+//
+// The same holds under a weighted mix whose buildings weigh (#1198): there the line's own variable
+// held its buildings at KEEP_SHARE with no cap, and only its outside share was capped
+// (creditSpentShare), so with the buildings weighted 1 and power and raw 0, 6 Alumina Solution
+// Refineries built where 2 are needed ran 4 and sank 465.6 Aluminum Scrap/min. There a built
+// variable costs what a new machine does too, and its 'spent:' credit gives back (1 - KEEP_SHARE)
+// of that and of its outside share (outsideCost, priced by this same linear solve) for the same
+// used share. A built generator gets its outside credit as under creditSpentShare.
+function creditUsedShare(model: LpModel, config: CurrentSettings, built: PoolRecipe[]) {
+  const weighted = !!objectiveWeights(config.objective);
   const credited = built.filter(recipe => primaryOutput(recipe) !== undefined);
-  if (!credited.length) return;
+  if (!(weighted ? built : credited).length) return;
   const linear = relaxed(model);
   linear.variables = { ...model.variables };
   for (const recipe of credited) {
@@ -761,17 +788,23 @@ function creditUsedShare(model: LpModel, built: PoolRecipe[]) {
       ),
     );
   }
-  const used = solve(linear);
-  for (const recipe of credited) {
+  const used = solve(linear, weighted ? { duals: true } : {});
+  const outside = weighted ? outsideCost(model, config, used) : () => 0;
+  for (const recipe of weighted ? built : credited) {
     const name = BUILT + recipe.id;
     const variable = model.variables[name]!;
-    const made = itemTotal(variable, primaryOutput(recipe)!);
-    if (!(made > 0)) continue;
+    const main = primaryOutput(recipe);
+    const made = main === undefined ? 0 : itemTotal(variable, main);
+    if (!(made > 0)) {
+      const credit = (1 - KEEP_SHARE) * outside(recipe);
+      if (credit > 0) variable.cost = (variable.cost ?? 0) - credit;
+      continue;
+    }
     // The full cost of a new machine, KEEP_SHARE of it once credited.
     const full = model.variables[recipe.id]!.cost ?? 0;
     variable.cost = full;
-    addCredit(model, recipe, (1 - KEEP_SHARE) * full, made, () =>
-      itemUse(linear, used.values, primaryOutput(recipe)!),
+    addCredit(model, recipe, (1 - KEEP_SHARE) * (full + outside(recipe)), made, () =>
+      itemUse(linear, used.values, main!),
     );
   }
 }
@@ -965,16 +998,124 @@ function roundNuclear(
 }
 // Solve. Under `maximum`, a second solve fixes the goal at its optimum (less a hair for
 // numerical slack) and minimises machines, so the fastest plan is also the leanest one. With built
-// lines, keepBuilt may solve on, so they are kept unless that is clearly slower (#1189).
-function solveModel(model: LpModel, maximum: boolean, pool: PoolRecipe[]): Solution {
+// lines, keepBuilt may solve on, so they are kept unless that is clearly slower (#1189); under
+// any other goal, where buildings weigh, capBuiltRaw may, so they run beyond the plan's share only
+// while that costs little raw (#1202).
+function solveModel(
+  model: LpModel,
+  { maximum, config }: PhaseContext,
+  pool: PoolRecipe[],
+): Solution {
   const solved = solve(model);
-  if (!maximum || !solved.feasible) return solved;
+  if (!maximum)
+    return solved.feasible && solved.bounded && buildingsWeigh(config)
+      ? capBuiltRaw(model, solved)
+      : solved;
+  if (!solved.feasible) return solved;
   model.constraints.keepGoal = { min: solved.values.goal! * (1 - 1e-8) };
   model.variables.goal!.keepGoal = 1;
   setObjective(model, 'cost', 'min');
   const economical = solve(model);
   if (!economical.feasible) return solved;
   return keepBuilt(model, pool, economical) ?? economical;
+}
+// Built lines and raw resources where buildings weigh (#1202, the owner's option C on #1172). A
+// built machine counts KEEP_SHARE of a new one for the share of its main product the plan uses
+// (creditUsedShare), and that share is read from a solve in which the built lines are that cheap.
+// So a cheap built line can grow its own use: 9 Fuel Refineries built in Phase 5, where the plan
+// with nothing built runs 3, all ran, and 13 Fuel Generators replaced 12 Rocket Fuel ones, saving
+// 4 new machines for 29.6% more Crude Oil (912 to 1,183/min). The owner keeps and extends built
+// factories, but watches ore closely. So a built line may run beyond the share it has in the
+// plan with nothing built only while no raw resource rises more than BUILT_RAW_SHARE (5%) over
+// that plan; otherwise the extra built machines stay spare. Like keepBuilt's BUILT_SPEED_SHARE, a
+// cap on a follow-up solve rather than all or nothing, so one costly line does not undo the rest:
+//   share  the model with every built line priced as a new machine and no credit ('spent:'), the
+//          plan with nothing built. A built line kept at its share of that plan changes nothing
+//          in it, so this is also the plan that keeps the built lines at that share. A built
+//          amplified twin keeps its price and credit there: its somersloops stay where they are
+//          (#1176), so the rule weighs the lines around them, not where the somersloops sit;
+//   capped when `solved` draws more than (1 + BUILT_RAW_SHARE) times that plan of any raw
+//          resource, or overflows more of an item to the sink (shareBounds), the same model again
+//          held to those bounds. The share plan keeps them, so it always has a solution.
+// Per raw resource rather than in total, as the owner reads it: Phase 5's Crude Oil rose 29.6%
+// while its total raw rose 2.9%, behind its iron and copper. Water counts too: the share plan's
+// use of it is the bound, as of any other. The rule holds wherever buildings weigh: under the
+// fewest buildings, and under a weighted mix with a buildings weight, since there a built line's
+// raw inputs are 90% credited as well (outsideCost), so its raw weight alone does not stop it
+// (#1198: with buildings 10, power 1 and raw 1, 9 Plastic Refineries built where 2 are needed ran
+// 3, and the Polymer Resin of the Fuel line that fed Residual Plastic went to the sink). The least
+// power and the least raw resources leave buildings at TIE_BUILDING, so the discount buys nothing
+// there; under maximum output keepBuilt's speed rule decides (#1189). A plan with nothing built,
+// or whose plan keeps within the bounds, is the plan it was; should the share plan not solve, the
+// phase keeps `solved`, and should the capped one not, the share plan.
+const BUILT_RAW_SHARE = 0.05;
+function capBuiltRaw(model: LpModel, solved: Solution): Solution {
+  if (!Object.keys(model.variables).some(name => name.startsWith(BUILT))) return solved;
+  const share: LpModel = { ...model, variables: {} };
+  for (const [name, coefficients] of Object.entries(model.variables))
+    if (name.startsWith(BUILT + 'amp:') || name.startsWith(SPENT + 'amp:'))
+      share.variables[name] = coefficients;
+    else if (name.startsWith(BUILT))
+      share.variables[name] = {
+        ...coefficients,
+        cost: model.variables[name.slice(BUILT.length)]!.cost ?? 0,
+      };
+    else if (!name.startsWith(SPENT)) share.variables[name] = coefficients;
+  const reference = solve(share);
+  if (!reference.feasible || !reference.bounded) return solved;
+  const bounds = shareBounds(model, reference.values);
+  const totals = boundedTotals(model, solved.values, bounds);
+  if (Object.entries(bounds).every(([row, max]) => totals[row]! <= max + 1e-6)) return solved;
+  const capped: LpModel = { ...model, constraints: { ...model.constraints }, variables: {} };
+  for (const [row, max] of Object.entries(bounds)) capped.constraints[row] = { max };
+  for (const [name, coefficients] of Object.entries(model.variables))
+    capped.variables[name] = { ...coefficients, ...boundedCoefficients(name, coefficients) };
+  const kept = solve(capped);
+  return kept.feasible && kept.bounded && satisfiesModel(capped, kept) ? kept : reference;
+}
+// The bounds a built line's run beyond its share must keep (capBuiltRaw), from the share plan's
+// `values`: 'builtRaw:<item>', what it mines of each raw resource, at most BUILT_RAW_SHARE more;
+// and 'builtSink:<item>', each item balance that may overflow to the sink, at most what that plan
+// overflows, as #1190 and #1193 hold a spare built machine to: it is never run so that something
+// is sunk, its own byproducts or those of a line it leaves without a consumer. The bounds give no
+// slack, since a capped solve takes all it is given; `solved` keeps within them up to the solver's
+// noise (1e-6).
+const BUILT_RAW = 'builtRaw:',
+  BUILT_SINK = 'builtSink:';
+function shareBounds(model: LpModel, values: Record<string, number>): Record<string, number> {
+  const bounds: Record<string, number> = {};
+  for (const [row, total] of Object.entries(boundedTotals(model, values)))
+    bounds[row] = row.startsWith(BUILT_RAW) ? total * (1 + BUILT_RAW_SHARE) : total;
+  return bounds;
+}
+// What a variable puts into the rows capBuiltRaw bounds: a raw source ('raw:<item>', or with
+// mining per phase a node kind's 'raw:<item>@<kind>', addNodeKinds) into its resource's, and
+// every coefficient in an item balance that may overflow (a 'min' bound, not 'equal') into its
+// 'builtSink:' twin.
+function boundedCoefficients(name: string, coefficients: Record<string, number>) {
+  const bounded: Record<string, number> = {};
+  if (name.startsWith('raw:')) bounded[BUILT_RAW + name.slice(4).split('@')[0]] = 1;
+  for (const [row, coefficient] of Object.entries(coefficients))
+    if (row.startsWith('item:')) bounded[BUILT_SINK + row.slice(5)] = coefficient;
+  return bounded;
+}
+// The totals of those rows in a solution of the model (all of them, or those of `only`), leaving
+// out the balances that must balance exactly, which cannot overflow.
+function boundedTotals(
+  model: LpModel,
+  values: Record<string, number>,
+  only?: Record<string, number>,
+): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const [name, coefficients] of Object.entries(model.variables))
+    for (const [row, coefficient] of Object.entries(boundedCoefficients(name, coefficients))) {
+      const balance = row.startsWith(BUILT_SINK)
+        ? model.constraints['item:' + row.slice(BUILT_SINK.length)]
+        : undefined;
+      if ((only && !(row in only)) || balance?.equal !== undefined) continue;
+      totals[row] = (totals[row] ?? 0) + coefficient * (values[name] || 0);
+    }
+  return totals;
 }
 function setObjective(model: LpModel, optimize: string, opType: 'max' | 'min') {
   model.optimize = optimize;
