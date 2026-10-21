@@ -14,7 +14,10 @@
   the open plan makes on site for it in this phase, its own lines, then the items it marks that give
   it no line, each with why, the ones that share a reason under one note (onSiteSummaries and
   onSiteEntriesText in app/on-site-picker.ts, #931, #955), and its part of the handover from the
-  phase before (FactoryHandover.vue, #1069). The section's id
+  phase before (FactoryHandover.vue, #1069). A factory's owner (#1199) is a line under its name,
+  "Owner: Anna", with "(you)" when it is the name this device goes by (app/mine.ts); while editing it
+  is a field under the name field, saved as the `factoryGroupOwner` update when committed, a blank
+  one meaning nobody. The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
@@ -40,6 +43,8 @@ import FactoryHandover from './FactoryHandover.vue';
 import GroupRunning from './GroupRunning.vue';
 import OnSitePicker from './OnSitePicker.vue';
 import { onSiteEntriesText, onSiteSummaries } from '../../on-site-picker.ts';
+import { meName, sameOwner } from '../../mine.ts';
+import { OWNER_MAX } from '../../../state.ts';
 
 // The factories to sort into groups (calculated rows), and the key
 // their memberships are saved under.
@@ -63,6 +68,9 @@ const sections = computed(() =>
         // recalculation); Water (can't be made on site)".
         made: onSiteEntriesText(onSite[group.id]?.made || []),
         marked: onSiteEntriesText(onSite[group.id]?.marked || []),
+        // Its owner (#1199), and whether that is the name this device goes by.
+        owner: group.owner || '',
+        mine: sameOwner(group.owner, meName()),
       }))
       .filter(section => section.members.length || factoryEditing);
   }),
@@ -88,6 +96,27 @@ function rename(event: Event, id: string) {
       render();
       const name = savedNames()[id];
       if (name !== undefined) resetDraft(names, id, name);
+    }
+  });
+}
+
+// The groups' owner fields (#1199) keep what is typed across redraws the same way.
+const savedOwners = () =>
+  Object.fromEntries(sections.value.map(section => [section.id, section.owner]));
+const owners = useDrafts(savedOwners);
+
+// A group's owner field: saved when committed, a blank one meaning nobody, then redrawn with the
+// saved owner whether or not the save worked.
+function setOwner(event: Event, id: string) {
+  const input = event.target as HTMLInputElement;
+  return whileBusy(input, async () => {
+    try {
+      await save({ type: 'factoryGroupOwner', id, owner: input.value });
+    } catch {
+    } finally {
+      render();
+      const owner = savedOwners()[id];
+      if (owner !== undefined) resetDraft(owners, id, owner);
     }
   });
 }
@@ -145,6 +174,20 @@ async function remove(event: Event, id: string) {
             @blur="leaveDraft(names, section.id, $event)"
           />
           <h2 v-else tabindex="-1" data-section-heading>{{ section.name }}</h2>
+          <label v-if="editing" class="group-owner-field small"
+            >Owner<input
+              :data-group-owner-input="section.id"
+              :value="owners[section.id]"
+              :maxlength="OWNER_MAX"
+              placeholder="Nobody"
+              :aria-label="'Owner of ' + section.name"
+              @input="owners[section.id] = ($event.target as HTMLInputElement).value"
+              @change="setOwner($event, section.id)"
+              @blur="leaveDraft(owners, section.id, $event)"
+          /></label>
+          <p v-else-if="section.owner" class="small muted group-owner" data-group-owner>
+            Owner: {{ section.owner }}<template v-if="section.mine"> (you)</template>
+          </p>
         </div>
       </div>
       <button
