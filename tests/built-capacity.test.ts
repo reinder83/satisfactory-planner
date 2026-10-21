@@ -304,11 +304,53 @@ const sunkOf = (plan: Pick<StoredCalculatedPlan, 'stages'>, phase: string, item?
 const near = (actual: number, expected: number, message: string) =>
   assert.ok(Math.abs(actual - expected) < 1e-6, `${message}: ${actual}, expected ${expected}`);
 
+// #1193: under the fewest buildings too. There a built machine cost KEEP_SHARE of a new one and its
+// ore almost nothing, so spare built machines ran for their byproducts; now only the share of a
+// built line the plan uses costs KEEP_SHARE (creditUsedShare in planner/model.ts).
+const EVERY_LEAST: [string, object][] = [['the fewest buildings', {}], ...LEAST];
+const rawOf = (plan: Pick<StoredCalculatedPlan, 'stages'>, phase: string) =>
+  Object.values(plan.stages[phase as '3']?.raw || {}).reduce((sum, rate) => sum + rate, 0);
+
+test('spare built Alumina Solution stays idle under the fewest buildings and maximum output', () => {
+  // The issue's world: Phase 4 needs 2 Alumina Solution Refineries and Phase 5 needs 4. With 6 and
+  // 12 built, all ran: 465.6 and 1,411.35 Aluminum Scrap/min went to the sink, and Phase 4's raw
+  // use rose from 5,297 to 6,004/min.
+  const plain = calculate({});
+  for (const [phase, count] of [
+    ['4', 6],
+    ['5', 12],
+  ] as const) {
+    const need = machinesOf(plain, phase);
+    assert.equal(need[ALUMINA], count / 3, `Phase ${phase}: the plan's need`);
+    const built = calculate({ builtLines: { [phase]: { [ALUMINA]: count } } });
+    const machines = machinesOf(built, phase);
+    assert.equal(machines[ALUMINA], need[ALUMINA], `Phase ${phase}: only the needed ones run`);
+    assert.equal(machines[SCRAP], need[SCRAP], `Phase ${phase}: Aluminum Scrap`);
+    assert.equal(
+      sunkOf(built, phase, 'Aluminum Scrap'),
+      0,
+      `Phase ${phase}: no Aluminum Scrap sunk`,
+    );
+    near(sunkOf(built, phase), sunkOf(plain, phase), `Phase ${phase}: nothing more sunk`);
+    near(rawOf(built, phase), rawOf(plain, phase), `Phase ${phase}: raw use`);
+    assert.equal(built.stages[phase].builtDropped, undefined, `Phase ${phase}`);
+  }
+  // Under maximum output too: with 48 built where its Phase 4 needs 16, 5,706.8/min were sunk.
+  const fastest = calculate(MAX);
+  const need = machinesOf(fastest)[ALUMINA]!;
+  assert.equal(need, 16);
+  const built = calculate({ ...MAX, builtLines: { '4': { [ALUMINA]: 3 * need } } });
+  assert.equal(machinesOf(built)[ALUMINA], need, 'maximum output: only the needed ones run');
+  assert.equal(sunkOf(built, '4', 'Aluminum Scrap'), 0, 'maximum output: no Aluminum Scrap sunk');
+  near(sunkOf(built, '4'), sunkOf(fastest, '4'), 'maximum output: nothing more sunk');
+  assert.equal(hoursOf(built), hoursOf(fastest), 'maximum output: as fast');
+});
+
 test('built Plastic Refineries beyond the plan’s need are not run for their Heavy Oil Residue', () => {
   // 9 Refineries built in Phase 3, where the plan's Plastic takes 3 (60/min at 20 each). The
   // credit used to run all 9 under least raw resources: their residue became fuel and 121.8
   // Plastic/min went to the sink.
-  for (const [name, objective] of LEAST) {
+  for (const [name, objective] of EVERY_LEAST) {
     const plain = calculate(objective);
     const plastic = madeOf(plain, '3', 'Plastic');
     assert.equal(Math.ceil(plastic / 20 - 1e-9), 3, `${name}: the plan needs 3 Refineries' worth`);
@@ -325,7 +367,7 @@ test('built Alumina Solution beyond the plan’s need is not run for its byprodu
   // Phase 4 needs 2 Alumina Solution Refineries and 1 on Aluminum Scrap; three times that stands.
   // The credit used to run them all and sink the Aluminum Scrap (465.6/min under least raw
   // resources and under least power).
-  for (const [name, objective] of LEAST) {
+  for (const [name, objective] of EVERY_LEAST) {
     const plain = calculate(objective);
     const need = machinesOf(plain);
     assert.equal(need[ALUMINA], 2, name);
@@ -343,21 +385,23 @@ test('built Alumina Solution beyond the plan’s need is not run for its byprodu
   }
 });
 
+const PHASES = ['1', '2', '3', '4', '5'] as const;
 test('a plan built three times over runs no line beyond the plan', () => {
-  // Every Phase 3-5 line of the plain plan built three times over (the review's probe): the
-  // credit used to run them in Phase 3 and 5 under least raw resources (1,503 and 10,922 raw/min
-  // became 3,505 and 18,445) and in Phase 4 and 5 under least power (953 and 1,466/min sunk).
-  for (const [name, objective] of LEAST) {
+  // Every line of the plain plan built three times over (the review's probe, now in every phase):
+  // the credit used to run them in Phase 3 and 5 under least raw resources (1,503 and 10,922
+  // raw/min became 3,505 and 18,445) and in Phase 4 and 5 under least power (953 and 1,466/min
+  // sunk). Under the fewest buildings (#1193) no line runs beyond the plan either.
+  for (const [name, objective] of EVERY_LEAST) {
     const plain = calculate(objective);
     const lines: BuiltLines = {};
-    for (const phase of ['3', '4', '5'] as const)
+    for (const phase of PHASES)
       lines[phase] = Object.fromEntries(
         (plain.stages[phase].rows || [])
           .filter(row => !row.id.startsWith('power-'))
           .map(row => [row.id, 3 * row.machines]),
       );
     const built = calculate({ ...objective, builtLines: lines });
-    for (const phase of ['3', '4', '5']) {
+    for (const phase of PHASES) {
       const need = machinesOf(plain, phase);
       for (const [id, count] of Object.entries(machinesOf(built, phase)))
         assert.ok(count <= (need[id] ?? 0), `${name}, Phase ${phase}: ${id} ${count}`);
