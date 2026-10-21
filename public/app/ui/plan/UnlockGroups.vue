@@ -22,6 +22,7 @@ import {
   groupDoneLabel,
   groupTickNews,
   groupUndoNews,
+  itemTitle,
   type UnlockGroupView,
 } from '../../unlock-groups.ts';
 import { toggleCheck } from '../actions.ts';
@@ -142,7 +143,7 @@ async function tickItem(event: Event, id: string, title: string) {
             @change="tickItem($event, item.id, item.title)"
           />
           <details>
-            <summary>{{ item.title }}</summary>
+            <summary>{{ itemTitle(item.title, group.key) }}</summary>
             <StepTable v-if="item.table" :table="item.table" :terms="item.terms ?? []" />
             <p v-else-if="item.body"><TermText :text="item.body" :terms="item.terms ?? []" /></p>
           </details>

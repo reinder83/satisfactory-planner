@@ -99,3 +99,13 @@ export function groupUndoNews(change: RunningChange, restored: number, label: st
       : '.')
   );
 }
+
+// An item's title inside its group, without the group it repeats: "Tier 3: Coal Power" under
+// Tier 3 is "Coal Power", "MAM: Caterium" under MAM research "Caterium". A title the user rewrote
+// (taskEdits) is shown as it is unless it starts the same way.
+export function itemTitle(title: string, groupKey: string): string {
+  const prefix = groupKey === 'mam' ? 'MAM: ' : `Tier ${groupKey.slice('tier-'.length)}: `;
+  return title.startsWith(prefix) && title.length > prefix.length
+    ? title.slice(prefix.length)
+    : title;
+}

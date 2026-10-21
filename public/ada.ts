@@ -412,7 +412,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.unlockGroups?.total ?? 0) > 0,
     text: facts =>
-      `Expert mode: ${facts.unlockGroups!.done} of ${plural(facts.unlockGroups!.total, 'unlock group')} in this phase ${facts.unlockGroups!.done === 1 ? 'is' : 'are'} done. Tick a tier and every unlock in it is ticked; untick it and only those are unticked. No hand-holding, as requested.`,
+      `Expert mode: ${facts.unlockGroups!.done} of ${plural(facts.unlockGroups!.total, 'unlock group')} done in this phase. Tick a tier and every unlock in it is ticked; untick it and only those are unticked. No hand-holding, as requested.`,
   },
   {
     // Research only a later phase needs (#1070): marked optional and listed last.

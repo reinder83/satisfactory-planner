@@ -7050,3 +7050,9 @@ th.resource-cell {
     text-align: left;
   }
 }
+@media (max-width: 720px) {
+  /* Expert mode's denser All settings (#1197): two fields a row on a phone. */
+  .wizard-panel.compact .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
