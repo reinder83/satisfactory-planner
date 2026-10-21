@@ -138,6 +138,7 @@ const OBJECTIVES: [string, object][] = [
   ['least raw resources', { objective: 'raw' }],
   ['raw resources weighted alone', { objective: { buildings: 0, power: 0, raw: 1 } }],
   ['an even mix', { objective: { buildings: 1, power: 1, raw: 1 } }],
+  ['buildings 10, power 1, raw 1', { objective: { buildings: 10, power: 1, raw: 1 } }],
 ];
 const SCREW_LINES: BuiltLines = { '4': { [SCREWS]: 35, [ROD]: 38 } };
 
@@ -307,7 +308,13 @@ const near = (actual: number, expected: number, message: string) =>
 // #1193: under the fewest buildings too. There a built machine cost KEEP_SHARE of a new one and its
 // ore almost nothing, so spare built machines ran for their byproducts; now only the share of a
 // built line the plan uses costs KEEP_SHARE (creditUsedShare in planner/model.ts).
-const EVERY_LEAST: [string, object][] = [['the fewest buildings', {}], ...LEAST];
+// #1198: and under a weighted mix whose buildings weigh, where the buildings share of a built line
+// was not capped at all.
+const WEIGHTED: [string, object][] = [
+  ['buildings weighted alone', { objective: { buildings: 1, power: 0, raw: 0 } }],
+  ['buildings 10, power 1, raw 1', { objective: { buildings: 10, power: 1, raw: 1 } }],
+];
+const EVERY_LEAST: [string, object][] = [['the fewest buildings', {}], ...LEAST, ...WEIGHTED];
 const rawOf = (plan: Pick<StoredCalculatedPlan, 'stages'>, phase: string) =>
   Object.values(plan.stages[phase as '3']?.raw || {}).reduce((sum, rate) => sum + rate, 0);
 
@@ -385,13 +392,108 @@ test('built Alumina Solution beyond the plan’s need is not run for its byprodu
   }
 });
 
+// No raw resource of a phase rises more than 5% over the plan with nothing built (BUILT_RAW_SHARE
+// in planner/model.ts), and nothing more is sunk. The solve measures that plan before its load
+// bound trims its fuel (withinLoad in planner/load.ts), a hundredth of a percent at most.
+const withinRawShare = (
+  built: Pick<StoredCalculatedPlan, 'stages'>,
+  plain: Pick<StoredCalculatedPlan, 'stages'>,
+  phase: string,
+  name: string,
+) => {
+  const before: Record<string, number> = plain.stages[phase as '3']?.raw || {},
+    after: Record<string, number> = built.stages[phase as '3']?.raw || {};
+  for (const [item, rate] of Object.entries(after))
+    assert.ok(
+      rate <= (before[item] ?? 0) * 1.05 * (1 + 1e-4) + 1e-6,
+      `${name}, Phase ${phase}: ${item} ${rate}, nothing built ${before[item]}`,
+    );
+  assert.ok(sunkOf(built, phase) <= sunkOf(plain, phase) + 1e-6, `${name}, Phase ${phase}: sunk`);
+};
+const FUEL = 'Recipe_LiquidFuel_C';
+const RESIDUAL_PLASTIC = 'Recipe_ResidualPlastic_C';
+
+// #1198: under a weighted mix whose buildings weigh, a built machine cost KEEP_SHARE of a new one
+// with no cap on that share, so spare built lines ran for their byproducts. With the buildings
+// weighted 1 and power and raw 0, 6 Alumina Solution Refineries built in Phase 4 where 2 are
+// needed ran 4 (465.6 Aluminum Scrap/min sunk) and 12 in Phase 5 where 4 are needed ran 12
+// (1,411.3/min sunk); with buildings 10, power 1 and raw 1, 9 Plastic Refineries built in Phase 3
+// where 2 are needed ran 3 and the Polymer Resin that fed Residual Plastic went to the sink.
+test('spare built lines stay idle under a buildings-weighted mix', () => {
+  const [alone, mixed] = WEIGHTED.map(([, objective]) => objective) as [object, object];
+  const plain = calculate(alone);
+  for (const [phase, count] of [
+    ['4', 6],
+    ['5', 12],
+  ] as const) {
+    const need = machinesOf(plain, phase);
+    assert.equal(need[ALUMINA], count / 3, `Phase ${phase}: the plan's need`);
+    const built = calculate({ ...alone, builtLines: { [phase]: { [ALUMINA]: count } } });
+    const machines = machinesOf(built, phase);
+    assert.equal(machines[ALUMINA], need[ALUMINA], `Phase ${phase}: only the needed ones run`);
+    assert.equal(machines[SCRAP], need[SCRAP], `Phase ${phase}: Aluminum Scrap`);
+    assert.equal(sunkOf(built, phase, 'Aluminum Scrap'), 0, `Phase ${phase}: nothing sunk`);
+    near(sunkOf(built, phase), sunkOf(plain, phase), `Phase ${phase}: nothing more sunk`);
+    near(rawOf(built, phase), rawOf(plain, phase), `Phase ${phase}: raw use`);
+  }
+  const mix = calculate(mixed);
+  const need = machinesOf(mix, '3');
+  const built = calculate({ ...mixed, builtLines: { '3': { [PLASTIC]: 9 } } });
+  const machines = machinesOf(built, '3');
+  assert.equal(machines[PLASTIC], need[PLASTIC], 'Plastic: only the needed ones run');
+  assert.equal(machines[RESIDUAL_PLASTIC], need[RESIDUAL_PLASTIC], 'Residual Plastic stays');
+  assert.equal(sunkOf(built, '3', 'Polymer Resin'), 0, 'no Polymer Resin sunk');
+  withinRawShare(built, mix, '3', 'Plastic');
+});
+
+// #1202 (the owner's option C on #1172): where buildings weigh, a built line may run beyond its
+// share of the plan with nothing built only while no raw resource rises more than 5%; the other
+// built machines stay spare. 9 Fuel Refineries built in Phase 5, where that plan runs 3, all ran:
+// 13 Fuel Generators replaced 12 Rocket Fuel ones and Crude Oil rose 29.6% (912 to 1,183/min).
+// Now the line grows only as far as 5% more Crude Oil allows. 6 Plastic Refineries built in Phase
+// 3, where 2 are needed, ran 3 for 12% more Crude Oil and sank 77.1 Polymer Resin/min.
+test('built lines run beyond the plan’s share only while raw use rises at most 5%', () => {
+  const probes: [string, string, Record<string, number>][] = [
+    ['6 Plastic', '3', { [PLASTIC]: 6 }],
+    ['9 Fuel', '5', { [FUEL]: 9 }],
+    ['6 Alumina Solution', '4', { [ALUMINA]: 6 }],
+    ['12 Alumina Solution', '5', { [ALUMINA]: 12 }],
+  ];
+  for (const [name, objective] of [['the fewest buildings', {}], ...WEIGHTED] as const) {
+    const plain = calculate(objective);
+    for (const [probe, phase, lines] of probes) {
+      const built = calculate({ ...objective, builtLines: { [phase]: lines } });
+      const label = `${name}, ${probe}`;
+      withinRawShare(built, plain, phase, label);
+      const [id, count] = Object.entries(lines)[0]!;
+      assert.ok(machinesOf(built, phase)[id]! < count, `${label}: some stay spare`);
+      assert.equal(built.stages[phase as '3'].builtDropped, undefined, label);
+    }
+    // The Fuel line still grows where that costs little: 4 of the 9 run, for 5% more Crude Oil.
+    const fuel = calculate({ ...objective, builtLines: { '5': { [FUEL]: 9 } } });
+    assert.equal(machinesOf(plain, '5')[FUEL], 3, name);
+    assert.equal(machinesOf(fuel, '5')[FUEL], 4, `${name}: 9 Fuel, 4 run`);
+    const crude = (plan: Pick<StoredCalculatedPlan, 'stages'>) =>
+      plan.stages['5']?.raw?.['Crude Oil'] ?? 0;
+    assert.ok(crude(fuel) > crude(plain) * 1.04, `${name}: Crude Oil ${crude(fuel)}`);
+  }
+  // Also with whole machines, through the two-step fit.
+  const WHOLE = { wholeMachines: true, storageFromSurplus: true };
+  const plain = calculate(WHOLE);
+  const built = calculate({ ...WHOLE, builtLines: { '5': { [FUEL]: 9 } } });
+  withinRawShare(built, plain, '5', 'whole machines, 9 Fuel');
+  assert.ok(machinesOf(built, '5')[FUEL]! < 9, 'whole machines: some stay spare');
+});
+
 const PHASES = ['1', '2', '3', '4', '5'] as const;
 test('a plan built three times over runs no line beyond the plan', () => {
   // Every line of the plain plan built three times over (the review's probe, now in every phase):
   // the credit used to run them in Phase 3 and 5 under least raw resources (1,503 and 10,922
   // raw/min became 3,505 and 18,445) and in Phase 4 and 5 under least power (953 and 1,466/min
-  // sunk). Under the fewest buildings (#1193) no line runs beyond the plan either.
+  // sunk). Under the fewest buildings (#1193) no line runs beyond the plan either. Under a
+  // buildings-weighted mix a line may (#1202), but only while no raw resource rises more than 5%.
   for (const [name, objective] of EVERY_LEAST) {
+    const extending = WEIGHTED.some(([weighted]) => weighted === name);
     const plain = calculate(objective);
     const lines: BuiltLines = {};
     for (const phase of PHASES)
@@ -403,8 +505,10 @@ test('a plan built three times over runs no line beyond the plan', () => {
     const built = calculate({ ...objective, builtLines: lines });
     for (const phase of PHASES) {
       const need = machinesOf(plain, phase);
-      for (const [id, count] of Object.entries(machinesOf(built, phase)))
-        assert.ok(count <= (need[id] ?? 0), `${name}, Phase ${phase}: ${id} ${count}`);
+      if (extending) withinRawShare(built, plain, phase, name);
+      else
+        for (const [id, count] of Object.entries(machinesOf(built, phase)))
+          assert.ok(count <= (need[id] ?? 0), `${name}, Phase ${phase}: ${id} ${count}`);
       near(sunkOf(built, phase), sunkOf(plain, phase), `${name}, Phase ${phase}: sunk`);
     }
   }
@@ -603,7 +707,27 @@ async function dockerEdition(edition: EditionCase = {}, carried = UNCHANGED) {
     await fs.rm(dir, { recursive: true, force: true });
   }
 }
-test('the Docker server stores the built lines a recalculation counted', () => dockerEdition());
+// The default case: Residual Fuel and Screws ticked, recalculated with Cast Screws. The Screws
+// stay. The plan with Cast Screws runs 4 Residual Fuel Refineries where 5 stand; running the 5th
+// took 10.8% more Crude Oil (#1202: Plastic replaced the Residual Plastic its fuel fed), so it
+// stays spare: the line keeps 4, its step says 1 is spare, and the carry counts it as changed.
+const SPARE_CASE: EditionCase = {
+  kept: (reply, lines) => {
+    const machines = machinesOf(reply.plan!);
+    assert.equal(machines[SCREWS], 35, 'Screws stay on their recipe');
+    assert.equal(machines[CAST], undefined);
+    assert.equal(reply.state.checks[key(SCREWS)], true, 'Screws stay ticked');
+    assert.equal(lines['4']![REFINERY], 5);
+    assert.equal(machines[REFINERY], 4, 'Residual Fuel runs what the plan uses');
+    assert.deepEqual(reply.state.builtMachines, { [key(REFINERY)]: 5 }, 'all 5 still stand');
+    const crude = (plan: Pick<StoredCalculatedPlan, 'stages'>) =>
+      plan.stages['4']?.raw?.['Crude Oil'] ?? 0;
+    assert.ok(crude(reply.plan!) <= crude(calculate(TO)) * 1.05, 'Crude Oil within 5%');
+  },
+};
+const SPARE_CARRIED = { reviewCount: 0, changedCount: 1 };
+test('the Docker server stores the built lines a recalculation counted', () =>
+  dockerEdition(SPARE_CASE, SPARE_CARRIED));
 
 async function browserEdition(edition: EditionCase = {}, carried = UNCHANGED) {
   const records = new Map<string, unknown>();
@@ -629,7 +753,8 @@ async function browserEdition(edition: EditionCase = {}, carried = UNCHANGED) {
     carried,
   );
 }
-test('the browser edition stores the built lines a recalculation counted', () => browserEdition());
+test('the browser edition stores the built lines a recalculation counted', () =>
+  browserEdition(SPARE_CASE, SPARE_CARRIED));
 
 // #1188: under the raw resources objective the recalculation in place switched the built Screws
 // to Cast Screws and cut the Iron Rods from 38 to 15, while Review said they were kept. Both
