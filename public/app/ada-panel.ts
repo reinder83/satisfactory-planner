@@ -22,6 +22,7 @@ import {
   groupMoved,
   importedSaves,
   mergedProgress,
+  sessionSize,
   milestoneOnly,
   openedFrom,
   payoff,
@@ -55,6 +56,7 @@ import {
   taskEditsState,
 } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
+import { sessionView } from './views/session-builds.ts';
 import {
   buildRowName,
   changedLineCount,
@@ -333,6 +335,20 @@ function groupMovedFact(): string {
   return `“${moved.profileName}”` + (moved.otherSave ? ` in “${moved.saveName}”` : '');
 }
 
+// Today's session on its page (#1073): its builds and how many wait on something upstream, as the
+// page lists them; nothing on any other page.
+function sessionFacts(view: string): Pick<AdaFacts, 'session'> {
+  if (view !== 'session') return {};
+  const session = sessionView(sessionSize);
+  if (!session) return {};
+  return {
+    session: {
+      builds: session.builds.length,
+      waiting: session.builds.filter(build => build.readiness === 'waiting').length,
+    },
+  };
+}
+
 // The last merge of a friend's progress into the open profile (#1160), as the toast counted it.
 function mergedFacts(): Pick<AdaFacts, 'merged' | 'mergedFrom'> {
   const merged = mergedProgress;
@@ -466,6 +482,7 @@ function adaFacts(): AdaFacts {
       workspace.saves.filter(save => importedSaves.includes(save.id)).map(save => `“${save.name}”`),
     ),
     ...mergedFacts(),
+    ...sessionFacts(view),
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     grownLines: grownShares(calcStage()?.rows || []).size,

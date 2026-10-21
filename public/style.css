@@ -5596,6 +5596,95 @@ button.rail-tile:hover {
   color: var(--bright);
   font-weight: 600;
 }
+/* Today's session (#1073): the next builds as cards, each with its facts as a two-column list
+   (one column on a phone), and the To-Do note in a read-only box above them. */
+.session-toolbar .session-size {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-family: var(--head);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.session-intro {
+  margin: 0 0 16px;
+}
+.session-note-text {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.session-builds {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+.session-build h2 {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+.session-no {
+  flex: none;
+  min-width: 1.6em;
+  color: var(--accent);
+  font-family: var(--head);
+}
+.session-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 10px 0 0;
+}
+.session-facts dt {
+  color: var(--muted);
+  font-family: var(--head);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.session-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.session-ready.ready {
+  color: var(--green);
+}
+.session-ready.waiting {
+  color: var(--accent);
+}
+@media (max-width: 560px) {
+  .session-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .session-facts dd {
+    margin-bottom: 8px;
+  }
+}
+@media print {
+  .session-build,
+  .session-note {
+    break-inside: avoid;
+  }
+  .session-note-text {
+    resize: none;
+    background: white;
+    color: #1c2328;
+  }
+}
 /* A line that only made a Space Elevator part already delivered in full (#1062): dimmed like a
    finished step but not struck through, since nobody ticked it, with a note under its title that
    says why, in the body font (the title's own is the heading font). */
