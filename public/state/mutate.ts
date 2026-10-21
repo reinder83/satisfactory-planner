@@ -28,6 +28,7 @@ import {
   handbookFloor,
   isPhase,
   knownFloor,
+  groupOwner,
   label,
   linkKey,
   linkTransport,
@@ -264,6 +265,16 @@ function renameGroup(factory: FactoryGroups, update: Raw) {
   // The check above found it.
   factory.groups.find(group => group.id === update.id)!.name = update.name.trim();
 }
+// The player who builds a group (#1199, co-op), free text set on its header on the Factories page.
+// A blank owner means nobody: the field goes, and with it version 20 once no group has one.
+function setGroupOwner(factory: FactoryGroups, update: Raw) {
+  const group = factory.groups.find(known => known.id === update.id);
+  if (!group) fail('Unknown factory.');
+  if (typeof update.owner !== 'string') fail('Invalid factory owner.');
+  const owner = groupOwner(update.owner);
+  if (owner) group.owner = owner;
+  else delete group.owner;
+}
 // Removing a group also drops it from every row's assignment list.
 function removeGroup(factory: FactoryGroups, update: Raw) {
   if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory.');
@@ -364,6 +375,7 @@ const groupEdits: Record<string, GroupEdit> = {
   factoryGroupAdd: addGroup,
   factoryGroupRename: renameGroup,
   factoryGroupRemove: removeGroup,
+  factoryGroupOwner: setGroupOwner,
   factoryLinkTransport: setLinkTransport,
   factoryAssign: assignGroups,
   factoryLocal: setLocalItems,

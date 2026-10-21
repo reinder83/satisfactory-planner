@@ -12,6 +12,7 @@ import type {
   BuiltMachines,
   CustomTask,
   ExactClocks,
+  FactoryGroup,
   FactoryGroups,
   GroupAssignment,
   HandbookMapping,
@@ -142,6 +143,17 @@ const phases: string[] = ['1', '2', '3', '4', '5', 'post'];
 export const isPhase = (value: unknown): value is Phase => phases.includes(value as string);
 export const groupId = (value: unknown): value is string =>
   typeof value === 'string' && /^fg-[a-z0-9]{4,32}$/.test(value);
+// The longest owner name a factory group keeps (#1199), once trimmed.
+export const OWNER_MAX = 40;
+// A factory group's owner as kept (#1199): the trimmed name, or undefined for none (absent or
+// blank: nobody). Anything else, or a name longer than OWNER_MAX, throws.
+export function groupOwner(value: unknown): string | undefined {
+  if (value === undefined || (typeof value === 'string' && !value.trim())) return undefined;
+  if (!label(value, OWNER_MAX)) fail('Invalid factory owner.');
+  return value.trim();
+}
+// Whether any group has an owner: that state is version 20 (#1199).
+const hasOwners = (factoryGroups: FactoryGroups) => factoryGroups.groups.some(group => group.owner);
 const hasTaskEdits = (edits: TaskEdits) =>
   edits.removed.length ||
   Object.keys(edits.order).length +
@@ -315,11 +327,13 @@ export function validateGroups(raw: unknown): FactoryGroups {
   if (raw.groups !== undefined) {
     if (!Array.isArray(raw.groups) || raw.groups.length > 60) fail('Invalid factories.');
     const seen = new Set<string>();
-    clean.groups = raw.groups.map((group: unknown) => {
+    clean.groups = raw.groups.map((group: unknown): FactoryGroup => {
       if (!plain(group) || !groupId(group.id) || seen.has(group.id) || !label(group.name))
         fail('Invalid factory.');
       seen.add(group.id);
-      return { id: group.id, name: group.name.trim() };
+      const owner = groupOwner(group.owner);
+      // Only kept when set, so a group without an owner keeps its old shape and version.
+      return { id: group.id, name: group.name.trim(), ...(owner ? { owner } : {}) };
     });
   }
   if (raw.assignments !== undefined) {
@@ -734,7 +748,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–19 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–20 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -745,13 +759,13 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].includes(
       state.version as number,
     )
   )
     fail(
-      // Compared as the old code did, so a version given as "20" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 19
+      // Compared as the old code did, so a version given as "21" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 20
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -839,44 +853,48 @@ export function validateState(state: unknown): ProgressState {
   // of asking for an update. A link on Fluid Trucks (mode 'fluidTruck', #1177) is 18: an older
   // release would refuse that mode as malformed. The machines that stand on a production line a
   // recalculation grew (builtMachines, #1174) are 19: an older release would drop them and show the
-  // line as if none of it were built.
-  clean.version = clean.builtMachines
-    ? 19
-    : linksNeedV18(clean.factoryGroups)
-      ? 18
-      : linksNeedV17(clean.factoryGroups)
-        ? 17
-        : clean.exactClocks
-          ? 16
-          : clean.onSiteReview
-            ? 15
-            : clean.factoryGroups.local
-              ? 14
-              : clean.handbookOrigin?.mapping
-                ? 13
-                : clean.handbookOrigin
-                  ? 12
-                  : linksNeedV11(clean.factoryGroups)
-                    ? 11
-                    : clean.storageEdits.bayOrder
-                      ? 10
-                      : linksNeedV9(clean.factoryGroups)
-                        ? 9
-                        : clean.storageEdits.bayFloors
-                          ? 8
-                          : clean.factoryGroups.links
-                            ? 7
-                            : clean.storageEdits.hiddenFloors.length
-                              ? 6
-                              : clean.storageEdits.hiddenBays.length
-                                ? 5
-                                : hasAddedSlots(clean.storageEdits)
-                                  ? 4
-                                  : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                                    ? 3
-                                    : hasEdits(clean.storageEdits)
-                                      ? 2
-                                      : 1;
+  // line as if none of it were built. A factory group with an owner (#1199) is 20: an older
+  // release's validateGroups would drop the owner.
+  clean.version = hasOwners(clean.factoryGroups)
+    ? 20
+    : clean.builtMachines
+      ? 19
+      : linksNeedV18(clean.factoryGroups)
+        ? 18
+        : linksNeedV17(clean.factoryGroups)
+          ? 17
+          : clean.exactClocks
+            ? 16
+            : clean.onSiteReview
+              ? 15
+              : clean.factoryGroups.local
+                ? 14
+                : clean.handbookOrigin?.mapping
+                  ? 13
+                  : clean.handbookOrigin
+                    ? 12
+                    : linksNeedV11(clean.factoryGroups)
+                      ? 11
+                      : clean.storageEdits.bayOrder
+                        ? 10
+                        : linksNeedV9(clean.factoryGroups)
+                          ? 9
+                          : clean.storageEdits.bayFloors
+                            ? 8
+                            : clean.factoryGroups.links
+                              ? 7
+                              : clean.storageEdits.hiddenFloors.length
+                                ? 6
+                                : clean.storageEdits.hiddenBays.length
+                                  ? 5
+                                  : hasAddedSlots(clean.storageEdits)
+                                    ? 4
+                                    : hasTaskEdits(clean.taskEdits) ||
+                                        hasGroups(clean.factoryGroups)
+                                      ? 3
+                                      : hasEdits(clean.storageEdits)
+                                        ? 2
+                                        : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
