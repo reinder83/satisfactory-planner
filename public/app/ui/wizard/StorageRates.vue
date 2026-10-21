@@ -93,7 +93,7 @@ const shown = (row: { name: string }) =>
       Per-item storage rates{{ view.set > 0 ? ' · ' + num(view.set) + ' set' : '' }}
       <HelpTip name="storageOverrides" />
     </summary>
-    <p class="small muted">
+    <p class="small muted" data-explain>
       Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container
       and address without reserving any production for it. Space Elevator parts start at 0:
       deliveries and later project parts already consume them, so a standing buffer would be

@@ -70,7 +70,7 @@ function tick(row: OwnedRow, on: boolean) {
 <template>
   <details class="owned-alt-picker" data-owned-alt-picker :open="startOpen">
     <summary>Alternates you already own · {{ picked.size }} ticked</summary>
-    <p class="small muted">
+    <p class="small muted" data-explain>
       Tick the alternate recipes you have already unlocked in game. The plan may use them whatever
       Recipe access says, from the phase each becomes available, and their unlock steps start
       ticked, so no hard drives go to them. MAM and milestone recipes are not listed: their research

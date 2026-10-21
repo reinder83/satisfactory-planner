@@ -15,6 +15,7 @@ import {
   tutorialKeys,
 } from '../../preferences.ts';
 import { beginnerMode, beginnerStock, setBeginnerMode } from '../beginner.ts';
+import { setExpertMode, switchBeginnerMode } from '../expert.ts';
 import { $ } from '../format.ts';
 import { draft, wizard } from '../session.ts';
 import { render } from '../shell.ts';
@@ -112,12 +113,37 @@ function beginnerSkips(id: string, settings: WizardDraft['settings']): boolean {
 // "New to Satisfactory" on the guided start's first screen (#1076): remembers the choice and, for
 // a new save (whose settings are a fresh plan's), switches the stock question's default between
 // "Nothing" and "My building materials" while the user has not picked another stock. The screen is
-// read first, so nothing typed is lost, and redrawn; nothing is calculated.
+// read first, so nothing typed is lost, and redrawn; nothing is calculated. On, it switches expert
+// mode off (#1197).
 export function switchBeginner(form: HTMLFormElement | null, value: boolean) {
   const wizardDraft = draft();
   if (form) readGuidedForm(form);
-  setBeginnerMode(value);
+  switchBeginnerMode(value);
   if (!wizardDraft.saveId && beginnerStock(wizardDraft.settings, value)) wizardDraft.preview = null;
+  render();
+}
+
+// "Expert mode" (#1197, expert.ts) on the guided start's first screen and above All settings'
+// steps: remembers the choice, after reading the screen so nothing typed is lost. On, it switches
+// New to Satisfactory off the way its own switch does (the stock default follows), and the guided
+// start gives way to All settings, every answer kept, as "All settings →" does. Nothing is
+// calculated.
+export function switchExpert(form: HTMLFormElement | null, value: boolean) {
+  const wizardDraft = draft();
+  if (form) {
+    if (wizardDraft.mode === 'guided') readGuidedForm(form);
+    else readWizard(form);
+  }
+  if (value && beginnerMode()) {
+    setBeginnerMode(false);
+    if (!wizardDraft.saveId && beginnerStock(wizardDraft.settings, false))
+      wizardDraft.preview = null;
+  }
+  setExpertMode(value);
+  if (value && wizardDraft.mode === 'guided') {
+    wizardDraft.mode = 'advanced';
+    wizardDraft.step = 1;
+  }
   render();
 }
 

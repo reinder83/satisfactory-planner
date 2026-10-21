@@ -38,6 +38,9 @@ export interface AdaFacts {
   // listed last, and whether "Required steps only" hides them.
   optionalResearch?: number;
   requiredOnly?: boolean;
+  // Expert mode's grouped unlocks (#1197): the open phase's unlock groups, and how many are done;
+  // absent outside expert mode.
+  unlockGroups?: { done: number; total: number };
   // The generators the phase before built that this phase keeps (#1064), as a name list ("7 Fuel
   // Generators"), and that phase ("Phase 3"); absent when it keeps none.
   keptGenerators?: string;
@@ -401,6 +404,15 @@ const RULES: AdaRule[] = [
     when: facts => (facts.stockLines ?? 0) > 0,
     text: facts =>
       `${plural(facts.stockLines!, 'storage-only line')} at the end of this phase ${facts.stockLines === 1 ? 'is' : 'are'} optional: storage takes the plan's surplus first, and ${facts.stockLines === 1 ? 'that line fills' : 'those lines fill'} only containers nothing spills into. Build ${facts.stockLines === 1 ? 'it' : 'them'} last, or never. Shelves can wait.`,
+  },
+  {
+    // Expert mode's grouped unlocks (#1197): how many of the phase's unlock groups are done.
+    id: 'expert-unlocks',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => (facts.unlockGroups?.total ?? 0) > 0,
+    text: facts =>
+      `Expert mode: ${facts.unlockGroups!.done} of ${plural(facts.unlockGroups!.total, 'unlock group')} in this phase ${facts.unlockGroups!.done === 1 ? 'is' : 'are'} done. Tick a tier and every unlock in it is ticked; untick it and only those are unticked. No hand-holding, as requested.`,
   },
   {
     // Research only a later phase needs (#1070): marked optional and listed last.

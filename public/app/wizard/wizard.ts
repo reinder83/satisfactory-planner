@@ -18,6 +18,7 @@ import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../prog
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { beginnerMode, beginnerStock } from '../beginner.ts';
+import { expertMode } from '../expert.ts';
 import { sourceBuiltLines, withBuiltLines } from '../built-capacity.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
@@ -49,6 +50,7 @@ import { confirmAction } from '../ui/confirm.ts';
 import { extractionOf } from './extraction.ts';
 import { guidedBuiltKeys, guidedFlow } from './guided.ts';
 import { mamRecipesShown } from './recipes.ts';
+import { nextScreenStep, screenSteps } from './screens.ts';
 import { readSupply } from './supply.ts';
 import type {
   ContextReply,
@@ -159,9 +161,13 @@ export function startWizard(saveId: string | null = null) {
     });
 }
 
+// In expert mode (#1197, expert.ts) the draft opens on All settings rather than the guided start,
+// which "← Guided start" still reaches.
 function openWizard(saveId: string | null) {
   const existing = workspace.saves.find(s => s.id === saveId);
-  setWizard(newDraft(saveId, existing, startingSettings(existing)));
+  const wizardDraft = newDraft(saveId, existing, startingSettings(existing));
+  if (expertMode()) wizardDraft.mode = 'advanced';
+  setWizard(wizardDraft);
   navigate('wizard');
 }
 
@@ -364,7 +370,7 @@ function dropWizard() {
   navigate('profiles');
 }
 
-// Copy the five-step form on screen into the draft (all steps share this one
+// Copy the All settings screen into the draft (all steps share this one
 // reader; each only finds its own fields). Mutates wizard and wizard.settings
 // and clears the preview. Does not re-render.
 export function readWizard(form: HTMLFormElement) {
@@ -383,7 +389,7 @@ export function readWizard(form: HTMLFormElement) {
   readStorageOverrides(form, data, settings);
   readStepChecks(data, wizardDraft);
   readCarry(form, data);
-  if (wizardDraft.step === 1 && oldPreset !== worldPreset(settings))
+  if (screenSteps(wizardDraft.step).includes(1) && oldPreset !== worldPreset(settings))
     resetForNewWorld(wizardDraft, oldPreset);
   wizardDraft.preview = null;
 }
@@ -577,14 +583,16 @@ function readStorageOverrides(form: HTMLFormElement, data: FormData, settings: W
 }
 
 // An unticked checkbox is absent from FormData, so these are read only on the
-// step that draws them, or leaving another step would clear them.
+// screen that draws them (one step, or two in expert mode, screens.ts), or leaving another
+// screen would clear them.
 function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
-  const settings = wizardDraft.settings;
-  if (wizardDraft.step === 3) {
+  const settings = wizardDraft.settings,
+    shown = screenSteps(wizardDraft.step);
+  if (shown.includes(3)) {
     settings.roundRates = data.has('roundRates');
     settings.wholeMachines = data.has('wholeMachines');
   }
-  if (wizardDraft.step === 4) {
+  if (shown.includes(4)) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
     readOwnedEquipment(data, settings);
@@ -812,14 +820,17 @@ export const submitLabel = (wizardDraft: WizardDraft) =>
       ? wizardDraft.edit
         ? 'Recalculate in place'
         : 'Create profile'
-      : wizardDraft.step === 4
+      : nextScreenStep(wizardDraft.step) === 5
         ? 'Calculate plan'
         : 'Continue →';
 
 // Go to step `target` (1-5): read the form first, validating only when moving
-// forward. Reaching step 5 always recalculates the preview.
+// forward. Reaching step 5 always recalculates the preview. A step drawn on the
+// screen already (expert mode's shared screens, screens.ts) is no move.
 export async function moveWizard(target: number) {
-  if (wizardBusy || !wizard || target === wizard.step || target < 1 || target > 5) return;
+  if (wizardBusy || !wizard || target < 1 || target > 5) return;
+  if ((wizard.mode === 'guided' ? [wizard.step] : screenSteps(wizard.step)).includes(target))
+    return;
   const form = required<HTMLFormElement>('#wizard-form');
   if (target > wizard.step && !form.reportValidity()) return;
   readWizard(form);

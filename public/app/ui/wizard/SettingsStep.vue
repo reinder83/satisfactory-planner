@@ -44,8 +44,10 @@ const view = computed(() =>
 </script>
 
 <template>
-  <StepHeading :step="1" :total="5">Your save and game settings</StepHeading>
-  <p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p>
+  <StepHeading :all-settings="1">Your save and game settings</StepHeading>
+  <p data-explain>
+    Use the settings shown in your game. Values are multipliers: half consumption is 0.5.
+  </p>
   <div class="form-grid">
     <div class="settings-name">
       <NameField
@@ -99,7 +101,7 @@ const view = computed(() =>
         :options="recipeCostChoices"
         :value="view.recipeCost"
       />
-      <p class="small muted">
+      <p class="small muted" data-explain>
         Every recipe takes this many times its usual inputs; its outputs stay the same.
       </p>
     </div>
@@ -131,7 +133,7 @@ const view = computed(() =>
   </div>
   <h3>Production you already run <HelpTip name="existingSupply" /></h3>
   <SupplyRows />
-  <p class="small muted">
+  <p class="small muted" data-explain>
     Other settings are notes only. Modified recipes, production boosts and modded items are not
     simulated. Phase plans assume the necessary milestones and
     <Term term="mam" text="MAM" /> research are unlocked by commissioning.
