@@ -216,6 +216,89 @@ test('a built line the new plan has no use for is not run for nothing', () => {
   }
 });
 
+// #1190's review: Screws have no byproduct, but a line that has one could pay for itself by it
+// once its ore and power were credited. A built line is credited only for the share of it the
+// plan uses (creditSpentShare in planner/model.ts), so under least power and least raw resources
+// a built machine the plan does not need stays idle and nothing more is sunk.
+const LEAST: [string, object][] = [
+  ['least power', { objective: 'power' }],
+  ['least raw resources', { objective: 'raw' }],
+];
+const PLASTIC = 'Recipe_Plastic_C';
+const ALUMINA = 'Recipe_AluminaSolution_C';
+const SCRAP = 'Recipe_AluminumScrap_C';
+// What a phase's lines make of an item, and what it sinks of it, per minute.
+const madeOf = (plan: Pick<StoredCalculatedPlan, 'stages'>, phase: string, item: string) =>
+  (plan.stages[phase as '3']?.rows || []).reduce((sum, row) => sum + (row.outputs[item] ?? 0), 0);
+const sunkOf = (plan: Pick<StoredCalculatedPlan, 'stages'>, phase: string, item?: string) => {
+  const surplus: Record<string, number> = plan.stages[phase as '3']?.surplus || {};
+  return item ? (surplus[item] ?? 0) : Object.values(surplus).reduce((sum, rate) => sum + rate, 0);
+};
+const near = (actual: number, expected: number, message: string) =>
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${message}: ${actual}, expected ${expected}`);
+
+test('built Plastic Refineries beyond the plan’s need are not run for their Heavy Oil Residue', () => {
+  // 9 Refineries built in Phase 3, where the plan's Plastic takes 3 (60/min at 20 each). The
+  // credit used to run all 9 under least raw resources: their residue became fuel and 121.8
+  // Plastic/min went to the sink.
+  for (const [name, objective] of LEAST) {
+    const plain = calculate(objective);
+    const plastic = madeOf(plain, '3', 'Plastic');
+    assert.equal(Math.ceil(plastic / 20 - 1e-9), 3, `${name}: the plan needs 3 Refineries' worth`);
+    const built = calculate({ ...objective, builtLines: { '3': { [PLASTIC]: 9 } } });
+    const machines = machinesOf(built, '3');
+    assert.ok(machines[PLASTIC]! <= 3, `${name}: ${machines[PLASTIC]} of the 9 built run`);
+    near(madeOf(built, '3', 'Plastic'), plastic, `${name}: Plastic made`);
+    assert.equal(sunkOf(built, '3', 'Plastic'), 0, `${name}: no Plastic sunk`);
+    assert.equal(built.stages['3'].builtDropped, undefined, name);
+  }
+});
+
+test('built Alumina Solution beyond the plan’s need is not run for its byproducts', () => {
+  // Phase 4 needs 2 Alumina Solution Refineries and 1 on Aluminum Scrap; three times that stands.
+  // The credit used to run them all and sink the Aluminum Scrap (465.6/min under least raw
+  // resources and under least power).
+  for (const [name, objective] of LEAST) {
+    const plain = calculate(objective);
+    const need = machinesOf(plain);
+    assert.equal(need[ALUMINA], 2, name);
+    assert.equal(need[SCRAP], 1, name);
+    const built = calculate({
+      ...objective,
+      builtLines: { '4': { [ALUMINA]: 3 * need[ALUMINA]!, [SCRAP]: 3 * need[SCRAP]! } },
+    });
+    const machines = machinesOf(built);
+    assert.equal(machines[ALUMINA], need[ALUMINA], `${name}: only the needed Alumina Solution`);
+    assert.equal(machines[SCRAP], need[SCRAP], `${name}: only the needed Aluminum Scrap`);
+    near(madeOf(built, '4', 'Alumina Solution'), madeOf(plain, '4', 'Alumina Solution'), name);
+    assert.equal(sunkOf(built, '4', 'Aluminum Scrap'), 0, `${name}: no Aluminum Scrap sunk`);
+    near(sunkOf(built, '4'), sunkOf(plain, '4'), `${name}: nothing more sunk`);
+  }
+});
+
+test('a plan built three times over runs no line beyond the plan', () => {
+  // Every Phase 3-5 line of the plain plan built three times over (the review's probe): the
+  // credit used to run them in Phase 3 and 5 under least raw resources (1,503 and 10,922 raw/min
+  // became 3,505 and 18,445) and in Phase 4 and 5 under least power (953 and 1,466/min sunk).
+  for (const [name, objective] of LEAST) {
+    const plain = calculate(objective);
+    const lines: BuiltLines = {};
+    for (const phase of ['3', '4', '5'] as const)
+      lines[phase] = Object.fromEntries(
+        (plain.stages[phase].rows || [])
+          .filter(row => !row.id.startsWith('power-'))
+          .map(row => [row.id, 3 * row.machines]),
+      );
+    const built = calculate({ ...objective, builtLines: lines });
+    for (const phase of ['3', '4', '5']) {
+      const need = machinesOf(plain, phase);
+      for (const [id, count] of Object.entries(machinesOf(built, phase)))
+        assert.ok(count <= (need[id] ?? 0), `${name}, Phase ${phase}: ${id} ${count}`);
+      near(sunkOf(built, phase), sunkOf(plain, phase), `${name}, Phase ${phase}: sunk`);
+    }
+  }
+});
+
 test('the somersloops stay on the built amplified line', () => {
   const W = { wholeMachines: true, storageFromSurplus: true, somersloops: 40, amplifySloops: 20 };
   const first = calculate(W);
