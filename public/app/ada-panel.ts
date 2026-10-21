@@ -28,6 +28,7 @@ import {
   payoff,
   phase,
   phaseLabel,
+  progressionData,
   planEditing,
   query,
   requiredOnly,
@@ -74,9 +75,12 @@ import { power } from './wizard/fields.ts';
 import { leftOutWords } from '../mining.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
+import { expertMode } from './expert.ts';
+import { unlockGroups } from './unlock-groups.ts';
 import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
 import { OWNED_GENERATORS, objectiveWords, phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
+import type { Step } from './tasks.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
 const ADA_KEY = 'planner-ada';
@@ -242,6 +246,20 @@ function fluidTruckFacts(): Pick<AdaFacts, 'fluidTruckLinks'> {
     return transport?.mode === 'fluidTruck' && link.items.some(entry => FLUIDS.has(entry.item));
   }).length;
   return count ? { fluidTruckLinks: count } : {};
+}
+
+// Expert mode's grouped unlocks on the build plan (#1197): the open phase's unlock groups and how
+// many are done, as ui/plan/UnlockGroups.vue draws them; nothing outside expert mode.
+function unlockGroupFacts(steps: Step[]): Pick<AdaFacts, 'unlockGroups'> {
+  if (!expertMode() || !progressionData) return {};
+  const groups = unlockGroups(steps, progressionData);
+  if (!groups.length) return {};
+  return {
+    unlockGroups: {
+      done: groups.filter(group => group.items.every(stepDone)).length,
+      total: groups.length,
+    },
+  };
 }
 
 // The generators the phase before built that the open phase keeps (#1064, the stage's grid), as
@@ -450,6 +468,7 @@ function adaFacts(): AdaFacts {
     optionalResearch: steps.filter(t => t.optional && t.id.startsWith('unlock-') && !checked(t.id))
       .length,
     requiredOnly,
+    ...unlockGroupFacts(steps),
     ...keptFacts(storedStage),
     ...ownedGeneratorFacts(storedStage),
     // The nodes the open plan's node survey leaves out of it (#1183), only when it leaves some.

@@ -620,7 +620,9 @@ export function sourceCost(
 // must save more new machines elsewhere than the switch builds, less a tenth of those standing;
 // machines that stand elsewhere count a tenth too, so a built chain is never redesigned to save
 // a few buildings. It stays above 0, so a built machine the new plan has no use for is not run
-// for nothing: the line shrinks, and its step says which machines are spare.
+// for nothing: the line shrinks, and its step says which machines are spare. Only the share of
+// the built lines the plan uses costs KEEP_SHARE, under every objective (creditSpentShare,
+// creditUsedShare), so a spare built machine is not run for its byproducts either.
 export const KEEP_SHARE = 0.1;
 function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: PoolRecipe[]) {
   const lines = config.builtLines?.[String(phase) as StageKey];
@@ -639,7 +641,8 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
     if (model.ints?.[recipe.id]) model.ints[name] = 1;
     built.push(recipe);
   }
-  creditSpentShare(model, config, built);
+  if (objectiveWeights(config.objective)) creditSpentShare(model, config, built);
+  else creditUsedShare(model, built);
 }
 // What a built line draws outside its own variable (#1188). Under a chosen objective (#1180) a
 // line's own variable holds only part of what it costs: its buildings and its own power, which
@@ -654,9 +657,9 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
 // objective a switch to a line that draws a little less power (a few machines fewer, burning a
 // little less Crude Oil) outweighed keeping a built line, since a machine there costs only
 // TIE_BUILDING. A switch still wins where it saves more than it builds and a tenth of the built
-// line's share, as under the fewest buildings. The fewest-buildings objective (no field) is left
-// exactly as #1176 made it: there the outside share is the generators' and fuel lines'
-// buildings, a few hundredths of a machine per built machine.
+// line's share, as under the fewest buildings. The fewest-buildings objective (no field) gets no
+// such credit: there the outside share is the generators' and fuel lines' buildings, a few
+// hundredths of a machine per built machine. It caps its share as creditUsedShare says.
 //
 // The credit goes only to the share of the built lines the plan uses (#1190's review). Credited
 // on every machine that stands, a built machine the plan does not need could pay for itself by
@@ -674,9 +677,8 @@ function addBuiltLines(model: LpModel, { config, phase }: PhaseContext, pool: Po
 const SPENT = 'spent:';
 const SPENT_USE = 'spentUse:';
 function creditSpentShare(model: LpModel, config: CurrentSettings, built: PoolRecipe[]) {
-  if (!built.length || !objectiveWeights(config.objective)) return;
-  // Relaxed, and always for cost: under `maximum` the model may still be set to maximise its gain.
-  const linear = { ...model, optimize: 'cost', opType: 'min' as const, ints: {} };
+  if (!built.length) return;
+  const linear = relaxed(model);
   const priced = solve(linear, { duals: true });
   // Drawing a MW lowers what the power row may still take, so it costs minus its shadow price.
   const perMW = Math.max(0, -(priced.duals?.power ?? 0));
@@ -700,20 +702,88 @@ function creditSpentShare(model: LpModel, config: CurrentSettings, built: PoolRe
       variable.cost = (variable.cost ?? 0) - credit;
       continue;
     }
-    const use = SPENT_USE + main;
-    model.constraints[use] ??= { max: itemUse(linear, priced.values, main!) };
-    model.constraints[SPENT + recipe.id] = { max: 0 };
-    variable[SPENT + recipe.id] = -1;
-    model.variables[SPENT + recipe.id] = { cost: -credit, [SPENT + recipe.id]: 1, [use]: made };
+    addCredit(model, recipe, credit, made, () => itemUse(linear, priced.values, main!));
   }
 }
+// The model relaxed, and always for cost: under `maximum` it may still be set to maximise its gain.
+const relaxed = (model: LpModel): LpModel => ({
+  ...model,
+  optimize: 'cost',
+  opType: 'min',
+  ints: {},
+});
+// A built line's credit (#1190): its own variable 'spent:<recipe id>', worth `credit` a machine, at
+// most the line's running machines and, with the other built lines of its main product, at most
+// `use()` of it ('spentUse:<item>', the first such line sets it). `made` is what one machine makes.
+function addCredit(
+  model: LpModel,
+  recipe: PoolRecipe,
+  credit: number,
+  made: number,
+  use: () => number,
+) {
+  const name = SPENT + recipe.id,
+    row = SPENT_USE + primaryOutput(recipe);
+  model.constraints[row] ??= { max: use() };
+  model.constraints[name] = { max: 0 };
+  model.variables[BUILT + recipe.id]![name] = -1;
+  model.variables[name] = { cost: -credit, [name]: 1, [row]: made };
+}
+// The same share under the fewest buildings (#1193). There a built machine costs KEEP_SHARE of a
+// new one and its ore almost nothing, so one the plan does not need could pay for itself by its
+// byproducts: with 6 Alumina Solution Refineries built where 2 are needed, the Silica of 2 more
+// saved Silica Constructors, their Alumina Solution went to a new Aluminum Scrap Refinery and
+// 465.6 Aluminum Scrap/min to the sink. So, as under every other objective, only the share of the
+// built lines the plan uses is kept at KEEP_SHARE: each built variable costs what a new machine
+// does, and its 'spent:' credit gives back (1 - KEEP_SHARE) of that for no more of its main
+// product than the plan uses. What it uses is read from a linear solve in which the built lines
+// cost KEEP_SHARE but make only their main product, so their byproducts cannot buy them a use:
+// the built Screws are kept there (they cost a tenth of the Cast Screws), and so are the Iron Rods
+// they take, so the issue's Screws and Iron Rods stay (#1187) and a clearly better switch, such as
+// Steel Screws, still wins. A built machine beyond that share costs what a new one does, so the
+// plan runs it only where a new machine would run too. A built generator (no main product) keeps
+// KEEP_SHARE: its fuel is all it draws. Under maximum output that linear solve leaves the goal at
+// nothing, so it credits little more than the phase's fixed demand, as creditSpentShare does
+// there: keepBuilt keeps the built lines that plan can use (#1189), and 48 Alumina Solution
+// Refineries built where 16 are needed no longer sink 5,706.8 Aluminum Scrap/min.
+function creditUsedShare(model: LpModel, built: PoolRecipe[]) {
+  const credited = built.filter(recipe => primaryOutput(recipe) !== undefined);
+  if (!credited.length) return;
+  const linear = relaxed(model);
+  linear.variables = { ...model.variables };
+  for (const recipe of credited) {
+    const main = primaryOutput(recipe)!;
+    const name = BUILT + recipe.id;
+    linear.variables[name] = Object.fromEntries(
+      Object.entries(model.variables[name]!).filter(
+        ([row, coefficient]) =>
+          !(coefficient > 0 && row.startsWith('item:') && !isItemRow(row, main)),
+      ),
+    );
+  }
+  const used = solve(linear);
+  for (const recipe of credited) {
+    const name = BUILT + recipe.id;
+    const variable = model.variables[name]!;
+    const made = itemTotal(variable, primaryOutput(recipe)!);
+    if (!(made > 0)) continue;
+    // The full cost of a new machine, KEEP_SHARE of it once credited.
+    const full = model.variables[recipe.id]!.cost ?? 0;
+    variable.cost = full;
+    addCredit(model, recipe, (1 - KEEP_SHARE) * full, made, () =>
+      itemUse(linear, used.values, primaryOutput(recipe)!),
+    );
+  }
+}
+// Whether a balance row is an item's: its central one or a group's own (siteBalance in on-site.ts).
+const isItemRow = (row: string, item: string) =>
+  row === 'item:' + item || row.startsWith('item:' + item + '@');
 // What one unit of a variable puts into an item's balances, the central one and the groups' own
 // (siteBalance in on-site.ts); a route between them puts in nothing.
 function itemTotal(coefficients: Record<string, number>, item: string): number {
-  const central = 'item:' + item;
   let total = 0;
   for (const [row, coefficient] of Object.entries(coefficients))
-    if (row === central || row.startsWith(central + '@')) total += coefficient;
+    if (isItemRow(row, item)) total += coefficient;
   return total;
 }
 // How much of an item a solution of the model uses: what its variables take from the item's
@@ -722,9 +792,8 @@ function itemUse(model: LpModel, values: Record<string, number>, item: string): 
   let use = 0;
   for (const [name, coefficients] of Object.entries(model.variables))
     use += Math.max(0, -itemTotal(coefficients, item)) * (values[name] || 0);
-  const central = 'item:' + item;
   for (const [row, bound] of Object.entries(model.constraints))
-    if (row === central || row.startsWith(central + '@')) use += bound.equal ?? bound.min ?? 0;
+    if (isItemRow(row, item)) use += bound.equal ?? bound.min ?? 0;
   return Math.max(0, use);
 }
 // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes

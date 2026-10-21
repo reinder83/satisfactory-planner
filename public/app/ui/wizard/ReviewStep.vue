@@ -85,8 +85,9 @@ const view = computed(() =>
     )
       ? 'Within your budgets'
       : 'Within the default budgets';
-    // The guided start shows this as its last step (#1072), numbered as its own.
-    const total = guidedReview(wizardDraft) ? guidedFlow().length + 1 : 5;
+    // The guided start shows this as its last step (#1072), numbered as its own; All settings by
+    // its screens (0: StepHeading asks wizard/screens.ts).
+    const total = guidedReview(wizardDraft) ? guidedFlow().length + 1 : 0;
     const stages = Object.entries(preview.stages).filter(([phase]) => Number(phase) >= from);
     return {
       name: profileNameOf(wizardDraft),
@@ -134,7 +135,10 @@ const view = computed(() =>
 
 <template>
   <template v-if="view">
-    <StepHeading :step="view.total" :total="view.total">Review {{ view.name }}</StepHeading>
+    <StepHeading v-if="view.total" :step="view.total" :total="view.total"
+      >Review {{ view.name }}</StepHeading
+    >
+    <StepHeading v-else :all-settings="5">Review {{ view.name }}</StepHeading>
     <p v-if="view.editing" data-edit-intro>
       Nothing has changed yet. <b>Recalculate in place</b> gives this profile the new plan and
       carries its progress over; the current version is kept as a separate profile, so you can go

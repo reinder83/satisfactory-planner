@@ -59,16 +59,16 @@ const overclock = ref(!!draft().settings.overclock);
 </script>
 
 <template>
-  <StepHeading :step="4" :total="5">Available resource budgets</StepHeading>
+  <StepHeading :all-settings="4">Available resource budgets</StepHeading>
   <p>
     <button type="button" class="btn primary" data-open-extraction @click="openExtraction()">
       Work these out from my nodes →
     </button>
-    <span class="small muted"
+    <span class="small muted" data-explain
       >Count what your world holds and the planner turns it into these rates.</span
     >
   </p>
-  <p>
+  <p data-explain>
     Enter the extraction you can allocate to this new plan, per minute, after existing factories and
     power fuel. Starter values are full-map estimates at endgame extraction, not resources already
     connected.
@@ -107,7 +107,7 @@ const overclock = ref(!!draft().settings.overclock);
       data-water-overclock
       :checked="!!draft().settings.waterOverclock"
     /><span
-      >Suggest overclocked Water Extractors<br /><small class="muted"
+      >Suggest overclocked Water Extractors<br /><small class="muted" data-explain
         >The build plan always shows both ways to build them: at 100%, and overclocked up to 250%
         with Power Shards. This only picks the one suggested first and counted in the power total:
         100% when off, overclocked when on (from Phase 2, or once you can overclock).</small

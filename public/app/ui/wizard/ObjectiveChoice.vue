@@ -51,7 +51,7 @@ function typed(e: Event) {
 <template>
   <fieldset class="objective-choice" data-objective>
     <legend>What the plan keeps lowest <HelpTip name="objective" /></legend>
-    <p class="small muted">
+    <p class="small muted" data-explain>
       The goal sets how fast each phase delivers; this sets what the plan keeps lowest while it
       does.
     </p>
