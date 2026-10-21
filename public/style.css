@@ -4040,6 +4040,79 @@ button.rail-tile:hover {
   min-width: 28ch;
   overflow-wrap: anywhere;
 }
+/* A factory's flow graph (FlowGraphDialog.vue, #1192) widens the shared dialog, still inside the
+   window's edges. The drawing scrolls inside its own box, sideways and down, so neither the dialog
+   nor the page ever scrolls sideways (390px phones included); the box takes keyboard focus, so
+   the arrow keys scroll it too. */
+#detail:has(.fgraph-scroll) {
+  max-width: 1180px;
+}
+.fgraph-scroll {
+  overflow: auto;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+}
+.fgraph-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.fgraph {
+  display: block;
+}
+.fgraph-node rect {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.fgraph-node.line rect {
+  stroke: var(--accent-sh);
+}
+.fgraph-node.in rect {
+  stroke: var(--blue);
+}
+.fgraph-node.out rect {
+  stroke: var(--accent);
+}
+.fgraph-name {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+.fgraph-caption,
+.fgraph-label text {
+  font-size: 11px;
+  fill: var(--muted);
+}
+.fgraph-label rect {
+  fill: var(--bg2);
+  opacity: 0.92;
+}
+.fgraph-label text:first-of-type {
+  fill: var(--ink);
+}
+.fgraph-edge {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1.5;
+}
+.fgraph-edge.from-place {
+  stroke: var(--blue);
+}
+.fgraph-edge.to-place {
+  stroke: var(--accent);
+}
+/* A loop back to a line built earlier is dashed, as its table row says "loop". */
+.fgraph-edge.loop {
+  stroke-dasharray: 6 4;
+}
+/* The arrowhead takes its arrow's colour where the browser can (context-stroke). */
+#fgraph-arrow path {
+  fill: var(--dim);
+  fill: context-stroke;
+}
 /* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,
    with the underline moved onto the text so it stays under the words in the taller box (#886).
    So are the factory links in a factory dialog's flow rows (#891); their row grows around them.

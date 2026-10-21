@@ -690,6 +690,41 @@ try {
     openerId,
     'Escape returns focus to the card that opened the first dialog',
   );
+  // A factory's flow graph (#1192) on a phone: Enter on "Flow graph ↗" opens it, the drawing
+  // scrolls inside its own box while neither the dialog nor the page scrolls sideways, its table
+  // lists every arrow, and Escape returns focus to the button.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const graphButton = page.locator('#main [data-group-graph]').first();
+  const graphGroup = await graphButton.getAttribute('data-group-graph');
+  await graphButton.focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#detail [data-flow-graph] svg').waitFor();
+  const graphLayout = await page.evaluate(() => {
+    const box = document.querySelector<HTMLElement>('#detail [data-flow-graph]')!;
+    const dialog = document.querySelector<HTMLDialogElement>('#detail')!;
+    return {
+      inside: box.scrollWidth > box.clientWidth,
+      dialog: dialog.scrollWidth <= dialog.clientWidth,
+      onScreen: dialog.getBoundingClientRect().right <= window.innerWidth,
+      page: document.documentElement.scrollWidth <= window.innerWidth,
+      listed:
+        document.querySelectorAll('#detail [data-flow-edge]').length >=
+        document.querySelectorAll('#detail [data-flow-graph] path[data-edge]').length,
+    };
+  });
+  assert.deepEqual(
+    graphLayout,
+    { inside: true, dialog: true, onScreen: true, page: true, listed: true },
+    'the flow graph scrolls inside its box at 390 px, and its table lists every arrow',
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute('data-group-graph')),
+    graphGroup,
+    'Escape returns focus to "Flow graph ↗"',
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();
