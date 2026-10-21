@@ -72,6 +72,11 @@ const node = (graph: FlowGraph, id: string): GraphNode => {
   assert.ok(found, 'a box for ' + id);
   return found;
 };
+// The points of a path (each "x,y" pair) that lie outside the drawing.
+const outside = (graph: Pick<FlowGraph, 'width' | 'height'>, path: string): string[] =>
+  [...path.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)]
+    .filter(([, x, y]) => +x! < 0 || +x! > graph.width || +y! < 0 || +y! > graph.height)
+    .map(([point]) => point);
 // An edge as from > to: item rate.
 const edgeWords = (graph: FlowGraph) =>
   graph.edges.map(edge => `${edge.from} > ${edge.to}: ${edge.item} ${edge.rate}`).sort();
@@ -162,6 +167,7 @@ test('the boxes run left to right: what comes in, the lines in layers, what leav
     assert.match(edge.path!, new RegExp(` ${to.x},[\\d.]+$`), edge.id + ' enters the left side');
     assert.ok(edge.label, edge.id + ' has a label');
     assert.ok(edge.label.y > 0 && edge.label.y < graph.height, edge.id + ' label inside');
+    assert.deepEqual(outside(graph, edge.path!), [], edge.id + ' stays inside the drawing');
   }
   assert.equal(graph.width, GRAPH.pad + 6 * GRAPH.nodeWidth + 5 * GRAPH.gap + GRAPH.pad);
   // Deterministic: the same flow gives the same drawing.

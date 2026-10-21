@@ -25,6 +25,7 @@ export const GRAPH = {
   gap: 196,
   rowGap: 20,
   waypoint: 8,
+  port: 14,
   backLane: 14,
   labelHeight: 30,
   char: 6.6,
@@ -128,7 +129,7 @@ export function flowGraph(flow: GroupFlow, rateText: GraphRate, caption: GraphCa
       label: null,
     };
   });
-  layOut(nodes, edges);
+  const bottom = layOut(nodes, edges);
   const width = Math.max(0, ...nodes.map(node => node.x + node.width)) + GRAPH.pad;
   return {
     group: flow.group,
@@ -136,7 +137,7 @@ export function flowGraph(flow: GroupFlow, rateText: GraphRate, caption: GraphCa
     edges,
     layers: Math.max(0, ...nodes.map(node => node.layer + 1)),
     width,
-    height: graphHeight(nodes, edges),
+    height: graphHeight(bottom, edges),
   };
 }
 
@@ -196,18 +197,31 @@ interface Slot {
   y: number;
 }
 
-// Gives each node its layer and place, and each drawn edge its path and label.
-function layOut(nodes: GraphNode[], edges: GraphEdge[]) {
+// Gives each node its layer and place, and each drawn edge its path and label. Returns the bottom
+// of the lowest box or waypoint.
+function layOut(nodes: GraphNode[], edges: GraphEdge[]): number {
   const byId = new Map(nodes.map(node => [node.id, node]));
   assignLayers(nodes, edges, byId);
   const forward = edges.filter(edge => edge.note !== 'self' && isForward(edge, byId));
+  fitPorts(nodes, forward);
   const { layers, chains } = slotLayers(nodes, forward, byId);
   orderLayers(layers, chains);
   placeSlots(layers);
+  const bottom = Math.max(0, ...layers.flat().map(slot => slot.y + slot.height));
   const back = edges.filter(edge => edge.note !== 'self' && !isForward(edge, byId));
   const gaps = routeForward(forward, chains, byId);
-  routeBack(back, nodes, byId);
-  placeLabels(edges, gaps);
+  routeBack(back, bottom, byId);
+  placeLabels(edges, gaps, nodes);
+  return bottom;
+}
+
+// A box with many edges on one side grows to give each its own port, GRAPH.port apart.
+function fitPorts(nodes: GraphNode[], forward: GraphEdge[]) {
+  for (const node of nodes) {
+    const ins = forward.filter(edge => edge.to === node.id).length,
+      outs = forward.filter(edge => edge.from === node.id).length;
+    node.height = Math.max(node.height, (Math.max(ins, outs) + 1) * GRAPH.port);
+  }
 }
 
 const nodeOf = (byId: ReadonlyMap<string, GraphNode>, id: string): GraphNode => {
@@ -345,7 +359,7 @@ function routeForward(
   forward: GraphEdge[],
   chains: ReadonlyMap<GraphEdge, Slot[]>,
   byId: ReadonlyMap<string, GraphNode>,
-): Map<GraphEdge, LabelGap> {
+): Map<GraphEdge, LabelGap[]> {
   const middle = (slot: Slot) => slot.y + slot.height / 2;
   const ports = (side: 'out' | 'in') => {
     const at = new Map<GraphEdge, number>();
@@ -363,14 +377,14 @@ function routeForward(
       };
       const sorted = [...list].sort((a, b) => other(a) - other(b));
       const top = node.y + 10,
-        span = GRAPH.nodeHeight - 20;
+        span = Math.max(GRAPH.nodeHeight, node.height) - 20;
       sorted.forEach((edge, i) => at.set(edge, top + (span * (i + 1)) / (sorted.length + 1)));
     }
     return at;
   };
   const outs = ports('out'),
     ins = ports('in');
-  const gaps = new Map<GraphEdge, LabelGap>();
+  const gaps = new Map<GraphEdge, LabelGap[]>();
   for (const edge of forward) {
     const chain = chains.get(edge)!;
     const points: Point[] = [];
@@ -381,10 +395,12 @@ function routeForward(
       else points.push({ x, y: middle(slot) }, { x: x + GRAPH.nodeWidth, y: middle(slot) });
     });
     edge.path = forwardPath(points);
-    // The label sits in the gap next to the place outside the group (where an item comes in, or
-    // where it leaves), else in the gap after the line making it.
-    const gap = edge.to.startsWith('out:') ? points.length - 2 : 0;
-    gaps.set(edge, { from: points[gap]!, to: points[gap + 1]! });
+    // Its label may sit on any of its curves between two layers: the first, after its source,
+    // then the last, before its target, then those between.
+    const curves: LabelGap[] = [];
+    for (let i = 0; i + 1 < points.length; i += 2)
+      curves.push({ from: points[i]!, to: points[i + 1]! });
+    gaps.set(edge, [curves[0]!, ...curves.slice(1).reverse()]);
   }
   return gaps;
 }
@@ -409,8 +425,7 @@ const round = (value: number) => Math.round(value * 10) / 10;
 // An edge to a box in the same layer or one to its left (a recycling loop): out of the source's
 // right side, down below every box, back left and up into the target's left side, each on a lane
 // of its own under the boxes.
-function routeBack(back: GraphEdge[], nodes: GraphNode[], byId: ReadonlyMap<string, GraphNode>) {
-  const bottom = Math.max(0, ...nodes.map(node => node.y + node.height));
+function routeBack(back: GraphEdge[], bottom: number, byId: ReadonlyMap<string, GraphNode>) {
   back.forEach((edge, i) => {
     const from = nodeOf(byId, edge.from),
       to = nodeOf(byId, edge.to);
@@ -431,24 +446,49 @@ function routeBack(back: GraphEdge[], nodes: GraphNode[], byId: ReadonlyMap<stri
 const labelWidth = (edge: GraphEdge) =>
   Math.ceil(Math.max([...edge.item].length, [...edge.rateText].length) * GRAPH.char) + 8;
 
-// Each forward edge's label on its curve in its gap: at the middle, or, where that box would
-// overlap a label already placed, at the first point further along or back that does not.
-const ALONG = [0.5, 0.3, 0.7, 0.15, 0.85];
-function placeLabels(edges: GraphEdge[], gaps: ReadonlyMap<GraphEdge, LabelGap>) {
+// Each forward edge's label on one of its curves between layers (LabelGap, in the order
+// routeForward gives them), at the first of these points along it whose box overlaps no box and no
+// label placed before; where every point overlaps something, at the one that overlaps fewest.
+const ALONG = [0.5, 0.35, 0.65, 0.2, 0.8];
+function placeLabels(
+  edges: GraphEdge[],
+  gaps: ReadonlyMap<GraphEdge, LabelGap[]>,
+  nodes: GraphNode[],
+) {
   // The loops' labels, under the boxes, are placed already.
   const placed = edges.flatMap(edge => (edge.label ? [edge.label] : []));
+  const boxes = nodes.map(node => ({
+    x: node.x + node.width / 2,
+    y: node.y + node.height / 2,
+    width: node.width,
+    height: node.height,
+  }));
   const overlaps = (x: number, y: number, width: number) =>
-    placed.some(
+    placed.filter(
       box =>
         Math.abs(box.x - x) < (box.width + width) / 2 && Math.abs(box.y - y) < GRAPH.labelHeight,
-    );
+    ).length +
+    boxes.filter(
+      box =>
+        Math.abs(box.x - x) < (box.width + width) / 2 &&
+        Math.abs(box.y - y) < (box.height + GRAPH.labelHeight) / 2,
+    ).length;
   for (const edge of edges) {
-    const gap = gaps.get(edge);
-    if (!gap) continue;
+    const curves = gaps.get(edge);
+    if (!curves) continue;
     const width = labelWidth(edge);
-    const at = (t: number) => curvePoint(gap.from, gap.to, t);
-    const spot = ALONG.map(at).find(point => !overlaps(point.x, point.y, width)) ?? at(0.5);
-    edge.label = { x: round(spot.x), y: round(spot.y), width };
+    let best: { spot: Point; count: number } | null = null;
+    for (const curve of curves) {
+      for (const t of ALONG) {
+        const spot = curvePoint(curve.from, curve.to, t);
+        const count = overlaps(spot.x, spot.y, width);
+        if (!best || count < best.count) best = { spot, count };
+        if (count === 0) break;
+      }
+      if (best?.count === 0) break;
+    }
+    // Every curve has its points.
+    edge.label = { x: round(best!.spot.x), y: round(best!.spot.y), width };
     placed.push(edge.label);
   }
 }
@@ -465,10 +505,10 @@ function curvePoint(from: Point, to: Point, t: number): Point {
   };
 }
 
-// Down to the lowest box, label or loop lane, and the padding under it.
-function graphHeight(nodes: GraphNode[], edges: GraphEdge[]): number {
+// Down to the lowest box, waypoint, label or loop lane, and the padding under it.
+function graphHeight(bottom: number, edges: GraphEdge[]): number {
   const bottoms = [
-    ...nodes.map(node => node.y + node.height),
+    bottom,
     ...edges.flatMap(edge => (edge.label ? [edge.label.y + GRAPH.labelHeight / 2] : [])),
   ];
   return Math.ceil(Math.max(0, ...bottoms) + GRAPH.pad);

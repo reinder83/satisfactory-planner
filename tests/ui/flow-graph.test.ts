@@ -110,6 +110,15 @@ test('one arrow per flow, and the table lists every flow with its rate', async (
     drawn.length,
     'each drawn arrow is labelled',
   );
+  // Every arrow stays inside the drawing, also one passing below the boxes of a tall layer.
+  const svg = $<SVGSVGElement>('#detail [data-flow-graph] svg')!;
+  assert.equal(svg.getAttribute('height'), String(graph.height));
+  for (const edge of graph.edges)
+    for (const [, x, y] of edge.path?.matchAll(/(-?[\d.]+),(-?[\d.]+)/g) ?? [])
+      assert.ok(
+        +x! >= 0 && +x! <= graph.width && +y! >= 0 && +y! <= graph.height,
+        `${edge.id} at ${x},${y} is inside ${graph.width} × ${graph.height}`,
+      );
   assert.equal($$('#detail [data-flow-graph] [data-node]').length, graph.nodes.length);
   // The table: every flow once, in the same order, with the words of the flow page's table.
   const rows = $$('#detail [data-flow-graph-table] [data-flow-edge]');
