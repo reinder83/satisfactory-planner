@@ -1527,6 +1527,49 @@ textarea::placeholder {
 .site-group {
   scroll-margin-top: 16px;
 }
+/* "Mine only" and the player's name (#1199, ui/factories/MineOnly.vue), on the Factories page under
+   the toolbar and in the build plan under the checklist's tools; the note wraps under them. */
+.mine-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: -8px 0 18px;
+}
+.mine-bar .check-row {
+  white-space: nowrap;
+}
+.mine-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.mine-name input,
+.group-owner-field input {
+  width: 14em;
+  max-width: 100%;
+  min-width: 0;
+  background: #0f1214;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 5px 8px;
+}
+.mine-bar [data-mine-note] {
+  flex-basis: 100%;
+}
+/* A factory's owner under its name (#1199): a line outside edit mode, a field while editing. */
+.group-owner {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.group-owner-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--muted);
+}
 .site-title {
   display: flex;
   align-items: end;
@@ -6396,6 +6439,8 @@ button.rail-tile:hover {
   .dialog-head .close,
   .slot-remove,
   .bay-rename,
+  .mine-name input,
+  .group-owner-field input,
   .bay-actions .move-bay,
   .delivery input,
   .notes,

@@ -5,6 +5,7 @@ import { itemRate } from '../flow.ts';
 import { num } from '../format.ts';
 import { rowShares } from '../group-links.ts';
 import { rowMemberships } from '../group-order.ts';
+import { mineFilter } from '../mine.ts';
 import { calculated, checked, sectionCollapsed, state } from '../session.ts';
 import { inputText } from './storage.ts';
 import { localeNumber } from '../../wording.ts';
@@ -55,6 +56,15 @@ export const siteLineOf = (key: string): OnSiteLine | undefined =>
 // dialog place it there; any other factory has its saved memberships.
 export const membershipsOf = (key: string): GroupAssignment[] =>
   rowMemberships({ id: key, onSite: siteLineOf(key) }, factoryGroupsState());
+
+// The groups "Mine only" keeps (#1199, app/mine.ts), or null while it does not apply.
+export const activeMine = (editing = false): Set<string> | null =>
+  mineFilter(factoryGroupsState(), editing);
+// Whether "Mine only" keeps the line under factory key `key`: always while it does not apply,
+// else when one of the line's factories is owned by "me" (a line split over several counts for
+// each of them).
+export const mineKeeps = (mine: Set<string> | null, key: string): boolean =>
+  !mine || membershipsOf(key).some(member => mine.has(member.group));
 
 // The name of the group a line made on site is for (#876): the group's name now, else the name
 // the plan was calculated with, else its id. '' for any other row.

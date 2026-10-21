@@ -26,7 +26,7 @@ import {
   rowIcon,
   stepRowName,
 } from './views/calculated.ts';
-import { factoryGroupsState } from './views/factories.ts';
+import { activeMine, factoryGroupsState, mineKeeps } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
 import type { StepMaterialWords } from './views/step-materials.ts';
 import { listText, tableText, type StepList, type StepTable } from '../step-table.ts';
@@ -439,13 +439,25 @@ export const satisfiedStepIds = (shownPhase: Phase = phase()): Set<string> =>
       : [],
   );
 
-// Applies "Hide completed", "Required steps only" (#1070) and the step search to a list of steps.
+// Whether "Mine only" (#1199) keeps a step: always while it does not apply, else when the step
+// links to a production line (its own, or a personal task's chosen link) in a factory owned by "me".
+// A step that links to no line (milestones, research, deliveries) is in no factory, so it is hidden.
+export function mineKeepsStep(mine: Set<string> | null, step: Step): boolean {
+  if (!mine) return true;
+  const linked = stepLink(step.id);
+  return !!linked && mineKeeps(mine, linked);
+}
+
+// Applies "Hide completed", "Required steps only" (#1070), "Mine only" (#1199) and the step search
+// to a list of steps.
 export function filteredPlanTasks(steps: Step[]): Step[] {
   const search = query.trim().toLowerCase();
+  const mine = activeMine();
   return steps.filter(
     step =>
       (!hideDone || !stepDone(step)) &&
       (!requiredOnly || !step.optional) &&
+      mineKeepsStep(mine, step) &&
       (!search ||
         [step.title, step.body || '', tableText(step.table), listText(step.list)]
           .join(' ')
