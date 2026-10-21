@@ -26,6 +26,9 @@
 //                  recalculation grew (validateBuiltMachines, #1174), version 19; or shrunk,
 //                  or no longer has (#1175, state/built-match.ts); only a carry sets it
 //                  (carryLines, carryFormerLines), no update op edits it
+//   tickedBy       { key: { at, by? } } who ticked a step and when (validateTickedBy, #1206),
+//                  version 21; kept by a tick of a step not ticked yet (the check and checks
+//                  updates' ticked or tickedBy), only while its step is ticked
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -71,7 +74,9 @@ export {
   OWNER_MAX,
   safeKey,
   slotPosition,
+  tickRecord,
   validateState,
+  validateTickedBy,
 } from './state/validate.ts';
 export { checkBase, mutate, noteConflict, staleWrite } from './state/mutate.ts';
 export {

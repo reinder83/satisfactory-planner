@@ -3,8 +3,9 @@
      { id, title, body }. -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { checked } from '../../session.ts';
+import { checked, state } from '../../session.ts';
 import { taskIcon } from '../../tasks.ts';
+import { tickedNote } from '../../ticked-by.ts';
 import { legacy } from '../bridge.ts';
 import PlanStep from '../plan/PlanStep.vue';
 import type { PlanStepView, Step } from '../../tasks.ts';
@@ -17,6 +18,7 @@ const rows = computed(() =>
       (task): PlanStepView => ({
         ...task,
         done: checked(task.id),
+        ticked: tickedNote(state, task.id),
         icon: taskIcon(task),
         link: null,
       }),

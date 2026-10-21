@@ -36,6 +36,7 @@ import {
   safeKey,
   slotAddr,
   sourcePlace,
+  tickRecord,
   validateEdits,
   validateGroups,
   validateState,
@@ -127,9 +128,20 @@ function setRecord(state: SavedState, update: Raw) {
   if (!safeKey(update.key)) fail('Invalid record address.');
   const type = update.type as 'check' | 'note' | 'delivery';
   const kind = ({ check: 'checks', note: 'notes', delivery: 'deliveries' } as const)[type];
+  if (type === 'check') keepTicker(state, update.key, update.value, update.ticked);
   if (type === 'note' && typeof update.value === 'string' && !update.value.trim())
     delete state.notes[update.key];
   else (state[kind] as Raw)[update.key] = update.value;
+}
+// Who ticked step `key` and when (#1206), before its check gets `value`: a tick of a step not
+// ticked yet keeps `record` (sent by the ticking tab: its time and "Your name"), a tick without
+// one (an older page, a script) keeps none, and a step already ticked keeps the record it has.
+// Anything but a tick drops the record. validateState drops a record whose step is not ticked.
+function keepTicker(state: SavedState, key: string, value: unknown, record: unknown) {
+  if (value === true && state.checks[key] === true) return;
+  const records = (state.tickedBy ??= {});
+  if (value === true && record !== undefined) records[key] = tickRecord(record);
+  else delete records[key];
 }
 // Ticks or clears many checklist keys at once. `value: null` forgets them, as if never ticked:
 // the Undo of a factory's "Mark all running" (#1163) puts a line that had no record back that
@@ -140,12 +152,17 @@ function setChecks(state: SavedState, update: Raw) {
     !update.keys.length ||
     update.keys.length > 1000 ||
     update.keys.some((key: unknown) => !safeKey(key)) ||
-    (update.value !== null && typeof update.value !== 'boolean')
+    (update.value !== null && typeof update.value !== 'boolean') ||
+    (update.tickedBy !== undefined && !plain(update.tickedBy))
   )
     fail('Invalid checklist update.');
-  for (const key of update.keys as string[])
+  // Who ticked and when (#1206): per key from `tickedBy` (a merge), else `ticked` for each.
+  const perKey = (update.tickedBy ?? {}) as Raw;
+  for (const key of update.keys as string[]) {
+    keepTicker(state, key, update.value, Object.hasOwn(perKey, key) ? perKey[key] : update.ticked);
     if (update.value === null) delete state.checks[key];
     else state.checks[key] = update.value;
+  }
 }
 function setPhase(state: SavedState, update: Raw) {
   state.settings.phase = update.value as Phase;

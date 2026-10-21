@@ -14,7 +14,7 @@ import { state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { HOLD_MS, LEAVE_MS, setHoldDelay } from '../../public/app/ui/plan/tick-hold.ts';
-import { $, $$, applyUpdate, go, openMigrated, page, stubFetch } from './setup.ts';
+import { $, $$, applyUpdate, go, openMigrated, page, stubFetch, unstamped } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 // Lets a save's reply and the redraw after it land; timers stay where they are.
@@ -69,7 +69,8 @@ test('a ticked step stays in its place during the delay, then goes to Done', asy
   assert.ok(first && second);
   await click(openBox(0));
   // Saved at once, as before.
-  assert.deepEqual(updates.at(-1), ['/api/update', { type: 'check', key: first, value: true }]);
+  assert.equal(updates.at(-1)![0], '/api/update');
+  assert.deepEqual(unstamped(updates.at(-1)![1]), { type: 'check', key: first, value: true });
   assert.equal(state.checks[first], true);
   assert.equal(openIds()[0], first, 'still first among the unfinished steps');
   assert.equal(openBox(0).checked, true, 'drawn ticked');

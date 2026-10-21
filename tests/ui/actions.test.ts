@@ -21,6 +21,7 @@ import {
   openMigrated,
   page,
   stubFetch,
+  unstamped,
 } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
@@ -64,7 +65,8 @@ test('ticking a progress checkbox saves it and redraws the page', async () => {
   assert.equal(box.getAttribute('aria-disabled'), 'true', 'the box waits for the write');
   assert.equal(box.disabled, false);
   await settle();
-  assert.deepEqual(calls.at(-1), ['/api/update', { type: 'check', key: WIRE_CHECK, value: true }]);
+  assert.deepEqual(calls.at(-1)![0], '/api/update');
+  assert.deepEqual(unstamped(calls.at(-1)![1]), { type: 'check', key: WIRE_CHECK, value: true });
   assert.equal(state.checks[WIRE_CHECK], true);
   const after = $<HTMLInputElement>(`.factory-card [data-check="${WIRE_CHECK}"]`)!;
   assert.equal(after.checked, true);

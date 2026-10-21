@@ -28,6 +28,7 @@ import {
   open,
   page,
   stubFetch,
+  unstamped,
 } from './setup.ts';
 import type {
   Catalog,
@@ -1649,7 +1650,11 @@ test("a guided plan's power commissioning and blocks on the resources page", asy
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'power-rocket-1', value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), {
+    type: 'check',
+    key: 'power-rocket-1',
+    value: true,
+  });
   // Without a guide the page has none of it.
   openCalculatedResources(generated());
   await settle();
