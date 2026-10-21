@@ -336,7 +336,19 @@ try {
   await page.locator('#phase-note-1').waitFor();
   assert.equal(await page.locator('#phase-note-1').inputValue(), 'Remember my iron site');
   assert.equal(await page.locator('#global-note').inputValue(), 'Seed and routes');
+  // Today's session (#1073) in the browser edition: its builds with their materials, and a To-Do
+  // note that fits the game's 256 characters; the build plan's line steps say what they take.
+  await page.goto(base + '#session');
+  await page.locator('[data-session-note]').waitFor();
+  const sessionNote = await page.locator('[data-session-note]').inputValue();
+  assert.ok([...sessionNote].length <= 256, `a To-Do note of ${[...sessionNote].length}`);
+  assert.ok((await page.locator('[data-session-build]').count()) >= 1, 'the session lists builds');
+  assert.match(
+    (await page.locator('[data-session-to-build]').first().textContent()) ?? '',
+    /^\d+ /,
+  );
   await page.goto(base + '#plan');
+  await page.locator('[data-step-materials]').first().waitFor({ state: 'attached' });
   // A ticked step folds into "Done (n)" under the list (SP-42): open it from the keyboard, and
   // the step is there, still ticked, while the next one leads the list.
   const done = page.locator('#main .done-group');

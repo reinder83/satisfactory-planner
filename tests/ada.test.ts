@@ -1016,3 +1016,16 @@ test('ADA names the profile that delivers every phase soonest on Saves & profile
       !adaRemarks(facts({ view: 'profiles', fastest: none })).some(r => r.id === 'compare-fastest'),
     );
 });
+
+test('ADA counts today’s session on its page, and what waits upstream (#1073)', () => {
+  const line = (session: { builds: number; waiting: number }) =>
+    adaRemarks(facts({ view: 'session', session })).find(r => r.id === 'session')!;
+  assert.equal(line({ builds: 4, waiting: 1 }).tone, 'calm');
+  assert.match(
+    line({ builds: 4, waiting: 1 }).text,
+    /^4 builds for today, 1 of them waiting on something upstream\. Print it/,
+  );
+  assert.match(line({ builds: 3, waiting: 0 }).text, /^3 builds for today, all of them fed\./);
+  assert.match(line({ builds: 0, waiting: 0 }).text, /^Nothing left to build in this phase\./);
+  assert.ok(!ids(facts({ view: 'session' })).includes('session'), 'absent means none');
+});

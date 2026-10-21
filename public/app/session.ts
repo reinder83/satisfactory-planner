@@ -31,6 +31,8 @@ export const VIEWS = [
   'storage',
   'resources',
   'notes',
+  // Today's session (#1073): the next open builds of the build plan, printable.
+  'session',
   'backup',
   'profiles',
   'wizard',
@@ -184,6 +186,28 @@ export function setHideDone(value: boolean) {
 }
 function hideDoneStored() {
   return storedSwitch(HIDE_DONE_KEY);
+}
+// How many builds "Today's session" shows (#1073): 3 to 5, 4 unless chosen. A view preference
+// remembered in this browser like "Required steps only", never in a saved profile: it changes what
+// one page lists, not the plan or its progress, so it needs no state version.
+const SESSION_SIZE_KEY = 'planner-session-size';
+export const SESSION_SIZES = [3, 4, 5] as const;
+export let sessionSize = storedSessionSize();
+export function setSessionSize(value: number) {
+  if (!(SESSION_SIZES as readonly number[]).includes(value)) return;
+  sessionSize = value;
+  try {
+    localStorage.setItem(SESSION_SIZE_KEY, String(value));
+  } catch {}
+}
+// The stored size, or 4 when nothing usable is stored or the browser refuses storage.
+function storedSessionSize(): number {
+  try {
+    const stored = Number(localStorage.getItem(SESSION_SIZE_KEY));
+    return (SESSION_SIZES as readonly number[]).includes(stored) ? stored : 4;
+  } catch {
+    return 4;
+  }
 }
 export function setRequiredOnly(value: boolean) {
   requiredOnly = value;

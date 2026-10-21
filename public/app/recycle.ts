@@ -29,7 +29,7 @@
 import { num } from './format.ts';
 import { nearestFraction, roundedParts, sensibleDecimals } from './apportion.ts';
 import { EXTRACTOR_MIN_RATE } from '../preferences.ts';
-import { waterExtractorWords } from '../mining.ts';
+import { waterExtractorWords, waterOptions } from '../mining.ts';
 import type { WaterChoice } from '../mining.ts';
 import { homeGroup, LINK_DUST, rowPlaces, UNGROUPED } from './group-order.ts';
 import { groupLinks, isSource, itemBooks, OUTSIDE, placeName } from './group-links.ts';
@@ -181,6 +181,8 @@ export interface AdviceLine {
   lead: string;
   parts: AdvicePart[];
   extractors?: string;
+  // The Water Extractors of the suggested option (#1073), which the step's build materials count.
+  waterExtractors?: number;
 }
 
 // One other end of a line's transfers of an item, summed: a line (by row id, in a place), or a
@@ -420,7 +422,12 @@ export function inputAdvice(
           : lines.length
             ? [...parts, rest]
             : [NO_COVER],
-        ...(water ? { extractors: extractorAdvice(extracted, model.water) } : {}),
+        ...(water
+          ? {
+              extractors: extractorAdvice(extracted, model.water),
+              waterExtractors: waterOptions(extracted, model.water)?.first.option.extractors ?? 0,
+            }
+          : {}),
       },
     ];
   });

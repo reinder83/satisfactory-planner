@@ -218,6 +218,9 @@ const page = computed(() =>
           from production lines marked running. Full-phase production lines follow the startup and
           unlock steps.
         </p>
+        <p v-if="!page.milestones && !page.guided" class="small" data-session-link-row>
+          <a href="#session" data-session-link>Today's session: the next builds, printable →</a>
+        </p>
         <Checklist />
         <AddTaskForm placeholder="Add a task…" />
         <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
