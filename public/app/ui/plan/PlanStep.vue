@@ -14,7 +14,9 @@
   recalculation grew (`step.built`, #1174: "5 of 6 built"), whose table says what to add, or that
   built lines of another recipe switch to (#1175: "4 to switch from Iron Plate, 1 to add"), and a
   shrunk line's spare machines (`step.spare`, #1175: "6 built, 1 spare"), ticked or not; a step
-  with both a table and a list (a grown line's byproduct advice) draws the table first. A line's
+  with both a table and a list (a grown line's byproduct advice) draws the table first. A batch
+  task's step (`step.batch`, #1211), a line that only makes a Space Elevator part, says under its
+  text how many to make, how long that takes and the power switching the line off frees. A line's
   own step ends with what it takes to build (`step.materials`, #1073): "To build: 2 Refineries + 1
   Water Extractor + Mk.2 belts and Mk.1 pipes" and the parts those buildings cost. Its text marks the glossary
   terms in `step.terms` (#1076, ui/TermText.vue); the words stay the step's `body`. A step just ticked is
@@ -268,6 +270,9 @@ async function deletePersonal(event: Event) {
         <TermText :text="step.body" :terms="step.terms ?? []" />
       </p>
       <p v-if="!step.table && !step.list && !step.body">Your own task for this phase.</p>
+      <p v-if="step.batch" class="small step-batch" data-step-batch>
+        <b>Batch:</b> {{ step.batch }}
+      </p>
       <p v-if="step.materials" class="small step-materials" data-step-materials>
         <b>To build:</b> {{ step.materials.build
         }}<template v-if="step.materials.parts"

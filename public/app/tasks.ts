@@ -4,7 +4,7 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
-import { idleLineNote, idleLines } from './delivered.ts';
+import { batchLine, batchLineText, idleLineNote, idleLines } from './delivered.ts';
 import { placeName } from './group-links.ts';
 import { homeGroup, LINK_DUST, rowPlaces } from './group-order.ts';
 import {
@@ -83,6 +83,9 @@ export interface PlanStepView extends Step {
   // A production line at exact clocks in a whole-machine plan, or the change a recalculation would
   // make to its clocks (lineClockNote in exact-clocks.ts, #1066), under the title.
   clocks?: string;
+  // A line that only makes a Space Elevator part (#1211, batchStepNote): how many to make, how
+  // long that takes and the power switching the line off then frees, under the step's text.
+  batch?: string;
   // The glossary terms its text marks (#1076): those no step above it on screen marked first.
   terms?: string[];
   // What a production line's own step takes to build (#1073, stepMaterialWords in
@@ -282,6 +285,23 @@ export function idleStepNotes(steps: Step[]): Map<string, string> {
     if (line) notes.set(step.id, idleLineNote(line));
   }
   return notes;
+}
+
+// What a batch task (#1211, batchLine in delivered.ts) of the phase shown says, for line `rowId`'s
+// build-plan step and its dialog: "Make 50 × Smart Plating (about 25 minutes at this rate), then
+// switch the line off until Phase 2 needs it again: frees 4 MW."; '' for a line that keeps
+// running. Post Phase 5 keeps every Phase 5 line running, and a milestone-only phase has no lines.
+export function lineBatchText(rowId: string): string {
+  if (phase() === 'post' || milestoneOnly()) return '';
+  const batch = batchLine(calculated, stage(), rowId);
+  return batch ? batchLineText(batch) : '';
+}
+
+// A step's batch task (lineBatchText): only a line's own step (calc-<stage>-<row id>) has one, not
+// a personal task linked to the line.
+export function batchStepNote(stepId: string): string {
+  const prefix = 'calc-' + stage() + '-';
+  return stepId.startsWith(prefix) ? lineBatchText(stepId.slice(prefix.length)) : '';
 }
 
 // The production line (row) a step links to: its saved link, or else the automatic one. A saved
