@@ -126,14 +126,18 @@ function planStages(
 // the cap does not have; the Docker server calculates on its main thread (#1156), so this keeps
 // such a phase to seconds rather than PHASE_SEARCH_MS. A search that stops there is a draft that
 // says so (capReason in draft.ts), never a guess.
-const CAP_SEARCH_MS = 10000;
+const CAP_SEARCH_MS = 15000;
 // The caps per phase (#1221, settings.phaseCaps), on the stages planned without them: a phase
 // whose plan keeps within them, counted as the plan counts (capExcess: its rows' buildings and its
 // grid's need), stays exactly as it was. A phase over one is planned again with them (cappedRun
 // in solveGoal), its integer searches within CAP_SEARCH_MS, and with storage held to them
 // (withStock); a plan still over, or none, is a draft that says what the plan without the caps
 // (`free`) needs. A Phase 5 planned again has its fueled augmenters judged again; returns that
-// warning, if any.
+// warning, if any. What the buildings cost to build (#1229, buildCostDraft) is not checked again:
+// that check solves the phase's exact LP, not its plan, so a phase planned again has passed it
+// already (one that fails it is a draft, which this leaves as it is), and its new plan keeps within
+// the caps. The check does not count the caps: its LP counts power in each line's linear share,
+// more than an underclocked machine draws, so a cap the plan keeps within would draft it again.
 function holdToCaps(
   config: CurrentSettings,
   caps: PhaseCaps,

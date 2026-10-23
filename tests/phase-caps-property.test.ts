@@ -1,6 +1,6 @@
 // The caps per phase (#1221) over a set of settings: several start phases, exact clocks and whole
-// machines, every alternate, minimal construction, the target time on the final phase, and
-// production amplification. Two properties, with each phase's buildings and MW counted as the
+// machines, every alternate, minimal construction, the target time on the final phase, build costs
+// counted, and production amplification. Two properties, with each phase's buildings and MW counted as the
 // plan and the pages count them (its rows' machines and its grid's need):
 //   a cap at or above what the plan without caps uses never changes it: the plan is the same,
 //     byte for byte, apart from the caps in its settings and the time it was made;
@@ -36,6 +36,10 @@ const SETTINGS: [string, object][] = [
   ],
   ['Phase 3, minimal construction', { phase: '3', goal: 'minimal' }],
   ['Phase 3, target time on the final phase', { phase: '3', phaseTime: 'final' }],
+  [
+    'Phase 3, every alternate, build costs counted',
+    { phase: '3', recipes: 'all', buildCost: true },
+  ],
   ['amplified (fixture)', amplified],
 ];
 // A phase's figures as the caps count them.

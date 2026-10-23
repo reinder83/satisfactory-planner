@@ -267,10 +267,11 @@ export function shortfallReason(
         : ` More time alone will not fit: continuous demands (${storage}drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.`)
   );
 }
-// The least hours per phase at which the exact LP fits the real budgets (and the caps per phase),
-// found by bisection between the current hours and the 2,000-hour maximum, to a quarter hour. The
-// caller has checked that it fits at 2,000 hours; whole machines may need slightly more.
-function leastHours(draft: DraftContext, currentHours: number): number {
+// The least hours per phase at which the exact LP fits the real budgets (and the caps per phase,
+// or what its buildings cost to build, as `draft` counts them), found by bisection between the
+// current hours and the 2,000-hour maximum, to a quarter hour. The caller has checked that it fits
+// at 2,000 hours; whole machines may need slightly more. Shared with build-cost-draft.ts.
+export function leastHours(draft: DraftContext, currentHours: number): number {
   let low = currentHours,
     high = 2000;
   for (let i = 0; i < 12 && high - low > 0.25; i++) {

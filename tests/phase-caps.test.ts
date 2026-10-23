@@ -199,6 +199,32 @@ test('a search within a cap that stops at its limit says so, and claims no need'
   );
 });
 
+test('with build costs counted, a phase keeps within the caps and still checks its build cost', () => {
+  // Every alternate from Phase 3 with build costs counted (#1229): each phase fits them.
+  const base = { ...CASE, buildCost: true };
+  const counted = calculate(base);
+  assert.ok(Object.values(counted.stages).every(stage => stage.feasible));
+  // Caps the busiest phase keeps within change nothing.
+  const roomy = calculate({ ...base, phaseCaps: { buildings: 272, mw: 18970 } });
+  assert.equal(JSON.stringify(roomy.stages), JSON.stringify(counted.stages));
+  // At most 900 MW: Phase 3 is planned again within it, and passed the build-cost check (an LP
+  // of the phase, not of its plan); the phases the cap does not bind stay as they were.
+  const capped = calculate({ ...base, phaseCaps: { mw: 900 } });
+  const three = capped.stages['3'];
+  assert.equal(three.feasible, true);
+  assert.ok(needOf(three) <= 900, String(needOf(three)));
+  for (const phase of ['1', '2'] as const)
+    assert.equal(JSON.stringify(capped.stages[phase]), JSON.stringify(counted.stages[phase]));
+  // A phase that cannot make its buildings' parts in time is that draft, cap or not.
+  const short = { phase: '3', goal: 'timed', hours: 1, buildCost: true } as const;
+  const plain = calculate(short),
+    tight = calculate({ ...short, phaseCaps: { mw: 1000 } });
+  for (const phase of ['4', '5'] as const) {
+    assert.ok(tight.stages[phase].buildCost, `Phase ${phase}`);
+    assert.equal(JSON.stringify(tight.stages[phase]), JSON.stringify(plain.stages[phase]));
+  }
+});
+
 test('storage-only lines keep within the caps: storage then takes only the surplus', () => {
   const base = { phase: '1', wholeMachines: true, storageFromSurplus: true } as const;
   const open = calculate(base).stages['1'],
