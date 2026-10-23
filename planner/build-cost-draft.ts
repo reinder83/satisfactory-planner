@@ -22,6 +22,7 @@ import { goalHours } from './model.ts';
 import {
   exactRun,
   fitsInHours,
+  leastHours,
   phaseBudgets,
   shortfallReason,
   type DraftContext,
@@ -108,14 +109,7 @@ export function buildCostWords({ hours, buildings, parts: counted }: StageBuildC
 function noBudgetWords(stage: CurrentStage, draft: DraftContext, hours: number): string {
   if (!fitsInHours(draft, 2000))
     return 'More time alone will not fit: no budget lets this phase make its buildings and its deliveries.';
-  let low = hours,
-    high = 2000;
-  for (let i = 0; i < 12 && high - low > 0.25; i++) {
-    const mid = (low + high) / 2;
-    if (fitsInHours(draft, mid)) high = mid;
-    else low = mid;
-  }
-  stage.minHours = Math.ceil(high * 4) / 4;
+  stage.minHours = leastHours(draft, hours);
   return `No budget makes them in that time, but it fits the current budgets at ${warningDuration(stage.minHours)} for this phase.`;
 }
 // One building's parts that the phase counted (the items of `counted`, the parts of all of them).

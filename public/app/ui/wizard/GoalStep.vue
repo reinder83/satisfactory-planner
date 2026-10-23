@@ -1,6 +1,7 @@
 <!--
   All settings step 3, goal: the goal cards (radio "goal", with the one these settings suggest
-  marked), what the plan keeps lowest (ObjectiveChoice.vue, #1180), the profile name (blank until
+  marked), what the plan keeps lowest (ObjectiveChoice.vue, #1180), the caps per phase
+  (PhaseCaps.vue, #1221), the profile name (blank until
   one is typed: the profile is then named after its goal,
   what changed and the date, profileNameOf in wizard/wizard.ts, #1071), hours per phase, what the
   target time applies to, and the rounding and whole-machine checkboxes. readWizard reads the
@@ -20,6 +21,7 @@ import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import ObjectiveChoice from './ObjectiveChoice.vue';
+import PhaseCaps from './PhaseCaps.vue';
 import SelectField from '../form/SelectField.vue';
 import StepHeading from '../form/StepHeading.vue';
 import Term from '../Term.vue';
@@ -41,6 +43,7 @@ const view = computed(() =>
       // The goal is always one of the catalog's.
       name: wizardDraft.name,
       objective: settings.objective,
+      caps: settings.phaseCaps,
       hours: settings.hours,
       phaseTime: settings.phaseTime || 'every',
       roundRates: !!settings.roundRates,
@@ -82,6 +85,7 @@ const view = computed(() =>
     >
   </div>
   <ObjectiveChoice :objective="view.objective" />
+  <PhaseCaps :caps="view.caps" />
   <div class="form-grid">
     <InputField
       label="Profile name"

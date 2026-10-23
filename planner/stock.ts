@@ -30,6 +30,7 @@ import {
   stockedFromSurplus,
   storageDemand,
   type PhaseContext,
+  capExcess,
 } from './model.ts';
 import { buildOrder, stagePower, stageRows, stageSurplus } from './stage.ts';
 
@@ -69,35 +70,42 @@ export function withStock(config: CurrentSettings, phase: number, stage: Solved)
     if (spare <= STOCK_DUST) missing[item] = rate;
     else if (topUp && rate - spare > STOCK_DUST) missing[item] = rate - spare;
   }
-  const lines = stockLines(config, phase, stage, powered, fromSurplus, missing);
-  const storage: ItemRates = Object.fromEntries(
-    Object.keys(asked).map(item => [item, (fromSurplus[item] ?? 0) + (lines.stored[item] ?? 0)]),
-  );
-  const rows = [
-    ...stage.rows.map(row => lines.generators[row.id] ?? row),
-    ...buildOrder(lines.rows),
-  ];
-  const raw = { ...stage.raw };
-  for (const [item, rate] of Object.entries(lines.raw)) raw[item] = (raw[item] || 0) + rate;
-  const supplied = { ...stage.supplied };
-  for (const [item, rate] of Object.entries(lines.supplied))
-    supplied[item] = (supplied[item] || 0) + rate;
-  const surplus = stageSurplus(context, rows, {
-    storage,
-    delivery: stage.delivery,
-    drone: stage.drone,
-    matrix: stage.matrixRate,
-  });
-  return {
-    ...stage,
-    rows,
-    raw,
-    supplied,
-    storage,
-    storageAsked: asked,
-    surplus,
-    ...stagePower(context, rows, raw),
+  const stocked = (lines: ReturnType<typeof stockLines>): Solved => {
+    const storage: ItemRates = Object.fromEntries(
+      Object.keys(asked).map(item => [item, (fromSurplus[item] ?? 0) + (lines.stored[item] ?? 0)]),
+    );
+    const rows = [
+      ...stage.rows.map(row => lines.generators[row.id] ?? row),
+      ...buildOrder(lines.rows),
+    ];
+    const raw = { ...stage.raw };
+    for (const [item, rate] of Object.entries(lines.raw)) raw[item] = (raw[item] || 0) + rate;
+    const supplied = { ...stage.supplied };
+    for (const [item, rate] of Object.entries(lines.supplied))
+      supplied[item] = (supplied[item] || 0) + rate;
+    const surplus = stageSurplus(context, rows, {
+      storage,
+      delivery: stage.delivery,
+      drone: stage.drone,
+      matrix: stage.matrixRate,
+    });
+    return {
+      ...stage,
+      rows,
+      raw,
+      supplied,
+      storage,
+      storageAsked: asked,
+      surplus,
+      ...stagePower(context, rows, raw),
+    };
   };
+  const filled = stocked(stockLines(config, phase, stage, powered, fromSurplus, missing));
+  // The caps per phase (#1221) hold storage too: when its storage-only lines would take the phase
+  // over a cap, they are left out, and storage takes only what the surplus gives.
+  return config.phaseCaps && capExcess(config.phaseCaps, filled)
+    ? stocked(stockLines(config, phase, stage, powered, fromSurplus, {}))
+    : filled;
 }
 
 // The storage-only lines for the items with no surplus (`missing`): a linear program over the

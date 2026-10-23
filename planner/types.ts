@@ -30,6 +30,10 @@ export interface RunOptions {
   // plan solve a copy of the settings without whole machines, so they pass the answer for the
   // calculation's own settings instead (#1100).
   storageLeftOut?: boolean;
+  // Count a cap on buildings per phase (#1221, settings.phaseCaps) in machine-equivalents, a linear
+  // solve, instead of whole buildings per line, an integer one (addPhaseCaps in model.ts): the
+  // two-step fit's first, exact step, which only picks the network, and a draft's measurements.
+  relaxCaps?: boolean;
   // Count what the phase's buildings cost to build (#1229, addBuildCosts in build-cost.ts): only
   // the check of a plan with settings.buildCost and its draft's measurements set it, never the
   // solves that plan the phase.

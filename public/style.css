@@ -6863,17 +6863,19 @@ button.rail-tile:hover {
 /* The materials you carry out by hand. A floor for one of them costs about a
    percent; the general construction rate that would reach the same number
    costs far more, so the guided start never touches it. */
-/* All settings step 3's objective (#1180, ObjectiveChoice.vue) is framed like the guided start's
-   stock question. */
+/* All settings step 3's objective (#1180, ObjectiveChoice.vue) and caps per phase (#1221,
+   PhaseCaps.vue) are framed like the guided start's stock question. */
 .guided-topup,
-.objective-choice {
+.objective-choice,
+.phase-caps {
   margin: 22px 0 0;
   border: 1px solid var(--line2);
   background: var(--panel2);
   padding: 14px 16px 16px;
 }
 .guided-topup legend,
-.objective-choice legend {
+.objective-choice legend,
+.phase-caps legend {
   font-family: var(--head);
   font-size: 14px;
   font-weight: 700;
@@ -6883,7 +6885,8 @@ button.rail-tile:hover {
   padding: 0 6px;
 }
 .guided-topup p,
-.objective-choice > p {
+.objective-choice > p,
+.phase-caps > p {
   margin: 0 0 12px;
 }
 .guided-chips {

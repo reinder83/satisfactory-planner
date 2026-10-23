@@ -17,6 +17,8 @@ export const helpText: Record<string, string> = {
     'The Game Modes setting Recipe Part Cost. 2 means every machine needs twice its usual inputs for the same output. It is chosen when the save is created.',
   objective:
     'The goal decides how fast each phase delivers. This decides what the plan saves on while it does: buildings, power, raw resources, or a mix you weigh yourself. A plan keeps the objective it was calculated with until you change it in Edit settings.',
+  phaseCaps:
+    'The most a phase may build and draw. Buildings count every machine and generator on the production lines, as the plan counts them; miners and extractors are not lines. MW is the power the phase needs: its lines with the utility allowance, and its miners and extractors. A plan keeps the caps it was calculated with until you change them in Edit settings.',
   availablePowerMW:
     'Enter unused capacity after existing consumption. Reserve existing generator fuel separately in Resources.',
   recipes:

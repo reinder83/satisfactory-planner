@@ -70,6 +70,8 @@ const exactFit = (variant: CurrentSettings, phase: number, options: FitOptions) 
   run({ ...sharedSettings(variant), wholeMachines: false, amplifySloops: 0 }, phase, {
     ...options,
     storageLeftOut: stockedFromSurplus(variant),
+    // It only picks the network, so a cap on buildings is counted linearly there (#1221).
+    relaxCaps: true,
   });
 // The amplification candidates: the largest lines (at least one machine-equivalent) of an
 // exact solve, as { recipeId: equivalent }. A group's own line made on site (#875) is never

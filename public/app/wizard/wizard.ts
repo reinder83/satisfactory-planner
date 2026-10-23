@@ -11,6 +11,7 @@ import {
   knownWorld,
   matchingPreset,
   ownedGeneratorCounts,
+  PHASE_CAP_KEYS,
   presetSurvey,
   resourceDefaults,
 } from '../../preferences.ts';
@@ -57,6 +58,7 @@ import type {
   CurrentSettings,
   FirstReleaseSettings,
   ItemRates,
+  PhaseCaps,
   SaveSummary,
   StoredCalculatedPlan,
   Survey,
@@ -380,6 +382,7 @@ export function readWizard(form: HTMLFormElement) {
     oldPreset = worldPreset(settings);
   readFields(data, wizardDraft);
   readObjective(data, settings);
+  readPhaseCaps(data, settings);
   readSloops(form, data, settings);
   readAlternates(form, data, settings);
   readOwnedAlternates(form, data, settings);
@@ -478,6 +481,21 @@ function readObjective(data: FormData, settings: WizardSettings) {
       raw: weight('raw'),
     };
   else delete settings.objective;
+}
+
+// The caps per phase (#1221, All settings step 3, ui/wizard/PhaseCaps.vue): each box that holds
+// a number, as a number, which settings() checks; both blank leaves the field out, as settings()
+// stores it, so a draft from a plan made before the caps keeps settings without them. A screen
+// without the boxes changes nothing.
+function readPhaseCaps(data: FormData, settings: WizardSettings) {
+  if (!data.has('phaseCap:buildings')) return;
+  const caps: PhaseCaps = {};
+  for (const name of PHASE_CAP_KEYS) {
+    const value = String(data.get('phaseCap:' + name) ?? '').trim();
+    if (value !== '') caps[name] = Number(value);
+  }
+  if (Object.keys(caps).length) settings.phaseCaps = caps;
+  else delete settings.phaseCaps;
 }
 
 // A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:

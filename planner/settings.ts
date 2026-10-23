@@ -10,6 +10,8 @@ import {
   ownedGeneratorCounts,
   OBJECTIVE_WEIGHT_MAX,
   OBJECTIVE_WEIGHTS,
+  PHASE_CAP_KEYS,
+  PHASE_CAP_LIMITS,
   powerOptions,
   RECIPE_COSTS,
   resourceDefaults,
@@ -437,6 +439,32 @@ const objectiveSetting = (value: unknown): Pick<CurrentSettings, 'objective'> =>
   if (!OBJECTIVE_WEIGHTS.some(name => weights[name] > 0)) fail(OBJECTIVE_REFUSAL);
   return { objective: weights };
 };
+// The caps per phase (#1221): `{ phaseCaps }` with `buildings` and `mw`, each a whole number from
+// 1 to its PHASE_CAP_LIMITS, either one absent (a new object with just those, in that order);
+// nothing when neither is set, so a plan without caps, and every plan stored before them, has no
+// field and calculates exactly as before. Any other value is refused, never corrected.
+const PHASE_CAP_REFUSAL = `Give the caps per phase as whole numbers: buildings from 1 to ${PHASE_CAP_LIMITS.buildings.toLocaleString('en-US')}, MW from 1 to ${PHASE_CAP_LIMITS.mw.toLocaleString('en-US')}.`;
+const phaseCapsSetting = (value: unknown): Pick<CurrentSettings, 'phaseCaps'> => {
+  if (value === undefined) return {};
+  if (
+    !isRecord(value) ||
+    Object.keys(value).some(key => !PHASE_CAP_KEYS.some(name => name === key))
+  )
+    fail(PHASE_CAP_REFUSAL);
+  const caps: NonNullable<CurrentSettings['phaseCaps']> = {};
+  for (const name of PHASE_CAP_KEYS) {
+    const given = value[name];
+    if (given === undefined) continue;
+    if (
+      !Number.isInteger(given) ||
+      (given as number) < 1 ||
+      (given as number) > PHASE_CAP_LIMITS[name]
+    )
+      fail(PHASE_CAP_REFUSAL);
+    caps[name] = given as number;
+  }
+  return Object.keys(caps).length ? { phaseCaps: caps } : {};
+};
 // The generators the player already has (#1068): `{ ownedGenerators: { building: count } }` with
 // only the known kinds (OWNED_GENERATORS in public/preferences/fuels.ts) and whole counts from 1,
 // or nothing, so the field is absent unless one is entered.
@@ -543,6 +571,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // What the plan keeps lowest (#1180): absent for the fewest buildings, so settings without
     // it, and every plan stored before it, stay as they were.
     ...objectiveSetting(input.objective),
+    // The caps per phase (#1221): absent without one, so settings without them, and every plan
+    // stored before them, stay as they were.
+    ...phaseCapsSetting(input.phaseCaps),
     phaseTime: choice(input.phaseTime, ['every', 'final'], 'every'),
     hours: number(input.hours, 0.25, 2000, 8),
     roundRates: input.roundRates !== false,
