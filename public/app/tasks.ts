@@ -4,7 +4,7 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
-import { idleLineNote, idleLines } from './delivered.ts';
+import { batchLine, batchLineText, idleLineNote, idleLines } from './delivered.ts';
 import { placeName } from './group-links.ts';
 import { homeGroup, LINK_DUST, rowPlaces } from './group-order.ts';
 import {
@@ -26,6 +26,7 @@ import {
   rowIcon,
   stepRowName,
 } from './views/calculated.ts';
+import { jumpTarget } from './step-jump.ts';
 import { activeMine, factoryGroupsState, mineKeeps } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
 import type { StepMaterialWords } from './views/step-materials.ts';
@@ -86,6 +87,9 @@ export interface PlanStepView extends Step {
   // Who ticked it and when, "Ticked by Anna, 21 Oct" (#1206, tickedNote in ticked-by.ts), under the
   // title while it is ticked; absent for a tick made before the records were kept.
   ticked?: string;
+  // A line that only makes a Space Elevator part (#1211, batchStepNote): how many to make, how
+  // long that takes and the power switching the line off then frees, under the step's text.
+  batch?: string;
   // The glossary terms its text marks (#1076): those no step above it on screen marked first.
   terms?: string[];
   // What a production line's own step takes to build (#1073, stepMaterialWords in
@@ -95,6 +99,8 @@ export interface PlanStepView extends Step {
   link: StepLink | null;
   custom?: boolean;
   form?: ReturnType<typeof taskLinkChoices> | null;
+  // The step an activity-log entry jumped to (#1214, step-jump.ts), marked until the page goes.
+  jumped?: boolean;
 }
 
 // A step in "Removed steps in this phase". `shared` says which other phases list the same
@@ -287,6 +293,23 @@ export function idleStepNotes(steps: Step[]): Map<string, string> {
   return notes;
 }
 
+// What a batch task (#1211, batchLine in delivered.ts) of the phase shown says, for line `rowId`'s
+// build-plan step and its dialog: "Make 50 × Smart Plating (about 25 minutes at this rate), then
+// switch the line off until Phase 2 needs it again: frees 4 MW."; '' for a line that keeps
+// running. Post Phase 5 keeps every Phase 5 line running, and a milestone-only phase has no lines.
+export function lineBatchText(rowId: string): string {
+  if (phase() === 'post' || milestoneOnly()) return '';
+  const batch = batchLine(calculated, stage(), rowId);
+  return batch ? batchLineText(batch) : '';
+}
+
+// A step's batch task (lineBatchText): only a line's own step (calc-<stage>-<row id>) has one, not
+// a personal task linked to the line.
+export function batchStepNote(stepId: string): string {
+  const prefix = 'calc-' + stage() + '-';
+  return stepId.startsWith(prefix) ? lineBatchText(stepId.slice(prefix.length)) : '';
+}
+
 // The production line (row) a step links to: its saved link, or else the automatic one. A saved
 // link of '-' (StepEditForm.vue's "No linked production line" on an automatically linked step)
 // means none. No factory or row has that id, so releases before it also show no link.
@@ -452,15 +475,18 @@ export function mineKeepsStep(mine: Set<string> | null, step: Step): boolean {
 }
 
 // Applies "Hide completed", "Required steps only" (#1070), "Mine only" (#1199) and the step search
-// to a list of steps.
+// to a list of steps. The step an activity-log entry jumped to (#1214, step-jump.ts) is kept
+// whatever the first three would hide.
 export function filteredPlanTasks(steps: Step[]): Step[] {
   const search = query.trim().toLowerCase();
   const mine = activeMine();
+  const jumped = jumpTarget();
   return steps.filter(
     step =>
-      (!hideDone || !stepDone(step)) &&
-      (!requiredOnly || !step.optional) &&
-      mineKeepsStep(mine, step) &&
+      (step.id === jumped ||
+        ((!hideDone || !stepDone(step)) &&
+          (!requiredOnly || !step.optional) &&
+          mineKeepsStep(mine, step))) &&
       (!search ||
         [step.title, step.body || '', tableText(step.table), listText(step.list)]
           .join(' ')

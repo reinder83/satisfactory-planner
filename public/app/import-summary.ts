@@ -33,8 +33,9 @@ import type {
 } from '../types/index.ts';
 import type { ConfirmOptions } from './ui/confirm.ts';
 
-// The progress backup's format (GET /api/export in both editions).
-const BACKUP_FORMAT = 'satisfactory-planner-backup';
+// The progress backup's format (GET /api/export in both editions), named apart from
+// progress-merge.ts's BACKUP_FORMAT: the VM tests load the app's modules into one script.
+const PROGRESS_BACKUP_FORMAT = 'satisfactory-planner-backup';
 // The Docker server's refusals of a progress backup (importProgress in server/profile-routes.ts),
 // word for word, so a refused file reads as it did before the question was added (tested against
 // the server in tests/import-summary.test.ts).
@@ -56,7 +57,7 @@ export interface ImportContext {
 
 // A profile's progress in words: "Phase 3, 412 of 980 steps done", or "Phase 3, 30 ticked"
 // without a plan (or without progression.json).
-export function progressText(
+export function profileProgressText(
   plan: StoredCalculatedPlan | null | undefined,
   state: SavedState,
   context: Pick<ImportContext, 'progression' | 'phaseLabel'>,
@@ -88,7 +89,7 @@ function stepsDone(
   return steps.total ? steps : null;
 }
 
-const fileRecord = (value: unknown): value is Record<string, unknown> =>
+const summaryRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
 // "Import saves…": the question for a full save export (all saves, a selection, one profile or a
@@ -108,12 +109,12 @@ export function savesImportQuestion(
   const { saves } = validateTransfer(labelled);
   // validateTransfer accepted the file, so it is an object with a list of saves, each with a
   // name; the list shows each save's own name, and the note the name its copy gets.
-  const named = fileRecord(data) && Array.isArray(data.saves) ? data.saves : [];
+  const named = summaryRecord(data) && Array.isArray(data.saves) ? data.saves : [];
   const ownName = (index: number) => {
     const save: unknown = named[index];
-    return fileRecord(save) && typeof save.name === 'string' ? save.name.trim() : '';
+    return summaryRecord(save) && typeof save.name === 'string' ? save.name.trim() : '';
   };
-  const exported = fileRecord(data) ? localStamp(data.exportedAt) : '';
+  const exported = summaryRecord(data) ? localStamp(data.exportedAt) : '';
   const profiles = saves.flatMap((save, index) =>
     save.profiles.map(profile => ({ save: ownName(index), profile })),
   );
@@ -121,7 +122,7 @@ export function savesImportQuestion(
     ({ save, profile }) =>
       (saves.length > 1 ? `${save} · ${profile.name}` : profile.name) +
       ': ' +
-      progressText(profile.plan, profile.state, context),
+      profileProgressText(profile.plan, profile.state, context),
   );
   const one = saves.length === 1;
   const holds = one
@@ -165,8 +166,8 @@ export function backupQuestion(
   target: RestoreTarget,
   context: ImportContext,
 ): ConfirmOptions {
-  const backup = fileRecord(data) ? data : null;
-  if (backup?.format && backup.format !== BACKUP_FORMAT) throw Error(WRONG_BACKUP_FORMAT);
+  const backup = summaryRecord(data) ? data : null;
+  if (backup?.format && backup.format !== PROGRESS_BACKUP_FORMAT) throw Error(WRONG_BACKUP_FORMAT);
   if (backup?.profileId && backup.profileId !== target.id) throw Error(OTHER_PROFILE_BACKUP);
   const restored = restoreProgress(
     target.state,

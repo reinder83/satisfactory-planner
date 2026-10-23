@@ -13,7 +13,7 @@ import { createApp } from '../server.ts';
 import {
   backupQuestion,
   OTHER_PROFILE_BACKUP,
-  progressText,
+  profileProgressText,
   savesImportQuestion,
   WRONG_BACKUP_FORMAT,
 } from '../public/app/import-summary.ts';
@@ -255,7 +255,10 @@ test('a backup on another phase says so, and a bare state reads without a source
     question.note,
     'It works on Phase 4, this profile now on Phase 3. Its notes, deliveries and personal tasks replace this profile’s too. The plan stays as it is.',
   );
-  assert.equal(progressText(plan, ticking(2, '4'), context()), `Phase 4, 2 of ${total} steps done`);
+  assert.equal(
+    profileProgressText(plan, ticking(2, '4'), context()),
+    `Phase 4, 2 of ${total} steps done`,
+  );
 });
 
 test('a refused backup reads exactly as the Docker server refuses it', async () => {
