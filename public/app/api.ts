@@ -634,9 +634,12 @@ export function allowSwitch(root: ParentNode = document): true | Promise<boolean
 
 // Offers `data` as a .json file download (exports and shared profiles).
 export function downloadJson(data: unknown, name: string) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
-  );
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), name);
+}
+
+// Offers `blob` as a file download named `name` (downloadJson, the .sft export, #1209).
+export function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
