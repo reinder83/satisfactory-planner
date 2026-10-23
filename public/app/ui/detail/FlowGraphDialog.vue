@@ -5,12 +5,17 @@
   group's flow (shownGroupFlow, the flow page's own figures), so every arrow is one of the flow
   page's connections. Left to right: what comes in, the group's lines in layers, what leaves (other
   factories, storage, the AWESOME Sink), each arrow labelled with its item and rate per minute.
-  The drawing scrolls inside its own box (focusable, so the keyboard scrolls it too) and never
-  widens the dialog; "The graph as a table" lists every arrow again as text, which the drawing's
-  accessible name points to. A group gone since the dialog opened says so.
+  The dialog takes the window's width and most of its height (#1223). The drawing scrolls inside
+  its own box (focusable, so the keyboard scrolls it too) and never widens the dialog; the wheel
+  over it zooms around the pointer, a drag on its background moves it, two fingers pinch, and
+  − / + / Fit zoom it (useGraphPanZoom, graph-pan-zoom.ts; nothing saved). A press on a line's box
+  without a drag opens that production line's dialog in this one's place. "The graph as a table"
+  lists every arrow again as text, which the drawing's accessible name points to. A group gone
+  since the dialog opened says so.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { openCalculatedFactory } from '../../factory-detail.ts';
 import { itemRate } from '../../flow.ts';
 import { flowGraph, GRAPH, shortText, type GraphEdge } from '../../flow-graph.ts';
 import type { FlowLine } from '../../group-flow.ts';
@@ -20,6 +25,8 @@ import { shownGroupFlow } from '../../shown-group-flow.ts';
 import { factoryGroupsState, machineLine } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import DialogFrame from './DialogFrame.vue';
+import { GRAPH_ZOOM } from '../../graph-view.ts';
+import { useGraphPanZoom } from './graph-pan-zoom.ts';
 
 const props = defineProps<{ id: string }>();
 
@@ -62,6 +69,18 @@ const edgeClass = (edge: GraphEdge) => [
   edge.from.startsWith('in:') ? 'from-place' : edge.to.startsWith('out:') ? 'to-place' : 'inside',
   edge.note,
 ];
+
+// The scrolling box, and the drawing's natural size the zoom scales.
+const box = ref<HTMLElement | null>(null);
+const { zoom, panning, zoomIn, zoomOut, fit, handlers, onClickCapture } = useGraphPanZoom(
+  box,
+  () => view.value.graph,
+);
+const zoomText = computed(() => `${Math.round(zoom.value * 100)}%`);
+// A press on a line's box without a drag (a drag or pinch swallows its click, onClickCapture).
+const openNode = (id: string) => {
+  if (id.startsWith('line:')) openCalculatedFactory(id.slice('line:'.length));
+};
 </script>
 
 <template>
@@ -75,13 +94,56 @@ const edgeClass = (edge: GraphEdge) => [
     <template v-else>
       <p class="small muted">
         What comes in on the left, this factory's production lines from left to right in the order
-        they feed each other, and what leaves on the right. Each arrow is one item, per minute.
+        they feed each other, and what leaves on the right. Each arrow is one item, per minute. Drag
+        the background to move the graph, zoom with the mouse wheel, a pinch or the buttons, and
+        press a production line to open it.
       </p>
-      <div class="fgraph-scroll" tabindex="0" role="group" :aria-label="graphName" data-flow-graph>
+      <div class="fgraph-tools" data-flow-graph-tools>
+        <button
+          class="btn"
+          type="button"
+          aria-label="Zoom out"
+          data-flow-zoom="out"
+          :disabled="zoom <= GRAPH_ZOOM.min"
+          @click="zoomOut"
+        >
+          −
+        </button>
+        <span class="fgraph-zoom" data-flow-zoom-level>{{ zoomText }}</span>
+        <button
+          class="btn"
+          type="button"
+          aria-label="Zoom in"
+          data-flow-zoom="in"
+          :disabled="zoom >= GRAPH_ZOOM.max"
+          @click="zoomIn"
+        >
+          +
+        </button>
+        <button
+          class="btn"
+          type="button"
+          aria-label="Fit the whole graph"
+          data-flow-zoom="fit"
+          @click="fit"
+        >
+          Fit
+        </button>
+      </div>
+      <div
+        ref="box"
+        :class="['fgraph-scroll', { panning }]"
+        tabindex="0"
+        role="group"
+        :aria-label="graphName"
+        data-flow-graph
+        v-on="handlers"
+        @click.capture="onClickCapture"
+      >
         <svg
           class="fgraph"
-          :width="view.graph.width"
-          :height="view.graph.height"
+          :width="view.graph.width * zoom"
+          :height="view.graph.height * zoom"
           :viewBox="`0 0 ${view.graph.width} ${view.graph.height}`"
           aria-hidden="true"
         >
@@ -112,6 +174,7 @@ const edgeClass = (edge: GraphEdge) => [
             :class="['fgraph-node', node.kind]"
             :data-node="node.id"
             :transform="`translate(${node.x},${node.y})`"
+            @click="openNode(node.id)"
           >
             <rect :width="node.width" :height="node.height" />
             <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>

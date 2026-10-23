@@ -226,6 +226,70 @@ async function checkExpertMode(browser: import('playwright').Browser) {
     await context.close();
   }
 }
+// Pan and zoom of a factory's flow graph (#1223) at 1280 px: the wheel over the drawing zooms it
+// without scrolling the dialog, a drag on its background moves it, and a press on a line's box
+// without a drag opens that line in the graph's place.
+async function checkGraphPanZoom(page: Page, graphButton: import('playwright').Locator) {
+  await graphButton.click();
+  const box = page.locator('#detail [data-flow-graph]');
+  await box.locator('svg').waitFor();
+  const read = () =>
+    box.evaluate((el: HTMLElement) => ({
+      width: Number(el.querySelector('svg')!.getAttribute('width')),
+      left: el.scrollLeft,
+      top: el.scrollTop,
+      dialog: document.querySelector('#detail')!.scrollTop,
+    }));
+  // A spot of the box's background, clear of the boxes and labels.
+  const spots = await box.evaluate((el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    let background = null;
+    for (let y = rect.top + 8; y < rect.bottom - 24 && !background; y += 12)
+      for (let x = rect.left + 8; x < rect.right - 24 && !background; x += 12) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit && el.contains(hit) && !hit.closest('[data-node], [data-edge-label]'))
+          background = { x, y };
+      }
+    return { background };
+  });
+  assert.ok(spots.background, 'the drawing has a background to drag');
+  const before = await read();
+  await page.mouse.move(spots.background.x, spots.background.y);
+  await page.mouse.wheel(0, -200);
+  await page.waitForFunction(width => {
+    const svg = document.querySelector('#detail [data-flow-graph] svg');
+    return Number(svg?.getAttribute('width')) > width;
+  }, before.width);
+  const zoomed = await read();
+  assert.equal(
+    zoomed.dialog,
+    before.dialog,
+    'the wheel over the drawing does not scroll the dialog',
+  );
+  await page.mouse.move(spots.background.x, spots.background.y);
+  await page.mouse.down();
+  await page.mouse.move(spots.background.x - 30, spots.background.y - 20, { steps: 4 });
+  await page.mouse.up();
+  const panned = await read();
+  assert.ok(panned.left > zoomed.left || panned.top > zoomed.top, 'a drag moves the drawing');
+  await page.locator('#detail [data-flow-zoom="fit"]').click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector<HTMLElement>('#detail [data-flow-graph]')!;
+    return el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight;
+  });
+  const line = await box.evaluate((el: HTMLElement) => {
+    const rect = el.querySelector('[data-node^="line:"] rect')!.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  });
+  await page.mouse.click(line.x, line.y);
+  await page.waitForFunction(() => !document.querySelector('#detail [data-flow-graph]'));
+  assert.ok(
+    await page.evaluate(() => document.querySelector<HTMLDialogElement>('#detail')!.open),
+    'a press on a line opens it in place of the graph',
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+}
 // Edit settings → Review → Recalculate in place (#1138) on the open profile: Review calculates the
 // plan once, and the recalculation stores it without calculating again. How long each took.
 async function reviewedInPlace(page: Page, calculations: () => Promise<number | undefined>) {
@@ -725,6 +789,7 @@ try {
     'Escape returns focus to "Flow graph ↗"',
   );
   await page.setViewportSize({ width: 1280, height: 720 });
+  await checkGraphPanZoom(page, graphButton);
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();
