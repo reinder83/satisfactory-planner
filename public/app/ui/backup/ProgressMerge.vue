@@ -3,8 +3,8 @@
   "Export ticks" downloads the open profile's ticked step ids as a small file, and "Merge progress
   from file…" reads such a file (or a progress backup, or a save export holding one profile),
   shows what merging it would tick, per phase, with the steps ticked already and the ids this plan
-  does not list, and ticks those steps only after Merge. A merge never unticks anything and never
-  recalculates: the rules are in app/progress-merge.ts; this component hands it the open profile's
+  does not list, and ticks those steps only after Merge, with the file's records of who ticked
+  them and when (#1206). A merge never unticks anything and never recalculates: the rules are in app/progress-merge.ts; this component hands it the open profile's
   ticks and step ids and sends the merge through save(), as every tick is saved.
 -->
 <script setup lang="ts">
@@ -16,6 +16,7 @@ import {
   mergeChunks,
   mergedMessage,
   mergePreview,
+  mergeUpdate,
   mergeQuestion,
   NOT_PROGRESS,
   nothingToMerge,
@@ -52,7 +53,13 @@ async function exportTicks() {
   exporting.value = true;
   try {
     await writeQueue;
-    const data = ticksExport(state.checks, currentSave.name, currentProfile.name);
+    const data = ticksExport(
+      state.checks,
+      currentSave.name,
+      currentProfile.name,
+      new Date(),
+      state.tickedBy,
+    );
     downloadJson(data, ticksFileName(currentProfile.name));
     toast(`Ticks exported: ${data.ticks.length} ticked step${data.ticks.length === 1 ? '' : 's'}.`);
   } catch (error) {
@@ -129,7 +136,7 @@ async function mergeFile(event: Event) {
     let count = 0;
     try {
       for (const keys of chunks) {
-        await save({ type: 'checks', keys, value: true });
+        await save(mergeUpdate(keys, source));
         count += keys.length;
       }
     } catch {

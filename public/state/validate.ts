@@ -26,6 +26,7 @@ import type {
   StorageEdits,
   StoredCalculatedPlan,
   TaskEdits,
+  TickRecord,
 } from '../types/index.ts';
 
 // A plan whose rows a state is built for: a fresh calculation or a stored one.
@@ -509,6 +510,37 @@ export function validateBuiltMachines(raw: unknown): BuiltMachines | undefined {
   // Only kept with an entry, so a state without one keeps its old shape and version.
   return Object.keys(out).length ? out : undefined;
 }
+// A tick's time as kept (#1206): an ISO time in UTC, as Date.toISOString() writes it.
+const TICK_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+// One record of who ticked a step and when (#1206), as kept: its time, and the name of the player
+// who ticked it, trimmed, when one was given (a blank name is none). Anything else throws.
+export function tickRecord(raw: unknown): TickRecord {
+  const bad = () => fail('Invalid record of who ticked a step.');
+  if (!plain(raw) || typeof raw.at !== 'string' || !TICK_TIME.test(raw.at)) bad();
+  const record = raw as Raw & { at: string };
+  if (Number.isNaN(Date.parse(record.at))) bad();
+  const by = record.by;
+  if (by === undefined || (typeof by === 'string' && !by.trim())) return { at: record.at };
+  if (!label(by, OWNER_MAX)) bad();
+  return { at: record.at, by: (by as string).trim() };
+}
+// Returns a clean copy of tickedBy (#1206), or undefined when none is left: who ticked each step
+// and when, by check key, kept only for a key `checks` has ticked, so unticking a step (or
+// removing it with its tick) drops its record and a state without one keeps its old version.
+export function validateTickedBy(
+  raw: unknown,
+  checks: Record<string, boolean>,
+): Record<string, TickRecord> | undefined {
+  if (raw === undefined) return undefined;
+  if (!plain(raw) || Object.keys(raw).length > 20000) fail('Invalid record of who ticked a step.');
+  const out: Record<string, TickRecord> = {};
+  for (const [key, record] of Object.entries(raw as Raw)) {
+    if (!safeKey(key)) fail('Invalid record address.');
+    const clean = tickRecord(record);
+    if (checks[key] === true) out[key] = clean;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 // Returns a clean copy of exactClocks (#1066), or undefined when absent: the production lines the
 // user asked to run at exact clocks, { phase: [row id] }. Row ids are record-key safe and never an
 // amplified twin ('amp:'), which is always whole machines; duplicates go, ids are sorted and an
@@ -748,7 +780,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–20 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–21 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -759,13 +791,13 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(
       state.version as number,
     )
   )
     fail(
-      // Compared as the old code did, so a version given as "21" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 20
+      // Compared as the old code did, so a version given as "22" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 21
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -825,6 +857,9 @@ export function validateState(state: unknown): ProgressState {
   if (exact) clean.exactClocks = exact;
   const standing = validateBuiltMachines(state.builtMachines);
   if (standing) clean.builtMachines = standing;
+  // Read against the ticks as merged above: a record of a step no longer ticked goes.
+  const tickedBy = validateTickedBy(state.tickedBy, clean.checks);
+  if (tickedBy) clean.tickedBy = tickedBy;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -854,47 +889,50 @@ export function validateState(state: unknown): ProgressState {
   // release would refuse that mode as malformed. The machines that stand on a production line a
   // recalculation grew (builtMachines, #1174) are 19: an older release would drop them and show the
   // line as if none of it were built. A factory group with an owner (#1199) is 20: an older
-  // release's validateGroups would drop the owner.
-  clean.version = hasOwners(clean.factoryGroups)
-    ? 20
-    : clean.builtMachines
-      ? 19
-      : linksNeedV18(clean.factoryGroups)
-        ? 18
-        : linksNeedV17(clean.factoryGroups)
-          ? 17
-          : clean.exactClocks
-            ? 16
-            : clean.onSiteReview
-              ? 15
-              : clean.factoryGroups.local
-                ? 14
-                : clean.handbookOrigin?.mapping
-                  ? 13
-                  : clean.handbookOrigin
-                    ? 12
-                    : linksNeedV11(clean.factoryGroups)
-                      ? 11
-                      : clean.storageEdits.bayOrder
-                        ? 10
-                        : linksNeedV9(clean.factoryGroups)
-                          ? 9
-                          : clean.storageEdits.bayFloors
-                            ? 8
-                            : clean.factoryGroups.links
-                              ? 7
-                              : clean.storageEdits.hiddenFloors.length
-                                ? 6
-                                : clean.storageEdits.hiddenBays.length
-                                  ? 5
-                                  : hasAddedSlots(clean.storageEdits)
-                                    ? 4
-                                    : hasTaskEdits(clean.taskEdits) ||
-                                        hasGroups(clean.factoryGroups)
-                                      ? 3
-                                      : hasEdits(clean.storageEdits)
-                                        ? 2
-                                        : 1;
+  // release's validateGroups would drop the owner. Who ticked a step and when (tickedBy, #1206) is
+  // 21: an older release would drop the records. It is kept only while a ticked step has one.
+  clean.version = clean.tickedBy
+    ? 21
+    : hasOwners(clean.factoryGroups)
+      ? 20
+      : clean.builtMachines
+        ? 19
+        : linksNeedV18(clean.factoryGroups)
+          ? 18
+          : linksNeedV17(clean.factoryGroups)
+            ? 17
+            : clean.exactClocks
+              ? 16
+              : clean.onSiteReview
+                ? 15
+                : clean.factoryGroups.local
+                  ? 14
+                  : clean.handbookOrigin?.mapping
+                    ? 13
+                    : clean.handbookOrigin
+                      ? 12
+                      : linksNeedV11(clean.factoryGroups)
+                        ? 11
+                        : clean.storageEdits.bayOrder
+                          ? 10
+                          : linksNeedV9(clean.factoryGroups)
+                            ? 9
+                            : clean.storageEdits.bayFloors
+                              ? 8
+                              : clean.factoryGroups.links
+                                ? 7
+                                : clean.storageEdits.hiddenFloors.length
+                                  ? 6
+                                  : clean.storageEdits.hiddenBays.length
+                                    ? 5
+                                    : hasAddedSlots(clean.storageEdits)
+                                      ? 4
+                                      : hasTaskEdits(clean.taskEdits) ||
+                                          hasGroups(clean.factoryGroups)
+                                        ? 3
+                                        : hasEdits(clean.storageEdits)
+                                          ? 2
+                                          : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

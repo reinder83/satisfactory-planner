@@ -2,8 +2,10 @@
 // friend's ticks into the open profile from a file, with a preview first.
 //
 // The export is a small file of its own format, `satisfactory-planner-ticks`, version 1:
-//   { format, version: 1, exportedAt, saveName, profileName, ticks: [check id, …] }
-// with the ids of the profile's ticked checks (`state.checks` set to true), sorted. No plan,
+//   { format, version: 1, exportedAt, saveName, profileName, ticks: [check id, …], tickedBy? }
+// with the ids of the profile's ticked checks (`state.checks` set to true), sorted, and who ticked
+// them and when where the profile knows it (#1206: `tickedBy`, { check id: { at, by? } }, only
+// with a record; a release before it reads the file and merges the ticks without them). No plan,
 // settings, notes or deliveries: it is not a backup and nothing imports it as one.
 //
 // A merge reads that file, or the ticks of a progress backup (`satisfactory-planner-backup`, the
@@ -13,12 +15,16 @@
 // plan is never recalculated. Step ids are stable (AGENTS.md), so the same plan's steps carry from
 // one copy to another. An id this plan does not list is skipped and listed in the preview. The
 // merge is one `checks` update per thousand ids through the usual save queue (save() in api.ts),
-// so both editions store it as they store any tick.
+// so both editions store it as they store any tick. Each update carries the file's own records of
+// who ticked those steps and when (#1206, mergeUpdate), never the merging device's: a step the
+// file has no record for is ticked without one.
 //
 // This module reads no session state, so the node tests import it; the Backup page's panel
 // (ui/backup/ProgressMerge.vue) hands it the open profile's ticks and step ids.
-import { safeKey, validateState } from '../state.ts';
+import { safeKey, validateState, validateTickedBy } from '../state.ts';
 import { transferFormat, validateTransfer } from '../transfer.ts';
+import { recordsFor } from './ticked-by.ts';
+import type { TickRecord, UpdateOp } from '../types/index.ts';
 import type { ConfirmOptions } from './ui/confirm.ts';
 
 export const TICKS_FORMAT = 'satisfactory-planner-ticks';
@@ -39,6 +45,8 @@ export interface TicksExport {
   saveName: string;
   profileName: string;
   ticks: string[];
+  // Who ticked them and when (#1206), for the ticks that have a record; absent when none has.
+  tickedBy?: Record<string, TickRecord>;
 }
 
 // The ids of the ticked checks, sorted.
@@ -52,14 +60,18 @@ export function ticksExport(
   saveName: string,
   profileName: string,
   now = new Date(),
+  tickedBy?: Record<string, TickRecord>,
 ): TicksExport {
+  const ticks = tickedIds(checks),
+    records = recordsFor(tickedBy, ticks);
   return {
     format: TICKS_FORMAT,
     version: TICKS_VERSION,
     exportedAt: now.toISOString(),
     saveName,
     profileName,
-    ticks: tickedIds(checks),
+    ticks,
+    ...(Object.keys(records).length ? { tickedBy: records } : {}),
   };
 }
 
@@ -82,6 +94,8 @@ export interface ProgressSource {
   profileName: string;
   exportedAt: string;
   ticks: string[];
+  // Who ticked them and when (#1206), for the ticks the file has a record for.
+  tickedBy: Record<string, TickRecord>;
 }
 
 export const NOT_PROGRESS =
@@ -114,14 +128,25 @@ function readTicks(data: Record<string, unknown>): ProgressSource {
     data.ticks.some(id => typeof id !== 'string')
   )
     throw Error(DAMAGED_TICKS);
+  // Checked above: every entry is a string.
+  const ticks = [...new Set(data.ticks as string[])];
   return {
     kind: 'ticks',
     saveName: fileText(data.saveName),
     profileName: fileText(data.profileName),
     exportedAt: fileText(data.exportedAt),
-    // Checked above: every entry is a string.
-    ticks: [...new Set(data.ticks as string[])],
+    ticks,
+    tickedBy: fileRecords(data.tickedBy, ticks),
   };
+}
+// A ticks file's records of who ticked (#1206), for the ids it ticks; a malformed one makes the
+// file damaged, as a malformed tick does.
+function fileRecords(raw: unknown, ticks: string[]): Record<string, TickRecord> {
+  try {
+    return validateTickedBy(raw, Object.fromEntries(ticks.map(id => [id, true]))) || {};
+  } catch {
+    throw Error(DAMAGED_TICKS);
+  }
 }
 
 // A progress backup's state goes through validateState, so an older version is read as an import
@@ -134,6 +159,7 @@ function readBackup(data: Record<string, unknown>): ProgressSource {
     profileName: fileText(data.profileName),
     exportedAt: fileText(data.exportedAt),
     ticks: tickedIds(state.checks),
+    tickedBy: state.tickedBy || {},
   };
 }
 
@@ -154,6 +180,7 @@ function readSaves(data: Record<string, unknown>): ProgressSource {
     profileName: profile.name,
     exportedAt: fileText(data.exportedAt),
     ticks: tickedIds(profile.state.checks),
+    tickedBy: profile.state.tickedBy || {},
   };
 }
 
@@ -294,6 +321,18 @@ export function mergeChunks(
   for (let i = 0; i < ids.length; i += MERGE_CHUNK) chunks.push(ids.slice(i, i + MERGE_CHUNK));
   return chunks;
 }
+
+// The update that merges one chunk: its ids ticked, with the file's records of who ticked them
+// and when (#1206). `tickedBy` is always sent, empty too, so save() never adds this device's own.
+export const mergeUpdate = (
+  keys: string[],
+  source: Pick<ProgressSource, 'tickedBy'>,
+): Extract<UpdateOp, { type: 'checks' }> => ({
+  type: 'checks',
+  keys,
+  value: true,
+  tickedBy: recordsFor(source.tickedBy, keys),
+});
 
 // The toast after a merge.
 export const mergedMessage = (count: number, fileName: string): string =>

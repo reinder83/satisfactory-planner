@@ -37,6 +37,7 @@ import {
   page,
   stubFetch,
   useStylesheet,
+  unstamped,
 } from './setup.ts';
 import type { StorageEdits, UpdateOp } from '../../public/types/index.ts';
 
@@ -474,12 +475,12 @@ test('Done and "Complete room" write the four checks of each container', async (
   done.checked = true;
   done.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(calls[0]![1], { type: 'checks', keys: slotKeys('A02'), value: true });
+  assert.deepEqual(unstamped(calls[0]![1]), { type: 'checks', keys: slotKeys('A02'), value: true });
   const bay = $$('#main .bay').find(b => b.querySelector('.bay-letter')!.textContent === 'A')!;
   bay.querySelector<HTMLButtonElement>('[data-complete-bay]')!.click();
   await settle();
   const named = [...bay.querySelectorAll<HTMLElement>('[data-slot]')].map(b => b.dataset.slot!);
-  assert.deepEqual(calls[1]![1], {
+  assert.deepEqual(unstamped(calls[1]![1]), {
     type: 'checks',
     keys: named.flatMap(slotKeys),
     value: true,
@@ -713,7 +714,7 @@ test('the filter moves are an ordinary storage task on a migrated profile (#798)
   step().checked = true;
   step().dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: MOVES, value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), { type: 'check', key: MOVES, value: true });
   assert.equal(calls.length, 1, 'one save');
   assert.equal(state.checks[MOVES], true);
   assert.equal(state.checks['storage-ground-shell'], true, 'the other checks are untouched');
@@ -790,7 +791,11 @@ test("a guided plan's storage checklist is the guide's tasks, with no ground-flo
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'storage-filter-moves', value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), {
+    type: 'check',
+    key: 'storage-filter-moves',
+    value: true,
+  });
   // A guide without storage tasks keeps the calculated step.
   open({ calculated: { ...plan, guide: { phases: {} } } });
   render();

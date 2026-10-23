@@ -29,6 +29,7 @@ import {
   page,
   stubFetch,
   useStylesheet,
+  unstamped,
 } from './setup.ts';
 import type { WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
@@ -299,7 +300,7 @@ test('the build plan groups the unlocks by tier, with a tick per group and per i
   // An item ticked by itself writes its own check.
   const [first, ...rest] = groupKeys(tier);
   await click(`#main [data-unlock-group="${tier}"] [data-check="${first}"]`);
-  assert.deepEqual(updates.at(-1)![1], { type: 'check', key: first, value: true });
+  assert.deepEqual(unstamped(updates.at(-1)![1]), { type: 'check', key: first, value: true });
   assert.equal(box.indeterminate, true, 'some done: mixed');
   assert.match(text($(`#main [data-unlock-group="${tier}"] [data-unlock-group-count]`)), /^1 of /);
   // The group's tick: the rest, in one update, focus staying on it.
@@ -307,7 +308,7 @@ test('the build plan groups the unlocks by tier, with a tick per group and per i
   box.focus();
   box.click();
   await settle();
-  assert.deepEqual(updates.at(-1)![1], { type: 'checks', keys: rest, value: true });
+  assert.deepEqual(unstamped(updates.at(-1)![1]), { type: 'checks', keys: rest, value: true });
   const byHand = rest.reduce(
     (checks, key) => ({ ...checks, [key]: true }),
     before as Record<string, boolean>,
@@ -357,7 +358,11 @@ test('Hide completed and the search show only some items; the group tick still c
   assert.deepEqual(groupKeys(tier), all.slice(1), 'the done item is hidden');
   assert.match(text($(`#main [data-unlock-group="${tier}"] [data-unlock-group-count]`)), /^1 of /);
   await click(`#main [data-unlock-group-tick="${tier}"]`);
-  assert.deepEqual(updates.at(-1)![1], { type: 'checks', keys: all.slice(1), value: true });
+  assert.deepEqual(unstamped(updates.at(-1)![1]), {
+    type: 'checks',
+    keys: all.slice(1),
+    value: true,
+  });
   assert.equal($(`#main [data-unlock-group="${tier}"]`), null, 'the done group is hidden');
   assert.ok(
     document.activeElement?.matches('[data-unlock-group-tick], #plan-search'),

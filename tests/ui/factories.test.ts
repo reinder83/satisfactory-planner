@@ -52,6 +52,7 @@ import {
   page,
   stubFetch,
   transcribed,
+  unstamped,
 } from './setup.ts';
 
 import type { UpdateOp } from '../../public/types/index.ts';
@@ -2129,7 +2130,7 @@ test('a migrated factory dialog has its Running box in the header, saved as its 
   render();
   const key = 'calc-3-' + row('wire');
   await headerRunning(key, /^Running at Phase 3 target$/, () => openCalculatedFactory(row('wire')));
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key, value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), { type: 'check', key, value: true });
   assert.ok($(`#main [data-check="${key}"]`)!.closest('.factory-card.done'));
 });
 
@@ -2141,7 +2142,11 @@ test('a calculated factory dialog has its Running box in the header, saved as it
   await headerRunning('calc-3-' + first.id, /^Running at Phase 3 target$/, () =>
     openCalculatedFactory(first.id),
   );
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + first.id, value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), {
+    type: 'check',
+    key: 'calc-3-' + first.id,
+    value: true,
+  });
 });
 
 test('Build order is a link to the group’s flow page, which stages suppliers first (#895)', async () => {
@@ -3148,7 +3153,11 @@ test("a guided plan's sites, local badges, notes and completion modules on the f
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'completion-thermal', value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), {
+    type: 'check',
+    key: 'completion-thermal',
+    value: true,
+  });
   // Without a guide nothing of it shows.
   open({ calculated: plan, phase: 'post' });
   go('factories');

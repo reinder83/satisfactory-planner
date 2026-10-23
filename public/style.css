@@ -2992,6 +2992,28 @@ tr.muted td:first-child {
     padding: 16px 16px 0;
   }
 }
+/* Above every page on the Docker edition when another tab or device changed the progress while
+   the player was busy here (#1210): one quiet line with Refresh, aligned with the page under it. */
+.live-change-wrap {
+  padding: 16px clamp(14px, 2.4vw, 30px) 0;
+  max-width: 1660px;
+  margin: auto;
+}
+.live-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0;
+}
+.live-change p {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .live-change-wrap {
+    padding: 16px 16px 0;
+  }
+}
 /* Saves & profiles after an import (#1052): one Open button per copy, a long name wrapping inside
    its button. */
 .import-notice p {
@@ -5911,9 +5933,10 @@ button.rail-tile:hover {
 }
 /* Why a step is done by its own condition (#1070): an inline-block, so the done title's
    line-through does not run through the reason. So is a shrunk line's spare machines (#1175),
-   which a ticked step shows too. */
+   which a ticked step shows too, and who ticked a step and when (#1206). */
 .task-idle[data-satisfied-note],
-.task-idle[data-step-spare] {
+.task-idle[data-step-spare],
+.task-idle[data-step-ticked-by] {
   display: inline-block;
   width: 100%;
 }

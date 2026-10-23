@@ -22,6 +22,7 @@ import {
   type View,
 } from './session.ts';
 import { render } from './shell.ts';
+import { tickStamped } from './ticked-by.ts';
 import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
@@ -121,6 +122,11 @@ export async function request<T = unknown>(path: string, options: RequestOptions
     cache: 'no-store',
     ...options,
   });
+  return replyData<T>(response);
+}
+
+// The parsed JSON body of a reply to request() or requestIfChanged(), or its error.
+async function replyData<T>(response: Response): Promise<T> {
   let data;
   try {
     data = await response.json();
@@ -134,6 +140,23 @@ export async function request<T = unknown>(path: string, options: RequestOptions
   if (!response.ok)
     throw Object.assign(new Error(data.error || 'Request failed.'), { status: response.status });
   return data;
+}
+
+// A GET to the Docker server that names the reply it already has (`tag`, the ETag of its last
+// reply): an unchanged reply comes back as 304 without a body, and this resolves to null;
+// otherwise to the body and its ETag. Only the live refresh of progress uses it
+// (live-refresh.ts, #1210), which the browser edition never runs.
+export async function requestIfChanged<T>(
+  path: string,
+  tag: string | null,
+  headers: Record<string, string>,
+): Promise<{ data: T; tag: string | null } | null> {
+  const response = await fetch(path, {
+    cache: 'no-store',
+    headers: { ...headers, ...(tag ? { 'If-None-Match': tag } : {}) },
+  });
+  if (response.status === 304) return null;
+  return { data: await replyData<T>(response), tag: response.headers.get('ETag') };
 }
 
 // A 401 while signed in means the session expired or was ended in another tab. boot()
@@ -167,9 +190,9 @@ const refusedStatuses = [400, 409];
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
 // profile's full new state. Does not render: callers render() after it resolves. On failure
 // it shows an error toast and rejects, and callers usually just restore their control
-// instead of rendering.
+// instead of rendering. A tick carries who ticked and when (tickStamped, #1206).
 export function save(operation: UpdateOp): Promise<ProgressState> {
-  return queuedWrite('/api/update', operation).catch((error: Error) => {
+  return queuedWrite('/api/update', tickStamped(operation)).catch((error: Error) => {
     toast(error.message, true);
     throw error;
   });
@@ -272,7 +295,7 @@ export const recalculatedNotice =
 // The plan the open profile shows, for the X-Planner-Plan header both editions compare with the
 // stored plan (checkPlan in state/carry.ts, #1071): its createdAt, blank for a profile without a
 // plan. Omitted with no profile open.
-function planHeader(): Record<string, string> {
+export function planHeader(): Record<string, string> {
   return stateLoaded && currentSave?.id ? { 'X-Planner-Plan': calculated?.createdAt ?? '' } : {};
 }
 

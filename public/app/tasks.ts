@@ -83,6 +83,9 @@ export interface PlanStepView extends Step {
   // A production line at exact clocks in a whole-machine plan, or the change a recalculation would
   // make to its clocks (lineClockNote in exact-clocks.ts, #1066), under the title.
   clocks?: string;
+  // Who ticked it and when, "Ticked by Anna, 21 Oct" (#1206, tickedNote in ticked-by.ts), under the
+  // title while it is ticked; absent for a tick made before the records were kept.
+  ticked?: string;
   // A line that only makes a Space Elevator part (#1211, batchStepNote): how many to make, how
   // long that takes and the power switching the line off then frees, under the step's text.
   batch?: string;
