@@ -6,7 +6,7 @@ import { beforeEach, test } from 'vitest';
 import { setWizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { carryOptions } from '../../public/state.ts';
-import { draftFixes } from '../../public/app/views/calculated.ts';
+import { draftAdvice } from '../../public/app/draft-advice.ts';
 import { $$, generated, go, open, page } from './setup.ts';
 import type { StoredStage } from '../../public/types/index.ts';
 
@@ -146,7 +146,8 @@ test('an unconfirmed whole-machine draft amount reads "at least"', () => {
   };
   const settings = { limits: { 'Crude Oil': 4500 } };
   // 8,081 m³/min in the test's locale, whatever its separators.
-  assert.match(draftFixes(snapshot, settings)[0]!, /Crude Oil to at least 8.081\sm/);
+  const budget = () => draftAdvice(snapshot, settings).levers[0]!.text;
+  assert.match(budget(), /Crude Oil to at least 8.081\sm/);
   delete snapshot.shortfalls![0]!.atLeast;
-  assert.match(draftFixes(snapshot, settings)[0]!, /Crude Oil to about 8.081\sm/);
+  assert.match(budget(), /Crude Oil to about 8.081\sm/);
 });

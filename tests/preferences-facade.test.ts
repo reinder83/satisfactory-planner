@@ -83,6 +83,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'leftOutCap',
     'leftOutCounts',
     'leftOutPool',
+    'mapSupply',
     'matchingPreset',
     'minedResources',
     'minerMarks',

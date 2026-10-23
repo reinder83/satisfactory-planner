@@ -80,6 +80,7 @@ import { listNames } from '../wording.ts';
 import { beginnerMode } from './beginner.ts';
 import { expertMode } from './expert.ts';
 import { sloopPayoffs } from './sloop-payoff.ts';
+import { draftNeeds } from './draft-advice.ts';
 import { unlockGroups } from './unlock-groups.ts';
 import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
 import { OWNED_GENERATORS, objectiveWords, phaseBelt } from '../preferences.ts';
@@ -431,6 +432,14 @@ function fastestFact(): AdaFacts['fastest'] {
   };
 }
 
+// The first short resource of draft `snapshot` the map cannot give (#1222), as ADA words it.
+function mapShortFacts(snapshot: StoredStage): AdaFacts['mapShort'] {
+  const need = draftNeeds(snapshot, calculated?.settings).find(entry => entry.overMap);
+  if (!need || need.map === null) return undefined;
+  const rate = (value: number) => num(value) + (FLUIDS.has(need.name) ? ' m³/min' : '/min');
+  return { name: need.name, needed: rate(need.needed), map: rate(Math.floor(need.map)) };
+}
+
 function adaFacts(): AdaFacts {
   const steps = currentSave.id ? planTasks() : [];
   // The next step leaves out the lines a delivered elevator part leaves without work (#1062), as
@@ -561,6 +570,7 @@ function adaFacts(): AdaFacts {
               Infinity),
         )
       : [],
+    mapShort: calculated && storedStage.feasible === false ? mapShortFacts(storedStage) : undefined,
     // A shortfall is only measured with a calculated profile, so `grid` is there below.
     power:
       headroom > 0.01

@@ -160,6 +160,10 @@ export interface AdaFacts {
   reason: string;
   // Raw resources over their budget.
   short: string[];
+  // A draft's first short resource the map cannot give at the nodes the plan may tap (#1222,
+  // draftNeeds in app/draft-advice.ts): its name, what the phase needs and what the map gives, as
+  // rates ("1,023/min"); absent when the map has enough of each, or its count is not known.
+  mapShort?: { name: string; needed: string; map: string };
   // A stage's power shortfall (powerView in public/power.ts, #1064), as power strings: the draw
   // (its need), the generation its own rows build with the augmenter boost ('' when none), the spare power
   // entered, that spare part with what Phase 5's augmenters add ('' when it adds nothing) and
@@ -287,6 +291,14 @@ const RULES: AdaRule[] = [
     when: facts => facts.feasible === false,
     text: facts =>
       `This profile is a planning draft, not a plan. ${facts.reason || 'The numbers do not close.'} Optimism is not a listed resource. Create a new profile with the setting adjusted — this snapshot stays exactly as it is.`,
+  },
+  {
+    id: 'draft-map',
+    on: ['plan', 'resources'],
+    tone: 'warn',
+    when: facts => facts.feasible === false && !!facts.mapShort,
+    text: facts =>
+      `${facts.mapShort!.name}: this phase needs ${facts.mapShort!.needed}, and the map gives ${facts.mapShort!.map} at the nodes you allow. No budget box changes geology; the options under the draft notice say what would.`,
   },
   {
     id: 'short',
