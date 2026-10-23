@@ -82,6 +82,9 @@ export interface AdaFacts {
   // many steps it ticked and the file's name; absent when there was none since the page opened.
   merged?: number;
   mergedFrom?: string;
+  // The Backup page's activity log (#1214): how many ticks it lists, and the names in it as a list
+  // in quotes ('' when no tick has a name); absent elsewhere and while it lists none.
+  activity?: { ticks: number; people: string };
   // Today's session (#1073), on its page: how many builds it lists and how many of them wait on
   // lines not marked running or the open mining step; absent elsewhere.
   session?: { builds: number; waiting: number };
@@ -759,6 +762,18 @@ const RULES: AdaRule[] = [
     // Only after when() found a merge.
     text: facts =>
       `Your merge ticked ${plural(facts.merged!, 'step')} from ${facts.mergedFrom}. Nothing was unticked. Whether your co-op partner really built all that is between the two of you.`,
+  },
+  // Both editions: the Backup page's activity log (#1214), who ticked what, restated.
+  {
+    id: 'activity-log',
+    on: ['backup'],
+    tone: 'calm',
+    when: facts => !!facts.activity,
+    // Only after when() found a log.
+    text: facts =>
+      facts.activity!.people
+        ? `The log lists ${plural(facts.activity!.ticks, 'tick')} by ${facts.activity!.people}. I record who pressed the box. Who carried the concrete is not in my records.`
+        : `The log lists ${plural(facts.activity!.ticks, 'tick')}, none with a name. Set “Your name” and I can say who ticked what.`,
   },
   // Today's session (#1073): what it lists, and how many of its builds wait on something.
   {

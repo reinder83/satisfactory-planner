@@ -8,13 +8,13 @@
   and on the Factories page that every factory shows while the factories are edited.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { factoryEditing } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { anyOwner, meName, mineOnlyOn, setMeName, setMineOnly } from '../../mine.ts';
-import { OWNER_MAX } from '../../../state.ts';
+import { anyOwner, meName, mineOnlyOn, setMineOnly } from '../../mine.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import MeName from '../MeName.vue';
 
 const props = defineProps<{ where: 'factories' | 'plan' }>();
 
@@ -40,15 +40,6 @@ const view = computed(() =>
   }),
 );
 
-// What is typed in the name field until it is committed (change: Enter or leaving the field).
-const typed = ref(meName());
-
-function commitName(event: Event) {
-  setMeName((event.target as HTMLInputElement).value);
-  typed.value = meName();
-  render();
-}
-
 function toggle(event: Event) {
   setMineOnly((event.target as HTMLInputElement).checked);
   render();
@@ -66,16 +57,7 @@ function toggle(event: Event) {
         :aria-describedby="view.note ? 'mine-note-' + where : undefined"
         @change="toggle"
       />Mine only</label
-    ><label class="mine-name small"
-      >Your name<input
-        data-me-name
-        :maxlength="OWNER_MAX"
-        placeholder="e.g. Anna"
-        autocomplete="nickname"
-        :value="typed"
-        @input="typed = ($event.target as HTMLInputElement).value"
-        @change="commitName"
-    /></label>
+    ><MeName />
     <span v-if="view.note" :id="'mine-note-' + where" class="small muted" data-mine-note>{{
       view.note
     }}</span>

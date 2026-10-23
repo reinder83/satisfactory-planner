@@ -42,18 +42,34 @@ export function recordsFor(
   return Object.fromEntries(keys.flatMap(key => (tickedBy?.[key] ? [[key, tickedBy[key]]] : [])));
 }
 
+// The day and month of `time` in the locale's own order, with the year when it is not `now`'s.
+const dayParts = (time: Date, now: Date): Intl.DateTimeFormatOptions => ({
+  day: 'numeric',
+  month: 'short',
+  ...(time.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+});
+
 // A record as a ticked step says it: "Ticked by Anna, 21 Oct", or "Ticked 21 Oct" without a name,
 // the day and month in the locale's own order, with the year when it is not this year's. '' for a
 // time that does not read as one.
 export function tickedWords(record: TickRecord, now = new Date(), locale?: string): string {
   const time = new Date(record.at);
   if (Number.isNaN(time.getTime())) return '';
-  const day = time.toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'short',
-    ...(time.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
-  });
+  const day = time.toLocaleDateString(locale, dayParts(time, now));
   return record.by ? `Ticked by ${record.by}, ${day}` : `Ticked ${day}`;
+}
+
+// When a record says its step was ticked, with the time of day, as the activity log (#1214) lists
+// it: "Oct 21, 2:05 PM" in en-US, "21 okt, 14:05" in Dutch, with the year when it is not this
+// year's. '' for a time that does not read as one.
+export function tickedAt(at: string, now = new Date(), locale?: string): string {
+  const time = new Date(at);
+  if (Number.isNaN(time.getTime())) return '';
+  return time.toLocaleString(locale, {
+    ...dayParts(time, now),
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 // What step `key` says about its tick in a state: its record's words while it is ticked, else ''.
