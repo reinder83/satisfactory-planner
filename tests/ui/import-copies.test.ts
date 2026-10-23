@@ -25,11 +25,44 @@ const settle = async () => {
     await nextTick();
   }
 };
+// A friend's export with one save and one profile. Since #1217 the page checks the file as the
+// import does before it asks, so it has to be one the import accepts: a profile with a plan of
+// five phases and progress.
 const friendsExport = (exportedAt = '2026-10-04T12:05:00.000Z') => ({
   format: 'satisfactory-planner-saves',
   version: 1,
   exportedAt,
-  saves: [{ id: 'x', name: evil, activeProfile: 'xp', profiles: [] }],
+  saves: [
+    {
+      id: 'x',
+      name: evil,
+      activeProfile: 'xp',
+      profiles: [
+        {
+          id: 'xp',
+          name: 'Main',
+          kind: 'calculated',
+          plan: {
+            createdAt: '2026-09-24T10:00:00Z',
+            settings: { phase: '2', purity: 'normal', multiplier: 1, powerFactor: 1 },
+            stages: Object.fromEntries(
+              ['1', '2', '3', '4', '5'].map(phase => [phase, { rows: [], feasible: true }]),
+            ),
+            warnings: [],
+          },
+          state: {
+            version: 1,
+            revision: 0,
+            settings: { phase: '2' },
+            checks: { 'unlock-hub-1': true },
+            notes: {},
+            deliveries: {},
+            customTasks: [],
+          },
+        },
+      ],
+    },
+  ],
 });
 
 // The requests the page sent, and the names each import carried.
@@ -179,4 +212,52 @@ test('with no save open, the import opens the copy as before', async () => {
   );
   assert.equal(currentSave.id, 'imported-1');
   assert.equal($('[data-import-notice]'), null);
+});
+
+// #1217: before anything is imported, the question says what the file holds and what the import
+// does; Cancel sends nothing and changes nothing.
+test('the import asks with what the file holds, and Cancel changes nothing', async () => {
+  const before = structuredClone(workspace);
+  let shown = { list: '', note: '' };
+  const asked = answerConfirms(() => {
+    shown = {
+      list: $('#confirm [data-confirm-list]')?.textContent || '',
+      note: $('#confirm [data-confirm-note]')?.textContent || '',
+    };
+    return false;
+  });
+  await importFile(friendsExport(), 'anna.json');
+  assert.equal(asked.length, 1);
+  assert.match(
+    asked[0]!,
+    /^anna\.json holds the save “<x-evil.*” with 1 profile, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}:$/,
+  );
+  assert.match(shown.list, /^Main: Phase 2, \d+ of \d+ steps done$/);
+  assert.match(
+    shown.note,
+    /^Importing adds it as a new copy, “<x-evil.* \(from anna\.json, exported .*\)”, next to your 2 profiles\. Nothing you have is replaced, and you stay on the profile you have open\.$/,
+  );
+  assert.equal(document.querySelector('x-evil'), null, 'the names in the question are text');
+  assert.deepEqual(sent, [], 'nothing was sent');
+  assert.deepEqual(workspace, before, 'the workspace is as it was');
+  assert.equal(currentSave.id, 's');
+  assert.equal(view, 'backup', 'the page stays where it was');
+  assert.equal($('#toast')!.textContent, '');
+});
+
+test('a damaged or newer file is refused with the import’s own message, and nothing is asked', async () => {
+  const asked = answerConfirms(true);
+  const damaged = friendsExport();
+  damaged.saves[0]!.profiles = [];
+  await importFile(damaged, 'anna.json');
+  assert.equal(
+    $('#toast')!.textContent,
+    'This save file has a world with missing, damaged or too many profiles, so it cannot be imported. Export it again from the planner that made it.',
+  );
+  const newer = friendsExport();
+  newer.saves[0]!.profiles[0]!.state.version = 99;
+  await importFile(newer, 'anna.json');
+  assert.match($('#toast')!.textContent!, /newer planner/);
+  assert.deepEqual(asked, [], 'no question was asked');
+  assert.deepEqual(sent, [], 'nothing was sent');
 });
