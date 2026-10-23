@@ -2,8 +2,8 @@
 // (ui/detail/FlowGraphDialog.vue) applies to its scrolling box. The drawing keeps its own
 // coordinates (its viewBox); a zoom draws it `zoom` times its natural size, and `left` and `top`
 // are the box's scroll offsets into that zoomed drawing, so the box's scrollbars and the keyboard
-// keep scrolling it. Nothing here is saved: the view starts at natural size each time the
-// dialog opens (remembering it is slice 2, #1224).
+// keep scrolling it. The dialog stores the last view per factory (#1224, groups[].layout, within
+// LAYOUT_LIMITS in state/validate.ts, which a test keeps in step with GRAPH_ZOOM) and puts it back.
 
 // The zoom the view keeps to: a tenth of natural size, enough to fit a factory of many lines,
 // up to three times it. A button press zooms by `step`.

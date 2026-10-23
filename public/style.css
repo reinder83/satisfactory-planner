@@ -4246,7 +4246,9 @@ button.rail-tile:hover {
   touch-action: none;
   cursor: grab;
 }
-.fgraph-scroll.panning {
+.fgraph-scroll.panning,
+.fgraph-scroll.moving,
+.fgraph-scroll.moving .fgraph-node.line {
   cursor: grabbing;
 }
 .fgraph-scroll:focus-visible {
@@ -4257,12 +4259,18 @@ button.rail-tile:hover {
   display: block;
   user-select: none;
 }
-/* A line's box opens its production line on a press without a drag. */
+/* A line's box opens its production line on a press without a drag, and moves with a drag or the
+   arrow keys once focused (#1224): the focus ring is its box's outline, drawn thicker. */
 .fgraph-node.line {
   cursor: pointer;
+  outline: none;
 }
 .fgraph-node.line:hover rect {
   stroke: var(--accent);
+}
+.fgraph-node.line:focus-visible rect {
+  stroke: var(--accent);
+  stroke-width: 3;
 }
 /* On a phone the box keeps the size it had (#1192): up to 70% of the screen's height. The zoom
    buttons are 44px touch targets, like the page's other buttons there (#765). */

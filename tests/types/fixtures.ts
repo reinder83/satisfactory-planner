@@ -285,6 +285,29 @@ export const version21 = {
   },
 } satisfies SavedState;
 
+// Version 22: a factory's flow graph layout (#1224): two Plates lines moved, the graph zoomed to
+// 80% and scrolled; the wire group keeps the automatic layout, so it keeps its old shape.
+export const version22 = {
+  ...version21,
+  version: 22,
+  factoryGroups: {
+    ...version21.factoryGroups,
+    groups: [
+      {
+        id: 'fg-plates1',
+        name: 'Plates',
+        owner: 'Anna',
+        layout: {
+          nodes: { 'iron-plate': [420, 96], Recipe_IronPlate_C: [16, 260] },
+          zoom: 0.8,
+          pan: [120, 40],
+        },
+      },
+      { id: 'fg-wires1', name: 'Wire' },
+    ],
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -309,6 +332,7 @@ export const states: [SavedState, number][] = [
   [version19, 19],
   [version20, 20],
   [version21, 21],
+  [version22, 22],
 ];
 
 export const backup = {
