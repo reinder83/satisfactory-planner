@@ -41,7 +41,8 @@ export const contentTypes: Record<string, string> = {
   '.woff2': 'font/woff2',
 };
 const hash = (text: string) => createHash('sha256').update(text).digest();
-// JSON replies are never cached, so a browser never shows stale progress.
+// JSON replies are never cached, so a browser never shows stale progress. A 304 (Not Modified,
+// GET /api/state answering the live refresh's If-None-Match, #1210) has no body.
 const send = (
   res: ServerResponse,
   status: number,
@@ -53,7 +54,7 @@ const send = (
     'Cache-Control': 'no-store',
     ...headers,
   });
-  res.end(JSON.stringify(value));
+  res.end(status === 304 ? undefined : JSON.stringify(value));
 };
 // Reads a JSON request body, stopping at 2 MB (50 MB for a full-save import, which carries
 // whole plans and handbooks) so a huge upload cannot exhaust memory. The error names the
