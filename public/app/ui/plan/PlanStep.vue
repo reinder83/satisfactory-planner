@@ -238,6 +238,7 @@ async function deletePersonal(event: Event) {
       step.idle ? 'is-idle' : '',
       held ? 'is-held' : '',
       leaving ? 'is-leaving' : '',
+      step.jumped ? 'is-jumped' : '',
     ]"
   >
     <div v-if="lead" class="step-no">Next step</div>

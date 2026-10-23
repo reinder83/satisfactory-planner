@@ -26,6 +26,7 @@ import {
   rowIcon,
   stepRowName,
 } from './views/calculated.ts';
+import { jumpTarget } from './step-jump.ts';
 import { activeMine, factoryGroupsState, mineKeeps } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
 import type { StepMaterialWords } from './views/step-materials.ts';
@@ -98,6 +99,8 @@ export interface PlanStepView extends Step {
   link: StepLink | null;
   custom?: boolean;
   form?: ReturnType<typeof taskLinkChoices> | null;
+  // The step an activity-log entry jumped to (#1214, step-jump.ts), marked until the page goes.
+  jumped?: boolean;
 }
 
 // A step in "Removed steps in this phase". `shared` says which other phases list the same
@@ -472,15 +475,18 @@ export function mineKeepsStep(mine: Set<string> | null, step: Step): boolean {
 }
 
 // Applies "Hide completed", "Required steps only" (#1070), "Mine only" (#1199) and the step search
-// to a list of steps.
+// to a list of steps. The step an activity-log entry jumped to (#1214, step-jump.ts) is kept
+// whatever the first three would hide.
 export function filteredPlanTasks(steps: Step[]): Step[] {
   const search = query.trim().toLowerCase();
   const mine = activeMine();
+  const jumped = jumpTarget();
   return steps.filter(
     step =>
-      (!hideDone || !stepDone(step)) &&
-      (!requiredOnly || !step.optional) &&
-      mineKeepsStep(mine, step) &&
+      (step.id === jumped ||
+        ((!hideDone || !stepDone(step)) &&
+          (!requiredOnly || !step.optional) &&
+          mineKeepsStep(mine, step))) &&
       (!search ||
         [step.title, step.body || '', tableText(step.table), listText(step.list)]
           .join(' ')

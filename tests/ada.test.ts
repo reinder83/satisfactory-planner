@@ -896,6 +896,16 @@ test('ADA restates a merge of a friend’s progress on the Backup page (#1160)',
   assert.ok(!ids(facts({ view: 'backup' })).includes('progress-merged'), 'absent means none');
 });
 
+test('ADA restates the Backup page’s activity log (#1214)', () => {
+  const remark = (activity: { ticks: number; people: string }) =>
+    adaRemarks(facts({ view: 'backup', activity })).find(r => r.id === 'activity-log');
+  const line = remark({ ticks: 12, people: '“Anna” and “Bram”' })!;
+  assert.equal(line.tone, 'calm');
+  assert.match(line.text, /^The log lists 12 ticks by “Anna” and “Bram”\. I record who pressed/);
+  assert.match(remark({ ticks: 1, people: '' })!.text, /^The log lists 1 tick, none with a name\./);
+  assert.ok(!ids(facts({ view: 'backup' })).includes('activity-log'), 'absent means none');
+});
+
 test('ADA warns on every page when the others moved to another profile (#1052)', () => {
   for (const view of ['plan', 'factories', 'notes', 'profiles']) {
     const remarks = adaRemarks(facts({ view, groupMoved: '“Main · copy”' }));
