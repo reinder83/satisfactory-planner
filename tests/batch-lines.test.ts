@@ -13,8 +13,7 @@ import type { CalcRow, StoredCalculatedPlan, StoredStage } from '../public/types
 
 // A whole-machine plan from Phase 1, made once.
 let wholePlan: StoredCalculatedPlan | undefined;
-const whole = () =>
-  (wholePlan ??= calculate({ wholeMachines: true }) as unknown as StoredCalculatedPlan);
+const whole = (): StoredCalculatedPlan => (wholePlan ??= calculate({ wholeMachines: true }));
 
 const SMART_PLATING = 'Recipe_SpaceElevatorPart_1_C';
 const ADAPTIVE_CONTROL_UNIT = 'Recipe_SpaceElevatorPart_5_C';
@@ -36,12 +35,17 @@ const row = (id: string, inputs: CalcRow['inputs'], outputs: CalcRow['outputs'])
   generationMW: 0,
 });
 
-// A plan of one Phase 2 stage, made by hand.
-const planOf = (stage: StoredStage): StoredCalculatedPlan =>
-  ({
-    settings: { powerFactor: 1 },
-    stages: { '1': { feasible: true }, '2': stage, '3': {}, '4': {}, '5': {} },
-  }) as unknown as StoredCalculatedPlan;
+// A plan of one Phase 2 stage, made by hand on the whole-machine plan's frame: its settings at
+// power factor 1, and no rows in any other phase.
+const planOf = (stage: StoredStage): StoredCalculatedPlan => {
+  const base = whole();
+  const none = { feasible: false };
+  return {
+    ...base,
+    settings: { ...base.settings, powerFactor: 1 },
+    stages: { '1': { feasible: true }, '2': stage, '3': none, '4': none, '5': none },
+  };
+};
 
 test('a line that only makes an elevator part is a batch task (#1211)', () => {
   // Phase 1: one Assembler makes 2 Smart Plating/min, so the 50 parts take 25 minutes, and its
