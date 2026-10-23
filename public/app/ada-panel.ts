@@ -56,6 +56,8 @@ import {
   stepDone,
   taskEditsState,
 } from './tasks.ts';
+import { activityPeople } from './activity-log.ts';
+import { profileActivity } from './views/activity.ts';
 import { backupDays } from './views/backup.ts';
 import { sessionView } from './views/session-builds.ts';
 import {
@@ -374,6 +376,15 @@ function mergedFacts(): Pick<AdaFacts, 'merged' | 'mergedFrom'> {
   return { merged: merged.count, mergedFrom: `“${merged.fileName}”` };
 }
 
+// The Backup page's activity log (#1214): its ticks and the names in it, as the page lists them.
+function activityFacts(view: string): Pick<AdaFacts, 'activity'> {
+  if (view !== 'backup') return {};
+  const entries = profileActivity();
+  if (!entries.length) return {};
+  const people = activityPeople(entries).map(name => `“${name}”`);
+  return { activity: { ticks: entries.length, people: people.length ? listNames(people) : '' } };
+}
+
 // A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
 function guideFacts(): AdaFacts['guide'] {
   const guide = calculated?.guide;
@@ -501,6 +512,7 @@ function adaFacts(): AdaFacts {
       workspace.saves.filter(save => importedSaves.includes(save.id)).map(save => `“${save.name}”`),
     ),
     ...mergedFacts(),
+    ...activityFacts(view),
     ...sessionFacts(view),
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,

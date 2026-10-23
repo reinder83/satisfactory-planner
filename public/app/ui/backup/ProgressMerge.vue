@@ -6,6 +6,9 @@
   does not list, and ticks those steps only after Merge, with the file's records of who ticked
   them and when (#1206). A merge never unticks anything and never recalculates: the rules are in app/progress-merge.ts; this component hands it the open profile's
   ticks and step ids and sends the merge through save(), as every tick is saved.
+  Under the intro, "Your name" (ui/MeName.vue, #1214): the name the ticks saved from this browser
+  record, which can be set here before any factory has an owner. Last, "Recent ticks"
+  (ui/backup/ActivityLog.vue): who ticked what and when.
 -->
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue';
@@ -37,6 +40,8 @@ import {
 import { render } from '../../shell.ts';
 import { slotKeys, storageBays } from '../../views/storage.ts';
 import { confirmAction } from '../confirm.ts';
+import MeName from '../MeName.vue';
+import ActivityLog from './ActivityLog.vue';
 
 const exporting = ref(false);
 const merging = ref(false);
@@ -164,6 +169,15 @@ async function mergeFile(event: Event) {
       friends, and merge their file into this profile. A merge only adds ticks: nothing is unticked,
       and the plan stays as it is.
     </p>
+    <div class="coop-name">
+      <MeName described-by="coop-name-note" /><span
+        id="coop-name-note"
+        class="small muted"
+        data-coop-name-note
+        >Your ticks record this name. It is kept in this browser only, and “Mine only” goes by it
+        too.</span
+      >
+    </div>
     <button
       type="button"
       class="btn"
@@ -195,5 +209,6 @@ async function mergeFile(event: Event) {
       You see what the file would tick, per phase, before anything changes. A progress backup or a
       save export with one profile works too: only its ticks are merged.
     </p>
+    <ActivityLog />
   </section>
 </template>

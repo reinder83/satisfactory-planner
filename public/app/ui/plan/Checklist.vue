@@ -26,7 +26,7 @@
   tier above it (ui/plan/UnlockGroups.vue), each group with its own tick.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted } from 'vue';
 import { firstTerms } from '../../../preferences.ts';
 import { beginnerMode } from '../../beginner.ts';
 import { expertMode, setExpertMode, switchBeginnerMode } from '../../expert.ts';
@@ -58,6 +58,7 @@ import {
   taskLinkChoices,
 } from '../../tasks.ts';
 import { sharedRemovedNote, sharedStepPhases } from '../../shared-steps.ts';
+import { jumpTarget, setJumpTarget } from '../../step-jump.ts';
 import { tickedNote } from '../../ticked-by.ts';
 import { stepMaterialWords } from '../../views/step-materials.ts';
 import { unlockGroups, type UnlockGroupView } from '../../unlock-groups.ts';
@@ -84,7 +85,8 @@ const list = computed(() =>
     const tasks = planTasks(),
       shown = filteredPlanTasks(tasks),
       removed = removedPlanTasks(),
-      idle = idleStepNotes(shown);
+      idle = idleStepNotes(shown),
+      jumped = jumpTarget();
     // Done: ticked, or done by the step's own condition (`satisfied`, stepDone in tasks.ts, #1070).
     const satisfied = new Map(
       tasks.flatMap(task => (task.satisfied ? [[task.id, task.satisfied]] : [])),
@@ -109,6 +111,7 @@ const list = computed(() =>
         icon: taskIcon(task),
         link,
         custom: task.id.startsWith('custom-'),
+        jumped: task.id === jumped,
         form: planEditing && editingTask === task.id ? taskLinkChoices(task) : null,
       };
     });
@@ -188,7 +191,30 @@ function groupViews(
 }
 
 // A page change drops the hold: the steps are drawn where their ticks put them when it comes back.
-onBeforeUnmount(dropHold);
+// It drops the step an activity-log entry jumped to as well (#1214).
+onBeforeUnmount(() => {
+  dropHold();
+  setJumpTarget('');
+});
+
+// Opened from an activity-log entry (#1214, step-jump.ts): the step is drawn whatever the filters
+// would hide (filteredPlanTasks); unfold what holds it ("Done (n)", an unlock group), bring it into
+// view and focus its checkbox, after focusOpenedPage() has put focus on the page's heading.
+onMounted(async () => {
+  const id = jumpTarget();
+  if (!id) return;
+  await nextTick();
+  const box = document.querySelector<HTMLElement>(`#main input[data-check="${CSS.escape(id)}"]`);
+  if (!box) return;
+  for (
+    let fold = box.closest('details');
+    fold;
+    fold = fold.parentElement?.closest('details') ?? null
+  )
+    fold.open = true;
+  box.closest('.task')?.scrollIntoView?.({ block: 'center' });
+  box.focus({ preventScroll: true });
+});
 
 // "Removed steps in this phase", each step noting the other phases that list it too (#744).
 function removedViews(removed: Step[]): RemovedStepView[] {
