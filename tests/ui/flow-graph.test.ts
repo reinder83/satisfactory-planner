@@ -2,8 +2,10 @@
 // heading on the Factories page, on the planner's default Phase 3 plan with the default factory
 // groups: by keyboard it opens and closes with focus back on the button, the drawing has one
 // arrow per flow the group's flow figures give (flowGraph of shownGroupFlow), and "The graph as
-// a table" lists every one of them, self links included. Where the boxes land is checked in a
-// real browser (browser-check.ts); happy-dom lays nothing out.
+// a table" lists every one of them, self links included. Pan and zoom (#1223): the wheel over the
+// drawing zooms it, a drag on its background moves it while a press on a line's box without a
+// drag opens that line, and − / + / Fit zoom it. Where the boxes land is checked in a real
+// browser (browser-check.ts); happy-dom lays nothing out, so a test gives the box its size.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
@@ -155,4 +157,120 @@ test('a hostile factory name is shown as text', async () => {
   await openGraph();
   assert.equal($('#detail h2')!.textContent, evil);
   assert.equal(document.querySelector('x-evil'), null);
+});
+
+// The drawing's box, given the size a browser would lay it out at (happy-dom lays out nothing),
+// and the drawing's size as rendered.
+function sizedBox(width = 400, height = 300) {
+  const box = $('#detail [data-flow-graph]')!;
+  Object.defineProperty(box, 'clientWidth', { configurable: true, value: width });
+  Object.defineProperty(box, 'clientHeight', { configurable: true, value: height });
+  return box;
+}
+const drawnWidth = () => Number($('#detail [data-flow-graph] svg')!.getAttribute('width'));
+const zoomLevel = () => $('#detail [data-flow-zoom-level]')!.textContent!.trim();
+const pointer = (type: string, x: number, y: number, init: PointerEventInit = {}) =>
+  new PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    clientX: x,
+    clientY: y,
+    ...init,
+  });
+
+test('the wheel over the drawing zooms it, and a sideways wheel still scrolls it', async () => {
+  await openGraph();
+  const graph = graphOf();
+  const box = sizedBox();
+  assert.equal(drawnWidth(), graph.width, 'natural size on opening');
+  assert.equal(zoomLevel(), '100%');
+  const up = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100 });
+  box.querySelector('svg')!.dispatchEvent(up);
+  await settle();
+  assert.equal(up.defaultPrevented, true, 'the wheel zooms rather than scrolls');
+  assert.ok(drawnWidth() > graph.width, 'up zooms in');
+  assert.notEqual(zoomLevel(), '100%');
+  const down = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 100 });
+  box.dispatchEvent(down);
+  await settle();
+  assert.ok(Math.abs(drawnWidth() - graph.width) < 1e-6, 'down zooms back out');
+  const sideways = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX: 80 });
+  box.dispatchEvent(sideways);
+  assert.equal(sideways.defaultPrevented, false, 'a sideways wheel scrolls the box');
+  // Outside the drawing the wheel is the page's.
+  const outside = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100 });
+  $('#detail [data-flow-graph-table]')!.dispatchEvent(outside);
+  assert.equal(outside.defaultPrevented, false, 'the wheel outside the drawing scrolls');
+});
+
+test('a drag on the background moves the drawing; a press on a line without a drag opens it', async () => {
+  await openGraph();
+  const box = sizedBox();
+  const svg = box.querySelector('svg')!;
+  box.scrollLeft = 200;
+  box.scrollTop = 100;
+  // A move under the threshold is no drag yet.
+  svg.dispatchEvent(pointer('pointerdown', 100, 100));
+  svg.dispatchEvent(pointer('pointermove', 102, 101));
+  assert.deepEqual([box.scrollLeft, box.scrollTop], [200, 100], 'a press that hardly moves');
+  svg.dispatchEvent(pointer('pointermove', 40, 70));
+  assert.deepEqual([box.scrollLeft, box.scrollTop], [260, 130], 'the drawing follows the drag');
+  await settle();
+  assert.ok(box.classList.contains('panning'), 'the grabbing cursor while it moves');
+  svg.dispatchEvent(pointer('pointerup', 40, 70));
+  await settle();
+  assert.equal(box.classList.contains('panning'), false);
+  // The click the browser sends after the drag opens nothing, even over a line's box.
+  const line = $('#detail [data-node^="line:"]')!;
+  line.querySelector('rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await settle();
+  assert.ok($('#detail [data-flow-graph]'), 'the graph is still shown after a drag');
+  // A press on a line's box that does not move, then its click: the line's dialog in its place.
+  const rect = line.querySelector('rect')!;
+  rect.dispatchEvent(pointer('pointerdown', 150, 150));
+  rect.dispatchEvent(pointer('pointermove', 180, 150));
+  assert.deepEqual([box.scrollLeft, box.scrollTop], [260, 130], 'a press on a box does not pan');
+  rect.dispatchEvent(pointer('pointerup', 180, 150));
+  rect.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await settle();
+  assert.equal($('#detail [data-flow-graph]'), null, 'the graph made way');
+  assert.ok(dialog().open, 'the dialog stays open');
+  const row = line.dataset.node!.slice('line:'.length);
+  assert.ok(
+    plan.stages['3']!.rows!.some(r => r.id === row),
+    row + ' is a row of the plan',
+  );
+  assert.notEqual($('#detail .eyebrow')!.textContent, 'FACTORY · FLOW GRAPH');
+});
+
+test('− / + / Fit zoom the drawing, Fit to the whole graph', async () => {
+  await openGraph();
+  const graph = graphOf();
+  const box = sizedBox(400, 300);
+  const zoomButton = (which: string) =>
+    $<HTMLButtonElement>(`#detail [data-flow-zoom="${which}"]`)!;
+  assert.deepEqual(
+    ['out', 'in', 'fit'].map(which => zoomButton(which).getAttribute('aria-label')),
+    ['Zoom out', 'Zoom in', 'Fit the whole graph'],
+  );
+  for (const which of ['out', 'in', 'fit']) assert.equal(zoomButton(which).type, 'button');
+  zoomButton('in').click();
+  await settle();
+  assert.equal(zoomLevel(), '125%');
+  assert.ok(Math.abs(drawnWidth() - graph.width * 1.25) < 1e-6);
+  zoomButton('out').click();
+  zoomButton('out').click();
+  await settle();
+  assert.equal(zoomLevel(), '80%');
+  box.scrollLeft = 120;
+  zoomButton('fit').click();
+  await settle();
+  const fits = Math.min(400 / graph.width, 300 / graph.height, 1);
+  assert.ok(Math.abs(drawnWidth() - graph.width * fits) < 1e-6, 'the whole width fits');
+  const height = Number(box.querySelector('svg')!.getAttribute('height'));
+  assert.ok(drawnWidth() <= 400 + 1e-6 && height <= 300 + 1e-6, 'the whole graph fits');
+  assert.equal(box.scrollLeft, 0, 'from its left edge');
 });
