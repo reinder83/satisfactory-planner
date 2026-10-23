@@ -1,8 +1,10 @@
 // The caps per phase (#1221, slice 8 of #1079): settings.phaseCaps, at most `buildings` buildings
-// and at most `mw` MW per phase, held in every phase's model (addPhaseCaps in planner/model.ts)
-// and checked against the plan as it counts them (cappedRun). A phase that cannot keep within a
-// cap is a draft whose reason names the cap and the least it needs (capReason in
-// planner/draft.ts). The caps belong to the plan snapshot, like the objective: absent without one,
+// and at most `mw` MW per phase. Every phase is planned without them first; only a phase whose
+// plan is over one, as the plan counts them, is planned again with them in its model (holdToCaps
+// in planner/calculate.ts, addPhaseCaps in planner/model.ts). A phase that cannot keep within a
+// cap is a draft whose reason names the cap and what the phase needs, never more than its plan
+// without the cap (capReason in planner/draft.ts; tests/phase-caps-property.test.ts checks both
+// over many settings). The caps belong to the plan snapshot, like the objective: absent without one,
 // so such a plan, and every plan stored before them, calculates, loads, imports and exports exactly
 // as before, in both editions.
 import './helpers/en-us-numbers.ts';
@@ -15,6 +17,8 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { calculate, catalog, settings } from '../planner.ts';
+import { draftStage } from '../planner/draft.ts';
+import type { Solved } from '../planner/types.ts';
 import { PHASE_CAP_LIMITS, phaseCapAmount, phaseCapWords } from '../public/preferences.ts';
 import { initialState, validateState } from '../public/state.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
@@ -125,33 +129,38 @@ test('a cap that binds and still fits: the phase keeps within it, by other means
   assert.ok(buildingsOf(fewer) <= 50, String(buildingsOf(fewer)));
 });
 
-test('a cap that the phase cannot keep: its draft names the cap and the least it needs', () => {
+test('a cap that the phase cannot keep: its draft names the cap and what the phase needs', () => {
+  const plain = calculate(CASE);
   const plan = calculate({ ...CASE, phaseCaps: { mw: 700 } });
   const three = plan.stages['3'];
   assert.equal(three.feasible, false);
-  assert.deepEqual(three.capShortfalls, [{ name: 'mw', needed: 856, cap: 700 }]);
+  // The model counts power in each line's linear share, so its least power is no lower bound on
+  // what the plan counts: the draft gives the plan's own need without the cap, rounded down.
+  assert.equal(Math.floor(needOf(plain.stages['3']) * 10) / 10, 920.5);
+  assert.deepEqual(three.capShortfalls, [{ name: 'mw', needed: 920.5, cap: 700 }]);
   assert.equal(three.minHours, 10.5);
   assert.equal(
     three.reason,
-    'This phase needs at least 856 MW; the cap is 700 MW. Raise the cap (Goals), or give the phase more time: it fits within the cap at about 10 h 30 min for this phase.',
+    "Without the cap, this phase's plan needs 920.5 MW; the cap is 700 MW. The planner found no plan within the cap. Raise the cap (Goals), or give the phase more time: it may fit within the cap from about 10 h 30 min for this phase.",
   );
   assert.equal(three.shortfalls, undefined, 'no budget runs short');
   // The draft still shows what the goal needs, without the cap.
   assert.ok(three.rows!.length > 0);
-  // "At least" holds: with the cap raised to the need, the phase fits.
-  const raised = calculate({ ...CASE, phaseCaps: { mw: 856 } }).stages['3'];
-  assert.equal(raised.feasible, true);
-  assert.ok(needOf(raised) <= 856);
-  // A cap on buildings is named in buildings, and where more time alone cannot fit, it says so.
+  // With the cap raised to that need, the phase is its plan without the cap.
+  const raised = calculate({ ...CASE, phaseCaps: { mw: 921 } }).stages['3'];
+  assert.equal(JSON.stringify(raised), JSON.stringify(plain.stages['3']));
+  // A cap on buildings is named in buildings. Without amplification the least machine-
+  // equivalents is a lower bound on the buildings, so that one says "at least".
   const built = calculate({ ...CASE, phaseCaps: { buildings: 50, mw: 900 } }).stages['4'];
   assert.equal(built.feasible, false);
+  assert.equal(buildingsOf(plain.stages['4']), 138);
   assert.deepEqual(built.capShortfalls, [
     { name: 'buildings', needed: 102, cap: 50 },
-    { name: 'mw', needed: 3944, cap: 900 },
+    { name: 'mw', needed: 4141.4, cap: 900 },
   ]);
-  assert.match(
-    built.reason!,
-    /^This phase needs at least 102 buildings; the cap is 50 buildings\. This phase needs at least 3,944 MW; the cap is 900 MW\. Raise the caps \(Goals\); more time alone will not fit/,
+  assert.equal(
+    built.reason,
+    "This phase needs at least 102 buildings; the cap is 50 buildings. Without the caps, this phase's plan needs 4,141.4 MW; the cap is 900 MW. The planner found no plan within the caps. Raise the caps (Goals).",
   );
 });
 
@@ -161,9 +170,32 @@ test('a cap only whole machines break says so, and keeps the whole-machine optio
   ];
   assert.equal(three.feasible, false);
   assert.equal(three.wholeMachinesOnly, true);
+  assert.deepEqual(three.capShortfalls, [{ name: 'buildings', needed: 104, cap: 100 }]);
   assert.equal(
     three.reason,
-    'Precise balancing fits within your cap (at most 100 buildings per phase), but whole solid-part machines at 100% need more room than it leaves. Raise the cap (Goals), or turn off whole-machine production for this profile.',
+    "Without the cap, this phase's plan needs 104 buildings; the cap is 100 buildings. The planner found no plan within the cap. At exact clocks this phase's plan keeps within the cap, with 52 buildings and 920.5 MW: turn off whole-machine production for this profile, or raise the cap (Goals).",
+  );
+});
+
+test('a search within a cap that stops at its limit says so, and claims no need', () => {
+  // Every alternate at exact clocks, at most 263 buildings: Phase 5 plans 272 without the cap, and
+  // a whole-number search within it can stop at its limit (CAP_SEARCH_MS in
+  // planner/calculate.ts). Where it stops depends on the machine's speed, so the draft is made
+  // from a stopped result directly.
+  const free = calculate(CASE).stages['5'] as Solved;
+  assert.equal(buildingsOf(free), 272);
+  const five = draftStage(
+    settings({ ...CASE, phaseCaps: { buildings: 263 } }),
+    5,
+    { feasible: false, solverStatus: 'Time limit reached' },
+    undefined,
+    free,
+  );
+  assert.equal(five.feasible, false);
+  assert.deepEqual(five.capShortfalls, [{ name: 'buildings', needed: 272, cap: 263 }]);
+  assert.equal(
+    five.reason,
+    "Without the cap, this phase's plan needs 272 buildings; the cap is 263 buildings. The search for a plan within the cap stopped at its limit before it found one, so whether one exists has not been checked. Raise the cap (Goals).",
   );
 });
 
@@ -308,7 +340,9 @@ test('both editions create the same plan from the same request, and refuse inval
   assert.deepEqual(docker.plan!.settings.phaseCaps, { mw: 700 });
   assert.equal(JSON.stringify(browser.plan!.settings), JSON.stringify(docker.plan!.settings));
   assert.equal(JSON.stringify(browser.plan!.stages), JSON.stringify(docker.plan!.stages));
-  assert.deepEqual(docker.plan!.stages['3'].capShortfalls, [{ name: 'mw', needed: 856, cap: 700 }]);
+  assert.deepEqual(docker.plan!.stages['3'].capShortfalls, [
+    { name: 'mw', needed: 920.5, cap: 700 },
+  ]);
   for (const phaseCaps of [{ mw: 0 }, { buildings: 1.5 }, 'none']) {
     const wrong = newSaveRequest({ phase: '2', phaseCaps });
     const refused = await dockerRefusal(wrong);

@@ -5,7 +5,6 @@ import {
   leftOutCap,
   PHASE_CAP_KEYS,
   phaseCapAmount,
-  phaseCapWords,
   phaseMining,
 } from '../public/preferences.ts';
 import { amplifiesIn } from '../public/somersloops.ts';
@@ -14,11 +13,21 @@ import type {
   CurrentSettings,
   CurrentStage,
   ItemRates,
+  PhaseCapKey,
+  PhaseCaps,
   Shortfall,
 } from '../public/types/index.ts';
 import type { Solved, RunResult, RunOptions } from './types.ts';
 import { RAW } from './data.ts';
-import { run, goalHours, leastCapNeed, stockedFromSurplus } from './model.ts';
+import {
+  run,
+  capExcess,
+  capFigures,
+  goalHours,
+  leastCapNeed,
+  stockedFromSurplus,
+  withoutCaps,
+} from './model.ts';
 import type { Unsolved } from './calculate.ts';
 import { warningDuration } from './warnings.ts';
 import { stoppedSearch } from './rounding.ts';
@@ -46,18 +55,25 @@ export type Replan = (settings: CurrentSettings) => RunResult;
 // exact LP stays fast and runs no integer search, so unlike the amplified integer fit it cannot
 // stop at the node limit or the phase's deadline before proving the best plan. The reason says
 // the amounts are before amplification when somersloops are budgeted for it.
+// A phase whose plan without the caps per phase (`free`, #1221) fits but is over a cap, and
+// planned within the caps does not fit, gives the caps' reason instead (capReason).
 export function draftStage(
   config: CurrentSettings,
   phase: number,
   result: Unsolved,
   replan?: Replan,
+  free?: Solved,
 ): CurrentStage {
   const conversion = phase === 5 && config.sam !== 'avoid';
   const plain: CurrentSettings = { ...config, amplifySloops: 0 };
   // Without the caps per phase (#1221), so the draft shows what the goal needs.
-  const diagnostic = exactRun(uncapped(plain), phase, { conversion, ignoreLimits: true });
+  const diagnostic = exactRun(withoutCaps(plain), phase, { conversion, ignoreLimits: true });
   const stage: CurrentStage = { ...diagnostic, feasible: false };
-  if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
+  if (free && config.phaseCaps && diagnostic.feasible) {
+    const budgets = phaseBudgets(config, phase);
+    const draft: DraftContext = { config, phase, plain, conversion, budgets, replan };
+    stage.reason = capReason(stage, draft, config.phaseCaps, result, free);
+  } else if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
     stage.reason =
       'The whole-machine search stopped before it could prove the best plan for this combination. Try fewer alternates or precise balancing; no resource shortage has been established.';
   else if (!diagnostic.feasible)
@@ -68,10 +84,9 @@ export function draftStage(
     const draft: DraftContext = { config, phase, plain, conversion, budgets, replan };
     const currentHours = goalHours(config);
     stage.reason =
-      capReason(stage, draft, currentHours) ??
-      (config.goal !== 'maximum' && fitsInHours(draft, currentHours)
+      config.goal !== 'maximum' && fitsInHours(draft, currentHours)
         ? wholeMachinesReason(stage, draft)
-        : shortfallReason(stage, draft, diagnostic, currentHours));
+        : shortfallReason(stage, draft, diagnostic, currentHours);
     if (amplifiesIn(config, phase) && stage.shortfalls?.length)
       stage.reason +=
         ' These amounts are before production amplification; amplified machines may need somewhat less.';
@@ -263,73 +278,94 @@ function leastHours(draft: DraftContext, currentHours: number): number {
   }
   return Math.ceil(high * 4) / 4;
 }
-// The settings without the caps per phase (#1221).
-function uncapped(config: CurrentSettings): CurrentSettings {
-  const { phaseCaps: _caps, ...rest } = config;
-  return rest;
-}
-// Why a phase does not fit its caps per phase (#1221, settings.phaseCaps), or undefined when the
-// caps are not what stops it, and the budgets' reasons below apply: a phase without caps, and one
-// that does not fit its budgets even without them. Three cases, in order:
-//   a cap it needs more of at the least: the exact LP that fits the budgets with the least of that
-//     cap's figure (leastCapNeed, the other cap lifted) needs more than the cap, recorded as
-//     `capShortfalls` [{ name, needed, cap }] ("This phase needs at least 312 MW; the cap is
-//     250 MW."), with the hours it fits the caps in (`minHours`);
-//   only rounding: the exact LP fits the caps and the plan does not, while without the caps the
-//     plan fits: whole machines (`wholeMachinesOnly`), or at exact clocks each line's last machine;
-//   both caps together: each fits alone, not both, with `minHours` too (with one cap, what is left
-//     when its measurement and the plan disagree).
-// Under maximum output a phase fits its caps by running slower, so only its continuous demands
-// can break one: its need is measured at the 2,000-hour maximum instead.
-function capReason(stage: CurrentStage, draft: DraftContext, hours: number): string | undefined {
+// Why a phase does not fit its caps per phase (#1221, settings.phaseCaps): its plan without the
+// caps (`free`) fits but is over a cap, and planned again within them (holdToCaps in
+// calculate.ts) it is still over, or not found (`result`). For each cap `free` is over,
+// `capShortfalls` [{ name, needed, cap }] records what the phase needs, never more than `free`
+// itself needs, counted as the plan counts (capFigures):
+//   proven, for a cap on buildings without production amplification in the phase: the exact LP
+//     with the fewest machine-equivalents (leastCapNeed) is a lower bound on any plan's count,
+//     and it is over the cap: "This phase needs at least 102 buildings; the cap is 50 buildings."
+//   otherwise what `free` needs: "Without the cap, this phase's plan needs 920.5 MW; the cap is
+//     700 MW." The model counts power in each line's linear share, more than an underclocked
+//     machine draws, so its least power is no bound, nor is a count before amplification.
+// Then why no plan within them was given: the search stopped at its limit, or none was found.
+// Whole machines: when the phase's exact-clock plan (`exactPlan`, withExactPlan in calculate.ts)
+// keeps within the caps, `wholeMachinesOnly`, with that plan's figures. Otherwise more time, where
+// the exact LP fits the caps by the 2,000-hour maximum (`minHours`, measured in the model's terms,
+// so "may"). Under maximum output a phase fits its caps by running slower, so only its continuous
+// demands can break one: its least buildings are measured at the 2,000-hour maximum instead.
+function capReason(
+  stage: CurrentStage,
+  draft: DraftContext,
+  caps: PhaseCaps,
+  result: Unsolved,
+  free: Solved,
+): string {
   const { config, phase, plain, conversion } = draft;
-  const caps = config.phaseCaps;
-  if (!caps || !exactRun(uncapped(plain), phase, { conversion }).feasible) return undefined;
   const maximum = config.goal === 'maximum';
   const measured: CurrentSettings = maximum ? { ...plain, goal: 'timed', hours: 2000 } : plain;
+  const figures = capFigures(free),
+    over = capExcess(caps, free) ?? {};
+  const proven: PhaseCapKey[] = [];
   const shortfalls = PHASE_CAP_KEYS.flatMap((name): CapShortfall[] => {
     const cap = caps[name];
-    if (cap === undefined) return [];
-    const least = leastCapNeed(measured, phase, name, {
-      conversion,
-      storageLeftOut: stockedFromSurplus(plain),
-    });
-    const needed = least === null ? 0 : Math.ceil(least - 1e-6);
-    return needed > cap ? [{ name, needed, cap }] : [];
+    if (cap === undefined || over[name] === undefined) return [];
+    const planned = plannedFigure(figures[name], cap);
+    const least =
+      name === 'buildings' && !amplifiesIn(config, phase)
+        ? leastCapNeed(measured, phase, name, {
+            conversion,
+            storageLeftOut: stockedFromSurplus(plain),
+          })
+        : null;
+    const bound = least === null ? null : Math.ceil(least - 1e-6);
+    if (bound !== null && bound > cap && bound <= planned) {
+      proven.push(name);
+      return [{ name, needed: bound, cap }];
+    }
+    return [{ name, needed: planned, cap }];
   });
-  const storage = stockedFromSurplus(config) ? '' : 'protected storage, ';
-  const which = (count: number) => (count > 1 ? 'caps' : 'cap');
-  // More time, as the budgets' reason gives it, in the caps' words.
-  const time = (count: number) => {
-    if (maximum) return `, or reduce the ${storage}drone-fuel and Singularity Cell demands.`;
-    if (!fitsInHours(draft, 2000))
-      return `; more time alone will not fit, since continuous demands (${storage}drone fuel, cells and minimum rounded delivery rates) already need more than the ${which(count)} allow${count > 1 ? '' : 's'}.`;
-    stage.minHours = leastHours(draft, hours);
-    return `, or give the phase more time: it fits within the ${which(count)} at ${warningDuration(stage.minHours)} for this phase.`;
-  };
-  if (shortfalls.length) {
-    stage.capShortfalls = shortfalls;
-    return (
-      shortfalls
-        .map(
-          ({ name, needed, cap }) =>
-            `This phase needs at least ${phaseCapAmount(name, needed)}; the cap is ${phaseCapAmount(name, cap)}.`,
-        )
-        .join(' ') + ` Raise the ${which(shortfalls.length)} (Goals)${time(shortfalls.length)}`
-    );
-  }
-  const words = phaseCapWords(caps),
-    count = PHASE_CAP_KEYS.filter(name => caps[name] !== undefined).length;
-  if (!maximum && fitsInHours(draft, hours)) {
-    // Only rounding breaks a cap, when the plan without the caps fits: otherwise the budgets'
-    // whole-machine reason below says what does.
-    if (!draft.replan?.(uncapped(config)).feasible) return undefined;
-    if (!config.wholeMachines)
-      return `The production lines fit within your ${which(count)} (${words}) at exact clocks, but each line's last, underclocked machine is a whole building too, and together they need more. Raise the cap on buildings (Goals).`;
+  stage.capShortfalls = shortfalls;
+  const set = PHASE_CAP_KEYS.filter(name => caps[name] !== undefined).length;
+  const within = set > 1 ? 'caps' : 'cap',
+    raise = shortfalls.length > 1 ? 'caps' : 'cap';
+  const needs = shortfalls
+    .map(({ name, needed, cap }) =>
+      proven.includes(name)
+        ? `This phase needs at least ${phaseCapAmount(name, needed)}; the cap is ${phaseCapAmount(name, cap)}.`
+        : `Without the ${within}, this phase's plan needs ${phaseCapAmount(name, needed)}; the cap is ${phaseCapAmount(name, cap)}.`,
+    )
+    .join(' ');
+  const why = stoppedSearch(result)
+    ? ` The search for a plan within the ${within} stopped at its limit before it found one, so whether one exists has not been checked.`
+    : proven.length === shortfalls.length
+      ? ''
+      : ` The planner found no plan within the ${within}.`;
+  const exact = free.exactPlan;
+  if (
+    config.wholeMachines &&
+    exact &&
+    PHASE_CAP_KEYS.every(name => {
+      const cap = caps[name];
+      return cap === undefined || (name === 'mw' ? exact.needMW : exact.buildings) <= cap + 1e-6;
+    })
+  ) {
     stage.wholeMachinesOnly = true;
-    return `Precise balancing fits within your ${which(count)} (${words}), but whole solid-part machines at 100% need more room than ${count > 1 ? 'they leave' : 'it leaves'}. Raise ${count > 1 ? 'a' : 'the'} cap (Goals), or turn off whole-machine production for this profile.`;
+    return `${needs}${why} At exact clocks this phase's plan keeps within the ${within}, with ${phaseCapAmount('buildings', exact.buildings)} and ${phaseCapAmount('mw', Math.floor(exact.needMW * 10) / 10)}: turn off whole-machine production for this profile, or raise the ${raise} (Goals).`;
   }
-  return count > 1
-    ? `This phase fits each of your caps alone, but not both together (${words}). Raise a cap (Goals)${time(count)}`
-    : `This phase does not fit within your cap (${words}). Raise the cap (Goals)${time(count)}`;
+  const storage = stockedFromSurplus(config) ? '' : 'protected storage, ';
+  let time = '.';
+  if (maximum) time = `, or reduce the ${storage}drone-fuel and Singularity Cell demands.`;
+  else if (!fitsInHours(draft, goalHours(config)) && fitsInHours(draft, 2000)) {
+    stage.minHours = leastHours(draft, goalHours(config));
+    time = `, or give the phase more time: it may fit within the ${within} from ${warningDuration(stage.minHours)} for this phase.`;
+  }
+  return `${needs}${why} Raise the ${raise} (Goals)${time}`;
+}
+// A cap's figure of a plan as a draft gives it, never more than the plan's own: whole buildings,
+// and MW rounded down to a tenth, or to a thousandth when a tenth would not show it over the cap.
+function plannedFigure(figure: number, cap: number): number {
+  const tenth = Math.floor(figure * 10) / 10;
+  return tenth > cap ? tenth : Math.floor(figure * 1000) / 1000;
 }

@@ -5,12 +5,13 @@ import type {
   CurrentCalculatedPlan,
   CurrentSettings,
   CurrentStage,
+  PhaseCaps,
   StageKey,
 } from '../public/types/index.ts';
 import type { Solved, RunResult } from './types.ts';
 import { ENGINE } from './data.ts';
 import { fail, settings } from './settings.ts';
-import { capExcess, cappedRun } from './model.ts';
+import { capExcess, cappedRun, withoutCaps } from './model.ts';
 import { draftStage } from './draft.ts';
 import {
   pullFinalPhaseForward,
@@ -67,6 +68,34 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   const config = settings(input);
   if (config.goal === 'maximum' && !config.limitsConfirmed)
     fail('Confirm your available resource budgets before maximizing output.');
+  // The caps per phase (#1221) come last: every phase is planned without them first, and only a
+  // phase whose plan is over one is planned again (holdToCaps), so a cap that the plan keeps
+  // within changes nothing at all.
+  const caps = config.phaseCaps;
+  const { stages, warnings } = planStages(caps ? withoutCaps(config) : config, onPhase);
+  if (caps)
+    for (const warning of holdToCaps(config, caps, stages, onPhase))
+      if (!warnings.includes(warning)) warnings.push(warning);
+  // Each phase keeps the generators the phase before built, where it still fuels them (#1064),
+  // and counts those the player already has (#1068) the same way.
+  carryGenerators(stages, Number(config.phase), config.ownedGenerators);
+  warnings.push(...planWarnings(config, stages));
+  return {
+    engine: ENGINE,
+    settings: config,
+    stages: stages as Record<StageKey, CurrentStage>,
+    warnings,
+    createdAt: new Date().toISOString(),
+    // Fluid lines keep exact clocks even with a solid byproduct (#1086, roundsToWholeMachines).
+    exactFluidLines: true,
+  };
+}
+// calculatePlan's stages before the generators carried between phases, and the warnings of the
+// adjustments to them, for `config`.
+function planStages(
+  config: CurrentSettings,
+  onPhase?: (phase: number) => void,
+): { stages: PhaseStages; warnings: string[] } {
   // The first plan of each phase whose routed plan stands (withOverflow), for phaseTime 'final'.
   const unrouted: Record<number, Solved> = {};
   const stages = solvePhases(config, unrouted, onPhase);
@@ -88,27 +117,51 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // with no surplus gets storage-only lines at exact clocks, built last (#1061, withStock).
   for (const [phase, stage] of Object.entries(stages))
     if (stage.feasible) stages[Number(phase)] = withStock(config, Number(phase), stage as Solved);
-  // The caps per phase are a hard limit (#1221): a phase whose finished plan is over one (an
-  // adjustment above re-solved it at exact clocks, say) does not fit, and its draft says why.
-  if (config.phaseCaps)
-    for (const [phase, stage] of Object.entries(stages))
-      if (stage.feasible && capExcess(config.phaseCaps, stage as Solved))
-        stages[Number(phase)] = draftStage(config, Number(phase), { feasible: false }, settings =>
-          planPhase(settings, Number(phase)),
-        );
-  // Each phase keeps the generators the phase before built, where it still fuels them (#1064),
-  // and counts those the player already has (#1068) the same way.
-  carryGenerators(stages, Number(config.phase), config.ownedGenerators);
-  warnings.push(...planWarnings(config, stages));
-  return {
-    engine: ENGINE,
-    settings: config,
-    stages: stages as Record<StageKey, CurrentStage>,
-    warnings,
-    createdAt: new Date().toISOString(),
-    // Fluid lines keep exact clocks even with a solid byproduct (#1086, roundsToWholeMachines).
-    exactFluidLines: true,
-  };
+  return { stages, warnings };
+}
+// How long the integer searches of one phase planned again within the caps per phase may take
+// together (#1221), in milliseconds. A cap on buildings at exact clocks makes each line's
+// building count a whole number of its own (addPhaseCaps), an integer search the plan without
+// the cap does not have; the Docker server calculates on its main thread (#1156), so this keeps
+// such a phase to seconds rather than PHASE_SEARCH_MS. A search that stops there is a draft that
+// says so (capReason in draft.ts), never a guess.
+const CAP_SEARCH_MS = 10000;
+// The caps per phase (#1221, settings.phaseCaps), on the stages planned without them: a phase
+// whose plan keeps within them, counted as the plan counts (capExcess: its rows' buildings and its
+// grid's need), stays exactly as it was. A phase over one is planned again with them (cappedRun
+// in solveGoal), its integer searches within CAP_SEARCH_MS, and with storage held to them
+// (withStock); a plan still over, or none, is a draft that says what the plan without the caps
+// (`free`) needs. A Phase 5 planned again has its fueled augmenters judged again; returns that
+// warning, if any.
+function holdToCaps(
+  config: CurrentSettings,
+  caps: PhaseCaps,
+  stages: PhaseStages,
+  onPhase?: (phase: number) => void,
+): string[] {
+  const warnings: string[] = [];
+  for (let phase = 1; phase <= 5; phase++) {
+    const free = stages[phase]!;
+    if (!free.feasible || !capExcess(caps, free as Solved)) continue;
+    onPhase?.(phase);
+    setSearchDeadline(Date.now() + CAP_SEARCH_MS);
+    const result = planPhase(config, phase);
+    const planned = result.feasible
+      ? withStock(config, phase, withExactPlan(config, phase, result))
+      : null;
+    stages[phase] =
+      planned && !capExcess(caps, planned)
+        ? planned
+        : draftStage(
+            config,
+            phase,
+            result.feasible ? { feasible: false } : result,
+            settings => planPhase(settings, phase),
+            free as Solved,
+          );
+    if (phase === 5 && stages[5]!.feasible) warnings.push(...judgeAugmenterFuel(config, stages));
+  }
+  return warnings;
 }
 // Solves each phase on its own, 1 to 5, each with a fresh search deadline. A phase that does not
 // fit becomes a draft that explains why (draftStage). A phase planned with the groups' excess
@@ -201,7 +254,7 @@ function solveSites(config: CurrentSettings, phase: number): RunResult {
   return central.feasible ? { ...central, onSiteDropped: sites } : result;
 }
 // solvePhase's solve under the profile's goal and SAM conversion, held to the caps per phase as the
-// plan counts them (cappedRun, #1221).
+// plan counts them when holdToCaps plans the phase again (cappedRun, #1221).
 function solveGoal(config: CurrentSettings, phase: number): RunResult {
   const maximised = config.goal === 'maximum' && phase >= 2;
   const retried = phase === 5 && config.sam === 'needed';

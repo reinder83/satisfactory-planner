@@ -127,13 +127,16 @@ export function run(config: CurrentSettings, phase: number, options: RunOptions 
   const without = planRun(withoutBuiltLines(config, phase), phase, options);
   return without.feasible ? { ...without, builtDropped: true } : result;
 }
-// The caps per phase (#1221, settings.phaseCaps). Every solve holds the phase's lines to them in
-// the model (addPhaseCaps), but the model counts a line in machine-equivalents and in its linear
-// share of power, while the plan counts whole buildings (each line's last, underclocked machine is
-// a building too) and an underclocked machine's real power. So the phase's plan (solveGoal in
-// calculate.ts) is checked against the caps as the plan counts (capExcess), and while it is over,
-// planned again with the model's room cut by what it was over, CAP_ROUNDS times at most; a plan
-// still over then does not fit, and its draft says why (draftStage). Without caps this is run().
+// The caps per phase (#1221, settings.phaseCaps) for one solve of a phase that calculatePlan plans
+// again because its plan without the caps is over one (holdToCaps and solveGoal in calculate.ts).
+// The solve without the caps comes first: when its plan keeps within them, counted as the plan
+// counts (capExcess), that is the plan, and nothing is solved with the caps. Otherwise the model
+// holds the phase's lines to them (addPhaseCaps), but it counts a line in machine-equivalents and
+// in its linear share of power, while the plan counts whole buildings (each line's last,
+// underclocked machine is a building too) and an underclocked machine's real power. So while the
+// plan is over, it is planned again with the model's room cut by what it was over, CAP_ROUNDS
+// times at most; a plan still over then does not fit, and its draft says why (draftStage).
+// Without caps this is run().
 const CAP_ROUNDS = 3;
 export function cappedRun(
   config: CurrentSettings,
@@ -141,9 +144,13 @@ export function cappedRun(
   options: RunOptions = {},
 ): RunResult {
   const caps = config.phaseCaps;
+  if (!caps) return run(config, phase, options);
+  // Caps only take plans away: a phase that does not fit without them does not fit with them.
+  const free = run(withoutCaps(config), phase, options);
+  if (!free.feasible || !capExcess(caps, free)) return free;
   let result = run(config, phase, options),
     room: PhaseCaps = { ...caps };
-  for (let round = 0; caps && result.feasible; round++) {
+  for (let round = 0; result.feasible; round++) {
     const over = capExcess(caps, result);
     if (!over) return result;
     if (round === CAP_ROUNDS) return { feasible: false };
@@ -163,6 +170,11 @@ export function cappedRun(
     result = run({ ...config, phaseCaps: room }, phase, options);
   }
   return result;
+}
+// The settings without the caps per phase (#1221).
+export function withoutCaps(config: CurrentSettings): CurrentSettings {
+  const { phaseCaps: _caps, ...rest } = config;
+  return rest;
 }
 // A stage's figures as the caps count them (#1221): its buildings, as a phase's building count
 // counts them (every machine and generator of its lines), and the power it needs (its grid's).
@@ -184,9 +196,13 @@ export function capExcess(
   return Object.keys(over).length ? over : null;
 }
 // The least a phase needs of one cap's figure (#1221, a draft's measurement): the exact LP of
-// `config` without whole machines, amplification or built lines (draftStage passes them so),
-// with neither cap, minimising that cap's row (addPhaseCaps) instead of the objective's cost.
-// Its value is what the model counts: machine-equivalents, and each line's linear share of power.
+// `config` without whole machines, amplification, built lines or lines made on site, with neither
+// cap, minimising that cap's row (addPhaseCaps) instead of the objective's cost. Each of those
+// only takes plans away, so this LP is a relaxation of the phase's plans. Its value is what the
+// model counts: machine-equivalents, and each line's linear share of power. Every line builds at
+// least its machine-equivalents (stageRows rounds them up), so without amplification the
+// buildings figure is a lower bound on any plan's count. The power figure is not one: an
+// underclocked machine draws less than its linear share (capReason in draft.ts reads it so).
 // null when the phase does not fit at all.
 export function leastCapNeed(
   config: CurrentSettings,
@@ -194,7 +210,7 @@ export function leastCapNeed(
   name: PhaseCapKey,
   options: RunOptions = {},
 ): number | null {
-  const { phaseCaps: _caps, builtLines: _built, ...free } = config;
+  const { phaseCaps: _caps, builtLines: _built, onSite: _onSite, ...free } = config;
   const context = phaseContext({ ...free, wholeMachines: false, amplifySloops: 0 }, phase, options);
   const pool = phasePool(context);
   const demands = phaseDemands(context, reachableItems(context, pool));
