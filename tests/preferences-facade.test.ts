@@ -15,10 +15,12 @@ const modules = fs
 // (#1065), with the belt you already have (phaseBelt, #1068), and the generators you already have
 // (OWNED_GENERATORS, ownedGeneratorCounts, #1068), and the recipe part cost steps (RECIPE_COSTS,
 // recipeCostChoices, recipeCostOf, #1161), and what a plan keeps lowest (OBJECTIVES and its
-// helpers, #1180).
+// helpers, #1180), and what each building costs to build, which the planner counts (BUILD_COSTS,
+// #1229).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_MARKS',
+    'BUILD_COSTS',
     'BURNER_FUELS',
     'BURNER_MW',
     'DEFAULT_EXTRACTION',

@@ -1,10 +1,10 @@
-// The build-cost table (#1073, public/app/build-costs.ts), copied once from the SatisfactoryTools
+// The build-cost table (#1073, public/preferences/build-costs.ts), copied once from the SatisfactoryTools
 // revision recipes.json records: every building's recipe id is the one progression.json lists for
 // it, every part is an item the dataset knows, and every machine a plan's rows can name has a cost.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BUILD_COSTS } from '../public/app/build-costs.ts';
+import { BUILD_COSTS } from '../public/preferences.ts';
 import { ITEM_NAMES } from '../public/state.ts';
 import { settings } from '../planner.ts';
 import { generators } from '../planner/recipes.ts';

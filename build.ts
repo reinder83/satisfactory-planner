@@ -46,6 +46,7 @@ const SHARED = [
   'storage-room.ts',
   'transfer.ts',
   'wording.ts',
+  'preferences/build-costs.ts',
   'preferences/extraction.ts',
   'preferences/fuels.ts',
   'preferences/glossary.ts',

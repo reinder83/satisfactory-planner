@@ -92,6 +92,7 @@ import {
   SHARD_RECIPE_RESEARCH,
   PHASE_CLOCK,
   WATER_EXTRACTOR,
+  BUILD_COSTS,
   extractorOption,
   waterClock,
   BELT_MARKS,
@@ -229,6 +230,8 @@ function ui() {
     SHARD_RECIPE_RESEARCH,
     PHASE_CLOCK,
     WATER_EXTRACTOR,
+    // What each building costs to build (#1073), shared with the planner since #1229.
+    BUILD_COSTS,
     extractorOption,
     waterClock,
     // The belt and pipe marks (flow.ts) and the mining per phase (mining.ts, #1065).

@@ -54,11 +54,12 @@ export type DraftLeverId =
   | 'alternates'
   | 'amplify'
   | 'sam'
-  | 'nuclear';
+  | 'nuclear'
+  | 'buildCost';
 export interface DraftLever {
   id: DraftLeverId;
   text: string;
-  step?: 2 | 3 | 4;
+  step?: 1 | 2 | 3 | 4;
   label?: string;
   hours?: number;
 }
@@ -321,6 +322,15 @@ export function draftAdvice(
       label: 'Change demands in Edit settings →',
     });
   }
+  // A phase that fits until what its buildings cost to build is counted (#1229, the draft's
+  // `buildCost`): the setting is on step 1.
+  if (snapshot.buildCost)
+    levers.push({
+      id: 'buildCost',
+      text: 'Stop counting what buildings cost to build: untick “Count what buildings cost to build” (Game settings). This phase fits its budgets as planned without it.',
+      step: 1,
+      label: 'Change build costs in Edit settings →',
+    });
   if (!shortfalls.length) return { needs, levers };
   const mined = needs.filter(need => need.name !== 'Water');
   // Named alternates where the draft's lines show some, else the general advice under Standard

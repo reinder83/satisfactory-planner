@@ -1,6 +1,7 @@
 <!--
   All settings step 1, game settings: the save name (read-only when adding to a save), phase,
-  world settings, multipliers (the recipe part cost a select of the game's steps, #1161), power
+  world settings, multipliers (the recipe part cost a select of the game's steps, #1161), whether
+  the plan counts what its buildings cost to build (#1229, settings.buildCost), power
   in MW (stored as GW by readWizard) and the production you already run. An empty Save name, or one of spaces, stops Continue with a message beside the
   box (form/NameField.vue), as in the guided start. Changing purity or distribution replaces
   the budgets on step 4 with that world's starting estimates when the step is read.
@@ -35,6 +36,8 @@ const view = computed(() =>
       powerFactor: settings.powerFactor,
       // Absent is 1× (#1161), as in every plan made before the setting.
       recipeCost: settings.recipeCost ?? 1,
+      // Absent is off (#1229), as in every plan made before the setting.
+      buildCost: settings.buildCost === true,
       availablePowerMW: settings.availablePowerGW * 1000,
       installedPowerMW: (settings.installedPowerGW ?? settings.availablePowerGW) * 1000,
       modNotes: settings.modNotes || '',
@@ -131,6 +134,20 @@ const view = computed(() =>
       maxlength="500"
     />
   </div>
+  <label class="check-row"
+    ><input
+      type="checkbox"
+      name="buildCost"
+      :checked="view.buildCost"
+      data-build-cost
+      aria-describedby="build-cost-note"
+    />Count what buildings cost to build</label
+  >
+  <p id="build-cost-note" class="small muted">
+    Each phase must then also make the parts its production lines, generators, miners and extractors
+    cost to build, within its time and budgets; a phase that can't is a draft that says so. Not with
+    maximum output, which has no time to count them in.
+  </p>
   <h3>Production you already run <HelpTip name="existingSupply" /></h3>
   <SupplyRows />
   <p class="small muted" data-explain>
