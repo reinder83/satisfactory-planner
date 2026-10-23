@@ -55,6 +55,9 @@ export interface AdaFacts {
   leftOutNodes?: string;
   // The recipe part cost multiplier the open plan was calculated with (#1161); absent at 1×.
   recipeCost?: number;
+  // The open plan counts what its buildings cost to build (#1229, settings.buildCost); absent when
+  // it does not.
+  buildCost?: boolean;
   // The objective the open plan was calculated with in words (#1180, "least power"); absent for
   // the fewest buildings.
   objective?: string;
@@ -492,6 +495,16 @@ const RULES: AdaRule[] = [
     // The game's steps (RECIPE_COSTS) are short decimals, so the number is written as it is.
     text: facts =>
       `This plan was calculated with a ${facts.recipeCost}× recipe part cost: every recipe takes ${facts.recipeCost} times its usual inputs for the same outputs, and every number here already counts it. ${(facts.recipeCost ?? 1) > 1 ? 'Your patience is not included.' : 'Enjoy the discount.'}`,
+  },
+  {
+    // Build costs counted (#1229): a phase whose budgets cannot also make what its buildings cost
+    // is a draft that says so; only Edit settings changes it, so nothing waits for a recalculation.
+    id: 'build-cost',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.buildCost,
+    text: () =>
+      'This plan counts what its buildings cost to build: each phase must also make the parts of its production lines, generators, miners and extractors within its time, and a phase that cannot is a draft that says so. Nothing is free, not even the factory.',
   },
   {
     // What the plan keeps lowest (#1180): the plan's numbers already follow it, and only Edit

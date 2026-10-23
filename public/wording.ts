@@ -13,6 +13,17 @@ export const slug = (text: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
+// A building's name for `count` of it: "Refinery", "Refineries", "Water Extractors", "Miners Mk.2".
+// The build plan's materials (app/build-materials.ts) and the planner's build-cost reason
+// (planner/build-cost-draft.ts, #1229) name buildings with it.
+export function buildingName(building: string, count: number): string {
+  if (count === 1) return building;
+  const mark = building.match(/^(.*?)( Mk\.\d+)$/);
+  const [noun, suffix] = mark ? [mark[1]!, mark[2]!] : [building, ''];
+  const plural = /[^aeiou]y$/.test(noun) ? noun.slice(0, -1) + 'ies' : noun + 's';
+  return plural + suffix;
+}
+
 // "A", "A and B", "A, B and C": names, phase numbers and items in prose (#611, #735). An empty
 // list gives ''.
 export const listNames = (names: readonly string[]): string =>

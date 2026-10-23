@@ -30,6 +30,10 @@ export interface RunOptions {
   // plan solve a copy of the settings without whole machines, so they pass the answer for the
   // calculation's own settings instead (#1100).
   storageLeftOut?: boolean;
+  // Count what the phase's buildings cost to build (#1229, addBuildCosts in build-cost.ts): only
+  // the check of a plan with settings.buildCost and its draft's measurements set it, never the
+  // solves that plan the phase.
+  buildCost?: boolean;
 }
 // The fixed figures a solve bounded by its load is planned with (#1086, planner/load.ts), in MW:
 // what the power constraint is credited with, and the most the non-nuclear generators may give.

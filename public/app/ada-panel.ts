@@ -510,6 +510,8 @@ function adaFacts(): AdaFacts {
     ...(calculated?.settings.recipeCost && calculated.settings.recipeCost !== 1
       ? { recipeCost: calculated.settings.recipeCost }
       : {}),
+    // Whether the open plan counts what its buildings cost to build (#1229), only when it does.
+    ...(calculated?.settings.buildCost ? { buildCost: true } : {}),
     // The objective the open plan was calculated with (#1180), only when not the fewest buildings.
     ...(calculated?.settings.objective === undefined
       ? {}

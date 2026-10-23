@@ -37,6 +37,7 @@ import {
   primaryOutput,
 } from './recipes.ts';
 import { twoStepFit } from './fit.ts';
+import { addBuildCosts, withBuildCost } from './build-cost.ts';
 import { withinLoad } from './load.ts';
 import { BUILT, readStage } from './stage.ts';
 import {
@@ -145,7 +146,11 @@ function planRun(config: CurrentSettings, phase: number, options: RunOptions): R
   if (!solved.feasible || !solved.bounded)
     return { feasible: false, solverStatus: solved.solverStatus };
   if (!satisfiesModel(model, solved)) return { feasible: false };
-  return withinLoad(context, readStage(context, pool, demands, solved, period, model));
+  const stage = readStage(context, pool, demands, solved, period, model);
+  return withinLoad(
+    context,
+    context.buildCost ? withBuildCost(stage, model, solved, goalHours(context.config)) : stage,
+  );
 }
 // What every step of one phase's solve shares: the normalised settings, the phase (1 to 5),
 // run()'s options with their defaults filled in, the phase's power figures and, for a plan with
@@ -175,6 +180,7 @@ export const phaseContext = (
     overBudget = false,
     loadBound = null,
     storageLeftOut = stockedFromSurplus(config),
+    buildCost = false,
   }: RunOptions,
 ): PhaseContext => ({
   config:
@@ -193,6 +199,7 @@ export const phaseContext = (
   overBudget,
   loadBound,
   storageLeftOut,
+  buildCost,
   power: phasePower(config, phase),
   mining: config.phaseMining ? phaseMining(config, phase) : null,
 });
@@ -407,6 +414,9 @@ export function buildModel(
   addSources(model, context, allItems, demands.delivery);
   const period = roundNuclear(model, context, pool, demands.demand);
   addBuiltLines(model, context, pool);
+  // What the buildings cost to build (#1229), only in the check of a plan that counts it.
+  if (context.buildCost)
+    addBuildCosts(model, context, pool, goalHours(context.config), reachableItems(context, pool));
   return { model, period };
 }
 // One balance constraint per item, 'item:<name>': production minus consumption (including the

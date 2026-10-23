@@ -17,6 +17,7 @@
 //   mining.ts      mining and belts per phase (#1065): each phase's miner, clock, belts and
 //                  pipes, the budgets they give and the nodes a phase's draw taps
 //   objective.ts   what a plan keeps lowest (#1180): buildings, power, raw resources or a mix
+//   build-costs.ts what each building costs to build (#1073), which the planner counts (#1229)
 // build.ts ships each module to both editions as preferences/<name>.js; the Dockerfile copies
 // their sources for the server, which reaches this file through the planner.
 export {
@@ -154,3 +155,4 @@ export {
   waterClock,
   waterMWPerUnit,
 } from './preferences/mining.ts';
+export { BUILD_COSTS } from './preferences/build-costs.ts';

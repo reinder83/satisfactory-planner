@@ -1,10 +1,11 @@
 // What a build-plan step takes to build (#1073): its buildings ("2 Refineries + 1 Water
-// Extractor"), the parts those buildings cost (BUILD_COSTS in build-costs.ts) and the belt and pipe
+// Extractor"), the parts those buildings cost (BUILD_COSTS in preferences/build-costs.ts) and the belt and pipe
 // marks its line is fed by. Belts and pipes are named by their mark only: their cost follows a
 // length no plan holds. It reads only its arguments (no session), so the build plan's steps
 // (views/step-materials.ts) and the session view add up the same way.
-import { BUILD_COSTS } from './build-costs.ts';
+import { BUILD_COSTS } from '../preferences.ts';
 import { num } from './format.ts';
+import { buildingName } from '../wording.ts';
 
 // A building and how many of it to build.
 export interface BuildingCount {
@@ -57,15 +58,6 @@ export const addMaterials = (list: readonly BuildMaterials[]): BuildMaterials =>
 
 // Whether there is anything to build.
 export const hasMaterials = (materials: BuildMaterials): boolean => materials.buildings.length > 0;
-
-// A building's name for `count` of it: "Refinery", "Refineries", "Water Extractors", "Miners Mk.2".
-export function buildingName(building: string, count: number): string {
-  if (count === 1) return building;
-  const mark = building.match(/^(.*?)( Mk\.\d+)$/);
-  const [noun, suffix] = mark ? [mark[1]!, mark[2]!] : [building, ''];
-  const plural = /[^aeiou]y$/.test(noun) ? noun.slice(0, -1) + 'ies' : noun + 's';
-  return plural + suffix;
-}
 
 // "2 Refineries + 1 Water Extractor + Mk.4 belts and Mk.2 pipes"; '' for nothing to build.
 export function buildWords(materials: BuildMaterials): string {

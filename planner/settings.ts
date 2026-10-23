@@ -614,5 +614,10 @@ export function settings(input: unknown = {}): CurrentSettings {
       ].sort()
     : [];
   if (plannerPicks.length) config.plannerPicks = plannerPicks;
+  // Count what the buildings cost to build (#1229): only `true` is kept, and only with a time
+  // target, which the parts are counted over. Maximum output has none, so it drops the field, as
+  // does any other value, and settings without it, and every plan stored before it, stay as they
+  // were.
+  if (input.buildCost === true && config.goal !== 'maximum') config.buildCost = true;
   return config;
 }
