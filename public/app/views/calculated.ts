@@ -463,12 +463,14 @@ export function budgetMeasured(snapshot: StoredStage): boolean {
 // The bold heading over an infeasible phase `snapshot`'s reason: the plan page's draft notice
 // (ui/plan/CalcWarnings.vue), or with `phase` the wizard's Review (ui/wizard/ReviewStep.vue).
 // It names a budget only when the planner measured one (shortfalls, the hours it would fit in,
-// or whole machines breaking it). A stopped search, recipes that cannot make the goal and an
+// or whole machines breaking it), or a cap per phase when that is what it measured (#1221). A stopped search, recipes that cannot make the goal and an
 // older snapshot carry none of those, so the heading stays neutral and the reason says why (#626).
 export function draftHeading(snapshot: StoredStage, phase?: string): string {
+  // A cap per phase (#1221) that no budget shortfall comes with is named as the cap it is.
+  const what = snapshot.capShortfalls?.length && !snapshot.shortfalls?.length ? 'cap' : 'budget';
   const overBudget = budgetMeasured(snapshot);
-  if (phase) return `Phase ${phase}${overBudget ? ' — budget exceeded' : ''}:`;
-  return overBudget ? 'Planning draft — budget exceeded.' : 'Planning draft.';
+  if (phase) return `Phase ${phase}${overBudget ? ` — ${what} exceeded` : ''}:`;
+  return overBudget ? `Planning draft — ${what} exceeded.` : 'Planning draft.';
 }
 
 // One short budget in draftFixes' words: "Iron Ore to about 1,200/min (entered: 1,000/min)". With

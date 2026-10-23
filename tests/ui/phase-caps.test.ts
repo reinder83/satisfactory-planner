@@ -106,3 +106,20 @@ test('the sidebar names the caps a plan was calculated with, only when it has on
     else assert.doesNotMatch(footer(), /Caps:/);
   }
 });
+
+test('a draft a cap blocks is headed as a cap, not a budget', async () => {
+  const { draftHeading } = await import('../../public/app/views/calculated.ts');
+  const capped = {
+    feasible: false,
+    minHours: 10.5,
+    capShortfalls: [{ name: 'mw' as const, needed: 856, cap: 700 }],
+  };
+  assert.equal(draftHeading(capped), 'Planning draft — cap exceeded.');
+  assert.equal(draftHeading(capped, '3'), 'Phase 3 — cap exceeded:');
+  const both = { ...capped, shortfalls: [{ name: 'Coal', needed: 900, budget: 600 }] };
+  assert.equal(draftHeading(both), 'Planning draft — budget exceeded.');
+  assert.equal(
+    draftHeading({ feasible: false, minHours: 10.5 }),
+    'Planning draft — budget exceeded.',
+  );
+});
