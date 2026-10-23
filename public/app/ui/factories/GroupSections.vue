@@ -8,7 +8,9 @@
   another page, so it can open in a new tab and the address can be shared. Before it, "Mark all
   running" marks every line of the group running at once, or its reverse (GroupRunning.vue,
   #1163), and "Flow graph ↗", on any group with a line, opens the group's flow graph in the
-  #detail dialog (FlowGraphDialog.vue, #1192). Each group can be
+  #detail dialog (FlowGraphDialog.vue, #1192), and "Export to Satisfactory Tools" writes its lines
+  in the phase shown as a .sft file for satisfactorytools.com (app/sft-download.ts, #1209). Each
+  group can be
   folded (CollapseToggle.vue, SP-17): its header stays, its cards go. Unfolded, a group shows its
   "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise what
   the open plan makes on site for it in this phase, its own lines, then the items it marks that give
@@ -33,6 +35,7 @@ import {
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { openFlowGraph } from '../../factory-detail.ts';
+import { exportGroupToSft } from '../../sft-download.ts';
 import { legacy } from '../bridge.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
@@ -98,6 +101,12 @@ function rename(event: Event, id: string) {
       if (name !== undefined) resetDraft(names, id, name);
     }
   });
+}
+
+// "Export to Satisfactory Tools" (#1209): the group's .sft file in the phase shown, the button
+// busy while the browser packs it (app/busy.ts, #299).
+function exportSft(event: Event, id: string) {
+  return whileBusy(event.currentTarget as HTMLButtonElement, () => exportGroupToSft(id));
 }
 
 // The groups' owner fields (#1199) keep what is typed across redraws the same way.
@@ -208,6 +217,15 @@ async function remove(event: Event, id: string) {
           @click="openFlowGraph(section.id)"
         >
           Flow graph ↗</button
+        ><button
+          v-if="section.members.length"
+          type="button"
+          class="btn"
+          :data-group-sft="section.id"
+          :aria-label="'Export ' + section.name + ' to Satisfactory Tools'"
+          @click="exportSft($event, section.id)"
+        >
+          Export to Satisfactory Tools</button
         ><a
           v-if="section.members.length > 1"
           class="btn"
