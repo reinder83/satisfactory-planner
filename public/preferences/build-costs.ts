@@ -1,5 +1,7 @@
 // What each building the plan names costs to build (#1073): the parts one building takes, as the
-// build plan's steps and the session view (build-materials.ts) add them up.
+// build plan's steps and the session view (app/build-materials.ts) add them up, and as the
+// planner counts them when a plan counts what its buildings cost to build (#1229,
+// settings.buildCost, planner/build-cost.ts), which is why the table is shared.
 //
 // Copied once from the SatisfactoryTools dataset, https://github.com/greeny/SatisfactoryTools,
 // commit b5210ae9dcb629046ffc0b2f44152fd4b744067c (the revision recipes.json records), file

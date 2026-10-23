@@ -4,11 +4,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addMaterials,
-  buildingName,
   buildMaterials,
   buildWords,
   partsWords,
 } from '../public/app/build-materials.ts';
+import { buildingName } from '../public/wording.ts';
 
 test('a fixed set of buildings costs the parts of the table, the largest amount first', () => {
   const materials = buildMaterials(

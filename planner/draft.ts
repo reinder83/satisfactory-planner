@@ -35,14 +35,16 @@ import { stoppedSearch } from './rounding.ts';
 // What the draft of a phase that does not fit is diagnosed with: the settings without production
 // amplification (`plain`), the phase's SAM conversion and its budgets: the settings', or with
 // mining per phase the phase's own (#1065). `replan` plans the phase as calculate() does, which
-// checks the budgets a whole-machine draft names (#1091).
-interface DraftContext {
+// checks the budgets a whole-machine draft names (#1091). `buildCost` counts what the phase's
+// buildings cost to build in every exact LP the draft solves (#1229, build-cost-draft.ts).
+export interface DraftContext {
   config: CurrentSettings;
   phase: number;
   plain: CurrentSettings;
   conversion: boolean;
   budgets: ItemRates;
   replan?: Replan;
+  buildCost?: boolean;
 }
 // Plans the draft's phase with `settings` as calculate() does: the real whole-machine fit.
 export type Replan = (settings: CurrentSettings) => RunResult;
@@ -95,11 +97,11 @@ export function draftStage(
 }
 // The budgets a phase is planned with: the settings', or with mining per phase its own (#1065),
 // each held to the nodes the node survey does not leave out (budgetLimits, #1183).
-const phaseBudgets = (config: CurrentSettings, phase: number): ItemRates =>
+export const phaseBudgets = (config: CurrentSettings, phase: number): ItemRates =>
   config.phaseMining ? phaseMining(config, phase).budgets : budgetLimits(config);
 // The draft's exact LP: `plain` without whole machines. Protected storage is left out of it where
 // the whole-machine solve leaves it out (#1100), so the draft explains the phase that was solved.
-const exactRun = (plain: CurrentSettings, phase: number, options: RunOptions) =>
+export const exactRun = (plain: CurrentSettings, phase: number, options: RunOptions) =>
   run({ ...plain, wholeMachines: false }, phase, {
     ...options,
     storageLeftOut: stockedFromSurplus(plain),
@@ -107,8 +109,8 @@ const exactRun = (plain: CurrentSettings, phase: number, options: RunOptions) =>
     relaxCaps: true,
   });
 // Does the exact LP fit the real budgets at `hours` hours for this phase?
-const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) =>
-  exactRun({ ...plain, goal: 'timed', hours }, phase, { conversion }).feasible;
+export const fitsInHours = ({ plain, phase, conversion, buildCost }: DraftContext, hours: number) =>
+  exactRun({ ...plain, goal: 'timed', hours }, phase, { conversion, buildCost }).feasible;
 // Only rounding up to whole machines breaks a budget here. Sets `wholeMachinesOnly` and the
 // `shortfalls` measureWholeMachines finds, checked against the real fit (checkedShortfalls).
 function wholeMachinesReason(stage: CurrentStage, draft: DraftContext) {
@@ -231,7 +233,7 @@ function leftOutWords(config: CurrentSettings, names: string[]): string {
 }
 // A real budget shortfall: what the diagnostic draws beyond the budgets, and the time at which
 // the phase would fit them. Sets `shortfalls` and `minHours` on the draft.
-function shortfallReason(
+export function shortfallReason(
   stage: CurrentStage,
   draft: DraftContext,
   diagnostic: Solved,

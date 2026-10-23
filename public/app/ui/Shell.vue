@@ -251,6 +251,8 @@ function profileFooter() {
       ...(leftOutNote(settings.extraction) ? [leftOutNote(settings.extraction)] : []),
       // The recipe part cost the plan was calculated with (#1161), named only when not 1×.
       ...(recipeCostOf(settings) === 1 ? [] : [`${num(recipeCostOf(settings))}× recipe part cost`]),
+      // Whether it counts what its buildings cost to build (#1229), named only when it does.
+      ...(settings.buildCost ? ['Build costs counted'] : []),
       // The objective it was calculated with (#1180), named only when not the fewest buildings.
       ...(settings.objective === undefined
         ? []

@@ -628,6 +628,22 @@ test('ADA names the recipe part cost a plan was calculated with, when not 1× (#
   }
 });
 
+test('ADA says a plan counts what its buildings cost to build, only when it does (#1229)', () => {
+  for (const view of ['plan', 'resources']) {
+    const line = (buildCost?: boolean) =>
+      adaRemarks(facts({ view, ...(buildCost === undefined ? {} : { buildCost }) })).find(
+        r => r.id === 'build-cost',
+      );
+    assert.equal(line(true)!.tone, 'calm');
+    assert.equal(
+      line(true)!.text,
+      'This plan counts what its buildings cost to build: each phase must also make the parts of its production lines, generators, miners and extractors within its time, and a phase that cannot is a draft that says so. Nothing is free, not even the factory.',
+    );
+    assert.equal(line(false), undefined);
+    assert.equal(line(), undefined, 'absent means off');
+  }
+});
+
 test('ADA names the objective a plan was calculated with, when not the fewest buildings (#1180)', () => {
   for (const view of ['plan', 'resources']) {
     const line = (objective?: string) =>

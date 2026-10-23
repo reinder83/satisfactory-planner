@@ -145,6 +145,13 @@ export interface CurrentSettings {
   // planner/recipes.ts). One of RECIPE_COSTS in public/preferences/world.ts other than 1. Absent
   // at 1× and from every plan made before it, which therefore calculates exactly as before.
   recipeCost?: number;
+  // Count what a phase's buildings cost to build (#1229, All settings step 1): a phase whose
+  // budgets cannot also make the parts its production lines, generators, miners and extractors cost
+  // to build within its time is a draft (buildCostDraft in planner/build-cost-draft.ts); a phase
+  // that can keeps the plan it has without it. Only with a time target: settings() drops it under
+  // maximum output. Absent unless chosen and from every plan made before it, which therefore
+  // calculates exactly as before.
+  buildCost?: true;
   // What the plan keeps lowest (#1180, All settings step 3): 'power', 'raw' or a weighted mix
   // (ObjectiveWeights). Absent means the fewest buildings, as every plan made before it, which
   // therefore calculates exactly as before (objectiveWeights in public/preferences/objective.ts,
@@ -472,6 +479,17 @@ export interface StageMining {
   sources: Record<string, MiningSource[]>;
 }
 
+// What the buildings of a phase cost to build, counted over its time (#1229, settings.buildCost,
+// readBuildCost in planner/build-cost.ts): the buildings beyond those that already stand (the built
+// lines and the generators you already have), by name and rounded up to whole buildings, the parts
+// they take together that the phase can make (a part it cannot, such as the Portable Miners a Miner
+// takes, which the Equipment Workshop makes by hand, is left out), and the hours it has for them.
+export interface StageBuildCost {
+  hours: number;
+  buildings: Record<string, number>;
+  parts: ItemRates;
+}
+
 // A resource a failed phase needs more of.
 export interface Shortfall {
   name: string;
@@ -585,6 +603,9 @@ export interface StageResult {
   capShortfalls?: CapShortfall[];
   minHours?: number;
   wholeMachinesOnly?: boolean;
+  // The draft of a phase that fits its budgets until what its buildings cost to build is counted
+  // (#1229, settings.buildCost): what they cost. Absent otherwise and from older plans.
+  buildCost?: StageBuildCost;
   solverStatus?: string;
 }
 

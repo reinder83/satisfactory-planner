@@ -13,7 +13,7 @@
 import { computed, ref } from 'vue';
 import { toast } from '../../api.ts';
 import { beginnerMode } from '../../beginner.ts';
-import { buildingName } from '../../build-materials.ts';
+import { buildingName } from '../../../wording.ts';
 import { rateOfItem } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { calcStage, calculated, currentProfile, currentSave, stage } from '../../session.ts';

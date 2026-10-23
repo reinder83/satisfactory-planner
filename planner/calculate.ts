@@ -13,6 +13,7 @@ import { ENGINE } from './data.ts';
 import { fail, settings } from './settings.ts';
 import { capExcess, cappedRun, withoutCaps } from './model.ts';
 import { draftStage } from './draft.ts';
+import { buildCostDraft } from './build-cost-draft.ts';
 import {
   pullFinalPhaseForward,
   judgeAugmenterFuel,
@@ -176,8 +177,10 @@ function solvePhases(
     onPhase?.(phase);
     setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
     const result = planPhase(config, phase, first => (unrouted[phase] = first));
+    // A plan that counts what its buildings cost to build (#1229) checks the phase once more, and
+    // a phase that cannot make them in time is a draft that says so (buildCostDraft).
     stages[phase] = result.feasible
-      ? withExactPlan(config, phase, result)
+      ? (buildCostDraft(config, phase) ?? withExactPlan(config, phase, result))
       : draftStage(config, phase, result, settings => planPhase(settings, phase));
   }
   return stages;

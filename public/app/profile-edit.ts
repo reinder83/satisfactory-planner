@@ -72,8 +72,9 @@ const NAME_PARTS: [key: string, words: (value: unknown) => string][] = [
 ];
 
 // A profile card's line of the game settings its plan was calculated with (Saves & profiles):
-// "vanilla purity · 1× elevator · 1× power", the recipe part cost when not 1× (#1161) and the
-// objective when not the fewest buildings (#1180).
+// "vanilla purity · 1× elevator · 1× power", the recipe part cost when not 1× (#1161), "build
+// costs counted" when it counts them (#1229) and the objective when not the fewest buildings
+// (#1180).
 export function profileSummary(settings: {
   purity: string;
   multiplier: number;
@@ -81,6 +82,7 @@ export function profileSummary(settings: {
   // The node survey (#1183): its left-out nodes are named.
   extraction?: MiningSettings['extraction'];
   recipeCost?: number;
+  buildCost?: true;
   objective?: PlanObjective;
 }): string {
   const cost = recipeCostOf(settings);
@@ -91,6 +93,7 @@ export function profileSummary(settings: {
     `${num(settings.powerFactor)}× power`,
     ...(leftOut ? [leftOut] : []),
     ...(cost === 1 ? [] : [`${num(cost)}× recipe parts`]),
+    ...(settings.buildCost ? ['build costs counted'] : []),
     ...(settings.objective === undefined ? [] : [objectiveWords(settings.objective, true)]),
   ].join(' · ');
 }
@@ -245,6 +248,8 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
   ['availablePowerGW', 'Power you already have', value => power(Number(value) * 1000)],
   ['recipes', 'Recipes', value => RECIPES[String(value)] ?? String(value)],
   ['pureIngots', 'Pure ingot alternates', onOff],
+  // Present in settings only when on (#1229).
+  ['buildCost', 'Count what buildings cost to build', onOff],
   ['wholeMachines', 'Machines', value => (value === false ? 'Exact ratios' : 'Whole machines')],
   ['roundRates', 'Round rates', onOff],
   ['hours', 'Hours per phase', value => `${num(Number(value))} h`],
@@ -271,6 +276,7 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
 // Settings that are absent unless chosen (#1065, #1068): absent is their "off" or "none", so a
 // plan without one that the edit turns on is a change, not a setting added since the plan.
 const ABSENT_IS_NONE = new Set([
+  'buildCost',
   'phaseMining',
   'ownedMiner',
   'ownedBelt',

@@ -606,6 +606,7 @@ function readStorageOverrides(form: HTMLFormElement, data: FormData, settings: W
 function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
   const settings = wizardDraft.settings,
     shown = screenSteps(wizardDraft.step);
+  if (shown.includes(1)) readBuildCost(data, settings);
   if (shown.includes(3)) {
     settings.roundRates = data.has('roundRates');
     settings.wholeMachines = data.has('wholeMachines');
@@ -619,6 +620,13 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
     if (settings.phaseMining && data.has('waterOverclock')) settings.waterOverclock = true;
     else delete settings.waterOverclock;
   }
+}
+
+// "Count what buildings cost to build" (#1229, step 1, ui/wizard/SettingsStep.vue): ticked keeps
+// settings.buildCost, unticked leaves the field out, as settings() stores it.
+function readBuildCost(data: FormData, settings: WizardSettings) {
+  if (data.has('buildCost')) settings.buildCost = true;
+  else delete settings.buildCost;
 }
 
 // "Miners you already have" and "Belts you already have" (#1068, ui/wizard/OwnedEquipment.vue):

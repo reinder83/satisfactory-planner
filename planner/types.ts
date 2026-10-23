@@ -34,6 +34,10 @@ export interface RunOptions {
   // solve, instead of whole buildings per line, an integer one (addPhaseCaps in model.ts): the
   // two-step fit's first, exact step, which only picks the network, and a draft's measurements.
   relaxCaps?: boolean;
+  // Count what the phase's buildings cost to build (#1229, addBuildCosts in build-cost.ts): only
+  // the check of a plan with settings.buildCost and its draft's measurements set it, never the
+  // solves that plan the phase.
+  buildCost?: boolean;
 }
 // The fixed figures a solve bounded by its load is planned with (#1086, planner/load.ts), in MW:
 // what the power constraint is credited with, and the most the non-nuclear generators may give.
