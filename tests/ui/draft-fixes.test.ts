@@ -4,7 +4,7 @@
 // and every plan without the setting keep the advice.
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { draftFixes } from '../../public/app/views/calculated.ts';
+import { draftAdvice } from '../../public/app/draft-advice.ts';
 import type { CurrentSettings, StoredStage } from '../../public/types/index.ts';
 
 const draft = (storage: Record<string, number>): StoredStage => ({
@@ -13,7 +13,9 @@ const draft = (storage: Record<string, number>): StoredStage => ({
   storage,
 });
 const fixes = (stage: StoredStage, settings: Partial<CurrentSettings>) =>
-  draftFixes(stage, { goal: 'timed', ...settings }).join(' ');
+  draftAdvice(stage, { goal: 'timed', ...settings })
+    .levers.map(lever => lever.text)
+    .join(' ');
 const whole = { wholeMachines: true, storageFromSurplus: true } as const;
 
 test('a draft under storageFromSurplus does not advise lowering storage (#1100)', () => {

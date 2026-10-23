@@ -1,6 +1,7 @@
 // For a calculated profile: the checklist steps of its plan page
-// (ui/pages/CalculatedPlanPage.vue), the options for an infeasible phase, and the machine
-// setup and expansion its factory dialog shows (ui/detail/CalcFactoryDialog.vue). Its
+// (ui/pages/CalculatedPlanPage.vue), the heading over an infeasible phase (its options are in
+// app/draft-advice.ts), and the machine setup and expansion its factory dialog shows
+// (ui/detail/CalcFactoryDialog.vue). Its
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
 import { groupedRows, groupedSteps, LINK_DUST } from '../group-order.ts';
@@ -66,9 +67,8 @@ import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
 import { AMPLIFIER_WORDS } from '../../somersloops.ts';
-import { minerWords } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
-import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
+import type { CalcRow, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 import type { StepList, StepTable } from '../../step-table.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
@@ -471,71 +471,6 @@ export function draftHeading(snapshot: StoredStage, phase?: string): string {
   const overBudget = budgetMeasured(snapshot);
   if (phase) return `Phase ${phase}${overBudget ? ` — ${what} exceeded` : ''}:`;
   return overBudget ? `Planning draft — ${what} exceeded.` : 'Planning draft.';
-}
-
-// One short budget in draftFixes' words: "Iron Ore to about 1,200/min (entered: 1,000/min)". With
-// mining per phase (#1065) the phase gets a share of the entered budget, so the entered budget it
-// would take, and what the phase gets now: "Iron Ore to about 12,000/min (entered: 9,210/min;
-// this phase gets 921/min of it with Miner Mk.1 at 100%)". "to at least" for an unconfirmed amount.
-function shortfallWords(
-  shortfall: NonNullable<StoredStage['shortfalls']>[number],
-  snapshot: StoredStage,
-  settings: Partial<CurrentSettings> | undefined,
-): string {
-  const entered = settings?.limits?.[shortfall.name];
-  const mining = snapshot.mining;
-  // A whole-machine draft amount the real fit did not confirm is a floor (#1091).
-  const about = shortfall.atLeast ? 'at least' : 'about';
-  if (!mining || entered === undefined || !(shortfall.budget > 0))
-    return `${shortfall.name} to ${about} ${itemRate(shortfall.name, shortfall.needed)} (entered: ${itemRate(shortfall.name, shortfall.budget)})`;
-  const share = shortfall.budget / entered;
-  return `${shortfall.name} to ${about} ${itemRate(shortfall.name, Math.ceil(shortfall.needed / share))} (entered: ${itemRate(shortfall.name, entered)}; this phase gets ${itemRate(shortfall.name, shortfall.budget)} of it with ${minerWords(mining.miner)})`;
-}
-
-// Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
-// The options for an infeasible phase `snapshot` under `settings`, as sentences (none for an
-// older snapshot). ui/plan/CalcWarnings.vue and the wizard's Review
-// (ui/wizard/ReviewStep.vue) list them.
-export function draftFixes(
-  snapshot: StoredStage,
-  settings: Partial<CurrentSettings> | undefined,
-): string[] {
-  const fixes: string[] = [];
-  if (snapshot.shortfalls?.length)
-    fixes.push(
-      `Raise the short budget${snapshot.shortfalls.length > 1 ? 's' : ''} (Resources): ${snapshot.shortfalls.map(shortfall => shortfallWords(shortfall, snapshot, settings)).join('; ')}.`,
-    );
-  if (snapshot.wholeMachinesOnly)
-    fixes.push(
-      'Keep these budgets instead: untick “Whole machines” (Goals). Exact clocks fit, with one adjustable machine per production line.',
-    );
-  if (snapshot.minHours)
-    fixes.push(
-      settings?.goal === 'timed'
-        ? `Raise “Hours per phase” (Goals) to at least ${num(snapshot.minHours)} h.`
-        : `Switch the goal (Goals) to “Target completion time” with at least ${num(snapshot.minHours)} hours per phase.`,
-    );
-  else if (snapshot.shortfalls?.length && !snapshot.wholeMachinesOnly) {
-    // Storage fed from surplus is not a demand of a whole-machine draft's solve (#1100), so
-    // lowering it does not help; a draft stored before that, whose solve held storage, names it.
-    const fromSurplus =
-      settings?.wholeMachines &&
-      settings.storageFromSurplus === true &&
-      !Object.values(snapshot.storage ?? {}).some(rate => rate > 0);
-    const demands = `${fromSurplus ? '' : 'the protected storage refill rate, '}drone-fuel supply or extra Singularity Cells (Preferences)`;
-    fixes.push(
-      settings?.goal === 'maximum'
-        ? `Lower ${demands}.`
-        : `More time alone will not fit: lower ${demands}${settings?.roundRates ? ', or untick delivery-rate rounding (Goals)' : ''}.`,
-    );
-  }
-  if (snapshot.shortfalls?.length && settings?.recipes === 'standard')
-    fixes.push('Allow alternate recipes (Preferences) to cut raw resource use.');
-  if (snapshot.shortfalls?.length && settings?.sam === 'avoid')
-    fixes.push(
-      'Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.',
-    );
-  return fixes;
 }
 
 // How to build `row`: how many machines run at 100% and whether one last machine runs

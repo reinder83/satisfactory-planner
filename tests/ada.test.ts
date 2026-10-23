@@ -1061,3 +1061,18 @@ test('ADA names where a somersloop pays off most in the phase (#1215)', () => {
     /^A somersloop pays off most on Heavy Modular Frame in this phase: 85 raw resources a minute saved per somersloop, at this plan's rates\./,
   );
 });
+
+// #1222: a draft whose short resource the map cannot give at the nodes the plan may tap says so,
+// with the planner's figures, and only on a draft.
+test('ADA sets a short resource against what the map gives', () => {
+  const mapShort = { name: 'Bauxite', needed: '1,023/min', map: '900/min' };
+  const remarks = adaRemarks(facts({ feasible: false, reason: 'Needs more Bauxite.', mapShort }));
+  const line = remarks.find(remark => remark.id === 'draft-map')!;
+  assert.equal(line.tone, 'warn');
+  assert.equal(
+    line.text,
+    'Bauxite: this phase needs 1,023/min, and the map gives 900/min at the nodes you allow. No budget box changes geology; the options under the draft notice say what would.',
+  );
+  assert.ok(!ids(facts({ mapShort })).includes('draft-map'), 'not on a plan that fits');
+  assert.ok(!ids(facts({ feasible: false })).includes('draft-map'), 'not when the map has enough');
+});

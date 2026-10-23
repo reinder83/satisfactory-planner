@@ -6,6 +6,7 @@
 import type {
   BuiltLines,
   CalcRow,
+  FactoryGroup,
   FactoryGroups,
   GroupAssignment,
   Phase,
@@ -526,13 +527,25 @@ function keepSiteTicks(
   state.onSiteReview = { checks };
   return unticked;
 }
+// `group` with only the moved lines of its flow graph layout that are rows in `rows`; without a
+// layout left, without the field.
+function carriedLayout(group: FactoryGroup, rows: ReadonlySet<string>): FactoryGroup {
+  if (!group.layout?.nodes) return group;
+  const { nodes, ...view } = group.layout;
+  const kept = Object.fromEntries(Object.entries(nodes).filter(([row]) => rows.has(row)));
+  const layout = { ...view, ...(Object.keys(kept).length ? { nodes: kept } : {}) };
+  const { layout: _old, ...rest } = group;
+  return Object.keys(layout).length ? { ...rest, layout } : rest;
+}
 // Keep the previous profile's group names and its assignments for rows the new
 // plan still builds, then place the plan's remaining rows with the defaults.
 function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | null): FactoryGroups {
   const carried = validateGroups(raw);
   if (!carried.groups.length) return defaults;
   const rows = new Set([...planRows(plan).values()].map(row => row.id));
-  const groups = [...carried.groups];
+  // A group's flow graph layout (#1224) comes along, its zoom and scroll offsets as they were and
+  // the spots of the lines the new plan still has.
+  const groups = carried.groups.map(group => carriedLayout(group, rows));
   const known = new Set(groups.map(group => group.id));
   const assignments: Record<string, GroupAssignment[]> = {};
   for (const [key, list] of Object.entries(carried.assignments))

@@ -226,6 +226,120 @@ async function checkExpertMode(browser: import('playwright').Browser) {
     await context.close();
   }
 }
+// Pan and zoom of a factory's flow graph (#1223) at 1280 px: the wheel over the drawing zooms it
+// without scrolling the dialog, a drag on its background moves it, and a press on a line's box
+// without a drag opens that line in the graph's place.
+async function checkGraphPanZoom(page: Page, graphButton: import('playwright').Locator) {
+  await graphButton.click();
+  const box = page.locator('#detail [data-flow-graph]');
+  await box.locator('svg').waitFor();
+  const read = () =>
+    box.evaluate((el: HTMLElement) => ({
+      width: Number(el.querySelector('svg')!.getAttribute('width')),
+      left: el.scrollLeft,
+      top: el.scrollTop,
+      dialog: document.querySelector('#detail')!.scrollTop,
+    }));
+  // A spot of the box's background, clear of the boxes and labels.
+  const spots = await box.evaluate((el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    let background = null;
+    for (let y = rect.top + 8; y < rect.bottom - 24 && !background; y += 12)
+      for (let x = rect.left + 8; x < rect.right - 24 && !background; x += 12) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit && el.contains(hit) && !hit.closest('[data-node], [data-edge-label]'))
+          background = { x, y };
+      }
+    return { background };
+  });
+  assert.ok(spots.background, 'the drawing has a background to drag');
+  const before = await read();
+  await page.mouse.move(spots.background.x, spots.background.y);
+  await page.mouse.wheel(0, -200);
+  await page.waitForFunction(width => {
+    const svg = document.querySelector('#detail [data-flow-graph] svg');
+    return Number(svg?.getAttribute('width')) > width;
+  }, before.width);
+  const zoomed = await read();
+  assert.equal(
+    zoomed.dialog,
+    before.dialog,
+    'the wheel over the drawing does not scroll the dialog',
+  );
+  await page.mouse.move(spots.background.x, spots.background.y);
+  await page.mouse.down();
+  await page.mouse.move(spots.background.x - 30, spots.background.y - 20, { steps: 4 });
+  await page.mouse.up();
+  const panned = await read();
+  assert.ok(panned.left > zoomed.left || panned.top > zoomed.top, 'a drag moves the drawing');
+  await page.locator('#detail [data-flow-zoom="fit"]').click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector<HTMLElement>('#detail [data-flow-graph]')!;
+    return el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight;
+  });
+  const line = await box.evaluate((el: HTMLElement) => {
+    const rect = el.querySelector('[data-node^="line:"] rect')!.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  });
+  await page.mouse.click(line.x, line.y);
+  await page.waitForFunction(() => !document.querySelector('#detail [data-flow-graph]'));
+  assert.ok(
+    await page.evaluate(() => document.querySelector<HTMLDialogElement>('#detail')!.open),
+    'a press on a line opens it in place of the graph',
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+}
+// Rearranging the flow graph (#1224): a drag of a line's box moves it, the layout is stored with
+// the factory once the drag ends, and after a reload the graph opens with the line where it was
+// put. `stored` reads the open profile's progress state from the browser edition.
+async function checkGraphLayout(
+  page: Page,
+  graphGroup: string,
+  stored: () => Promise<ProgressState>,
+) {
+  const openGraph = async () => {
+    await page.locator(`#main [data-group-graph="${graphGroup}"]`).click();
+    await page.locator('#detail [data-flow-graph] svg').waitFor();
+  };
+  await openGraph();
+  const line = page.locator('#detail [data-node^="line:"]').first();
+  const node = (await line.getAttribute('data-node'))!;
+  const transform = () => page.locator(`#detail [data-node="${node}"]`).getAttribute('transform');
+  const before = await transform();
+  const rect = await line.locator('rect').boundingBox();
+  assert.ok(rect, 'the line has a box on screen');
+  await page.mouse.move(rect.x + 20, rect.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(rect.x + 100, rect.y + 80, { steps: 6 });
+  await page.mouse.up();
+  const after = await transform();
+  assert.notEqual(after, before, 'a drag moves the line');
+  assert.ok(
+    await page.evaluate(() => !!document.querySelector('#detail [data-flow-graph]')),
+    'and does not open it',
+  );
+  const row = node.slice('line:'.length);
+  const moved = (after ?? '').match(/translate\(([\d.]+),([\d.]+)\)/);
+  assert.ok(moved, 'the box is drawn at a spot: ' + after);
+  const spot = [Number(moved[1]), Number(moved[2])];
+  // The save goes as the drag ends; the browser edition writes it to IndexedDB.
+  let layout;
+  for (let tries = 0; tries < 50 && !layout?.nodes?.[row]; tries++) {
+    layout = (await stored()).factoryGroups.groups.find(group => group.id === graphGroup)?.layout;
+    if (!layout?.nodes?.[row]) await page.waitForTimeout(100);
+  }
+  assert.deepEqual(layout?.nodes?.[row], spot, 'the spot is stored with the factory');
+  assert.equal((await stored()).version, 22);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  await page.reload();
+  await page.locator(`#main [data-group-graph="${graphGroup}"]`).waitFor();
+  await openGraph();
+  assert.equal(await transform(), after, 'after a reload the line is where it was put');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+}
 // Edit settings → Review → Recalculate in place (#1138) on the open profile: Review calculates the
 // plan once, and the recalculation stores it without calculating again. How long each took.
 async function reviewedInPlace(page: Page, calculations: () => Promise<number | undefined>) {
@@ -725,6 +839,8 @@ try {
     'Escape returns focus to "Flow graph ↗"',
   );
   await page.setViewportSize({ width: 1280, height: 720 });
+  await checkGraphPanZoom(page, graphButton);
+  await checkGraphLayout(page, graphGroup!, () => api<ProgressState>('/api/state'));
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();
@@ -1231,6 +1347,15 @@ try {
   assert.equal(roundtrip.status, 200);
   const reexport: SaveExport = await (await fetch(backendURL + '/api/export-saves')).json();
   assert.equal(reexport.saves.length, 2);
+  // The flow graph's layout (#1224) went through the export into the Docker edition and back.
+  assert.ok(
+    reexport.saves.some(save =>
+      save.profiles.some(profile =>
+        profile.state.factoryGroups?.groups?.some(group => group.layout?.nodes),
+      ),
+    ),
+    'the Docker edition keeps the flow graph layout',
+  );
   assert.deepEqual(errors, []);
   await checkPerformance(browser);
   await checkExpertMode(browser);

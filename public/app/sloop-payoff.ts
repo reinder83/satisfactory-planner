@@ -41,6 +41,10 @@ export type SloopStage = Pick<StoredStage, 'feasible' | 'rows' | 'raw'> & {
   grid?: Pick<StageGrid, 'extraction'>;
 };
 
+// The settings the upstream costs read: the consumption multiplier and the extraction equipment.
+// An infeasible phase's advice (app/draft-advice.ts, #1222) reads its draft with them too.
+export type UpstreamSettings = Pick<Partial<StoredSettings>, 'powerFactor' | 'extraction'>;
+
 // What one amplified machine on a line saves (positive is saved; `netMW` positive is more power).
 export interface SloopPayoff {
   // The row id, as the line's dialog and step know it.
@@ -88,7 +92,11 @@ const sloopMainProduct = (row: CalcRow): string | undefined => Object.keys(row.o
 
 // MW per unit of a raw resource drawn: the stage's own extraction figures where it has them
 // (its grid, #1064), else the profile's extraction equipment, as the planner sized it.
-function sloopExtractionPerUnit(stage: SloopStage, settings: StoredSettings, item: string): number {
+function sloopExtractionPerUnit(
+  stage: SloopStage,
+  settings: UpstreamSettings,
+  item: string,
+): number {
   const drawn = stage.raw?.[item] ?? 0,
     measured = stage.grid?.extraction?.[item];
   if (measured !== undefined && drawn > SLOOP_DUST) return measured / drawn;
@@ -97,7 +105,10 @@ function sloopExtractionPerUnit(stage: SloopStage, settings: StoredSettings, ite
 
 // Each item's cost per unit at the stage's rates (see the header): the lines making it as their
 // main product and the raw draw of it, in proportion to what each gives.
-export function sloopUpstream(stage: SloopStage, settings: StoredSettings): Map<string, UnitCost> {
+export function sloopUpstream(
+  stage: SloopStage,
+  settings: UpstreamSettings,
+): Map<string, UnitCost> {
   const factor = settings.powerFactor ?? 1;
   const makers = new Map<string, { row: CalcRow | null; rate: number }[]>();
   const add = (item: string, row: CalcRow | null, rate: number) => {

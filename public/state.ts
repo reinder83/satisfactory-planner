@@ -14,7 +14,9 @@
 //                  links, the vehicle picked per group link, version 7; a link burning a
 //                  fuel added in #1165 (laterVehicleFuels), version 17; a link on Fluid
 //                  Trucks (mode 'fluidTruck', #1177), version 18; a group's owner (#1199,
-//                  groups[].owner, the factoryGroupOwner update), version 20
+//                  groups[].owner, the factoryGroupOwner update), version 20; a group's
+//                  flow graph layout (#1224, groups[].layout, the factoryGroupLayout
+//                  update), version 22
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
 //                  not place (validateOrigin), version 12; with what the migration mapped
 //                  (mapping, #606), version 13; no update op edits it
@@ -66,6 +68,7 @@ export {
   handbookFloor,
   holdsOldUnlockKeys,
   initialState,
+  LAYOUT_LIMITS,
   linkPlaces,
   mappingFits,
   mergeAmplifiedUnlocks,
