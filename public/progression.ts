@@ -7,11 +7,13 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
-import { listNames, powerAmount, slug } from './wording.ts';
+import { durationOfHours, listNames, powerAmount, slug } from './wording.ts';
 import { AMPLIFIER_RESEARCH, AMPLIFIER_WORDS, handFedPhase } from './somersloops.ts';
 import { ownedBeyondKept, powerView } from './power.ts';
 import {
   BELT_MARKS,
+  BURNER_FUELS,
+  BURNER_MW,
   MINER_MARKS,
   miningLinearMW,
   OVERCLOCK_RESEARCH,
@@ -1610,7 +1612,7 @@ function coalUnlockNeeded(context: GuideContext, { coal, petroleum, nuclear }: U
 // with the start-up keeps its own.
 function biomassStartupTasks(
   context: GuideContext,
-  { coal, petroleum, nuclear }: UnlockedPower,
+  { coal, petroleum, nuclear, solid }: UnlockedPower,
 ): GuideTask[] {
   const { plan, stage, stageOf } = context;
   if (!(stage === 1 || (!coal && !petroleum && !nuclear && !hasSparePower(context)))) return [];
@@ -1633,14 +1635,80 @@ function biomassStartupTasks(
       body: 'Tier 2 Obstacle Clearing unlocks the Chainsaw and Solid Biofuel. One Constructor consumes 120 Biomass/min → 60 Solid Biofuel/min at 100%. Start with one, fed by the Biomass buffer; retain fuel for the chainsaw. With a Mk.1 input belt, limit it to 60 Biomass/min → 30 Solid Biofuel/min; unlock Logistics Mk.2 for a 120/min input and the full 60/min output. A full 360 Biomass/min from both source Constructors can supply three Solid Biofuel Constructors, making 180/min. Split the merge across belts as needed: Mk.1 carries 60/min and Mk.2 120/min, so do not try to put 360/min on one early belt.',
     },
   ];
+  const sizing = `Standalone Biomass Burners provide 30 MW each; HUB burners provide 20 MW each. Ignoring any HUB capacity not entered as spare power, allow about ${formatNumber(burners)} standalone burners for ${formatNumber(need)} MW of planned additional load plus three fuel-processing Constructors.${ownedBurnersText(plan.settings.ownedGenerators?.['Biomass Burner'] ?? 0, burners)} At full load each standalone burner consumes 4 Solid Biofuel/min; this bank needs up to ${formatNumber(burners * 4)}/min. One 60/min Solid Biofuel Constructor can fuel 15 such burners; a Mk.1-fed 30/min line supports 7.5 burners at full load.`;
+  const estimate =
+    'This is a startup estimate, not part of the continuous resource model: add processing capacity/power if needed, keep a reserve, and build gradually until coal is unlocked.';
+  const fuel = burnerFuel(burners, stageOf(stage)?.hours, solid);
   return [
     ...(first ? once : []),
     {
       id: 'startup-burner-bank-' + stage,
       title: 'Size and feed the biomass burner bank',
-      body: `Standalone Biomass Burners provide 30 MW each; HUB burners provide 20 MW each. Ignoring any HUB capacity not entered as spare power, allow about ${formatNumber(burners)} standalone burners for ${formatNumber(need)} MW of planned additional load plus three fuel-processing Constructors.${ownedBurnersText(plan.settings.ownedGenerators?.['Biomass Burner'] ?? 0, burners)} At full load each standalone burner consumes 4 Solid Biofuel/min; this bank needs up to ${formatNumber(burners * 4)}/min. One 60/min Solid Biofuel Constructor can fuel 15 such burners; a Mk.1-fed 30/min line supports 7.5 burners at full load. This is a startup estimate, not part of the continuous resource model: add processing capacity/power if needed, keep a reserve, and build gradually until coal is unlocked.`,
+      body: `${sizing} ${estimate} ${fuel.text}`,
+      // The bank's fuel as a table (#1204): what the burners take by fuel, per minute, for the
+      // phase's run time and in stacks.
+      table: {
+        intro: `${sizing} ${fuel.intro}`,
+        columns: fuel.columns,
+        rows: fuel.rows,
+        after: estimate,
+        caption: 'Size and feed the biomass burner bank: fuel the burners take',
+      },
     },
   ];
+}
+
+// The burner bank's fuel (#1204): what `burners` standalone Biomass Burners at full load take of
+// each fuel they burn by hand, per minute, for the phase's `hours` (its planned run time, the
+// time to finish its deliveries) and in stacks, from BURNER_FUELS' energy and stack sizes. Each
+// fuel is a whole count, rounded up. Without a run time (a phase that never finishes) the table
+// is the rates alone. Display only: nothing here is saved or feeds the plan. `text` is the same in
+// words, for the step's body; `solid` is whether Obstacle Clearing is ticked.
+function burnerFuel(
+  burners: number,
+  hours: number | null | undefined,
+  solid: boolean,
+): { text: string; intro: string; columns: string[]; rows: string[][] } {
+  const run = typeof hours === 'number' && Number.isFinite(hours) && hours > 0 ? hours : 0;
+  const stacks = (items: number, stack: number) => {
+    const count = Math.ceil(items / stack);
+    return `${formatNumber(count)} stack${count === 1 ? '' : 's'} of ${formatNumber(stack)}`;
+  };
+  const details: Record<string, string> = {
+    Leaves: 'Gathered by hand, burned as they are',
+    Wood: 'Gathered by hand, burned as it is',
+    Mycelia: 'Gathered by hand, burned as it is',
+    Biomass: 'Made from Leaves, Wood or Mycelia in a Constructor',
+    'Solid Biofuel': solid
+      ? 'Made from Biomass; the fuel this bank is sized for'
+      : 'Made from Biomass; the fuel this bank is sized for, once Obstacle Clearing is unlocked',
+  };
+  const figures = BURNER_FUELS.map(({ name, mj, stack }) => {
+    const perMinute = Math.ceil((burners * BURNER_MW * 60) / mj - 1e-9);
+    const total = run ? Math.ceil(perMinute * run * 60 - 1e-9) : 0;
+    return { name, stack, perMinute, total };
+  });
+  const rows = figures.map(({ name, stack, perMinute, total }) => [
+    name,
+    `${formatNumber(perMinute)}/min`,
+    ...(run ? [formatNumber(total), stacks(total, stack)] : []),
+    details[name] ?? '',
+  ]);
+  const picks = figures.map(({ name, perMinute, total, stack }) =>
+    run
+      ? `${formatNumber(total)} ${name} (${stacks(total, stack)}) at ${formatNumber(perMinute)}/min`
+      : `${formatNumber(perMinute)} ${name}/min`,
+  );
+  const when = run ? `, for the phase's planned run time of ${durationOfHours(run)}` : '';
+  const lead = `Fuel for the ${formatNumber(burners)} standalone burners at full load${when}, by fuel (burn one kind, not all of them)`;
+  return {
+    text: `${lead}: ${picks.join('; ')}.`,
+    intro: `${lead}:`,
+    columns: run
+      ? ['Fuel', 'Per minute', 'For the run', 'Stacks', 'Details']
+      : ['Fuel', 'Per minute', 'Details'],
+    rows,
+  };
 }
 
 // The Biomass Burners the player already has (settings.ownedGenerators, #1068) against the bank's
