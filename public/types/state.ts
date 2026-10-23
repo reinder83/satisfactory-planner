@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–21). Later versions only add optional sections, so an older
+//                  version (1–22). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -21,7 +21,8 @@ import type { ExactClocks } from './calculated.ts';
 // factory-group link whose vehicles burn a fuel added in #1165 (laterVehicleFuels), 18 a
 // factory-group link on Fluid Trucks (mode 'fluidTruck', #1177), 19 the machines that stand on a
 // production line a recalculation grew (builtMachines, #1174), 20 a factory group's owner
-// (groups[].owner, #1199), 21 who ticked a step and when (tickedBy, #1206).
+// (groups[].owner, #1199), 21 who ticked a step and when (tickedBy, #1206), 22 a factory's flow
+// graph layout (groups[].layout, #1224).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -46,7 +47,8 @@ export type StateVersion =
   | 18
   | 19
   | 20
-  | 21;
+  | 21
+  | 22;
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
 // time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
@@ -161,6 +163,21 @@ export interface FactoryGroup {
   id: string;
   name: string;
   owner?: string;
+  layout?: GroupLayout;
+}
+
+// How a factory's flow graph is drawn (#1224, part of #1201): presentation only, set from the
+// graph (ui/detail/FlowGraphDialog.vue) by the factoryGroupLayout update; absent means the
+// automatic layout at natural size (version 22 while any group has one). `nodes` is where the
+// user put a production line's box, by plan row id (the line's id in every phase): its top-left
+// corner in the drawing's own units, whole numbers. `zoom` and `pan` are the last view: the zoom
+// (1 is natural size, two decimals) and the box's scroll offsets into the zoomed drawing, whole
+// px. Each part is left out when it says nothing (no line moved, natural size, the top-left
+// corner).
+export interface GroupLayout {
+  nodes?: Record<string, [x: number, y: number]>;
+  zoom?: number;
+  pan?: [left: number, top: number];
 }
 
 // Named production areas and the plan rows assigned to them (version 3).
@@ -278,6 +295,8 @@ export type UpdateOp =
   | { type: 'factoryGroupRemove'; id: string }
   // The player who builds group `id` (#1199); a blank owner means nobody and drops the field.
   | { type: 'factoryGroupOwner'; id: string; owner: string }
+  // The whole flow graph layout of group `id` (#1224); null or an empty one drops the field.
+  | { type: 'factoryGroupLayout'; id: string; layout: GroupLayout | null }
   | { type: 'factoryAssign'; key: string; groups: { group: string; rate?: number | null }[] }
   // The whole list of items group `id` makes on site (#877); an empty list drops its entry.
   | { type: 'factoryLocal'; id: string; items: string[] }

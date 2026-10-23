@@ -443,7 +443,7 @@ function routeBack(back: GraphEdge[], bottom: number, byId: ReadonlyMap<string, 
 }
 
 // A label is the item over its rate, as wide as the longer of the two.
-const labelWidth = (edge: GraphEdge) =>
+export const labelWidth = (edge: GraphEdge) =>
   Math.ceil(Math.max([...edge.item].length, [...edge.rateText].length) * GRAPH.char) + 8;
 
 // Each forward edge's label on one of its curves between layers (LabelGap, in the order

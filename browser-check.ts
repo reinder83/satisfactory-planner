@@ -290,6 +290,56 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
 }
+// Rearranging the flow graph (#1224): a drag of a line's box moves it, the layout is stored with
+// the factory once the drag ends, and after a reload the graph opens with the line where it was
+// put. `stored` reads the open profile's progress state from the browser edition.
+async function checkGraphLayout(
+  page: Page,
+  graphGroup: string,
+  stored: () => Promise<ProgressState>,
+) {
+  const openGraph = async () => {
+    await page.locator(`#main [data-group-graph="${graphGroup}"]`).click();
+    await page.locator('#detail [data-flow-graph] svg').waitFor();
+  };
+  await openGraph();
+  const line = page.locator('#detail [data-node^="line:"]').first();
+  const node = (await line.getAttribute('data-node'))!;
+  const transform = () => page.locator(`#detail [data-node="${node}"]`).getAttribute('transform');
+  const before = await transform();
+  const rect = await line.locator('rect').boundingBox();
+  assert.ok(rect, 'the line has a box on screen');
+  await page.mouse.move(rect.x + 20, rect.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(rect.x + 100, rect.y + 80, { steps: 6 });
+  await page.mouse.up();
+  const after = await transform();
+  assert.notEqual(after, before, 'a drag moves the line');
+  assert.ok(
+    await page.evaluate(() => !!document.querySelector('#detail [data-flow-graph]')),
+    'and does not open it',
+  );
+  const row = node.slice('line:'.length);
+  const moved = (after ?? '').match(/translate\(([\d.]+),([\d.]+)\)/);
+  assert.ok(moved, 'the box is drawn at a spot: ' + after);
+  const spot = [Number(moved[1]), Number(moved[2])];
+  // The save goes as the drag ends; the browser edition writes it to IndexedDB.
+  let layout;
+  for (let tries = 0; tries < 50 && !layout?.nodes?.[row]; tries++) {
+    layout = (await stored()).factoryGroups.groups.find(group => group.id === graphGroup)?.layout;
+    if (!layout?.nodes?.[row]) await page.waitForTimeout(100);
+  }
+  assert.deepEqual(layout?.nodes?.[row], spot, 'the spot is stored with the factory');
+  assert.equal((await stored()).version, 22);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  await page.reload();
+  await page.locator(`#main [data-group-graph="${graphGroup}"]`).waitFor();
+  await openGraph();
+  assert.equal(await transform(), after, 'after a reload the line is where it was put');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+}
 // Edit settings → Review → Recalculate in place (#1138) on the open profile: Review calculates the
 // plan once, and the recalculation stores it without calculating again. How long each took.
 async function reviewedInPlace(page: Page, calculations: () => Promise<number | undefined>) {
@@ -790,6 +840,7 @@ try {
   );
   await page.setViewportSize({ width: 1280, height: 720 });
   await checkGraphPanZoom(page, graphButton);
+  await checkGraphLayout(page, graphGroup!, () => api<ProgressState>('/api/state'));
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();
@@ -1296,6 +1347,15 @@ try {
   assert.equal(roundtrip.status, 200);
   const reexport: SaveExport = await (await fetch(backendURL + '/api/export-saves')).json();
   assert.equal(reexport.saves.length, 2);
+  // The flow graph's layout (#1224) went through the export into the Docker edition and back.
+  assert.ok(
+    reexport.saves.some(save =>
+      save.profiles.some(profile =>
+        profile.state.factoryGroups?.groups?.some(group => group.layout?.nodes),
+      ),
+    ),
+    'the Docker edition keeps the flow graph layout',
+  );
   assert.deepEqual(errors, []);
   await checkPerformance(browser);
   await checkExpertMode(browser);

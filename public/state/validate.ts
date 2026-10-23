@@ -15,6 +15,7 @@ import type {
   FactoryGroup,
   FactoryGroups,
   GroupAssignment,
+  GroupLayout,
   HandbookMapping,
   HandbookOrigin,
   LinkMode,
@@ -155,6 +156,66 @@ export function groupOwner(value: unknown): string | undefined {
 }
 // Whether any group has an owner: that state is version 20 (#1199).
 const hasOwners = (factoryGroups: FactoryGroups) => factoryGroups.groups.some(group => group.owner);
+// What a factory's flow graph layout may hold (#1224): this many moved lines, each corner from 0
+// to `coordinate` in the drawing's units, the graph's zoom limits (GRAPH_ZOOM in
+// app/graph-view.ts; a test keeps the two in step) and scroll offsets from 0 to `pan` px.
+export const LAYOUT_LIMITS = {
+  nodes: 1000,
+  coordinate: 100000,
+  zoomMin: 0.1,
+  zoomMax: 3,
+  pan: 1000000,
+} as const;
+// A whole number from 0 to `max`, from any finite number in that range (rounded); else throws.
+function layoutUnit(value: unknown, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > max)
+    fail('Invalid factory layout.');
+  return Math.round(value);
+}
+function layoutPair(value: unknown, max: number): [number, number] {
+  if (!Array.isArray(value) || value.length !== 2) fail('Invalid factory layout.');
+  return [layoutUnit(value[0], max), layoutUnit(value[1], max)];
+}
+// A factory group's flow graph layout as kept (#1224), or undefined when it says nothing: the
+// moved lines' corners by row id, rounded to whole units; the zoom to two decimals, left out at
+// natural size; the scroll offsets in whole px, left out at the top-left corner. Positions of
+// lines the plan no longer has are kept here (the graph drops them on its next save), since a
+// state is checked without its plan. Anything malformed throws, as for every other field.
+export function groupLayout(value: unknown): GroupLayout | undefined {
+  if (value === undefined) return undefined;
+  if (!plain(value)) fail('Invalid factory layout.');
+  const layout: GroupLayout = {};
+  if (value.nodes !== undefined) {
+    if (!plain(value.nodes) || Object.keys(value.nodes).length > LAYOUT_LIMITS.nodes)
+      fail('Invalid factory layout.');
+    const nodes: Record<string, [number, number]> = {};
+    for (const [row, corner] of Object.entries(value.nodes)) {
+      if (!safeKey(row)) fail('Invalid factory layout.');
+      nodes[row] = layoutPair(corner, LAYOUT_LIMITS.coordinate);
+    }
+    if (Object.keys(nodes).length) layout.nodes = nodes;
+  }
+  if (value.zoom !== undefined) {
+    const zoom = value.zoom;
+    if (
+      typeof zoom !== 'number' ||
+      !Number.isFinite(zoom) ||
+      zoom < LAYOUT_LIMITS.zoomMin ||
+      zoom > LAYOUT_LIMITS.zoomMax
+    )
+      fail('Invalid factory layout.');
+    const kept = Math.round(zoom * 100) / 100;
+    if (kept !== 1) layout.zoom = kept;
+  }
+  if (value.pan !== undefined) {
+    const pan = layoutPair(value.pan, LAYOUT_LIMITS.pan);
+    if (pan[0] || pan[1]) layout.pan = pan;
+  }
+  return Object.keys(layout).length ? layout : undefined;
+}
+// Whether any group has a flow graph layout: that state is version 22 (#1224).
+const hasLayouts = (factoryGroups: FactoryGroups) =>
+  factoryGroups.groups.some(group => group.layout);
 const hasTaskEdits = (edits: TaskEdits) =>
   edits.removed.length ||
   Object.keys(edits.order).length +
@@ -333,8 +394,14 @@ export function validateGroups(raw: unknown): FactoryGroups {
         fail('Invalid factory.');
       seen.add(group.id);
       const owner = groupOwner(group.owner);
-      // Only kept when set, so a group without an owner keeps its old shape and version.
-      return { id: group.id, name: group.name.trim(), ...(owner ? { owner } : {}) };
+      const layout = groupLayout(group.layout);
+      // Each only kept when set, so a group without them keeps its old shape and version.
+      return {
+        id: group.id,
+        name: group.name.trim(),
+        ...(owner ? { owner } : {}),
+        ...(layout ? { layout } : {}),
+      };
     });
   }
   if (raw.assignments !== undefined) {
@@ -780,7 +847,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–21 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–22 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -791,13 +858,13 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].includes(
       state.version as number,
     )
   )
     fail(
-      // Compared as the old code did, so a version given as "22" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 21
+      // Compared as the old code did, so a version given as "23" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 22
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -890,49 +957,53 @@ export function validateState(state: unknown): ProgressState {
   // recalculation grew (builtMachines, #1174) are 19: an older release would drop them and show the
   // line as if none of it were built. A factory group with an owner (#1199) is 20: an older
   // release's validateGroups would drop the owner. Who ticked a step and when (tickedBy, #1206) is
-  // 21: an older release would drop the records. It is kept only while a ticked step has one.
-  clean.version = clean.tickedBy
-    ? 21
-    : hasOwners(clean.factoryGroups)
-      ? 20
-      : clean.builtMachines
-        ? 19
-        : linksNeedV18(clean.factoryGroups)
-          ? 18
-          : linksNeedV17(clean.factoryGroups)
-            ? 17
-            : clean.exactClocks
-              ? 16
-              : clean.onSiteReview
-                ? 15
-                : clean.factoryGroups.local
-                  ? 14
-                  : clean.handbookOrigin?.mapping
-                    ? 13
-                    : clean.handbookOrigin
-                      ? 12
-                      : linksNeedV11(clean.factoryGroups)
-                        ? 11
-                        : clean.storageEdits.bayOrder
-                          ? 10
-                          : linksNeedV9(clean.factoryGroups)
-                            ? 9
-                            : clean.storageEdits.bayFloors
-                              ? 8
-                              : clean.factoryGroups.links
-                                ? 7
-                                : clean.storageEdits.hiddenFloors.length
-                                  ? 6
-                                  : clean.storageEdits.hiddenBays.length
-                                    ? 5
-                                    : hasAddedSlots(clean.storageEdits)
-                                      ? 4
-                                      : hasTaskEdits(clean.taskEdits) ||
-                                          hasGroups(clean.factoryGroups)
-                                        ? 3
-                                        : hasEdits(clean.storageEdits)
-                                          ? 2
-                                          : 1;
+  // 21: an older release would drop the records. It is kept only while a ticked step has one. A
+  // factory group with a flow graph layout (groups[].layout, #1224) is 22: an older release's
+  // validateGroups would drop it and draw the graph as if nothing had been moved.
+  clean.version = hasLayouts(clean.factoryGroups)
+    ? 22
+    : clean.tickedBy
+      ? 21
+      : hasOwners(clean.factoryGroups)
+        ? 20
+        : clean.builtMachines
+          ? 19
+          : linksNeedV18(clean.factoryGroups)
+            ? 18
+            : linksNeedV17(clean.factoryGroups)
+              ? 17
+              : clean.exactClocks
+                ? 16
+                : clean.onSiteReview
+                  ? 15
+                  : clean.factoryGroups.local
+                    ? 14
+                    : clean.handbookOrigin?.mapping
+                      ? 13
+                      : clean.handbookOrigin
+                        ? 12
+                        : linksNeedV11(clean.factoryGroups)
+                          ? 11
+                          : clean.storageEdits.bayOrder
+                            ? 10
+                            : linksNeedV9(clean.factoryGroups)
+                              ? 9
+                              : clean.storageEdits.bayFloors
+                                ? 8
+                                : clean.factoryGroups.links
+                                  ? 7
+                                  : clean.storageEdits.hiddenFloors.length
+                                    ? 6
+                                    : clean.storageEdits.hiddenBays.length
+                                      ? 5
+                                      : hasAddedSlots(clean.storageEdits)
+                                        ? 4
+                                        : hasTaskEdits(clean.taskEdits) ||
+                                            hasGroups(clean.factoryGroups)
+                                          ? 3
+                                          : hasEdits(clean.storageEdits)
+                                            ? 2
+                                            : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

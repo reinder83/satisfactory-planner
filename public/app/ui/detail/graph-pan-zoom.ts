@@ -3,12 +3,14 @@
 // keyboard once it has focus); on top of that:
 // - the wheel over the box zooms around the pointer, and only there: the page and the dialog
 //   outside the box scroll as usual (a sideways wheel or touchpad swipe still scrolls the box);
-// - a press on the background followed by a drag of a few px moves the drawing (mouse, pen or one
-//   finger: the box has touch-action: none, nowhere else does), while a press on a box without a
-//   drag stays a click;
+// - a press on the background or on a place's box followed by a drag of a few px moves the drawing
+//   (mouse, pen or one finger: the box has touch-action: none, nowhere else does);
+// - a press on a production line's box followed by a drag of as many px moves that box (#1224,
+//   `lines`: where it is, where it goes, and the drop, which the dialog saves), while a press on a
+//   box without a drag stays a click;
 // - two fingers pinch to zoom around their middle, and move the drawing as they move;
 // - zoomIn, zoomOut and fit for the buttons, around the middle of the box.
-// Nothing is saved: each opening starts at natural size.
+// show() puts a view back (the stored zoom and scroll offsets, #1224); the dialog saves them.
 import { nextTick, ref, type Ref } from 'vue';
 import {
   fitGraphView,
@@ -30,11 +32,28 @@ interface Press {
   left: number;
   top: number;
   panning: boolean;
+  // A press on a production line's box: its node id and where the box was (drawing units).
+  line?: { node: string; from: GraphPoint; moved: boolean };
 }
 
-export function useGraphPanZoom(box: Ref<HTMLElement | null>, size: () => GraphArea | null) {
+// What a drag of a production line's box does (#1224): `at` gives where the box with node id
+// `node` is now, `move` puts it somewhere else (drawing units, whole and never above or left of
+// the drawing) as the pointer moves, and `drop` runs once when a drag that moved it ends.
+export interface GraphLineDrag {
+  at(node: string): GraphPoint | null;
+  move(node: string, to: GraphPoint): void;
+  drop(node: string): void;
+}
+
+export function useGraphPanZoom(
+  box: Ref<HTMLElement | null>,
+  size: () => GraphArea | null,
+  lines?: GraphLineDrag,
+) {
   const zoom = ref(1);
   const panning = ref(false);
+  // A line's box is being dragged, for the grabbing cursor.
+  const moving = ref(false);
   // Where each pointer on the box is (client px), for a pinch; the press a pan may start from.
   const pointers = new Map<number, GraphPoint>();
   let press: Press | null = null;
@@ -103,17 +122,32 @@ export function useGraphPanZoom(box: Ref<HTMLElement | null>, size: () => GraphA
     const [a, b] = [...pointers.values()];
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   };
+  // A press on a line's box moves the box once it is a drag; one anywhere else moves the drawing.
   function startPress(el: HTMLElement, e: PointerEvent) {
-    const onNode = e.target instanceof Element && e.target.closest('[data-node]');
-    press = onNode
-      ? null
-      : {
-          id: e.pointerId,
-          start: { x: e.clientX, y: e.clientY },
-          left: el.scrollLeft,
-          top: el.scrollTop,
-          panning: false,
-        };
+    const onNode = e.target instanceof Element ? e.target.closest('[data-node]') : null;
+    const node = onNode?.getAttribute('data-node') ?? '';
+    const from = node.startsWith('line:') ? lines?.at(node) : null;
+    press = {
+      id: e.pointerId,
+      start: { x: e.clientX, y: e.clientY },
+      left: el.scrollLeft,
+      top: el.scrollTop,
+      panning: false,
+      ...(from ? { line: { node, from, moved: false } } : {}),
+    };
+  }
+  // The line's box under a drag, moved as far as the pointer, in the drawing's units.
+  function dragLine(el: HTMLElement, current: Press, dx: number, dy: number) {
+    const line = current.line;
+    if (!line) return;
+    if (!line.moved) {
+      line.moved = moving.value = true;
+      el.setPointerCapture?.(current.id);
+    }
+    lines?.move(line.node, {
+      x: Math.max(0, Math.round(line.from.x + dx / zoom.value)),
+      y: Math.max(0, Math.round(line.from.y + dy / zoom.value)),
+    });
   }
   function onPointerDown(e: PointerEvent) {
     const el = box.value;
@@ -121,8 +155,10 @@ export function useGraphPanZoom(box: Ref<HTMLElement | null>, size: () => GraphA
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     dragged = false;
     if (pointers.size === 1) return startPress(el, e);
-    // A second finger: a pinch, which no click follows.
+    // A second finger: a pinch, which no click follows. A line's box it was moving stays there.
+    if (press?.line?.moved) lines?.drop(press.line.node);
     press = null;
+    moving.value = false;
     pinchDistance = spread();
     pinchMiddle = middle();
     dragged = true;
@@ -153,7 +189,8 @@ export function useGraphPanZoom(box: Ref<HTMLElement | null>, size: () => GraphA
     if (!press || press.id !== e.pointerId) return;
     const dx = e.clientX - press.start.x;
     const dy = e.clientY - press.start.y;
-    if (!press.panning && Math.hypot(dx, dy) < PAN_THRESHOLD) return;
+    if (!press.panning && !press.line?.moved && Math.hypot(dx, dy) < PAN_THRESHOLD) return;
+    if (press.line) return dragLine(el, press, dx, dy);
     if (!press.panning) {
       press.panning = panning.value = true;
       el.setPointerCapture?.(e.pointerId);
@@ -163,9 +200,11 @@ export function useGraphPanZoom(box: Ref<HTMLElement | null>, size: () => GraphA
   }
   function onPointerUp(e: PointerEvent) {
     if (!pointers.delete(e.pointerId)) return;
-    if (press?.panning) dragged = true;
+    const line = press?.line;
+    if (press?.panning || line?.moved) dragged = true;
     press = null;
-    panning.value = false;
+    panning.value = moving.value = false;
+    if (line?.moved) lines?.drop(line.node);
     // A finger left after a pinch moves the drawing from where it is now.
     const el = box.value;
     const [rest] = [...pointers.entries()];
@@ -189,6 +228,8 @@ export function useGraphPanZoom(box: Ref<HTMLElement | null>, size: () => GraphA
   return {
     zoom,
     panning,
+    moving,
+    show,
     zoomIn,
     zoomOut,
     fit,

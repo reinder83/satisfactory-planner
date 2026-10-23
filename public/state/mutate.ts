@@ -28,6 +28,7 @@ import {
   handbookFloor,
   isPhase,
   knownFloor,
+  groupLayout,
   groupOwner,
   label,
   linkKey,
@@ -292,6 +293,19 @@ function setGroupOwner(factory: FactoryGroups, update: Raw) {
   if (owner) group.owner = owner;
   else delete group.owner;
 }
+// How a group's flow graph is drawn (#1224): its moved lines, zoom and scroll offsets, sent whole
+// by the graph after a drag, a nudge or a zoom or scroll settles (ui/detail/graph-layout-save.ts).
+// Null or a layout that says nothing (groupLayout) drops the field, and with it version 22 once no
+// group has one. Presentation only, so it is not base-sensitive: a tab that has not seen another
+// tab's change of the same graph replaces that layout, and nothing else.
+function setGroupLayout(factory: FactoryGroups, update: Raw) {
+  const group = factory.groups.find(known => known.id === update.id);
+  if (!group) fail('Unknown factory.');
+  if (update.layout === undefined) fail('Invalid factory layout.');
+  const layout = update.layout === null ? undefined : groupLayout(update.layout);
+  if (layout) group.layout = layout;
+  else delete group.layout;
+}
 // Removing a group also drops it from every row's assignment list.
 function removeGroup(factory: FactoryGroups, update: Raw) {
   if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory.');
@@ -393,6 +407,7 @@ const groupEdits: Record<string, GroupEdit> = {
   factoryGroupRename: renameGroup,
   factoryGroupRemove: removeGroup,
   factoryGroupOwner: setGroupOwner,
+  factoryGroupLayout: setGroupLayout,
   factoryLinkTransport: setLinkTransport,
   factoryAssign: assignGroups,
   factoryLocal: setLocalItems,

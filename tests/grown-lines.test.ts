@@ -315,7 +315,7 @@ test('builtMachines is version 19, checked, and older releases are told to updat
       () => validateState({ ...json(version19), builtMachines: bad }),
       /Invalid count of built machines/,
     );
-  assert.throws(() => validateState({ ...json(version19), version: 22 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(version19), version: 23 }), /newer planner version/);
   // A share leaves it out with the rest of the progress.
   assert.equal(shareState(validateState(json(version19))).builtMachines, undefined);
 });

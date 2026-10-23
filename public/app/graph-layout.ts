@@ -1,0 +1,309 @@
+// A factory's flow graph as the user arranged it (#1224, slice 2 of #1201): production lines moved
+// by a drag or the arrow keys keep their spots, stored per factory group (groups[].layout,
+// state version 22, with the zoom and scroll offsets), and the arrows follow them. Plain
+// arithmetic, no session: the dialog (ui/detail/FlowGraphDialog.vue) passes the automatic graph
+// (flowGraph in flow-graph.ts) and the stored spots, and saves what layoutToSave gives back.
+//
+// - Without a stored spot for any of its lines the graph is drawn exactly as flowGraph lays it out.
+// - The first move of a line stores the spots of all the graph's lines (heldSpots), so the others
+//   stay where they were drawn. After that each line with a spot sits there, and a line without one
+//   (new in the plan, or new in this phase) takes its automatic spot moved as far as the lines it is linked to were moved on
+//   average, then down below any box it would cover. Places (what comes in, what leaves) keep
+//   their automatic spots. Every arrow then runs from its source's right side to its target's
+//   left side as one curve, its label on the curve where it covers the fewest boxes and labels.
+// - Saving keeps the spots of the lines the factory still has in some phase of the plan
+//   (factoryLineRows), whole units, so a line the plan dropped loses its spot then.
+// The boxes stay in the automatic order in the drawing (and so in the tab order) wherever they sit.
+import { GRAPH, labelWidth, type FlowGraph, type GraphEdge, type GraphNode } from './flow-graph.ts';
+import { LINK_DUST, rowPlaces, type GroupsInput } from './group-order.ts';
+import type { GraphView } from './graph-view.ts';
+import type { CalcRow, GroupLayout } from '../types/index.ts';
+
+// Where a moved line's box sits: its top-left corner in the drawing's units, by plan row id.
+export type GraphSpots = Readonly<Record<string, readonly [number, number]>>;
+
+// An arrow key moves a focused line by `step` units, with Shift by `big`.
+export const GRAPH_NUDGE = { step: 10, big: 50 } as const;
+
+const LINE_PREFIX = 'line:';
+// The plan row id of a line's box ('line:<row id>'), or null for a place's box.
+export const lineRowOf = (nodeId: string): string | null =>
+  nodeId.startsWith(LINE_PREFIX) ? nodeId.slice(LINE_PREFIX.length) : null;
+
+// A corner as kept: whole units, never left of or above the drawing's edge.
+export const spotUnit = (value: number): number => Math.max(0, Math.round(value));
+
+// `graph` with the stored spots applied and its arrows drawn to them; `graph` itself when no line
+// of it has a spot. Never changes `graph`.
+export function placedGraph(graph: FlowGraph, spots: GraphSpots | undefined): FlowGraph {
+  const spotOf = (node: GraphNode) => {
+    const row = lineRowOf(node.id);
+    return row === null ? undefined : spots?.[row];
+  };
+  if (!graph.nodes.some(node => spotOf(node))) return graph;
+  const nodes = graph.nodes.map(node => ({ ...node }));
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const fresh: GraphNode[] = [];
+  for (const node of nodes) {
+    const spot = spotOf(node);
+    if (spot) [node.x, node.y] = spot;
+    else if (node.kind === 'line') fresh.push(node);
+  }
+  const automatic = new Map(graph.nodes.map(node => [node.id, node]));
+  placeFreshLines(fresh, nodes, graph.edges, automatic, spots ?? {});
+  const { edges, curves } = routeArranged(graph.edges, byId);
+  placeArrangedLabels(edges, curves, nodes);
+  return { ...graph, nodes, edges, ...arrangedSize(nodes, edges, curves) };
+}
+
+// Each line without a spot, in order: its automatic spot moved by the mean move of the lines it
+// is linked to that have one, then down a row at a time until it covers no box placed so far.
+function placeFreshLines(
+  fresh: GraphNode[],
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  automatic: ReadonlyMap<string, GraphNode>,
+  spots: GraphSpots,
+) {
+  if (!fresh.length) return;
+  const isFresh = new Set(fresh.map(node => node.id));
+  const settled = nodes.filter(node => !isFresh.has(node.id));
+  for (const node of fresh) {
+    let dx = 0,
+      dy = 0,
+      count = 0;
+    for (const edge of edges) {
+      const other = edge.from === node.id ? edge.to : edge.to === node.id ? edge.from : null;
+      const row = other === null ? null : lineRowOf(other);
+      const spot = row === null ? undefined : spots[row];
+      // The other end's box where flowGraph put it, before its spot was applied.
+      const before = other === null ? undefined : automatic.get(other);
+      if (!spot || !before) continue;
+      dx += spot[0] - before.x;
+      dy += spot[1] - before.y;
+      count++;
+    }
+    node.x = spotUnit(node.x + (count ? dx / count : 0));
+    node.y = spotUnit(node.y + (count ? dy / count : 0));
+    for (let tries = 0; tries < 200 && settled.some(box => boxesMeet(box, node)); tries++)
+      node.y += GRAPH.nodeHeight + GRAPH.rowGap;
+    settled.push(node);
+  }
+}
+
+// Whether two boxes overlap, with a row's gap kept between them.
+const boxesMeet = (one: GraphNode, other: GraphNode): boolean =>
+  one.x < other.x + other.width + GRAPH.rowGap &&
+  other.x < one.x + one.width + GRAPH.rowGap &&
+  one.y < other.y + other.height + GRAPH.rowGap &&
+  other.y < one.y + one.height + GRAPH.rowGap;
+
+interface SpotPoint {
+  x: number;
+  y: number;
+}
+// One arrow of an arranged graph: from its source's right side to its target's left side.
+interface ArrangedCurve {
+  from: SpotPoint;
+  out: SpotPoint;
+  into: SpotPoint;
+  to: SpotPoint;
+}
+
+const spotRound = (value: number) => Math.round(value * 10) / 10;
+
+// Each drawn arrow as one curve: the arrows on one side of a box spread evenly down that side in
+// the order of where their other ends are, so they do not cross there (as flowGraph does); the
+// curve leaves and enters level, and one running back to the left bends out a gap's quarter at
+// least, so it shows as a loop. A line's own output back into itself stays undrawn.
+function routeArranged(
+  edges: GraphEdge[],
+  byId: ReadonlyMap<string, GraphNode>,
+): { edges: GraphEdge[]; curves: Map<string, ArrangedCurve> } {
+  const curves = new Map<string, ArrangedCurve>();
+  const drawn = edges.filter(edge => edge.note !== 'self');
+  // Every edge joins two boxes of the graph (flowGraph's ends), so byId has both.
+  const middle = (id: string) => {
+    const node = byId.get(id)!;
+    return node.y + node.height / 2;
+  };
+  const portY = new Map<string, number>();
+  for (const side of ['from', 'to'] as const) {
+    const bySide = new Map<string, GraphEdge[]>();
+    for (const edge of drawn) bySide.set(edge[side], [...(bySide.get(edge[side]) ?? []), edge]);
+    for (const [id, list] of bySide) {
+      // An edge's end, as above.
+      const node = byId.get(id)!;
+      const other = (edge: GraphEdge) => middle(side === 'from' ? edge.to : edge.from);
+      const sorted = [...list].sort((a, b) => other(a) - other(b));
+      const top = node.y + 10,
+        span = Math.max(GRAPH.nodeHeight, node.height) - 20;
+      sorted.forEach((edge, i) =>
+        portY.set(side + edge.id, top + (span * (i + 1)) / (sorted.length + 1)),
+      );
+    }
+  }
+  const routed = edges.map(edge => {
+    if (edge.note === 'self') return { ...edge, path: null, label: null };
+    // Every drawn edge joins two boxes of the graph, and both its ports were set above.
+    const source = byId.get(edge.from)!,
+      target = byId.get(edge.to)!;
+    const from = { x: source.x + source.width, y: portY.get('from' + edge.id)! };
+    const to = { x: target.x, y: portY.get('to' + edge.id)! };
+    const reach = Math.max(GRAPH.gap / 4, Math.abs(to.x - from.x) / 2);
+    const curve: ArrangedCurve = {
+      from,
+      out: { x: from.x + reach, y: from.y },
+      into: { x: Math.max(0, to.x - reach), y: to.y },
+      to,
+    };
+    const path =
+      `M${spotRound(from.x)},${spotRound(from.y)} C${spotRound(curve.out.x)},${spotRound(curve.out.y)}` +
+      ` ${spotRound(curve.into.x)},${spotRound(curve.into.y)} ${spotRound(to.x)},${spotRound(to.y)}`;
+    curves.set(edge.id, curve);
+    return { ...edge, path, label: null };
+  });
+  return { edges: routed, curves };
+}
+
+// A point of a curve at `t` from 0 to 1.
+function arrangedPoint(curve: ArrangedCurve, t: number): SpotPoint {
+  const u = 1 - t;
+  const mix = (a: number, b: number, c: number, d: number) =>
+    u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+  return {
+    x: mix(curve.from.x, curve.out.x, curve.into.x, curve.to.x),
+    y: mix(curve.from.y, curve.out.y, curve.into.y, curve.to.y),
+  };
+}
+
+// Each drawn arrow's label on its curve, at the first of these points along it that covers no box
+// and no label placed before, else at the one that covers fewest; kept inside the drawing.
+const ARRANGED_ALONG = [0.5, 0.35, 0.65, 0.2, 0.8];
+function placeArrangedLabels(
+  edges: GraphEdge[],
+  curves: ReadonlyMap<string, ArrangedCurve>,
+  nodes: GraphNode[],
+) {
+  const placed: { x: number; y: number; width: number; height: number }[] = nodes.map(node => ({
+    x: node.x + node.width / 2,
+    y: node.y + node.height / 2,
+    width: node.width,
+    height: node.height,
+  }));
+  const covers = (x: number, y: number, width: number) =>
+    placed.filter(
+      box =>
+        Math.abs(box.x - x) < (box.width + width) / 2 &&
+        Math.abs(box.y - y) < (box.height + GRAPH.labelHeight) / 2,
+    ).length;
+  for (const edge of edges) {
+    const curve = curves.get(edge.id);
+    if (!curve) continue;
+    const width = labelWidth(edge);
+    let best: { spot: SpotPoint; count: number } | null = null;
+    for (const t of ARRANGED_ALONG) {
+      const spot = arrangedPoint(curve, t);
+      spot.x = Math.max(width / 2, spot.x);
+      spot.y = Math.max(GRAPH.labelHeight / 2, spot.y);
+      const count = covers(spot.x, spot.y, width);
+      if (!best || count < best.count) best = { spot, count };
+      if (count === 0) break;
+    }
+    // ARRANGED_ALONG is not empty, so the loop set it.
+    const label = { x: spotRound(best!.spot.x), y: spotRound(best!.spot.y), width };
+    edge.label = label;
+    placed.push({ ...label, height: GRAPH.labelHeight });
+  }
+}
+
+// The drawing's size: to the right and lowest of every box, curve and label, and the padding.
+function arrangedSize(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  curves: ReadonlyMap<string, ArrangedCurve>,
+): { width: number; height: number } {
+  let right = 0,
+    bottom = 0;
+  for (const node of nodes) {
+    right = Math.max(right, node.x + node.width);
+    bottom = Math.max(bottom, node.y + node.height);
+  }
+  for (const edge of edges) {
+    const curve = curves.get(edge.id);
+    if (curve) right = Math.max(right, curve.out.x, curve.into.x);
+    if (edge.label) {
+      right = Math.max(right, edge.label.x + edge.label.width / 2);
+      bottom = Math.max(bottom, edge.label.y + GRAPH.labelHeight / 2);
+    }
+  }
+  return { width: Math.ceil(right + GRAPH.pad), height: Math.ceil(bottom + GRAPH.pad) };
+}
+
+// `spots` with a spot for every line of `graph` as drawn (placedGraph) that has none yet: the
+// first move of a line keeps where all the others are, so they stay put when it moves, and a line
+// without a spot is always one the arrangement has not seen (new in the plan or in this phase).
+export function heldSpots(graph: FlowGraph, spots: GraphSpots): Record<string, [number, number]> {
+  const held: Record<string, [number, number]> = {};
+  for (const [row, [x, y]] of Object.entries(spots)) held[row] = [x, y];
+  for (const node of graph.nodes) {
+    const row = lineRowOf(node.id);
+    if (row !== null && !held[row]) held[row] = [spotUnit(node.x), spotUnit(node.y)];
+  }
+  return held;
+}
+
+// The plan row ids of factory group `groupId`'s lines in any phase of the plan (`rowLists`, one
+// list of rows per phase): the lines whose spots a save keeps.
+export function factoryLineRows(
+  rowLists: readonly (readonly CalcRow[])[],
+  groups: GroupsInput,
+  groupId: string,
+): Set<string> {
+  const rows = new Set<string>();
+  for (const list of rowLists)
+    for (const row of list)
+      if ((rowPlaces(row, groups).get(groupId) ?? 0) > LINK_DUST) rows.add(row.id);
+  return rows;
+}
+
+// What a save stores (groups[].layout): the spots of the lines in `keep`, whole units, and the
+// view, the zoom to two decimals and the scroll offsets in whole px; each left out when it says
+// nothing, and null when nothing is left.
+export function layoutToSave(
+  spots: GraphSpots,
+  view: GraphView | null,
+  keep: ReadonlySet<string>,
+): GroupLayout | null {
+  const layout: GroupLayout = {};
+  const nodes = Object.entries(spots).filter(([row]) => keep.has(row));
+  if (nodes.length)
+    layout.nodes = Object.fromEntries(
+      nodes.map(([row, [x, y]]) => [row, [spotUnit(x), spotUnit(y)] as [number, number]]),
+    );
+  if (view) {
+    const zoom = Math.round(view.zoom * 100) / 100;
+    if (zoom !== 1) layout.zoom = zoom;
+    const pan: [number, number] = [spotUnit(view.left), spotUnit(view.top)];
+    if (pan[0] || pan[1]) layout.pan = pan;
+  }
+  return Object.keys(layout).length ? layout : null;
+}
+
+// A spot moved by an arrow key: by GRAPH_NUDGE's step, with Shift by its big step; null for any
+// other key.
+export function nudgedSpot(
+  spot: readonly [number, number],
+  key: string,
+  big: boolean,
+): [number, number] | null {
+  const step = big ? GRAPH_NUDGE.big : GRAPH_NUDGE.step;
+  const moves: Record<string, [number, number]> = {
+    ArrowLeft: [-step, 0],
+    ArrowRight: [step, 0],
+    ArrowUp: [0, -step],
+    ArrowDown: [0, step],
+  };
+  const move = moves[key];
+  return move ? [spotUnit(spot[0] + move[0]), spotUnit(spot[1] + move[1])] : null;
+}
