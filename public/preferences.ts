@@ -140,6 +140,7 @@ export {
   extractorBuilt,
   isWellKind,
   leftOutCap,
+  mapSupply,
   miningAdvice,
   miningLinearMW,
   miningMW,

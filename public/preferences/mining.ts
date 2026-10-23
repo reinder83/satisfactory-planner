@@ -162,6 +162,8 @@ export interface MiningSettings {
         clock?: number;
         nodes?: Record<string, NodeCounts>;
         wells?: Record<string, NodeCounts>;
+        // What the survey says is committed elsewhere, per minute (mapSupply, #1222).
+        used?: ItemRates;
       } & NodeExclusions)
     | null;
   purity?: string;
@@ -344,6 +346,51 @@ export function budgetLimits(settings: Pick<MiningSettings, 'limits' | 'extracti
   for (const resource of Object.keys(limits))
     if (leftOutCap(settings, resource) !== null) limits[resource] = budgetLimit(settings, resource);
   return limits;
+}
+
+// What the map gives of a resource at the nodes the plan may tap (#1222), the figure an
+// infeasible phase's advice sets against what the phase needs: per minute, at the miner and clock
+// the survey's budgets are worked out with (the survey's, else Miner Mk.3 at 250%), no belt cap.
+// `surveyed` when the counts are the node survey's (less the nodes it leaves out, #1183, and what
+// it says is committed elsewhere), else the world's known counts, whose crude oil is its oil nodes
+// alone (`wells` false: the known table has none of its wells). null where no count is known:
+// Water, and a resource the survey does not count on a seed-dependent world (knownWorld), or
+// nitrogen off the default distribution. Never an estimate.
+export interface MapSupply {
+  total: number;
+  mark: number;
+  clock: number;
+  surveyed: boolean;
+  wells: boolean;
+}
+export function mapSupply(
+  settings: Pick<MiningSettings, 'extraction' | 'purity' | 'distribution'>,
+  resource: string,
+): MapSupply | null {
+  if (uncountedResources.includes(resource) || !rawResources.includes(resource)) return null;
+  const counted = (counts?: NodeCounts) =>
+    !!counts &&
+    (Number(counts.impure) || 0) + (Number(counts.normal) || 0) + (Number(counts.pure) || 0) > 0;
+  const survey = settings.extraction;
+  if (survey && (counted(survey.nodes?.[resource]) || counted(survey.wells?.[resource]))) {
+    const mark = survey.mark && MINER_BASE[survey.mark] ? survey.mark : REFERENCE.mark,
+      clock = survey.clock ?? REFERENCE.clock;
+    const used = Number(survey.used?.[resource]) || 0;
+    const pool = resourcePool(remainingSurvey({ ...survey, mark, clock }), resource);
+    return { total: Math.max(0, pool - used), mark, clock, surveyed: true, wells: true };
+  }
+  const purity = settings.purity ?? 'vanilla',
+    distribution = settings.distribution ?? 'original';
+  if (!knownWorld(purity, distribution)) return null;
+  const world = presetSurvey(purity, null, distribution);
+  if (!counted(world.nodes[resource]) && !counted(world.wells[resource])) return null;
+  return {
+    total: resourcePool(world, resource),
+    mark: REFERENCE.mark,
+    clock: REFERENCE.clock,
+    surveyed: false,
+    wells: !oilNodeResources.includes(resource),
+  };
 }
 
 // Rounds a budget down to 0.01/min, so floating-point noise never adds to it.
