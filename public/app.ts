@@ -34,6 +34,10 @@
 // request() then answers /api/* paths with browser-api.ts instead: IndexedDB storage and a
 // calculator Web Worker, with the same request and response shapes.
 import { boot } from './app/session.ts';
+import { startLiveRefresh } from './app/live-refresh.ts';
 import './app/listeners.ts';
 
+// The Docker edition asks every few seconds whether another tab or device changed the open
+// profile's progress (#1210); the browser edition has no server and does not.
+startLiveRefresh();
 boot();
