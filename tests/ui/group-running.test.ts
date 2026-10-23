@@ -17,7 +17,18 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, applyUpdate, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  $$,
+  applyUpdate,
+  evil,
+  generated,
+  go,
+  open,
+  page,
+  stubFetch,
+  unstamped,
+} from './setup.ts';
 import type { FactoryGroups, UpdateOp } from '../../public/types/index.ts';
 
 const ALPHA = 'fg-alpha',
@@ -110,7 +121,7 @@ test('a press ticks only the factory’s lines not running yet, says how many, a
   alpha.click();
   await settle();
   const sent = updates.filter(([path]) => path === '/api/update').map(([, body]) => body);
-  assert.deepEqual(sent, [
+  assert.deepEqual(sent.map(unstamped), [
     { type: 'checks', keys: [ids[1], ids[2], ids[3]].map(id => key(id!)), value: true },
   ]);
   assert.deepEqual(state.checks, {

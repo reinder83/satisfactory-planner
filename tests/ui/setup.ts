@@ -272,6 +272,23 @@ export function go(view: View) {
 // and leaves the page's state alone; mutate on the live state would change it before refusing.
 export const applyUpdate = (update: UpdateOp) => mutate(structuredClone(state), update);
 
+// An update as a page sent it, without who ticked and when (#1206), which save() adds to every
+// tick (tickStamped in app/ticked-by.ts): checks that a tick carries it, with a time of this
+// moment, and that nothing else does, and returns the rest
+// to compare.
+export function unstamped(body: unknown): unknown {
+  const update = body as { type?: string; value?: unknown; ticked?: { at: string; by?: string } };
+  const ticks = (update.type === 'check' || update.type === 'checks') && update.value === true;
+  if (!ticks) {
+    assert.equal(update.ticked, undefined, 'only a tick says who ticked');
+    return body;
+  }
+  const { ticked, ...rest } = update;
+  assert.ok(ticked, 'a tick says when it was made');
+  assert.ok(Math.abs(Date.now() - Date.parse(ticked.at)) < 60000, ticked.at);
+  return rest;
+}
+
 // Until a test stubs fetch, a request answers 503 at once rather than reaching happy-dom's
 // network, which has no server to talk to: Saves & profiles asks for the workspace summary as it
 // opens (#418), and a test that only draws the page need not stub that. Each test starts from

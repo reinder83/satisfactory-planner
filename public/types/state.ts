@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–19). Later versions only add optional sections, so an older
+//                  version (1–21). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -21,7 +21,7 @@ import type { ExactClocks } from './calculated.ts';
 // factory-group link whose vehicles burn a fuel added in #1165 (laterVehicleFuels), 18 a
 // factory-group link on Fluid Trucks (mode 'fluidTruck', #1177), 19 the machines that stand on a
 // production line a recalculation grew (builtMachines, #1174), 20 a factory group's owner
-// (groups[].owner, #1199).
+// (groups[].owner, #1199), 21 who ticked a step and when (tickedBy, #1206).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -45,7 +45,16 @@ export type StateVersion =
   | 17
   | 18
   | 19
-  | 20;
+  | 20
+  | 21;
+
+// Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
+// time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
+// absent when none was set. Kept per check key in `tickedBy`, only while the check is ticked.
+export interface TickRecord {
+  at: string;
+  by?: string;
+}
 
 // The machines that already stand on a production line whose plan now needs more of them (#1174,
 // newProfileState in state/carry.ts): a line ticked as built that a recalculation, in place or
@@ -212,6 +221,9 @@ export interface ProgressState {
   exactClocks?: ExactClocks;
   // Only on a profile whose carried progress grew a built line (version 19, #1174).
   builtMachines?: BuiltMachines;
+  // Who ticked a step and when (#1206), by check key: only ticks made since, and only while the
+  // check is ticked (version 21).
+  tickedBy?: Record<string, TickRecord>;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -232,13 +244,23 @@ export interface SavedState {
   onSiteReview?: OnSiteReview;
   exactClocks?: ExactClocks;
   builtMachines?: BuiltMachines;
+  tickedBy?: Record<string, TickRecord>;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
 export type UpdateOp =
-  | { type: 'check'; key: string; value: boolean }
-  // null forgets the keys, as if never ticked (#1163).
-  | { type: 'checks'; keys: string[]; value: boolean | null }
+  // `ticked` (#1206): who ticked it and when, kept when it ticks a step not ticked before.
+  | { type: 'check'; key: string; value: boolean; ticked?: TickRecord }
+  // null forgets the keys, as if never ticked (#1163). Ticking steps not ticked before keeps who
+  // and when (#1206): `tickedBy` per key (the co-op merge, which carries the file's records), else
+  // `ticked` for every key.
+  | {
+      type: 'checks';
+      keys: string[];
+      value: boolean | null;
+      ticked?: TickRecord;
+      tickedBy?: Record<string, TickRecord>;
+    }
   // An empty or blank value deletes the note. `base` is the saved text the value was typed over
   // (#1052): the write is refused (409) when the note now says something else (checkBase).
   | { type: 'note'; key: string; value: string; base?: string }

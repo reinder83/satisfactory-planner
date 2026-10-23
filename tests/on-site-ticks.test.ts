@@ -343,7 +343,7 @@ test('ticks kept for review are state version 15, validated, carried and never s
       /Invalid ticks kept for review/,
       JSON.stringify(bad),
     );
-  assert.throws(() => validateState({ ...json(clean), version: 21 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(clean), version: 22 }), /newer planner version/);
   // Every earlier released format loads unchanged and does not gain it.
   for (const [saved, version] of states.filter(([, version]) => version < 15)) {
     const loaded = validateState(json(saved));

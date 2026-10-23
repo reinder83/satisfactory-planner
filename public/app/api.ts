@@ -22,6 +22,7 @@ import {
   type View,
 } from './session.ts';
 import { render } from './shell.ts';
+import { tickStamped } from './ticked-by.ts';
 import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
@@ -167,9 +168,9 @@ const refusedStatuses = [400, 409];
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
 // profile's full new state. Does not render: callers render() after it resolves. On failure
 // it shows an error toast and rejects, and callers usually just restore their control
-// instead of rendering.
+// instead of rendering. A tick carries who ticked and when (tickStamped, #1206).
 export function save(operation: UpdateOp): Promise<ProgressState> {
-  return queuedWrite('/api/update', operation).catch((error: Error) => {
+  return queuedWrite('/api/update', tickStamped(operation)).catch((error: Error) => {
     toast(error.message, true);
     throw error;
   });

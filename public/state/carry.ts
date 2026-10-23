@@ -41,6 +41,7 @@ import {
   validateOrigin,
   validateState,
   validateTaskEdits,
+  validateTickedBy,
 } from './validate.ts';
 
 // A new profile for a save you are already playing describes the same world.
@@ -270,6 +271,7 @@ export function newProfileState(
   // So are the ticks an earlier recalculation kept for review because of lines made on site.
   const review = validateOnSiteReview(source.onSiteReview);
   if (review) state.onSiteReview = { checks: { ...review.checks, ...state.onSiteReview?.checks } };
+  carryTickers(state, source);
   const clean = validateState(state);
   return {
     state: clean,
@@ -278,6 +280,14 @@ export function newProfileState(
     changedCount,
     carried: Object.values(clean.checks).filter(Boolean).length,
   };
+}
+// Who ticked a step and when (#1206) goes with each tick carried: a step the source ticked that is
+// ticked here too keeps the source's record. A tick unticked for review has none, and neither has
+// a step only ticked here (finished work, picked unlocks), which validateState then drops.
+function carryTickers(state: ProgressState, source: Pick<SavedState, 'checks' | 'tickedBy'>) {
+  const records = validateTickedBy(source.tickedBy, source.checks || {});
+  for (const [key, record] of Object.entries(records || {}))
+    if (state.checks[key] === true) (state.tickedBy ??= {})[key] = record;
 }
 // The machines that stand on the source's production lines, by check key (#1175): a ticked line
 // of the source plan has its machines, or more where a carry kept spare ones (a shrunk line); a
@@ -772,6 +782,8 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
     started.profile.plan,
   );
   if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
+  // The steps kept above keep who ticked them too (#1206), and the version follows.
+  carryTickers(state, previous.state);
   state.revision = (previous.state.revision ?? 0) + 1;
   return {
     // A profile that is itself a kept version keeps its link (restore.ts): it stays the version
@@ -779,6 +791,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
     // (rename-offer.ts); the backup, which gets a name of its own, leaves it behind.
     profile: {
       ...started.profile,
+      state: validateState(state),
       ...(previous.backupOf === undefined ? {} : { backupOf: previous.backupOf }),
       ...renameOfferFields(previous),
     },
@@ -861,7 +874,8 @@ export function shareState(state: SavedState): ProgressState {
   // Its unmapped ticks and notes are progress too (#485), and so are ticks kept for review (#876).
   delete clean.handbookOrigin;
   delete clean.onSiteReview;
-  // And so are the machines that stand on a grown line (#1174).
+  // And so are the machines that stand on a grown line (#1174), and who ticked what (#1206).
   delete clean.builtMachines;
+  delete clean.tickedBy;
   return validateState(clean);
 }

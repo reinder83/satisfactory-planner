@@ -114,7 +114,13 @@ test('the preview counts per phase, names what is ticked and skipped, and Merge 
   assert.equal(shown.ok, 'Merge 2 ticks');
   assert.deepEqual(
     calls.map(([path, body]) => [path, body]),
-    [['/api/update', { type: 'checks', keys: [phaseOne[1], phaseOne[2]], value: true }]],
+    // A file without records of who ticked sends none, and never this device's (#1206).
+    [
+      [
+        '/api/update',
+        { type: 'checks', keys: [phaseOne[1], phaseOne[2]], value: true, tickedBy: {} },
+      ],
+    ],
   );
   assert.equal(state.checks[phaseOne[0]!], true);
   assert.equal(state.checks[phaseOne[1]!], true);

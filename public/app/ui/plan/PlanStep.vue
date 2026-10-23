@@ -13,7 +13,8 @@
   recalculation would change (`step.clocks`, #1066), says so there too, and so does a line a
   recalculation grew (`step.built`, #1174: "5 of 6 built"), whose table says what to add, or that
   built lines of another recipe switch to (#1175: "4 to switch from Iron Plate, 1 to add"), and a
-  shrunk line's spare machines (`step.spare`, #1175: "6 built, 1 spare"), ticked or not; a step
+  shrunk line's spare machines (`step.spare`, #1175: "6 built, 1 spare"), ticked or not, and a
+  ticked step who ticked it and when (`step.ticked`, #1206: "Ticked by Anna, 21 Oct"); a step
   with both a table and a list (a grown line's byproduct advice) draws the table first. A line's
   own step ends with what it takes to build (`step.materials`, #1073): "To build: 2 Refineries + 1
   Water Extractor + Mk.2 belts and Mk.1 pipes" and the parts those buildings cost. Its text marks the glossary
@@ -260,6 +261,9 @@ async function deletePersonal(event: Event) {
         }}</span
         ><span v-if="step.spare" :id="spareId" class="task-idle" data-step-spare>{{
           step.spare
+        }}</span
+        ><span v-if="step.done && step.ticked" class="task-idle" data-step-ticked-by>{{
+          step.ticked
         }}</span>
       </summary>
       <StepTable v-if="step.table" :table="step.table" :terms="step.terms ?? []" />

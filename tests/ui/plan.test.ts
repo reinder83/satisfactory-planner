@@ -35,6 +35,7 @@ import {
   openMigrated,
   page,
   stubFetch,
+  unstamped,
 } from './setup.ts';
 import type {
   CalcRow,
@@ -905,7 +906,11 @@ test("a guided plan shows the guide's steps for the phase, under their own ids",
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'phase-3-survey', value: true });
+  assert.deepEqual(unstamped(calls.at(-1)![1]), {
+    type: 'check',
+    key: 'phase-3-survey',
+    value: true,
+  });
   // Post-game reads the guide's post steps; a phase it leaves out (here 4) has none.
   open({ calculated: guided, phase: 'post' });
   render();

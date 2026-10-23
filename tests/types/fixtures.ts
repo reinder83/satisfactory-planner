@@ -269,6 +269,22 @@ export const version20 = {
   },
 } satisfies SavedState;
 
+// Version 21: who ticked a step and when (#1206, co-op): Anna ticked the Wire line, and a device
+// without a name ticked the container. The Iron Plate line was ticked before, so it has no record.
+export const version21 = {
+  ...version20,
+  version: 21,
+  checks: {
+    ...version20.checks,
+    'calc-3-Recipe_Wire_C': true,
+    'calc-3-Recipe_IronPlate_C': true,
+  },
+  tickedBy: {
+    'calc-3-Recipe_Wire_C': { at: '2026-10-21T09:15:00.000Z', by: 'Anna' },
+    'slot-C01-built': { at: '2026-10-20T18:40:12.000Z' },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -292,6 +308,7 @@ export const states: [SavedState, number][] = [
   [version18, 18],
   [version19, 19],
   [version20, 20],
+  [version21, 21],
 ];
 
 export const backup = {

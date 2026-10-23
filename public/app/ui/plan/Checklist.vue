@@ -58,6 +58,7 @@ import {
   taskLinkChoices,
 } from '../../tasks.ts';
 import { sharedRemovedNote, sharedStepPhases } from '../../shared-steps.ts';
+import { tickedNote } from '../../ticked-by.ts';
 import { stepMaterialWords } from '../../views/step-materials.ts';
 import { unlockGroups, type UnlockGroupView } from '../../unlock-groups.ts';
 import { legacy } from '../bridge.ts';
@@ -100,6 +101,7 @@ const list = computed(() =>
         built: task.built,
         spare: task.spare,
         done: checked(task.id),
+        ticked: tickedNote(state, task.id),
         idle: idle.get(task.id),
         satisfied: satisfied.get(task.id),
         clocks: clockNote(task.id, link?.id),
