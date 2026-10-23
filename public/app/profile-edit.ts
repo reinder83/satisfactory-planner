@@ -8,7 +8,13 @@
 // "<name> (before edit, Oct 7, 2:05 PM)" (backupName), which "Restore this version" can swap back
 // (app/restore-version.ts). Review lists what the edit changes
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
-import { distributions, objectiveWords, purities, recipeCostOf } from '../preferences.ts';
+import {
+  distributions,
+  objectiveWords,
+  phaseCapWords,
+  purities,
+  recipeCostOf,
+} from '../preferences.ts';
 import { ALLOWANCE_SETTING, powerView } from '../power.ts';
 import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
@@ -16,7 +22,13 @@ import { leftOutNote, leftOutWords } from '../mining.ts';
 import type { MiningSettings } from '../preferences/mining.ts';
 import type { NodeExclusions } from '../types/index.ts';
 import { power } from './wizard/fields.ts';
-import type { Choice, PlanObjective, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
+import type {
+  Choice,
+  PhaseCaps,
+  PlanObjective,
+  StoredCalculatedPlan,
+  StoredStage,
+} from '../types/index.ts';
 
 // The settings a name compares, as the planner reads them; any other field is left out.
 type NameSettings = Record<string, unknown> & { goal?: string };
@@ -216,6 +228,13 @@ const recipeCostWords = (settings: NameSettings): string =>
 const objectiveChange = (settings: NameSettings): string =>
   objectiveWords(settings.objective as PlanObjective | undefined);
 
+// The caps per phase (#1221) in words, absent as none: a plan made before them had no cap, so
+// setting one is named, and a draft that sets none is no change.
+const phaseCapsChange = (settings: NameSettings): string => {
+  const words = phaseCapWords(settings.phaseCaps as PhaseCaps | undefined);
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'None';
+};
+
 // The settings Review names when an edit changes them, with the words for their values.
 const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => string][] = [
   ['phase', 'Start phase', value => `Phase ${value}`],
@@ -335,6 +354,15 @@ export function settingsChanges(
     ...(objectiveChange(before) !== objectiveChange(after)
       ? [{ label: 'Objective', before: objectiveChange(before), after: objectiveChange(after) }]
       : []),
+    ...(phaseCapsChange(before) !== phaseCapsChange(after)
+      ? [
+          {
+            label: 'Caps per phase',
+            before: phaseCapsChange(before),
+            after: phaseCapsChange(after),
+          },
+        ]
+      : []),
     // Absent means what the plan did before the box (#1058), so a plan without it is compared too.
     ...(mamWords(before) !== mamWords(after)
       ? [{ label: 'MAM recipes', before: mamWords(before), after: mamWords(after) }]
@@ -345,6 +373,7 @@ export function settingsChanges(
     'mamRecipes',
     'recipeCost',
     'objective',
+    'phaseCaps',
     // The lines that stand (#1176) are no setting the user changed: Review says they are kept.
     'builtLines',
     ...SETTING_LABELS.map(([key]) => key),

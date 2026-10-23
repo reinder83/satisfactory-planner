@@ -7,6 +7,7 @@ import {
   extractionMWPerUnit,
   OBJECTIVE_EXCHANGE,
   objectiveWeights,
+  PHASE_CAP_KEYS,
   phaseMining,
   sourceMWPerUnit,
   sourceYield,
@@ -22,9 +23,12 @@ import type {
   CurrentSettings,
   ItemRates,
   MiningSource,
+  PhaseCapKey,
+  PhaseCaps,
   StageDelivery,
   StageKey,
   StageMining,
+  StageResult,
 } from '../public/types/index.ts';
 import type { PoolRecipe, RunResult, RunOptions } from './types.ts';
 import { DATA, RAW, DELIVERIES, exactBalance } from './data.ts';
@@ -73,6 +77,7 @@ import {
 //                 whole machines instead (roundedFallback, #593); only solvePhase sets it
 //   overBudget    let each raw resource exceed its budget at a high cost (OVER_BUDGET_COST), so
 //                 the solve finds the least extra budget it needs (a draft's measurement, #1066)
+//   relaxCaps     count a cap on buildings per phase linearly (#1221, addPhaseCaps)
 //
 // Returns { feasible: false, solverStatus? } or a stage:
 //   rows        one per recipe in use, in build order (suppliers before consumers): the recipe
@@ -121,6 +126,87 @@ export function run(config: CurrentSettings, phase: number, options: RunOptions 
     return result;
   const without = planRun(withoutBuiltLines(config, phase), phase, options);
   return without.feasible ? { ...without, builtDropped: true } : result;
+}
+// The caps per phase (#1221, settings.phaseCaps). Every solve holds the phase's lines to them in
+// the model (addPhaseCaps), but the model counts a line in machine-equivalents and in its linear
+// share of power, while the plan counts whole buildings (each line's last, underclocked machine is
+// a building too) and an underclocked machine's real power. So the phase's plan (solveGoal in
+// calculate.ts) is checked against the caps as the plan counts (capExcess), and while it is over,
+// planned again with the model's room cut by what it was over, CAP_ROUNDS times at most; a plan
+// still over then does not fit, and its draft says why (draftStage). Without caps this is run().
+const CAP_ROUNDS = 3;
+export function cappedRun(
+  config: CurrentSettings,
+  phase: number,
+  options: RunOptions = {},
+): RunResult {
+  const caps = config.phaseCaps;
+  let result = run(config, phase, options),
+    room: PhaseCaps = { ...caps };
+  for (let round = 0; caps && result.feasible; round++) {
+    const over = capExcess(caps, result);
+    if (!over) return result;
+    if (round === CAP_ROUNDS) return { feasible: false };
+    // Cut from what the model counted of the plan, not from the room it had: a cap the model did
+    // not reach would otherwise give the same plan again. The model counts a plan's buildings as
+    // its lines' machine-equivalents (generators' too); its power is at least what the plan needs.
+    const counted = result.rows.reduce((total, row) => total + row.equivalent, 0);
+    const tighter: PhaseCaps = {};
+    for (const name of PHASE_CAP_KEYS) {
+      const cap = room[name];
+      if (cap === undefined) continue;
+      const from = name === 'buildings' ? Math.min(cap, counted) : cap;
+      tighter[name] = from - (over[name] ?? 0);
+    }
+    if (PHASE_CAP_KEYS.some(name => (tighter[name] ?? 1) <= 0)) return { feasible: false };
+    room = tighter;
+    result = run({ ...config, phaseCaps: room }, phase, options);
+  }
+  return result;
+}
+// A stage's figures as the caps count them (#1221): its buildings, as a phase's building count
+// counts them (every machine and generator of its lines), and the power it needs (its grid's).
+export const capFigures = (stage: Pick<StageResult, 'rows' | 'grid'>): Required<PhaseCaps> => ({
+  buildings: stage.rows.reduce((total, row) => total + row.machines, 0),
+  mw: stage.grid.needMW,
+});
+// How far a stage is over each of the caps it has, or null when it keeps within them.
+export function capExcess(
+  caps: PhaseCaps,
+  stage: Pick<StageResult, 'rows' | 'grid'>,
+): PhaseCaps | null {
+  const figures = capFigures(stage),
+    over: PhaseCaps = {};
+  for (const name of PHASE_CAP_KEYS) {
+    const cap = caps[name];
+    if (cap !== undefined && figures[name] > cap + 1e-6) over[name] = figures[name] - cap;
+  }
+  return Object.keys(over).length ? over : null;
+}
+// The least a phase needs of one cap's figure (#1221, a draft's measurement): the exact LP of
+// `config` without whole machines, amplification or built lines (draftStage passes them so),
+// with neither cap, minimising that cap's row (addPhaseCaps) instead of the objective's cost.
+// Its value is what the model counts: machine-equivalents, and each line's linear share of power.
+// null when the phase does not fit at all.
+export function leastCapNeed(
+  config: CurrentSettings,
+  phase: number,
+  name: PhaseCapKey,
+  options: RunOptions = {},
+): number | null {
+  const { phaseCaps: _caps, builtLines: _built, ...free } = config;
+  const context = phaseContext({ ...free, wholeMachines: false, amplifySloops: 0 }, phase, options);
+  const pool = phasePool(context);
+  const demands = phaseDemands(context, reachableItems(context, pool));
+  const { model } = buildModel(context, pool, demands, name);
+  setObjective(model, CAP_ROWS[name], 'min');
+  const solved = solve(model);
+  if (!solved.feasible || !solved.bounded || !satisfiesModel(model, solved)) return null;
+  return Object.entries(model.variables).reduce(
+    (total, [variable, coefficients]) =>
+      total + (solved.values[variable] || 0) * (coefficients[CAP_ROWS[name]] || 0),
+    0,
+  );
 }
 // The settings without the built lines of one phase (#1176).
 function withoutBuiltLines(config: CurrentSettings, phase: number): CurrentSettings {
@@ -175,6 +261,7 @@ export const phaseContext = (
     overBudget = false,
     loadBound = null,
     storageLeftOut = stockedFromSurplus(config),
+    relaxCaps = false,
   }: RunOptions,
 ): PhaseContext => ({
   config:
@@ -193,6 +280,7 @@ export const phaseContext = (
   overBudget,
   loadBound,
   storageLeftOut,
+  relaxCaps,
   power: phasePower(config, phase),
   mining: config.phaseMining ? phaseMining(config, phase) : null,
 });
@@ -378,6 +466,7 @@ export function buildModel(
   context: PhaseContext,
   pool: PoolRecipe[],
   demands: PhaseDemands,
+  measure?: PhaseCapKey,
 ): { model: LpModel; period: number } {
   const allItems = new Set(
     pool.flatMap(recipe => [...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)]),
@@ -405,6 +494,7 @@ export function buildModel(
   addSiteFeeds(model, sites.feeds);
   addSiteOverflows(model, sites.overflows);
   addSources(model, context, allItems, demands.delivery);
+  addPhaseCaps(model, context, pool, measure);
   const period = roundNuclear(model, context, pool, demands.demand);
   addBuiltLines(model, context, pool);
   return { model, period };
@@ -538,6 +628,51 @@ function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[], r
       model.constraints['cap:' + recipe.id] = { max: cap };
       model.variables[recipe.id]!['cap:' + recipe.id] = 1;
     }
+}
+// The caps per phase (#1221, settings.phaseCaps), only for a cap that is set (or the one a
+// draft's measurement minimises, `measure`, leastCapNeed): 'phaseCap:buildings' counts every
+// line's machine-equivalents, generators included, as a phase's building count counts them, and
+// 'phaseCap:mw' every line's power coefficient above 0 (its MW with the consumption multiplier and
+// the utility allowance) and every raw source's extraction MW, as its grid's need counts them.
+// Added before the built lines, which copy their recipe's coefficients, so a machine that stands
+// counts too. Without caps nothing is added, so the model is exactly what it was.
+const CAP_ROWS: Record<PhaseCapKey, string> = {
+  buildings: 'phaseCap:buildings',
+  mw: 'phaseCap:mw',
+};
+function addPhaseCaps(
+  model: LpModel,
+  { config, relaxCaps }: PhaseContext,
+  pool: PoolRecipe[],
+  measure?: PhaseCapKey,
+) {
+  for (const name of PHASE_CAP_KEYS) {
+    const cap = config.phaseCaps?.[name],
+      row = CAP_ROWS[name];
+    if (cap === undefined && measure !== name) continue;
+    if (cap !== undefined) model.constraints[row] = { max: cap };
+    for (const recipe of pool) {
+      const coefficients = model.variables[recipe.id]!;
+      // A line at exact clocks is as many buildings as its machine-equivalents round up to: a
+      // whole count of its own ('whole:<recipe id>', at least the line's level, 'ceil:<recipe
+      // id>') is what the cap counts. A line of whole machines is its own count already.
+      if (name === 'buildings' && cap !== undefined && !relaxCaps && !model.ints?.[recipe.id]) {
+        const whole = 'whole:' + recipe.id,
+          ceil = 'ceil:' + recipe.id;
+        coefficients[ceil] = 1;
+        model.constraints[ceil] = { max: 0 };
+        model.variables[whole] = { [row]: 1, [ceil]: -1 };
+        (model.ints ??= {})[whole] = 1;
+        continue;
+      }
+      const share = name === 'buildings' ? 1 : Math.max(0, coefficients.power ?? 0);
+      if (share > 0) coefficients[row] = share;
+    }
+    if (name === 'mw')
+      for (const [variable, coefficients] of Object.entries(model.variables))
+        if (variable.startsWith('raw:') && (coefficients.power ?? 0) > 0)
+          coefficients[row] = coefficients.power!;
+  }
 }
 // A recipe variable's coefficients: its cost, its power, and its per-machine outputs (+) and
 // inputs (-) in each item balance: the central one, or split with the groups' own balances of the

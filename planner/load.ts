@@ -142,6 +142,7 @@ const runOptions = ({
   overBudget,
   loadBound,
   storageLeftOut,
+  relaxCaps,
 }: PhaseContext) => ({
   maximum,
   conversion,
@@ -154,4 +155,5 @@ const runOptions = ({
   overBudget,
   loadBound,
   storageLeftOut,
+  relaxCaps,
 });

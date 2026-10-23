@@ -2,8 +2,15 @@
 // default and every plan made before the setting), the least power, the least raw resources, or a
 // weighted mix of the three. The goal sets how fast each phase delivers; the objective sets what
 // the LP minimises while it does (lineCost and sourceCost in planner/model.ts). settings() in
-// planner/settings.ts keeps a valid choice and refuses anything else.
-import type { ObjectiveKind, ObjectiveWeights, PlanObjective } from '../types/index.ts';
+// planner/settings.ts keeps a valid choice and refuses anything else. The caps per phase (#1221) sit
+// beside it at the end: the most buildings and MW a phase may plan with.
+import type {
+  ObjectiveKind,
+  ObjectiveWeights,
+  PhaseCapKey,
+  PhaseCaps,
+  PlanObjective,
+} from '../types/index.ts';
 
 // The choices All settings step 3 offers, in order: [id, label, what it does]. 'buildings' is
 // stored as no field, 'weighted' as the weights themselves.
@@ -64,4 +71,23 @@ export function objectiveWords(objective: PlanObjective | undefined, short = fal
       : (OBJECTIVES.find(([id]) => id === kind)?.[1] ?? kind);
   const words = typeof objective === 'object' ? `${label} (${weightWords(objective)})` : label;
   return short ? words.charAt(0).toLowerCase() + words.slice(1) : words;
+}
+
+// The caps per phase (#1221, `settings.phaseCaps`): the most buildings and MW a phase may plan
+// with, beside what it keeps lowest. Each is a whole number from 1 to its most; settings() in
+// planner/settings.ts refuses anything else, and absent means no cap.
+export const PHASE_CAP_LIMITS = { buildings: 100000, mw: 10000000 } as const;
+// The names of the caps, in the order the wizard and the words give them.
+export const PHASE_CAP_KEYS = ['buildings', 'mw'] as const;
+
+// One cap in words: "120 buildings", "250 MW" (en-US grouping, as the planner's sentences).
+export const phaseCapAmount = (name: PhaseCapKey, amount: number): string =>
+  `${amount.toLocaleString('en-US')} ${name === 'mw' ? 'MW' : amount === 1 ? 'building' : 'buildings'}`;
+
+// The caps in words: "at most 120 buildings and 250 MW per phase", or '' without one.
+export function phaseCapWords(caps: PhaseCaps | undefined): string {
+  const amounts = PHASE_CAP_KEYS.filter(name => caps?.[name] !== undefined).map(name =>
+    phaseCapAmount(name, caps![name]!),
+  );
+  return amounts.length ? `at most ${amounts.join(' and ')} per phase` : '';
 }

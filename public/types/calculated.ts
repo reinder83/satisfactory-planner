@@ -111,6 +111,17 @@ export interface ObjectiveWeights {
 export type PlanObjective = 'power' | 'raw' | ObjectiveWeights;
 // The choice an objective is (objectiveKind in public/preferences/objective.ts).
 export type ObjectiveKind = 'buildings' | 'power' | 'raw' | 'weighted';
+// The most a plan may build and draw per phase (#1221, slice 8 of #1079): `settings.phaseCaps`,
+// at most `buildings` buildings (every machine and generator on the production lines, as a phase's
+// building count counts them; miners and extractors are no lines) and at most `mw` MW of power
+// needed (the lines with their utility allowance, and the miners and extractors), each a whole
+// number from 1 (PHASE_CAP_LIMITS in public/preferences/objective.ts). Either may be absent.
+export interface PhaseCaps {
+  buildings?: number;
+  mw?: number;
+}
+// Which cap a phase's draft names (CapShortfall).
+export type PhaseCapKey = keyof PhaseCaps;
 
 // Normalised settings, as settings() in planner.ts returns them. Units: GW for power,
 // % for utilityPercent, per minute for rates and limits, hours per phase.
@@ -139,6 +150,10 @@ export interface CurrentSettings {
   // therefore calculates exactly as before (objectiveWeights in public/preferences/objective.ts,
   // read by the LP's costs in planner/model.ts).
   objective?: PlanObjective;
+  // The caps per phase (#1221, All settings step 3): absent when neither is set, as on every plan
+  // made before them, which therefore calculates exactly as before (addPhaseCaps in
+  // planner/model.ts).
+  phaseCaps?: PhaseCaps;
   availablePowerGW: number;
   recipes: 'standard' | 'all' | 'custom';
   pureIngots: boolean;
@@ -467,6 +482,14 @@ export interface Shortfall {
   // from older plans, which say "about".
   atLeast?: boolean;
 }
+// A cap per phase that a failed phase needs more than (#1221): the least it needs at its delivery
+// rates and budgets (`needed`, rounded up: buildings as machine-equivalents, MW as each line's
+// share of its machines' power), against the cap (`cap`). Whole machines need at least as much.
+export interface CapShortfall {
+  name: PhaseCapKey;
+  needed: number;
+  cap: number;
+}
 
 // A stage as calculate() returns it today: a plan, or for a phase that does not fit, a draft
 // of the closest plan with feasible false and the reason (see CurrentStage).
@@ -557,6 +580,9 @@ export interface StageResult {
   // only whole machines break it.
   reason?: string;
   shortfalls?: Shortfall[];
+  // The caps per phase it needs more than (#1221); absent when no cap blocks it, and from older
+  // plans.
+  capShortfalls?: CapShortfall[];
   minHours?: number;
   wholeMachinesOnly?: boolean;
   solverStatus?: string;

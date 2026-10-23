@@ -15,7 +15,7 @@ const modules = fs
 // (#1065), with the belt you already have (phaseBelt, #1068), and the generators you already have
 // (OWNED_GENERATORS, ownedGeneratorCounts, #1068), and the recipe part cost steps (RECIPE_COSTS,
 // recipeCostChoices, recipeCostOf, #1161), and what a plan keeps lowest (OBJECTIVES and its
-// helpers, #1180).
+// helpers, #1180), and the caps per phase beside it (PHASE_CAP_LIMITS and its helpers, #1221).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_MARKS',
@@ -41,6 +41,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'OVERCLOCK_RESEARCH',
     'OWNED_GENERATORS',
     'OWNED_GENERATORS_MAX',
+    'PHASE_CAP_KEYS',
+    'PHASE_CAP_LIMITS',
     'PHASE_CLOCK',
     'PIPE_MARKS',
     'PRESSURIZER_MW',
@@ -98,6 +100,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'oilNodeResources',
     'ownedGeneratorCounts',
     'phaseBelt',
+    'phaseCapAmount',
+    'phaseCapWords',
     'phaseClock',
     'phaseForTier',
     'phaseMiner',

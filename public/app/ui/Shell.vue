@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../browser-api.ts';
-import { objectiveWords, purities, recipeCostOf } from '../../preferences.ts';
+import { objectiveWords, phaseCapWords, purities, recipeCostOf } from '../../preferences.ts';
 import { allowSwitch, notesNotSaved, pending, save, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
@@ -255,6 +255,8 @@ function profileFooter() {
       ...(settings.objective === undefined
         ? []
         : ['Objective: ' + objectiveWords(settings.objective, true)]),
+      // The caps per phase it was calculated with (#1221), named only when it has one.
+      ...(phaseCapWords(settings.phaseCaps) ? ['Caps: ' + phaseCapWords(settings.phaseCaps)] : []),
       ...(Number.isNaN(date.getTime())
         ? []
         : [

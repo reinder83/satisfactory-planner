@@ -10,7 +10,7 @@ import type {
 import type { Solved, RunResult } from './types.ts';
 import { ENGINE } from './data.ts';
 import { fail, settings } from './settings.ts';
-import { run } from './model.ts';
+import { capExcess, cappedRun } from './model.ts';
 import { draftStage } from './draft.ts';
 import {
   pullFinalPhaseForward,
@@ -31,8 +31,8 @@ import { withStock } from './stock.ts';
 //
 // Returns { engine, settings, stages: { 1..5: stage }, warnings: [string], createdAt }. A stage is
 // run()'s result, or for a phase that does not fit a draft with `feasible: false`, the diagnostic
-// solve's rows and a `reason`, plus `shortfalls` [{ name, needed, budget }], `minHours` and
-// `wholeMachinesOnly` where they apply (see draftFixes in public/app/views/calculated.ts).
+// solve's rows and a `reason`, plus `shortfalls` [{ name, needed, budget }], `capShortfalls`
+// [{ name, needed, cap }] (#1221), `minHours` and `wholeMachinesOnly` where they apply (see draftFixes in public/app/views/calculated.ts).
 // Stored as `profile.plan` and never recalculated behind the user's back, so a field added here
 // must be optional for plans saved by older engines.
 //
@@ -88,6 +88,14 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // with no surplus gets storage-only lines at exact clocks, built last (#1061, withStock).
   for (const [phase, stage] of Object.entries(stages))
     if (stage.feasible) stages[Number(phase)] = withStock(config, Number(phase), stage as Solved);
+  // The caps per phase are a hard limit (#1221): a phase whose finished plan is over one (an
+  // adjustment above re-solved it at exact clocks, say) does not fit, and its draft says why.
+  if (config.phaseCaps)
+    for (const [phase, stage] of Object.entries(stages))
+      if (stage.feasible && capExcess(config.phaseCaps, stage as Solved))
+        stages[Number(phase)] = draftStage(config, Number(phase), { feasible: false }, settings =>
+          planPhase(settings, Number(phase)),
+        );
   // Each phase keeps the generators the phase before built, where it still fuels them (#1064),
   // and counts those the player already has (#1068) the same way.
   carryGenerators(stages, Number(config.phase), config.ownedGenerators);
@@ -192,11 +200,12 @@ function solveSites(config: CurrentSettings, phase: number): RunResult {
   const central = solveGoal(centralSettings(config), phase);
   return central.feasible ? { ...central, onSiteDropped: sites } : result;
 }
-// solvePhase's solve under the profile's goal and SAM conversion.
+// solvePhase's solve under the profile's goal and SAM conversion, held to the caps per phase as the
+// plan counts them (cappedRun, #1221).
 function solveGoal(config: CurrentSettings, phase: number): RunResult {
   const maximised = config.goal === 'maximum' && phase >= 2;
   const retried = phase === 5 && config.sam === 'needed';
-  let result = run(
+  let result = cappedRun(
     config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
     phase,
     {
@@ -206,14 +215,18 @@ function solveGoal(config: CurrentSettings, phase: number): RunResult {
     },
   );
   if (!result.feasible && retried)
-    result = run(config, phase, {
+    result = cappedRun(config, phase, {
       maximum: config.goal === 'maximum',
       conversion: true,
       roundStopped: true,
     });
   // For maximum output, compare conversion when allowed only at a binding resource limit.
   if (config.goal === 'maximum' && retried) {
-    const converted = run(config, phase, { maximum: true, conversion: true, roundStopped: true });
+    const converted = cappedRun(config, phase, {
+      maximum: true,
+      conversion: true,
+      roundStopped: true,
+    });
     if (converted.feasible && (!result.feasible || converted.hours < result.hours - 1e-6))
       result = converted;
   }
