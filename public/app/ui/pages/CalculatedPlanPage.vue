@@ -12,7 +12,8 @@
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
   "Built so far" (ui/plan/BuildStatusPanel.vue), what whole machines cost (ui/plan/RoundingCost.vue,
   #1066) and the profile's assumptions. The best next hard drive (ui/plan/PayoffPanel.vue, the
-  hard-drive payoff table) sits above the checklist, after the handover (#1075). Everything
+  hard-drive payoff table) sits above the checklist, after the handover (#1075), and where a
+  somersloop pays off most (ui/plan/SloopPayoffPanel.vue, #1215) right after it. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
   (#759) has no stage to read: its checklist is its milestones, with ui/plan/MilestoneOnlyNotice.vue
@@ -60,6 +61,7 @@ import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
 import PayoffPanel from '../plan/PayoffPanel.vue';
+import SloopPayoffPanel from '../plan/SloopPayoffPanel.vue';
 import { powerView } from '../../../power.ts';
 import RoundingCost from '../plan/RoundingCost.vue';
 
@@ -195,6 +197,7 @@ const page = computed(() =>
     <HandoverSummary />
     <FormerLines v-if="!page.milestones" />
     <PayoffPanel />
+    <SloopPayoffPanel />
     <div :class="page.milestones ? undefined : 'split'">
       <section>
         <div class="section-head">

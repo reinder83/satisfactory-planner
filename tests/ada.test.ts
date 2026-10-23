@@ -1039,3 +1039,15 @@ test('in expert mode ADA counts the unlock groups done in the phase (#1197)', ()
   assert.match(line(0, 1).text, /^Expert mode: 0 of 1 unlock group done in this phase\./);
   assert.ok(!ids(facts({ unlockGroups: { done: 0, total: 0 } })).includes('expert-unlocks'));
 });
+
+test('ADA names where a somersloop pays off most in the phase (#1215)', () => {
+  assert.ok(!ids(facts()).includes('sloop-payoff'), 'nothing without the ranking');
+  const line = adaRemarks(
+    facts({ sloopBest: { name: 'Heavy Modular Frame', perSloop: '85' } }),
+  ).find(r => r.id === 'sloop-payoff')!;
+  assert.equal(line.tone, 'calm');
+  assert.match(
+    line.text,
+    /^A somersloop pays off most on Heavy Modular Frame in this phase: 85 raw resources a minute saved per somersloop, at this plan's rates\./,
+  );
+});

@@ -86,6 +86,7 @@ import {
   waterExtractors,
   DEFAULT_EXTRACTION,
   EXTRACTOR_MIN_RATE,
+  extractionMWPerUnit,
   OVERCLOCK,
   OVERCLOCK_RESEARCH,
   SHARD_RECIPE_RESEARCH,
@@ -221,6 +222,8 @@ function ui() {
     // The Water Extractor options of mining.ts (#1142).
     DEFAULT_EXTRACTION,
     EXTRACTOR_MIN_RATE,
+    // The extraction a stage without a grid is costed at, for ADA's somersloop ranking (#1215).
+    extractionMWPerUnit,
     OVERCLOCK,
     OVERCLOCK_RESEARCH,
     SHARD_RECIPE_RESEARCH,
