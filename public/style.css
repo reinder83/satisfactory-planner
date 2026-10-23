@@ -5806,14 +5806,18 @@ button.rail-tile:hover {
   display: block;
   margin-top: 6px;
 }
-/* What a line's step takes to build (#1073): its buildings, belts and pipes, then the parts. */
-.step-materials {
+/* What a line's step takes to build (#1073): its buildings, belts and pipes, then the parts. A
+   batch task's amount, time and freed power (#1211) above it, in the step and the line's dialog,
+   alike. */
+.step-materials,
+.step-batch {
   margin: 8px 0 10px;
   padding-left: 10px;
   border-left: 2px solid var(--line2);
   color: var(--ink);
 }
-.step-materials b {
+.step-materials b,
+.step-batch b {
   color: var(--bright);
   font-weight: 600;
 }

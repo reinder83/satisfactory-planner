@@ -1,9 +1,10 @@
 <!--
   The dialog for one row of a calculated plan at the current phase: its Running box in the
   sticky header (#239), writing `calc-<stage>-<row id>` like the row's card and build-plan
-  step, and under the title the card's headline rate (SP-21, #256); then the flow diagram, why
-  the plan sinks spare Petroleum Coke or Compacted Coal rather than burning it (burnNotes in
-  views/calculated.ts, #1063), the byproduct advice (RecycleAdvice.vue, #1022), machine setup
+  step, and under the title the card's headline rate (SP-21, #256); then a batch task's amount,
+  time and freed power as its build-plan step gives them (lineBatchText in tasks.ts, #1211), the
+  flow diagram, why the plan sinks spare Petroleum Coke or Compacted Coal rather than burning it
+  (burnNotes in views/calculated.ts, #1063), the byproduct advice (RecycleAdvice.vue, #1022), machine setup
   (machineSetup in views/calculated.ts, drawn as the three MachineCells, SP-20) with the line's
   clocks in a
   whole-machine plan (ExactClockChoice.vue, #1066),
@@ -29,6 +30,7 @@ import {
   rowIcon,
 } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
+import { lineBatchText } from '../../tasks.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { lineLoad } from '../../../power.ts';
@@ -101,6 +103,8 @@ const view = computed(() =>
       flow: calcFlowModel(row),
       // Why the plan sinks the line's spare coke rather than burning it (#1063).
       burn: burnNotes(row),
+      // A line that only makes a Space Elevator part: make N, then switch it off (#1211).
+      batch: lineBatchText(row.id),
       setup,
       // The three machine cells (SP-20), from the count and clock the row's card shows; the
       // captions keep the output per machine and the calculated clock this table used to show.
@@ -157,6 +161,7 @@ const view = computed(() =>
       Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a
       generic storage surplus.
     </div>
+    <p v-if="view.batch" class="small step-batch" data-batch-note><b>Batch:</b> {{ view.batch }}</p>
     <FlowDiagram :model="view.flow" />
     <p v-for="note in view.burn" :key="note" class="small muted" data-burn-note>{{ note }}</p>
     <RecycleAdvice :id="view.row.id" />
