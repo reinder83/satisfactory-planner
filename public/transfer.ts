@@ -480,8 +480,9 @@ export function activeAfterImport(
 }
 
 // The local time of an ISO timestamp as "2026-10-04 14:05", the same in every language, or ''
-// for a missing or unreadable one.
-function stamp(iso: unknown) {
+// for a missing or unreadable one. The Backup page's import confirm shows a file's export date
+// this way too (#1217).
+export function localStamp(iso: unknown) {
   const date = typeof iso === 'string' ? new Date(iso) : null;
   if (!date || Number.isNaN(date.getTime())) return '';
   const two = (value: number) => String(value).padStart(2, '0');
@@ -506,7 +507,7 @@ const LABEL_FILE_MAX = 32;
 // the rest, so a damaged file is refused exactly as before. Returns the data, changed in place.
 export function labelImport(data: unknown, file: string, taken: string[] = []): unknown {
   if (!fields(data) || !Array.isArray(data.saves)) return data;
-  const exported = stamp(data.exportedAt);
+  const exported = localStamp(data.exportedAt);
   const source = clip(file.trim(), LABEL_FILE_MAX);
   const detail = [source && 'from ' + source, exported && 'exported ' + exported]
     .filter(Boolean)

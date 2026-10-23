@@ -24,6 +24,8 @@ import {
   calculated,
   currentProfile,
   currentSave,
+  phaseLabel,
+  progressionData,
   setImportedSaves,
   setWorkspace,
   state,
@@ -31,6 +33,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { backupAge, restoreMessage } from '../../views/backup.ts';
+import { backupQuestion, savesImportQuestion } from '../../import-summary.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import ProgressMerge from '../backup/ProgressMerge.vue';
 import BrowserNotice from '../BrowserNotice.vue';
@@ -109,7 +112,10 @@ async function exportSaves(selection?: string[]) {
 }
 
 // "Import saves": import every save in the file as new copies with new ids, after a
-// confirmation, so existing saves are never replaced. Each copy is named after the file and
+// confirmation that says what the file holds and that it adds copies (savesImportQuestion,
+// #1217), so existing saves are never replaced. The file is checked as the import checks it
+// before the question, so a damaged or newer file is refused with the import's own message and
+// nothing is asked. Each copy is named after the file and
 // its export date (labelImport, #1052). It waits for queued saves, then shows the profiles
 // page, where a notice names the copies and offers to open each: the open profile stays open,
 // so nothing ticked next lands in someone else's copy. With no save open (an empty workspace)
@@ -123,14 +129,12 @@ async function importSaves(event: Event) {
     // Checked before reading, so a huge file is never parsed.
     if (file.size > transferImportLimit) throw Error('Choose a save export smaller than 50 MB.');
     const data = JSON.parse(await file.text());
-    if (
-      !(await confirmAction({
-        title: 'Import these saves?',
-        body: 'Import these saves as new copies? Existing saves will be kept, and you stay on the profile you have open.',
-        confirmLabel: 'Import saves',
-      }))
-    )
-      return;
+    const question = savesImportQuestion(data, workspace, {
+      fileName: file.name,
+      progression: progressionData,
+      phaseLabel,
+    });
+    if (!(await confirmAction(question))) return;
     await writeQueue;
     // The saves as they are now, another tab's included, to tell the copies apart afterwards.
     if (currentSave.id) setWorkspace(await request<WorkspaceSummary>('/api/workspace'));
@@ -162,7 +166,9 @@ async function importSaves(event: Event) {
   }
 }
 
-// "Restore this profile…": replace this profile's progress with a progress-only backup. Only the
+// "Restore this profile…": replace this profile's progress with a progress-only backup, after a
+// confirmation that compares this profile's progress with the file's (backupQuestion, #1217).
+// The file is checked as /api/import checks it first, so a refused file says what it did before. Only the
 // server version of the page binds it; the browser edition's page has no progress download or
 // restore, and moves saves with Export/Import saves instead, though
 // browser-api.ts answers /api/import the same way for parity.
@@ -178,15 +184,12 @@ async function restoreProgress(event: Event) {
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
     const data = JSON.parse(await file.text());
-    if (
-      !(await confirmAction({
-        title: 'Restore this backup?',
-        body: 'Replace current progress with this backup?',
-        confirmLabel: 'Replace progress',
-        danger: true,
-      }))
-    )
-      return;
+    const question = backupQuestion(
+      data,
+      { id: currentProfile.id, name: currentProfile.name, plan: calculated, state },
+      { fileName: file.name, progression: progressionData, phaseLabel },
+    );
+    if (!(await confirmAction(question))) return;
     // The review list as it is before the restore, which replaces the state.
     const before = { handbookOrigin: structuredClone(state.handbookOrigin) };
     const restored = await queuedWrite('/api/import', data);

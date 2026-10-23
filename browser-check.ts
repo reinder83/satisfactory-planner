@@ -953,8 +953,37 @@ try {
   assert.equal((await api<ProgressState>('/api/state')).notes['phase-1'], 'Remember my iron site');
   const exported = await api<SaveExport>('/api/export-saves');
   assert.equal(exported.saves[0]!.profiles.length, 2);
-  await api('/api/import-saves', exported);
+  // Imported through the Backup page (#1217): the confirm says what the file holds before
+  // anything is added, Cancel adds nothing, and Import saves adds the copy.
+  await page.goto(base + '#backup');
+  await page.reload();
+  const exportFile = {
+    name: 'browser-export.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(exported)),
+  };
+  const importQuestion = page.locator('#confirm #confirm-body');
+  await page.locator('#import-saves').setInputFiles(exportFile);
+  await importQuestion.waitFor();
+  assert.match(
+    (await importQuestion.textContent()) || '',
+    /^browser-export\.json holds the save “.+” with 2 profiles, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}:$/,
+  );
+  assert.equal(await page.locator('#confirm [data-confirm-list] li').count(), 2);
+  assert.match(
+    (await page.locator('#confirm [data-confirm-note]').textContent()) || '',
+    /next to your 2 profiles\. Nothing you have is replaced/,
+  );
+  await page.locator('#confirm [data-confirm-cancel]').click();
+  await importQuestion.waitFor({ state: 'detached' });
+  assert.equal((await api<WorkspaceSummary>('/api/workspace')).saves.length, 1, 'Cancel adds none');
+  await page.locator('#import-saves').setInputFiles(exportFile);
+  await page.locator('#confirm [data-confirm-ok]').click();
+  await page.locator('[data-import-notice]').waitFor();
   assert.equal((await api<WorkspaceSummary>('/api/workspace')).saves.length, 2);
+  // Back to the build plan, so the checks below open Saves & profiles afresh.
+  await page.goto(base + '#plan');
+  await page.locator('#main .checklist').first().waitFor();
   const separate = await browser.newContext(),
     other = await separate.newPage();
   await other.goto(base);

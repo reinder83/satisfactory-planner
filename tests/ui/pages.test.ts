@@ -760,8 +760,9 @@ test('restoring a progress backup shows "Saving…" and counts as a pending writ
   globalThis.fetch = async () => new Promise<Response>(resolve => (reply = resolve));
   answerConfirms(true);
   const input = $<HTMLInputElement>('#import-file')!;
+  // A backup the restore accepts: since #1217 the page checks it as /api/import does first.
   const file = new File(
-    [JSON.stringify({ format: 'satisfactory-planner-backup', state: {} })],
+    [JSON.stringify({ format: 'satisfactory-planner-backup', state })],
     'b.json',
   );
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
