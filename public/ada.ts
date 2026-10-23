@@ -58,6 +58,10 @@ export interface AdaFacts {
   // The objective the open plan was calculated with in words (#1180, "least power"); absent for
   // the fewest buildings.
   objective?: string;
+  // Where one somersloop pays off most in the open phase (#1215, app/sloop-payoff.ts): the best
+  // line's name and the raw resources a minute it saves per somersloop, in words ("85"); absent
+  // before Phase 3, without such a line and in New to Satisfactory mode.
+  sloopBest?: { name: string; perSloop: string };
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -486,6 +490,15 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.objective,
     text: facts =>
       `This plan's objective is ${facts.objective}, not the fewest buildings: it may build more machines to keep that low, and every number here already counts it. Efficiency has many definitions; you picked one.`,
+  },
+  {
+    // Where one somersloop pays off most (#1215): the build plan's ranking, its first line.
+    id: 'sloop-payoff',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => !!facts.sloopBest,
+    text: facts =>
+      `A somersloop pays off most on ${facts.sloopBest!.name} in this phase: ${facts.sloopBest!.perSloop} raw resources a minute saved per somersloop, at this plan's rates. The ranking is above the build sequence. They do not grow back, so choose well.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {

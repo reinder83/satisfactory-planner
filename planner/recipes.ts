@@ -5,6 +5,7 @@ import type { CurrentSettings, ItemRates, Recipe } from '../public/types/index.t
 import type { PoolRecipe } from './types.ts';
 import { DATA, MAM_RECIPES, RAW, STANDARD_ALTERNATES, powerNeedsTurbofuel } from './data.ts';
 import { turbofuelRecipes } from '../public/preferences.ts';
+import { AMPLIFIED_OUTPUT, AMPLIFIED_POWER, AMPLIFY_SLOTS } from '../public/somersloops.ts';
 
 export const pureNames = [
   'Alternate: Pure Iron Ingot',
@@ -166,20 +167,10 @@ function basePool(config: CurrentSettings, phase: number, conversion: boolean): 
 // fewer twins than precisely balanced ones.
 // Measured against the heaviest plans in the test set; raising these starts losing whole phases.
 export const AMPLIFY_CANDIDATES = { whole: 22, precise: 26 };
-// Somersloop slots per production machine, as in the game. Amplifying a machine fills all its
-// slots, so this is also the somersloop cost of one amplified machine.
-export const AMPLIFY_SLOTS: Record<string, number> = {
-  Smelter: 1,
-  Constructor: 1,
-  Assembler: 2,
-  Foundry: 2,
-  Refinery: 2,
-  Converter: 2,
-  Manufacturer: 4,
-  Blender: 4,
-  'Particle Accelerator': 4,
-  'Quantum Encoder': 4,
-};
+// Somersloop slots per production machine (AMPLIFY_SLOTS in public/somersloops.ts, re-exported):
+// amplifying a machine fills all its slots, so this is also the somersloop cost of one amplified
+// machine.
+export { AMPLIFY_SLOTS };
 export const amplifiable = (recipe: PoolRecipe) =>
   recipe.power > 0 && (AMPLIFY_SLOTS[recipe.machine] ?? 0) > 0;
 // The amplified twin of a recipe: a separate row with an 'amp:' id (its own progress key), which
@@ -188,11 +179,11 @@ export const amplified = (recipe: PoolRecipe): PoolRecipe => ({
   ...recipe,
   id: 'amp:' + recipe.id,
   name: recipe.name + ' (somersloop amplified)',
-  power: recipe.power * 4,
-  ...(recipe.minPower !== undefined ? { minPower: recipe.minPower * 4 } : {}),
+  power: recipe.power * AMPLIFIED_POWER,
+  ...(recipe.minPower !== undefined ? { minPower: recipe.minPower * AMPLIFIED_POWER } : {}),
   slots: AMPLIFY_SLOTS[recipe.machine],
   outputs: Object.fromEntries(
-    Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * 2]),
+    Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * AMPLIFIED_OUTPUT]),
   ),
 });
 // The largest period nuclearPeriod accepts. A longer one would force a plan to many more uranium

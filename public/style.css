@@ -2265,6 +2265,28 @@ p.eyebrow {
   gap: 6px 8px;
   margin-top: 8px;
 }
+/* Where a somersloop pays off most (#1215, ui/plan/SloopPayoffPanel.vue): one line per production
+ line, its name a link to the line dialog. */
+.sloop-payoff-lines {
+  margin: 10px 0;
+  padding-left: 22px;
+}
+.sloop-payoff-lines li {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.sloop-payoff button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+.sloop-payoff [data-sloop-payoff-settings] {
+  margin-left: 4px;
+}
 .factory-card .build-held {
   color: var(--accent-hi);
 }

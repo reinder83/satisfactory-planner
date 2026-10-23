@@ -29,6 +29,28 @@ export interface SloopCommitment {
 // Somersloops per Alien Power Augmenter.
 export const SLOOPS_PER_AUGMENTER = 10;
 
+// Somersloop slots per production machine, as in the game. Miners, extractors, packagers and
+// generators have none. Amplifying a machine fills all its slots, so this is also the somersloop
+// cost of one amplified machine. The planner's amplified twins (amplified() in planner/recipes.ts,
+// which re-exports this table) and the build plan's somersloop ranking (app/sloop-payoff.ts,
+// #1215) read it here.
+export const AMPLIFY_SLOTS: Record<string, number> = {
+  Smelter: 1,
+  Constructor: 1,
+  Assembler: 2,
+  Foundry: 2,
+  Refinery: 2,
+  Converter: 2,
+  Manufacturer: 4,
+  Blender: 4,
+  'Particle Accelerator': 4,
+  'Quantum Encoder': 4,
+};
+// An amplified machine, every slot filled: this many times the output from the same inputs, at
+// this many times the power, per (1 + filled/total)^2.
+export const AMPLIFIED_OUTPUT = 2;
+export const AMPLIFIED_POWER = 4;
+
 // Production amplification needs the MAM research Production Amplifier (#1056,
 // Research_Alien_ProductionBooster_C in progression.json): machines take somersloops only once it
 // is researched. It costs SAM Fluctuators and Circuit Boards, first available in Phase 3

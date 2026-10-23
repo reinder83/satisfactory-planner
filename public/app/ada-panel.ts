@@ -77,7 +77,9 @@ import { power } from './wizard/fields.ts';
 import { leftOutWords } from '../mining.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
+import { beginnerMode } from './beginner.ts';
 import { expertMode } from './expert.ts';
+import { sloopPayoffs } from './sloop-payoff.ts';
 import { unlockGroups } from './unlock-groups.ts';
 import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
 import { OWNED_GENERATORS, objectiveWords, phaseBelt } from '../preferences.ts';
@@ -262,6 +264,14 @@ function unlockGroupFacts(steps: Step[]): Pick<AdaFacts, 'unlockGroups'> {
       total: groups.length,
     },
   };
+}
+
+// Where one somersloop pays off most in the open phase (#1215), as ui/plan/SloopPayoffPanel.vue
+// ranks it: its first line; nothing in New to Satisfactory mode, which hides that panel.
+function sloopFacts(storedStage: StoredStage): Pick<AdaFacts, 'sloopBest'> {
+  if (!calculated || beginnerMode()) return {};
+  const best = sloopPayoffs(storedStage, stage(), calculated.settings)[0];
+  return best ? { sloopBest: { name: best.name, perSloop: num(best.perSloop) } } : {};
 }
 
 // The generators the phase before built that the open phase keeps (#1064, the stage's grid), as
@@ -480,6 +490,7 @@ function adaFacts(): AdaFacts {
       .length,
     requiredOnly,
     ...unlockGroupFacts(steps),
+    ...sloopFacts(storedStage),
     ...keptFacts(storedStage),
     ...ownedGeneratorFacts(storedStage),
     // The nodes the open plan's node survey leaves out of it (#1183), only when it leaves some.
