@@ -67,6 +67,7 @@ import { factoryGroupsState } from '../views/factories.ts';
 import { phaseTrack } from '../views/phase-track.ts';
 import AdaPanel from './AdaPanel.vue';
 import GroupMovedNotice from './GroupMovedNotice.vue';
+import LiveChangeNotice from './LiveChangeNotice.vue';
 import { legacy } from './bridge.ts';
 import ActionMenu from './ActionMenu.vue';
 import { openProfile, signOut } from './actions.ts';
@@ -636,6 +637,7 @@ async function workOnShown() {
         </div>
       </header>
       <GroupMovedNotice />
+      <LiveChangeNotice />
       <main id="main" class="workspace" tabindex="-1"></main>
     </div>
   </div>

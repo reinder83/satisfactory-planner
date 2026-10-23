@@ -25,6 +25,7 @@ import { render } from './shell.ts';
 import { watchToast } from './toast-place.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
+import { resumeLiveRefresh } from './live-refresh.ts';
 import { noteWizardEdit } from './wizard/wizard.ts';
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
@@ -99,8 +100,10 @@ for (const type of ['input', 'change'])
 // When the redraw takes away the control that had focus (a step ticked elsewhere moves to
 // "Done"), focus goes to the page's heading rather than to <body> (#809), as after a refused write.
 // It also asks where the user's other tabs and devices are, so a tab left on a profile the
-// others have moved away from says so (refreshWorkspace, #1052).
+// others have moved away from says so (refreshWorkspace, #1052). The Docker edition's live refresh
+// pauses while the tab is hidden and starts again when it is visible (live-refresh.ts, #1210).
 document.addEventListener('visibilitychange', () => {
+  resumeLiveRefresh();
   if (document.visibilityState !== 'visible') return;
   const refocus = refocusAfterRefresh(document.activeElement);
   refreshState()

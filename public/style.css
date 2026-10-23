@@ -3063,6 +3063,28 @@ tr.muted td:first-child {
     padding: 16px 16px 0;
   }
 }
+/* Above every page on the Docker edition when another tab or device changed the progress while
+   the player was busy here (#1210): one quiet line with Refresh, aligned with the page under it. */
+.live-change-wrap {
+  padding: 16px clamp(14px, 2.4vw, 30px) 0;
+  max-width: 1660px;
+  margin: auto;
+}
+.live-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0;
+}
+.live-change p {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .live-change-wrap {
+    padding: 16px 16px 0;
+  }
+}
 /* Saves & profiles after an import (#1052): one Open button per copy, a long name wrapping inside
    its button. */
 .import-notice p {

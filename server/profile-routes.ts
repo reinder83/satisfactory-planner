@@ -1,6 +1,7 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
 // or restoring its progress, the whole-machine copy, Edit settings' recalculation in place, the
 // restore of a version it kept and the hard-drive payoff ranking.
+import { createHash } from 'node:crypto';
 import {
   checkBase,
   checkPlan,
@@ -25,6 +26,18 @@ import { response } from './routing.ts';
 import { progressionData, recipeBookData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
 import type { ProgressState, StageKey, StoredPayoff, UpdateOp } from '../public/types/index.ts';
+
+// A strong ETag of a progress state: a hash of the JSON the reply sends, so any change to the
+// state, whatever wrote it, gives another tag.
+const stateTag = (state: ProgressState) =>
+  '"' + createHash('sha256').update(JSON.stringify(state)).digest('base64url').slice(0, 32) + '"';
+// Whether an If-None-Match header names `tag` (one of a list of tags, a weak one too, or *).
+const namesTag = (header: string | undefined, tag: string) =>
+  !!header &&
+  header.split(',').some(entry => {
+    const named = entry.trim().replace(/^W\//, '');
+    return named === '*' || named === tag;
+  });
 
 // A profile name from a request, trimmed (as save-routes.ts checks it).
 const profileName = (value: unknown): string =>
@@ -195,10 +208,16 @@ export function profileRoutes({
     });
   }
   // A tab that shows a plan this profile no longer has is refused (checkPlan, #1071), so it opens
-  // the new plan rather than adopting the new plan's state.
+  // the new plan rather than adopting the new plan's state. The reply carries an ETag of the state
+  // it sends, and a request naming that tag (If-None-Match) while the state is unchanged gets 304
+  // without a body: the live refresh asks every few seconds (live-refresh.ts, #1210), and an
+  // unchanged profile then costs a few bytes rather than its whole progress.
   function progressState({ req, profile }: ScopedRequest) {
     checkPlan(profile, [req.headers['x-planner-plan']].flat()[0]);
-    return response(profile.state);
+    const tag = stateTag(profile.state);
+    if (namesTag([req.headers['if-none-match']].flat()[0], tag))
+      return response(null, 304, { ETag: tag });
+    return response(profile.state, 200, { ETag: tag });
   }
   // Progress-only backup of the scoped profile, a separate format from the full-save
   // export: it restores into this same profile through /api/import.

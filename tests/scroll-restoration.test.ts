@@ -29,6 +29,8 @@ function start(globals: Record<string, unknown>) {
     URL,
     JSON,
     structuredClone,
+    // The Docker edition, as in the interface tests: start-up reads it (live-refresh.ts, #1210).
+    browserMode: false,
     ...globals,
   });
   vm.runInContext(source, context);
