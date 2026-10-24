@@ -1,9 +1,10 @@
 // Remembering how a factory's flow graph is drawn (#1224, slice 2 of #1201): the spots of the
 // production lines the user moved, the zoom and the scroll offsets, stored per factory group as
-// groups[].layout (state version 22) with the factoryGroupLayout update. FlowGraphDialog.vue reads
-// the stored layout once as it opens and keeps the spots here while it is open, so a drag shows at
-// once and the save's reply never moves a box back. A save goes:
-// - when a drag of a line ends, at once (`now`);
+// groups[].layout (state version 22) with the factoryGroupLayout update, and with them whether
+// storage and the sink are shown as tags (#1231, `tags`, version 23 while on). FlowGraphDialog.vue
+// reads the stored layout once as it opens and keeps the spots and the tags here while it is open,
+// so a drag shows at once and the save's reply never moves a box back. A save goes:
+// - when a drag of a line ends, or the tags are switched on or off, at once (`now`);
 // - when an arrow key nudge, a zoom or a scroll has settled, LAYOUT_SAVE_DELAY ms after the last
 //   one (`later`), never on every pointer move;
 // - when the dialog closes or makes way for a line's dialog, if one is still waiting.
@@ -33,6 +34,8 @@ export function useGraphLayout(groupId: string, view: () => GraphView | null) {
       Object.entries(stored?.nodes ?? {}).map(([row, [x, y]]) => [row, [x, y] as [number, number]]),
     ),
   );
+  // "Show storage and sink as tags" (#1231): off unless this factory stored it on.
+  const tags = ref(stored?.tags === true);
   // What was last stored or sent, as JSON; '' after a failed save, which nothing equals.
   let last = JSON.stringify(stored ?? null);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -46,7 +49,12 @@ export function useGraphLayout(groupId: string, view: () => GraphView | null) {
   function current(): GroupLayout | null {
     seen = view() ?? seen;
     const rows = Object.values(calculated?.stages ?? {}).map(stage => stage?.rows ?? []);
-    return layoutToSave(spots.value, seen, factoryLineRows(rows, factoryGroupsState(), groupId));
+    return layoutToSave(
+      spots.value,
+      seen,
+      factoryLineRows(rows, factoryGroupsState(), groupId),
+      tags.value,
+    );
   }
   function now() {
     clearTimeout(timer);
@@ -71,5 +79,5 @@ export function useGraphLayout(groupId: string, view: () => GraphView | null) {
   onBeforeUnmount(() => {
     if (timer !== undefined) now();
   });
-  return { stored, spots, now, later, settled, storedView: seen };
+  return { stored, spots, tags, now, later, settled, storedView: seen };
 }

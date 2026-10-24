@@ -16,7 +16,8 @@
 //                  Trucks (mode 'fluidTruck', #1177), version 18; a group's owner (#1199,
 //                  groups[].owner, the factoryGroupOwner update), version 20; a group's
 //                  flow graph layout (#1224, groups[].layout, the factoryGroupLayout
-//                  update), version 22
+//                  update), version 22; storage and the sink shown as tags in that
+//                  graph (#1231, groups[].layout.tags), version 23
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
 //                  not place (validateOrigin), version 12; with what the migration mapped
 //                  (mapping, #606), version 13; no update op edits it

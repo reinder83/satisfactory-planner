@@ -12,7 +12,22 @@
 // so it never runs behind a box; a few sweeps order each layer by where its neighbours sit, which
 // keeps crossings down. A link from a line back into itself (#898) is no edge on the drawing: the
 // box says it under its machines. Deterministic: it reads only its arguments.
+//
+// Storage and the sink (#1231): an edge into Protected storage or the AWESOME Sink is `quiet`,
+// which the dialog draws thin, grey and behind the others, without a label until it is lit. With
+// `tags` (the factory's "Show storage and sink as tags") those edges are drawn as a tag per
+// destination on their line's right edge instead ("▣ 2/min", "♻ 4.3/min"), and the two places'
+// boxes are left out; the edges stay in `edges` for the table. Every label sits at the middle of
+// its curve, slid along it where it would cover something (spreadLabels in graph-labels.ts).
 import type { FlowLine, FlowLink, GroupFlow, PortKind } from './group-flow.ts';
+import { OUTSIDE } from './group-links.ts';
+import {
+  spreadLabels,
+  straightCurve,
+  type GraphBox,
+  type GraphCurve,
+  type LabelToPlace,
+} from './graph-labels.ts';
 import { flowConnections, flowNames, isSelfLink, lineNumber } from './views/group-flow-page.ts';
 
 // Sizes in px. Monospaced type keeps text widths predictable: GRAPH_CHAR is a character's width
@@ -31,6 +46,13 @@ export const GRAPH = {
   char: 6.6,
   nameChars: 26,
   captionChars: 30,
+  // A storage or sink tag (#1231): its height, the room between two tags of a line, how far right
+  // of the line's box and down from its top they start, and the room around a tag's text.
+  tagHeight: 17,
+  tagGap: 3,
+  tagInset: 4,
+  tagTop: 4,
+  tagPad: 12,
 } as const;
 
 // Which side of the group a box stands for: a place that sends something in, a line of the group,
@@ -70,19 +92,54 @@ export interface GraphEdge {
   // 'loop' for a link to a line built earlier (a recycling loop needs a starter batch), 'self' for
   // a line's own output going back into it, else ''.
   note: '' | 'loop' | 'self';
-  // The drawn path, and where its label sits (its middle); null for a self link, which is not drawn.
+  // Into Protected storage or the AWESOME Sink (#1231): drawn quietly, or as a tag (`asTag`, with
+  // the graph's `tags` option, and then not drawn as an arrow).
+  quiet: boolean;
+  asTag: boolean;
+  // The drawn path, where its label sits (its middle) and the curve of the path it sits on, which
+  // the label slides along when lit labels are spread; null for an edge that is not drawn (a self
+  // link, a tag).
   path: string | null;
   label: { x: number; y: number; width: number } | null;
+  curve: GraphCurve | null;
+}
+
+// A line's storage or sink flows as one tag on its box's right edge (#1231): "▣ 2/min" for
+// Protected storage, "♻ 4.3/min" for the AWESOME Sink, summed; `name` lists the items, for the
+// hover title and screen readers. `index` stacks a line's tags from the top of its box.
+export interface GraphTag {
+  id: string;
+  node: string;
+  place: 'storage' | 'sink';
+  text: string;
+  name: string;
+  edges: string[];
+  index: number;
+  width: number;
 }
 
 export interface FlowGraph {
   group: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  tags: GraphTag[];
   layers: number;
   width: number;
   height: number;
 }
+
+// What a graph is drawn with: `tags` draws the storage and sink flows as tags on their lines.
+export interface GraphOptions {
+  tags?: boolean;
+}
+
+// The places whose edges are quiet: Protected storage and the AWESOME Sink, the right-hand boxes
+// almost every line sends a little to.
+const QUIET_PLACES: ReadonlySet<string> = new Set([
+  'out:' + OUTSIDE.storage,
+  'out:' + OUTSIDE.surplus,
+]);
+export const isQuietPlace = (nodeId: string): boolean => QUIET_PLACES.has(nodeId);
 
 // The words under a place's name, by kind, as the flow page's port boxes say them.
 const PLACE_CAPTIONS: Record<PortKind, string> = {
@@ -108,37 +165,144 @@ export type GraphCaption = (line: FlowLine) => string;
 const endId = (end: FlowLink['from'], side: 'in' | 'out'): string =>
   end.kind === 'line' ? 'line:' + end.id : side + ':' + end.id;
 
-// The graph of `flow`. `rateText` words a rate, `caption` a line's machines.
-export function flowGraph(flow: GroupFlow, rateText: GraphRate, caption: GraphCaption): FlowGraph {
+// The graph of `flow`. `rateText` words a rate, `caption` a line's machines; `options.tags` draws
+// the storage and sink flows as tags on their lines instead of arrows to two boxes.
+export function flowGraph(
+  flow: GroupFlow,
+  rateText: GraphRate,
+  caption: GraphCaption,
+  options: GraphOptions = {},
+): FlowGraph {
   const names = flowNames(flow);
-  const nodes = graphNodes(flow, rateText, caption);
   const edges: GraphEdge[] = flowConnections(flow, names).map((connection, i) => {
     const link = connection.link;
     const self = isSelfLink(link);
+    const from = endId(link.from, 'in'),
+      to = endId(link.to, 'out');
+    const quiet = QUIET_PLACES.has(to);
     return {
       id: 'e' + i,
-      from: endId(link.from, 'in'),
-      to: endId(link.to, 'out'),
+      from,
+      to,
       item: link.item,
       rate: link.rate,
       rateText: rateText(link.item, link.rate),
       fromText: connection.from,
       toText: connection.to,
       note: self ? 'self' : link.loop ? 'loop' : '',
+      quiet,
+      asTag: quiet && !!options.tags && from.startsWith('line:'),
       path: null,
       label: null,
+      curve: null,
     };
   });
-  const bottom = layOut(nodes, edges);
-  const width = Math.max(0, ...nodes.map(node => node.x + node.width)) + GRAPH.pad;
+  // A place every edge into which is a tag has no box.
+  const tagOnly = new Set(
+    [...QUIET_PLACES].filter(
+      place =>
+        edges.some(edge => edge.to === place) &&
+        edges.every(edge => edge.to !== place || edge.asTag),
+    ),
+  );
+  const nodes = graphNodes(flow, rateText, caption).filter(node => !tagOnly.has(node.id));
+  const tags = graphTags(edges, rateText);
+  const bottom = layOut(
+    nodes,
+    edges.filter(edge => !edge.asTag),
+    tags,
+  );
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const width =
+    Math.max(0, tagsRight(tags, byId), ...nodes.map(node => node.x + node.width)) + GRAPH.pad;
   return {
     group: flow.group,
     nodes,
     edges,
+    tags,
     layers: Math.max(0, ...nodes.map(node => node.layer + 1)),
     width,
     height: graphHeight(bottom, edges),
   };
+}
+
+// What a tag says for its destination, and the start of its name (#1231).
+const TAG_PLACES = [
+  { place: 'storage', id: 'out:' + OUTSIDE.storage, mark: '▣', to: 'To protected storage' },
+  { place: 'sink', id: 'out:' + OUTSIDE.surplus, mark: '♻', to: 'To the AWESOME Sink' },
+] as const;
+
+// The tags of the edges drawn as tags: per line (in the order of their edges), one for storage
+// and one for the sink, each with its edges' rates summed ("♻ 4.3/min"; solids and fluids each
+// summed on their own, "+" between) and its items listed in its name.
+function graphTags(edges: readonly GraphEdge[], rateText: GraphRate): GraphTag[] {
+  const tags: GraphTag[] = [];
+  const lines = [...new Set(edges.filter(edge => edge.asTag).map(edge => edge.from))];
+  for (const line of lines) {
+    let index = 0;
+    for (const place of TAG_PLACES) {
+      const own = edges.filter(edge => edge.asTag && edge.from === line && edge.to === place.id);
+      if (!own.length) continue;
+      const text = `${place.mark} ${summedRate(own, rateText)}`;
+      tags.push({
+        id: `tag:${line}:${place.place}`,
+        node: line,
+        place: place.place,
+        text,
+        name: `${place.to}: ${own.map(edge => `${edge.item} ${edge.rateText}`).join(', ')}`,
+        edges: own.map(edge => edge.id),
+        index: index++,
+        width: Math.ceil([...text].length * GRAPH.char) + GRAPH.tagPad,
+      });
+    }
+  }
+  return tags;
+}
+
+// The rates of `edges` added up, worded by `rateText`: the edges in one unit (the words a rate of
+// 0 gets, "0/min" or "0 m³/min") summed together.
+function summedRate(edges: readonly GraphEdge[], rateText: GraphRate): string {
+  const sums = new Map<string, { item: string; rate: number }>();
+  for (const edge of edges) {
+    const unit = rateText(edge.item, 0);
+    const sum = sums.get(unit);
+    if (sum) sum.rate += edge.rate;
+    else sums.set(unit, { item: edge.item, rate: edge.rate });
+  }
+  return [...sums.values()].map(sum => rateText(sum.item, sum.rate)).join(' + ');
+}
+
+// Where tag `tag` sits on its line's box `node`: by its middle, as the labels' boxes are.
+export const tagBox = (tag: GraphTag, node: GraphNode): GraphBox => ({
+  x: node.x + node.width + GRAPH.tagInset + tag.width / 2,
+  y: node.y + GRAPH.tagTop + tag.index * (GRAPH.tagHeight + GRAPH.tagGap) + GRAPH.tagHeight / 2,
+  width: tag.width,
+  height: GRAPH.tagHeight,
+});
+// The boxes and tags of a graph as obstacles for its labels, by their middles.
+export function labelObstacles(nodes: readonly GraphNode[], tags: readonly GraphTag[]): GraphBox[] {
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  return [
+    ...nodes.map(node => ({
+      x: node.x + node.width / 2,
+      y: node.y + node.height / 2,
+      width: node.width,
+      height: node.height,
+    })),
+    ...tags.flatMap(tag => {
+      const node = byId.get(tag.node);
+      return node ? [tagBox(tag, node)] : [];
+    }),
+  ];
+}
+// The right edge of the rightmost tag, or 0.
+export function tagsRight(tags: readonly GraphTag[], byId: ReadonlyMap<string, GraphNode>): number {
+  let right = 0;
+  for (const tag of tags) {
+    const node = byId.get(tag.node);
+    if (node) right = Math.max(right, node.x + node.width + GRAPH.tagInset + tag.width);
+  }
+  return right;
 }
 
 // The boxes: the places that send something in (in the order the flow page lists them), the
@@ -197,9 +361,9 @@ interface Slot {
   y: number;
 }
 
-// Gives each node its layer and place, and each drawn edge its path and label. Returns the bottom
-// of the lowest box or waypoint.
-function layOut(nodes: GraphNode[], edges: GraphEdge[]): number {
+// Gives each node its layer and place, and each drawn edge (all of `edges` but self links) its
+// path and label. Returns the bottom of the lowest box or waypoint.
+function layOut(nodes: GraphNode[], edges: GraphEdge[], tags: readonly GraphTag[]): number {
   const byId = new Map(nodes.map(node => [node.id, node]));
   assignLayers(nodes, edges, byId);
   const forward = edges.filter(edge => edge.note !== 'self' && isForward(edge, byId));
@@ -209,9 +373,9 @@ function layOut(nodes: GraphNode[], edges: GraphEdge[]): number {
   placeSlots(layers);
   const bottom = Math.max(0, ...layers.flat().map(slot => slot.y + slot.height));
   const back = edges.filter(edge => edge.note !== 'self' && !isForward(edge, byId));
-  const gaps = routeForward(forward, chains, byId);
-  routeBack(back, bottom, byId);
-  placeLabels(edges, gaps, nodes);
+  const curves = routeForward(forward, chains, byId);
+  for (const [edge, lane] of routeBack(back, bottom, byId)) curves.set(edge, [lane]);
+  placeEdgeLabels(edges, curves, labelObstacles(nodes, tags));
   return bottom;
 }
 
@@ -346,20 +510,21 @@ interface Point {
   y: number;
 }
 
-// The gap a drawn edge's label goes in: the two ends of its curve there.
-interface LabelGap {
-  from: Point;
-  to: Point;
-}
+// The S-curve between two layers from `from` to `to`, leaving and entering level (forwardPath's).
+const sCurve = (from: Point, to: Point): GraphCurve => {
+  const bend = (to.x - from.x) / 2;
+  return { from, c1: { x: from.x + bend, y: from.y }, c2: { x: to.x - bend, y: to.y }, to };
+};
 
-// Each forward edge's path through its chain of slots, and the gap its label goes in. Where an
-// edge leaves its source and enters its target: the edges on one side of a box spread evenly down
-// that side, in the order of where their other ends are, so they do not cross there.
+// Each forward edge's path through its chain of slots, and the curves its label may sit on. Where
+// an edge leaves its source and enters its target: the edges on one side of a box spread evenly
+// down that side, in the order of where their other ends are (the next slot along the edge: its
+// target's box, or the gap it passes the next layer in), so they do not cross there.
 function routeForward(
   forward: GraphEdge[],
   chains: ReadonlyMap<GraphEdge, Slot[]>,
   byId: ReadonlyMap<string, GraphNode>,
-): Map<GraphEdge, LabelGap[]> {
+): Map<GraphEdge, GraphCurve[]> {
   const middle = (slot: Slot) => slot.y + slot.height / 2;
   const ports = (side: 'out' | 'in') => {
     const at = new Map<GraphEdge, number>();
@@ -384,7 +549,7 @@ function routeForward(
   };
   const outs = ports('out'),
     ins = ports('in');
-  const gaps = new Map<GraphEdge, LabelGap[]>();
+  const gaps = new Map<GraphEdge, GraphCurve[]>();
   for (const edge of forward) {
     const chain = chains.get(edge)!;
     const points: Point[] = [];
@@ -396,11 +561,11 @@ function routeForward(
     });
     edge.path = forwardPath(points);
     // Its label may sit on any of its curves between two layers: the first, after its source,
-    // then the last, before its target, then those between.
-    const curves: LabelGap[] = [];
-    for (let i = 0; i + 1 < points.length; i += 2)
-      curves.push({ from: points[i]!, to: points[i + 1]! });
-    gaps.set(edge, [curves[0]!, ...curves.slice(1).reverse()]);
+    // then the last, before its target, then those between. A quiet edge's sits on the first, by
+    // the line it comes from.
+    const curves: GraphCurve[] = [];
+    for (let i = 0; i + 1 < points.length; i += 2) curves.push(sCurve(points[i]!, points[i + 1]!));
+    gaps.set(edge, edge.quiet ? [curves[0]!] : [curves[0]!, ...curves.slice(1).reverse()]);
   }
   return gaps;
 }
@@ -424,8 +589,13 @@ const round = (value: number) => Math.round(value * 10) / 10;
 
 // An edge to a box in the same layer or one to its left (a recycling loop): out of the source's
 // right side, down below every box, back left and up into the target's left side, each on a lane
-// of its own under the boxes.
-function routeBack(back: GraphEdge[], bottom: number, byId: ReadonlyMap<string, GraphNode>) {
+// of its own under the boxes. Returns each one's lane, which its label slides along.
+function routeBack(
+  back: GraphEdge[],
+  bottom: number,
+  byId: ReadonlyMap<string, GraphNode>,
+): Map<GraphEdge, GraphCurve> {
+  const lanes = new Map<GraphEdge, GraphCurve>();
   back.forEach((edge, i) => {
     const from = nodeOf(byId, edge.from),
       to = nodeOf(byId, edge.to);
@@ -438,74 +608,52 @@ function routeBack(back: GraphEdge[], bottom: number, byId: ReadonlyMap<string, 
     edge.path =
       `M${round(sx)},${round(sy)} C${round(sx + reach)},${round(sy)} ${round(sx + reach)},${round(lane)} ${round(sx)},${round(lane)}` +
       ` H${round(tx)} C${round(tx - reach)},${round(lane)} ${round(tx - reach)},${round(ty)} ${round(tx)},${round(ty)}`;
-    edge.label = { x: (sx + tx) / 2, y: lane, width: labelWidth(edge) };
+    lanes.set(edge, straightCurve({ x: sx, y: lane }, { x: tx, y: lane }));
   });
+  return lanes;
 }
 
 // A label is the item over its rate, as wide as the longer of the two.
 export const labelWidth = (edge: GraphEdge) =>
   Math.ceil(Math.max([...edge.item].length, [...edge.rateText].length) * GRAPH.char) + 8;
 
-// Each forward edge's label on one of its curves between layers (LabelGap, in the order
-// routeForward gives them), at the first of these points along it whose box overlaps no box and no
-// label placed before; where every point overlaps something, at the one that overlaps fewest.
-const ALONG = [0.5, 0.35, 0.65, 0.2, 0.8];
-function placeLabels(
-  edges: GraphEdge[],
-  gaps: ReadonlyMap<GraphEdge, LabelGap[]>,
-  nodes: GraphNode[],
+// Each drawn edge's label at rest (#1231), on one of `curves` (by edge, in the order it tries
+// them): at the middle of its curve, slid along it where it would cover one of `obstacles` (the
+// boxes and tags) or a label placed before it, and at the middle of its first curve where nothing
+// is free (spreadLabels, top to bottom). The quiet edges' labels, hidden until lit, come after the
+// others and make room for them, not for each other. Sets each edge's `label` and `curve`.
+export function placeEdgeLabels(
+  edges: readonly GraphEdge[],
+  curves: ReadonlyMap<GraphEdge, readonly GraphCurve[]>,
+  obstacles: readonly GraphBox[],
 ) {
-  // The loops' labels, under the boxes, are placed already.
-  const placed = edges.flatMap(edge => (edge.label ? [edge.label] : []));
-  const boxes = nodes.map(node => ({
-    x: node.x + node.width / 2,
-    y: node.y + node.height / 2,
-    width: node.width,
-    height: node.height,
-  }));
-  const overlaps = (x: number, y: number, width: number) =>
-    placed.filter(
-      box =>
-        Math.abs(box.x - x) < (box.width + width) / 2 && Math.abs(box.y - y) < GRAPH.labelHeight,
-    ).length +
-    boxes.filter(
-      box =>
-        Math.abs(box.x - x) < (box.width + width) / 2 &&
-        Math.abs(box.y - y) < (box.height + GRAPH.labelHeight) / 2,
-    ).length;
-  for (const edge of edges) {
-    const curves = gaps.get(edge);
-    if (!curves) continue;
-    const width = labelWidth(edge);
-    let best: { spot: Point; count: number } | null = null;
-    for (const curve of curves) {
-      for (const t of ALONG) {
-        const spot = curvePoint(curve.from, curve.to, t);
-        const count = overlaps(spot.x, spot.y, width);
-        if (!best || count < best.count) best = { spot, count };
-        if (count === 0) break;
-      }
-      if (best?.count === 0) break;
+  const toPlace = (edge: GraphEdge): LabelToPlace => ({
+    id: edge.id,
+    width: labelWidth(edge),
+    curves: curves.get(edge) ?? [],
+  });
+  const byId = new Map(edges.map(edge => [edge.id, edge]));
+  const set = (spots: Map<string, { x: number; y: number; curve: GraphCurve } | null>) => {
+    for (const [id, spot] of spots) {
+      // spreadLabels answers for the edges it was given, and keepAll places each.
+      const edge = byId.get(id)!;
+      edge.label = { x: spot!.x, y: spot!.y, width: labelWidth(edge) };
+      edge.curve = spot!.curve;
     }
-    // Every curve has its points.
-    edge.label = { x: round(best!.spot.x), y: round(best!.spot.y), width };
-    placed.push(edge.label);
-  }
-}
-
-// A point of the S-curve from `from` to `to` (forwardPath's bend), at `t` from 0 to 1.
-function curvePoint(from: Point, to: Point, t: number): Point {
-  const bend = (to.x - from.x) / 2;
-  const u = 1 - t;
-  const mix = (a: number, b: number, c: number, d: number) =>
-    u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
-  return {
-    x: mix(from.x, from.x + bend, to.x - bend, to.x),
-    y: mix(from.y, from.y, to.y, to.y),
   };
+  const loud = edges.filter(edge => curves.has(edge) && !edge.quiet).map(toPlace);
+  const spots = spreadLabels(loud, GRAPH.labelHeight, obstacles, true);
+  set(spots);
+  const taken: GraphBox[] = [...obstacles];
+  for (const edge of edges)
+    if (spots.has(edge.id) && edge.label) taken.push({ ...edge.label, height: GRAPH.labelHeight });
+  for (const edge of edges)
+    if (curves.has(edge) && edge.quiet)
+      set(spreadLabels([toPlace(edge)], GRAPH.labelHeight, taken, true));
 }
 
-// Down to the lowest box, waypoint, label or loop lane, and the padding under it.
+// Down to the lowest box, waypoint, label or loop lane, and the padding under it. A tag sits on
+// its line's box, never below it.
 function graphHeight(bottom: number, edges: GraphEdge[]): number {
   const bottoms = [
     bottom,

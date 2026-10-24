@@ -10,11 +10,21 @@
 //   (new in the plan, or new in this phase) takes its automatic spot moved as far as the lines it is linked to were moved on
 //   average, then down below any box it would cover. Places (what comes in, what leaves) keep
 //   their automatic spots. Every arrow then runs from its source's right side to its target's
-//   left side as one curve, its label on the curve where it covers the fewest boxes and labels.
+//   left side as one curve, its label at the curve's middle, slid along it where it would cover a
+//   box, a tag or another label (placeEdgeLabels, #1231). Tags stay on their lines' boxes.
 // - Saving keeps the spots of the lines the factory still has in some phase of the plan
 //   (factoryLineRows), whole units, so a line the plan dropped loses its spot then.
 // The boxes stay in the automatic order in the drawing (and so in the tab order) wherever they sit.
-import { GRAPH, labelWidth, type FlowGraph, type GraphEdge, type GraphNode } from './flow-graph.ts';
+import {
+  GRAPH,
+  labelObstacles,
+  placeEdgeLabels,
+  tagsRight,
+  type FlowGraph,
+  type GraphEdge,
+  type GraphNode,
+} from './flow-graph.ts';
+import type { GraphCurve } from './graph-labels.ts';
 import { LINK_DUST, rowPlaces, type GroupsInput } from './group-order.ts';
 import type { GraphView } from './graph-view.ts';
 import type { CalcRow, GroupLayout } from '../types/index.ts';
@@ -52,8 +62,13 @@ export function placedGraph(graph: FlowGraph, spots: GraphSpots | undefined): Fl
   const automatic = new Map(graph.nodes.map(node => [node.id, node]));
   placeFreshLines(fresh, nodes, graph.edges, automatic, spots ?? {});
   const { edges, curves } = routeArranged(graph.edges, byId);
-  placeArrangedLabels(edges, curves, nodes);
-  return { ...graph, nodes, edges, ...arrangedSize(nodes, edges, curves) };
+  const labelCurves = new Map<GraphEdge, GraphCurve[]>();
+  for (const edge of edges) {
+    const curve = curves.get(edge.id);
+    if (curve) labelCurves.set(edge, [curve]);
+  }
+  placeEdgeLabels(edges, labelCurves, labelObstacles(nodes, graph.tags));
+  return { ...graph, nodes, edges, ...arrangedSize(graph, nodes, edges, curves) };
 }
 
 // Each line without a spot, in order: its automatic spot moved by the mean move of the lines it
@@ -98,30 +113,19 @@ const boxesMeet = (one: GraphNode, other: GraphNode): boolean =>
   one.y < other.y + other.height + GRAPH.rowGap &&
   other.y < one.y + one.height + GRAPH.rowGap;
 
-interface SpotPoint {
-  x: number;
-  y: number;
-}
-// One arrow of an arranged graph: from its source's right side to its target's left side.
-interface ArrangedCurve {
-  from: SpotPoint;
-  out: SpotPoint;
-  into: SpotPoint;
-  to: SpotPoint;
-}
-
 const spotRound = (value: number) => Math.round(value * 10) / 10;
 
 // Each drawn arrow as one curve: the arrows on one side of a box spread evenly down that side in
 // the order of where their other ends are, so they do not cross there (as flowGraph does); the
 // curve leaves and enters level, and one running back to the left bends out a gap's quarter at
-// least, so it shows as a loop. A line's own output back into itself stays undrawn.
+// least, so it shows as a loop. A line's own output back into itself, and a flow drawn as a tag
+// (#1231), stay undrawn.
 function routeArranged(
   edges: GraphEdge[],
   byId: ReadonlyMap<string, GraphNode>,
-): { edges: GraphEdge[]; curves: Map<string, ArrangedCurve> } {
-  const curves = new Map<string, ArrangedCurve>();
-  const drawn = edges.filter(edge => edge.note !== 'self');
+): { edges: GraphEdge[]; curves: Map<string, GraphCurve> } {
+  const curves = new Map<string, GraphCurve>();
+  const drawn = edges.filter(edge => edge.note !== 'self' && !edge.asTag);
   // Every edge joins two boxes of the graph (flowGraph's ends), so byId has both.
   const middle = (id: string) => {
     const node = byId.get(id)!;
@@ -144,86 +148,37 @@ function routeArranged(
     }
   }
   const routed = edges.map(edge => {
-    if (edge.note === 'self') return { ...edge, path: null, label: null };
+    if (edge.note === 'self' || edge.asTag)
+      return { ...edge, path: null, label: null, curve: null };
     // Every drawn edge joins two boxes of the graph, and both its ports were set above.
     const source = byId.get(edge.from)!,
       target = byId.get(edge.to)!;
     const from = { x: source.x + source.width, y: portY.get('from' + edge.id)! };
     const to = { x: target.x, y: portY.get('to' + edge.id)! };
     const reach = Math.max(GRAPH.gap / 4, Math.abs(to.x - from.x) / 2);
-    const curve: ArrangedCurve = {
+    const curve: GraphCurve = {
       from,
-      out: { x: from.x + reach, y: from.y },
-      into: { x: Math.max(0, to.x - reach), y: to.y },
+      c1: { x: from.x + reach, y: from.y },
+      c2: { x: Math.max(0, to.x - reach), y: to.y },
       to,
     };
     const path =
-      `M${spotRound(from.x)},${spotRound(from.y)} C${spotRound(curve.out.x)},${spotRound(curve.out.y)}` +
-      ` ${spotRound(curve.into.x)},${spotRound(curve.into.y)} ${spotRound(to.x)},${spotRound(to.y)}`;
+      `M${spotRound(from.x)},${spotRound(from.y)} C${spotRound(curve.c1.x)},${spotRound(curve.c1.y)}` +
+      ` ${spotRound(curve.c2.x)},${spotRound(curve.c2.y)} ${spotRound(to.x)},${spotRound(to.y)}`;
     curves.set(edge.id, curve);
-    return { ...edge, path, label: null };
+    return { ...edge, path, label: null, curve: null };
   });
   return { edges: routed, curves };
 }
 
-// A point of a curve at `t` from 0 to 1.
-function arrangedPoint(curve: ArrangedCurve, t: number): SpotPoint {
-  const u = 1 - t;
-  const mix = (a: number, b: number, c: number, d: number) =>
-    u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
-  return {
-    x: mix(curve.from.x, curve.out.x, curve.into.x, curve.to.x),
-    y: mix(curve.from.y, curve.out.y, curve.into.y, curve.to.y),
-  };
-}
-
-// Each drawn arrow's label on its curve, at the first of these points along it that covers no box
-// and no label placed before, else at the one that covers fewest; kept inside the drawing.
-const ARRANGED_ALONG = [0.5, 0.35, 0.65, 0.2, 0.8];
-function placeArrangedLabels(
-  edges: GraphEdge[],
-  curves: ReadonlyMap<string, ArrangedCurve>,
-  nodes: GraphNode[],
-) {
-  const placed: { x: number; y: number; width: number; height: number }[] = nodes.map(node => ({
-    x: node.x + node.width / 2,
-    y: node.y + node.height / 2,
-    width: node.width,
-    height: node.height,
-  }));
-  const covers = (x: number, y: number, width: number) =>
-    placed.filter(
-      box =>
-        Math.abs(box.x - x) < (box.width + width) / 2 &&
-        Math.abs(box.y - y) < (box.height + GRAPH.labelHeight) / 2,
-    ).length;
-  for (const edge of edges) {
-    const curve = curves.get(edge.id);
-    if (!curve) continue;
-    const width = labelWidth(edge);
-    let best: { spot: SpotPoint; count: number } | null = null;
-    for (const t of ARRANGED_ALONG) {
-      const spot = arrangedPoint(curve, t);
-      spot.x = Math.max(width / 2, spot.x);
-      spot.y = Math.max(GRAPH.labelHeight / 2, spot.y);
-      const count = covers(spot.x, spot.y, width);
-      if (!best || count < best.count) best = { spot, count };
-      if (count === 0) break;
-    }
-    // ARRANGED_ALONG is not empty, so the loop set it.
-    const label = { x: spotRound(best!.spot.x), y: spotRound(best!.spot.y), width };
-    edge.label = label;
-    placed.push({ ...label, height: GRAPH.labelHeight });
-  }
-}
-
-// The drawing's size: to the right and lowest of every box, curve and label, and the padding.
+// The drawing's size: to the right and lowest of every box, tag, curve and label, and the padding.
 function arrangedSize(
+  graph: FlowGraph,
   nodes: GraphNode[],
   edges: GraphEdge[],
-  curves: ReadonlyMap<string, ArrangedCurve>,
+  curves: ReadonlyMap<string, GraphCurve>,
 ): { width: number; height: number } {
-  let right = 0,
+  let right = tagsRight(graph.tags, new Map(nodes.map(node => [node.id, node]))),
     bottom = 0;
   for (const node of nodes) {
     right = Math.max(right, node.x + node.width);
@@ -231,7 +186,7 @@ function arrangedSize(
   }
   for (const edge of edges) {
     const curve = curves.get(edge.id);
-    if (curve) right = Math.max(right, curve.out.x, curve.into.x);
+    if (curve) right = Math.max(right, curve.c1.x, curve.c2.x);
     if (edge.label) {
       right = Math.max(right, edge.label.x + edge.label.width / 2);
       bottom = Math.max(bottom, edge.label.y + GRAPH.labelHeight / 2);
@@ -267,15 +222,17 @@ export function factoryLineRows(
   return rows;
 }
 
-// What a save stores (groups[].layout): the spots of the lines in `keep`, whole units, and the
-// view, the zoom to two decimals and the scroll offsets in whole px; each left out when it says
-// nothing, and null when nothing is left.
+// What a save stores (groups[].layout): the spots of the lines in `keep`, whole units, the view,
+// the zoom to two decimals and the scroll offsets in whole px, and `tags: true` while storage and
+// the sink are shown as tags (#1231); each left out when it says nothing, and null when nothing is
+// left.
 export function layoutToSave(
   spots: GraphSpots,
   view: GraphView | null,
   keep: ReadonlySet<string>,
+  tags = false,
 ): GroupLayout | null {
-  const layout: GroupLayout = {};
+  const layout: GroupLayout = tags ? { tags: true } : {};
   const nodes = Object.entries(spots).filter(([row]) => keep.has(row));
   if (nodes.length)
     layout.nodes = Object.fromEntries(
