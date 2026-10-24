@@ -7,6 +7,7 @@
 // and SurveyPage.vue (ui/survey/), which read their forms back through the
 // readers here and handle their own controls.
 import {
+  beltCapMark,
   GUIDED_TOPUP_RATE,
   knownWorld,
   matchingPreset,
@@ -501,6 +502,10 @@ function readPhaseCaps(data: FormData, settings: WizardSettings) {
   }
   if (Object.keys(caps).length) settings.phaseCaps = caps;
   else delete settings.phaseCaps;
+  // The belt cap (#1232): Mk.2 to Mk.5, or "No cap", which leaves the field out.
+  const belt = Number(data.get('beltCap') ?? '');
+  if (beltCapMark(belt)) settings.beltCap = belt as 2 | 3 | 4 | 5;
+  else delete settings.beltCap;
 }
 
 // A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:

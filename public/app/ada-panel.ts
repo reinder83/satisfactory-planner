@@ -235,7 +235,8 @@ function miningFacts(): Pick<AdaFacts, 'mining' | 'ownedBelt'> {
       ]),
       mw: power(resources.reduce((sum, entry) => sum + entry.advice.mw, 0)),
     },
-    ...(stagePlan.mining.belt.mark !== phaseBelt(Number(stage())).mark
+    // Better than the milestones give, never a belt cap (#1232) that lowers it.
+    ...(stagePlan.mining.belt.cap > phaseBelt(Number(stage())).cap
       ? { ownedBelt: `${stagePlan.mining.belt.mark} belts (${num(stagePlan.mining.belt.cap)}/min)` }
       : {}),
   };

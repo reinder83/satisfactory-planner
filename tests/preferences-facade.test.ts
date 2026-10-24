@@ -16,9 +16,11 @@ const modules = fs
 // (OWNED_GENERATORS, ownedGeneratorCounts, #1068), and the recipe part cost steps (RECIPE_COSTS,
 // recipeCostChoices, recipeCostOf, #1161), and what a plan keeps lowest (OBJECTIVES and its
 // helpers, #1180), the caps per phase beside it (PHASE_CAP_LIMITS and its helpers, #1221), and
-// what each building costs to build, which the planner counts (BUILD_COSTS, #1229).
+// what each building costs to build, which the planner counts (BUILD_COSTS, #1229), and the belt
+// cap (BELT_CAP_MARKS, beltCapMark, beltCapWords, #1232).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
+    'BELT_CAP_MARKS',
     'BELT_MARKS',
     'BUILD_COSTS',
     'BURNER_FUELS',
@@ -53,6 +55,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'WATER_EXTRACTOR',
     'WELL_BASE',
     'WELL_SATELLITES',
+    'beltCapMark',
+    'beltCapWords',
     'bestMark',
     'blankCounts',
     'blankExtraction',

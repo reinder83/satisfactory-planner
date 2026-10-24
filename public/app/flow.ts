@@ -23,7 +23,7 @@ import { power } from './wizard/fields.ts';
 import { sinkCaption, sinkCause } from './sink-cause.ts';
 import { lineSink, recycleModel } from './recycle.ts';
 import { recycleModelOf } from './stage-recycle.ts';
-import { BELT_MARKS, PIPE_MARKS, phaseForTier } from '../preferences.ts';
+import { BELT_MARKS, PIPE_MARKS, beltCapMark, phaseForTier } from '../preferences.ts';
 import { rowStepTitle } from '../progression.ts';
 import type { ItemBooks } from './group-links.ts';
 import type { RecycleModel } from './recycle.ts';
@@ -58,6 +58,8 @@ export interface BestLane extends Lane {
   fluid: boolean;
   unit: string;
   owned?: true;
+  // The plan's belt cap (settings.beltCap, #1232) left out a better belt that is available.
+  capped?: true;
   milestone: LaneMilestone | null;
   next: (Lane & { milestone: LaneMilestone | null }) | null;
 }
@@ -257,36 +259,49 @@ function laneMilestone(lane: Lane): LaneMilestone | null {
 // null for a plan without one (every plan made before it).
 const ownedBeltMark = (): string | null =>
   calculated?.settings.ownedBelt ? `Mk.${calculated.settings.ownedBelt}` : null;
+// The best belt mark the open plan may use (settings.beltCap, #1232): "Mk.4", or null for a plan
+// without a cap (every plan made before it).
+const beltCapLane = (): string | null => beltCapMark(calculated?.settings.beltCap)?.mark ?? null;
 
 // The highest belt (or pipe) mark available at phase `stageKey` (default: the current stage). A mark
 // counts as available when its milestone is ticked, belongs to this phase or earlier, or is
 // unknown; Mk.1 is the fallback. A belt the player already has (ownedBeltMark, #1068) and the
-// belts below it count as available too, as the plan's mining counts them. Returns the lane with
-// its display unit, its milestone, whether only owning it makes it available (`owned`) and the
-// next mark up (with that mark's milestone), which LaneAdvice.vue mentions as the next upgrade.
+// belts below it count as available too, as the plan's mining counts them. A belt cap
+// (beltCapLane, #1232) leaves out every belt above it, an owned one too, as the plan's mining
+// does: the lane is then `capped` where a better one would be available, and no next mark is
+// offered from the cap on. Returns the lane with its display unit, its milestone, whether only
+// owning it makes it available (`owned`) and the next mark up (with that mark's milestone), which
+// LaneAdvice.vue mentions as the next upgrade.
 export function bestLane(fluid: boolean, stageKey?: string): BestLane {
   const lanes = laneMarks(fluid);
   const stageNo = Number(stageKey ?? stage());
   const ownedUpTo = fluid ? -1 : lanes.findIndex(lane => lane.mark === ownedBeltMark());
+  const capAt = fluid ? -1 : lanes.findIndex(lane => lane.mark === beltCapLane());
   // Both lists start with Mk.1.
   let best = lanes[0]!,
     bestMilestone = laneMilestone(best),
-    owned = false;
+    owned = false,
+    capped = false;
   lanes.forEach((lane, index) => {
     const milestone = laneMilestone(lane);
     const unlocked = !milestone || milestone.marked || milestone.phase <= stageNo;
-    if (unlocked || index <= ownedUpTo) {
-      best = lane;
-      bestMilestone = milestone;
-      owned = !unlocked;
+    if (!unlocked && index > ownedUpTo) return;
+    if (capAt >= 0 && index > capAt) {
+      capped = true;
+      return;
     }
+    best = lane;
+    bestMilestone = milestone;
+    owned = !unlocked;
   });
-  const next = lanes[lanes.indexOf(best) + 1];
+  const at = lanes.indexOf(best);
+  const next = capAt >= 0 && at >= capAt ? undefined : lanes[at + 1];
   return {
     ...best,
     fluid,
     unit: fluid ? ' m³/min' : '/min',
     ...(owned ? { owned: true as const } : {}),
+    ...(capped ? { capped: true as const } : {}),
     milestone: bestMilestone,
     next: next ? { ...next, milestone: laneMilestone(next) } : null,
   };

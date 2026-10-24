@@ -17,7 +17,8 @@
 // Their advice always gives both options, the counted one suggested (waterChoice in
 // public/mining.ts, #1142).
 // A miner or belt the player already has (settings.ownedMiner, settings.ownedBelt, #1068) raises
-// each phase's to it (phaseMiner, phaseBelt).
+// each phase's to it (phaseMiner, phaseBelt). A belt cap (settings.beltCap, #1232) lowers every
+// phase's belt to it, an owned belt's too (phaseBelt).
 // One node gives its yield at that miner and clock, never more than the belt or pipe it feeds
 // carries: a pure node's Mk.3 at 250% gives 780/min on Phase 4's Mk.5 belts, not 1,200.
 //
@@ -174,6 +175,10 @@ export interface MiningSettings {
   // The best conveyor belt the player already has (#1068, "Belts you already have"): 3 to 6 for
   // Mk.3 to Mk.6. Raises every phase's belt to at least that mark; absent unless chosen.
   ownedBelt?: number;
+  // The best belt the plan may assume (#1232, the caps on All settings step 3): 2 to 5 for Mk.2
+  // to Mk.5. Lowers every phase's belt to at most that mark, an owned belt's too; absent unless
+  // chosen.
+  beltCap?: number;
   // The player can overclock (#1137: the MAM's Power Shards research ticked, or "I can overclock"
   // in "What you already have"): every phase's clock is OVERCLOCK, Phase 1's too (the later
   // phases' are since #1169), and the build plan's Power Shards research step shows as done.
@@ -203,12 +208,29 @@ export function phaseMiner(
 }
 
 // The belt of `phase`: the best its HUB tiers unlock (BELT_MARKS), raised to a belt the player
-// already has (`owned`, settings.ownedBelt, #1068: 3 to 6 for Mk.3 to Mk.6); any other value, or
-// none, leaves every phase as before. Nothing caps it: a node survey records no belt.
-export function phaseBelt(phase: number, owned?: number): LaneMark {
+// already has (`owned`, settings.ownedBelt, #1068: 3 to 6 for Mk.3 to Mk.6), then lowered to the
+// belt cap (`cap`, settings.beltCap, #1232: 2 to 5 for Mk.2 to Mk.5), which wins over an owned
+// belt; any other value, or none, leaves every phase as before. A node survey records no belt.
+export function phaseBelt(phase: number, owned?: number, cap?: number): LaneMark {
   const unlocked = bestMark(BELT_MARKS, phase);
   const mine = owned ? BELT_MARKS.find(mark => mark.mark === `Mk.${owned}`) : undefined;
-  return mine && mine.cap > unlocked.cap ? mine : unlocked;
+  const best = mine && mine.cap > unlocked.cap ? mine : unlocked;
+  const most = beltCapMark(cap);
+  return most && most.cap < best.cap ? most : best;
+}
+// The marks a belt cap may name (settings.beltCap, #1232): Mk.2 to Mk.5. Mk.6 is the best belt,
+// so a cap there would cap nothing, and Phase 1 already has Mk.2.
+export const BELT_CAP_MARKS = [2, 3, 4, 5] as const;
+// The belt a belt cap allows at most, or undefined for no cap or any other value.
+export const beltCapMark = (cap: unknown): LaneMark | undefined =>
+  BELT_CAP_MARKS.some(mark => mark === cap)
+    ? BELT_MARKS.find(mark => mark.mark === `Mk.${cap as number}`)
+    : undefined;
+// The belt cap in words: "belts up to Mk.4 (480/min)", or '' without one (en-US grouping, as the
+// caps per phase are worded, phaseCapWords).
+export function beltCapWords(cap: unknown): string {
+  const mark = beltCapMark(cap);
+  return mark ? `belts up to ${mark.mark} (${mark.cap.toLocaleString('en-US')}/min)` : '';
 }
 
 // One node's output per minute at `clock` (1 = 100%), never more than its belt or pipe carries.
@@ -401,7 +423,7 @@ const budgetOf = (value: number) => Math.floor(value * 100 + 1e-6) / 100;
 export function phaseMining(settings: MiningSettings, phase: number): StageMining {
   const survey = settings.extraction ?? null;
   const miner = phaseMiner(phase, survey, settings.ownedMiner, settings.overclock);
-  const belt = phaseBelt(phase, settings.ownedBelt),
+  const belt = phaseBelt(phase, settings.ownedBelt, settings.beltCap),
     pipe = bestMark(PIPE_MARKS, phase);
   const reference = {
     mark: survey?.mark && MINER_BASE[survey.mark] ? survey.mark : REFERENCE.mark,
