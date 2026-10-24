@@ -20,7 +20,16 @@ import { builtCount, openBuiltLines, withBuiltLines } from '../built-capacity.ts
 import { isBusy, whileBusy } from '../busy.ts';
 import { plural } from '../format.ts';
 import { keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
-import { calculated, currentProfile, currentSave, loadContext, setWorkspace } from '../session.ts';
+import {
+  calculated,
+  currentProfile,
+  currentSave,
+  loadContext,
+  setWorkspace,
+  state,
+} from '../session.ts';
+import { sloopPinsSettings, wantedPins } from '../sloop-pins.ts';
+import type { StoredSettings } from '../../types/index.ts';
 import { render } from '../shell.ts';
 import { calcProgress } from '../wizard/wizard.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../handbook-migration.ts';
@@ -78,7 +87,13 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     kept = keptName(saveId, name),
     // The lines that stand now (#1176): every carry pick is on, so they count as built.
     builtLines = openBuiltLines(),
-    settings = withBuiltLines(offer.settings, builtLines);
+    // The somersloop pins asked for in the lines' dialogs (#1235) go with every recalculation the
+    // user starts, so another offer does not drop them. Every offer sends the plan's settings with
+    // its change.
+    settings = withBuiltLines(
+      sloopPinsSettings(offer.settings as StoredSettings, wantedPins(calculated, state)),
+      builtLines,
+    );
   const confirmed = await confirmAction({
     title: 'Recalculate this profile in place?',
     body: offerQuestion(

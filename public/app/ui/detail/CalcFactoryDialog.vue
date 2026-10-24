@@ -7,7 +7,8 @@
   (burnNotes in views/calculated.ts, #1063), the byproduct advice (RecycleAdvice.vue, #1022), machine setup
   (machineSetup in views/calculated.ts, drawn as the three MachineCells, SP-20) with the line's
   clocks in a
-  whole-machine plan (ExactClockChoice.vue, #1066),
+  whole-machine plan (ExactClockChoice.vue, #1066) and its somersloop pin (SloopPinChoice.vue,
+  #1235),
   lane advice, the outputs (only where the headline does not already say them), expansion by
   phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
   when the profile already runs whole machines. Opened by openCalculatedFactory in
@@ -39,6 +40,7 @@ import { legacy } from '../bridge.ts';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import ExactClockChoice from './ExactClockChoice.vue';
+import SloopPinChoice from './SloopPinChoice.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import MachineCells from './MachineCells.vue';
@@ -173,6 +175,7 @@ const view = computed(() =>
       :adjustable-caption="view.machines.adjustable"
     />
     <ExactClockChoice :row="view.row" />
+    <SloopPinChoice :row="view.row" />
     <div v-if="view.easy" class="notice info">
       <b>Easier optional setting: set only the adjustable machine to {{ view.easy.clock }}%.</b>
       <p>Its output: {{ view.easy.output }}.</p>

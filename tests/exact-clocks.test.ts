@@ -457,7 +457,7 @@ test('the choice is state version 16; every released format loads unchanged with
       () => validateState(json({ ...version15, exactClocks: bad })),
       /Invalid exact clocks/,
     );
-  assert.throws(() => validateState({ ...json(clean), version: 24 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(clean), version: 25 }), /newer planner version/);
   // The update saves the whole map; null forgets it and the state goes back to its version.
   const asked = mutate(json(version15), { type: 'exactClocks', value: { '4': ['b', 'a'] } });
   assert.deepEqual(asked.exactClocks, { '4': ['a', 'b'] });

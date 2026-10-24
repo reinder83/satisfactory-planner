@@ -333,6 +333,17 @@ export const version23 = {
   },
 } satisfies SavedState;
 
+// Version 24: somersloops pinned on production lines (#1235), on top of version 23 (#1231): 4 on
+// Phase 4's Heavy Modular Frame line (one Manufacturer) and none on Phase 3's Iron Rod line.
+export const version24 = {
+  ...version23,
+  version: 24,
+  sloopPins: {
+    '3': { Recipe_IronRod_C: 0 },
+    '4': { Recipe_ModularFrameHeavy_C: 4 },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -359,6 +370,7 @@ export const states: [SavedState, number][] = [
   [version21, 21],
   [version22, 22],
   [version23, 23],
+  [version24, 24],
 ];
 
 export const backup = {

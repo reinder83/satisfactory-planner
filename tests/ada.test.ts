@@ -1078,6 +1078,35 @@ test('ADA names where a somersloop pays off most in the phase (#1215)', () => {
   );
 });
 
+test('ADA says pins wait for a recalculation, and names a pin the plan could not keep (#1235)', () => {
+  for (const view of ['factories', 'plan']) {
+    assert.ok(!ids(facts({ view })).includes('sloop-pins-pending'), 'absent means none');
+    assert.ok(!ids(facts({ view })).includes('sloop-pins-dropped'));
+    const pending = adaRemarks(facts({ view, sloopPinsPending: 2 })).find(
+      r => r.id === 'sloop-pins-pending',
+    )!;
+    assert.equal(pending.tone, 'calm');
+    assert.match(
+      pending.text,
+      /^You pinned the somersloops of 2 production lines differently, and this plan has not been told yet\. Nothing recalculates by itself: Recalculate in place with somersloop pins plans them/,
+    );
+    const dropped = adaRemarks(
+      facts({ view, sloopPinsDropped: { count: 1, lines: 'Iron Rod in Phase 3' } }),
+    ).find(r => r.id === 'sloop-pins-dropped')!;
+    assert.equal(dropped.tone, 'warn');
+    assert.match(
+      dropped.text,
+      /^This plan could not keep the somersloops you pinned on Iron Rod in Phase 3, so it planned without that pin\. The warnings above the plan say why/,
+    );
+  }
+  assert.match(
+    adaRemarks(facts({ view: 'plan', sloopPinsPending: 1 })).find(
+      r => r.id === 'sloop-pins-pending',
+    )!.text,
+    /of 1 production line differently,.* plans it and keeps/,
+  );
+});
+
 // #1222: a draft whose short resource the map cannot give at the nodes the plan may tap says so,
 // with the planner's figures, and only on a draft.
 test('ADA sets a short resource against what the map gives', () => {

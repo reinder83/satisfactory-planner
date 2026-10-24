@@ -32,6 +32,9 @@
 //   tickedBy       { key: { at, by? } } who ticked a step and when (validateTickedBy, #1206),
 //                  version 21; kept by a tick of a step not ticked yet (the check and checks
 //                  updates' ticked or tickedBy), only while its step is ticked
+//   sloopPins      { phase: { recipe: sloops } } somersloops pinned on production lines
+//                  (validateSloopPins, #1235), version 24; absent means the plan's
+//                  own; the sloopPins update sends the whole map
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),

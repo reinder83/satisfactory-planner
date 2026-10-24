@@ -44,6 +44,7 @@ import { groupLinks } from './group-links.ts';
 import { carrierTransport, linkCarrier } from './logistics.ts';
 import { FLUIDS } from './flow.ts';
 import { exactClocksChange, roundingCost } from './exact-clocks.ts';
+import { droppedPinNames, sloopPinsChange } from './sloop-pins.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort, rankedPhases } from './payoff.ts';
 import { fastestProfiles } from './profile-compare.ts';
@@ -340,6 +341,19 @@ function ownedTicksFacts(): Pick<AdaFacts, 'ownedTicks'> {
   return found ? { ownedTicks: foundList(foundWords(found, workspace.catalog?.alternates)) } : {};
 }
 
+// The somersloop pins (#1235): how many lines a recalculation with the pins asked for would change
+// (sloopPinsChange), and the lines whose pins the plan could not keep (droppedPinNames).
+function sloopPinFacts(): Pick<AdaFacts, 'sloopPinsPending' | 'sloopPinsDropped'> {
+  if (!calculated) return {};
+  const change = sloopPinsChange(calculated, state);
+  const dropped = droppedPinNames(calculated);
+  return {
+    ...(change ? { sloopPinsPending: change.lines.length } : {}),
+    ...(dropped.length
+      ? { sloopPinsDropped: { count: dropped.length, lines: listNames(dropped) } }
+      : {}),
+  };
+}
 // The lines a recalculation with the clocks asked for would change (exactClocksChange, #1066), and
 // what whole machines cost in the open phase (roundingCost), in the side column's words: more
 // buildings and power than exact clocks, only where the whole-machine plan takes more.
@@ -543,6 +557,7 @@ function adaFacts(): AdaFacts {
     changedLines: changedLineCount(calcStage()?.rows || []),
     ...onSitePendingFacts(),
     ...exactClockFacts(),
+    ...sloopPinFacts(),
     ...ownedTicksFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
     ...waterFacts(),

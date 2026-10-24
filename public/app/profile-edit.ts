@@ -20,7 +20,7 @@ import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
 import { leftOutNote, leftOutWords } from '../mining.ts';
 import type { MiningSettings } from '../preferences/mining.ts';
-import type { NodeExclusions } from '../types/index.ts';
+import type { NodeExclusions, SloopPins } from '../types/index.ts';
 import { power } from './wizard/fields.ts';
 import type {
   Choice,
@@ -238,6 +238,18 @@ const phaseCapsChange = (settings: NameSettings): string => {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'None';
 };
 
+// The somersloop pins (#1235) in words, absent as none: a plan made before them had none, so
+// pinning a line is named. "2 lines, 8 somersloops".
+const pinsReviewWords = (settings: NameSettings): string => {
+  const counts = Object.values((settings.sloopPins ?? {}) as SloopPins).flatMap(lines =>
+    Object.values(lines ?? {}),
+  );
+  const total = counts.reduce((sum, sloops) => sum + sloops, 0);
+  return counts.length
+    ? `${plural(counts.length, 'line')}, ${plural(total, 'somersloop')}`
+    : 'None';
+};
+
 // The settings Review names when an edit changes them, with the words for their values.
 const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => string][] = [
   ['phase', 'Start phase', value => `Phase ${value}`],
@@ -372,6 +384,15 @@ export function settingsChanges(
           },
         ]
       : []),
+    ...(stable(before.sloopPins ?? {}) !== stable(after.sloopPins ?? {})
+      ? [
+          {
+            label: 'Somersloop pins',
+            before: pinsReviewWords(before),
+            after: pinsReviewWords(after),
+          },
+        ]
+      : []),
     // Absent means what the plan did before the box (#1058), so a plan without it is compared too.
     ...(mamWords(before) !== mamWords(after)
       ? [{ label: 'MAM recipes', before: mamWords(before), after: mamWords(after) }]
@@ -383,6 +404,7 @@ export function settingsChanges(
     'recipeCost',
     'objective',
     'phaseCaps',
+    'sloopPins',
     // The lines that stand (#1176) are no setting the user changed: Review says they are kept.
     'builtLines',
     ...SETTING_LABELS.map(([key]) => key),

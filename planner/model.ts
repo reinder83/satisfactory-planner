@@ -41,6 +41,7 @@ import {
   primaryOutput,
 } from './recipes.ts';
 import { twoStepFit } from './fit.ts';
+import { keptPins, phasePins, withPinDrops } from './pins.ts';
 import { addBuildCosts, withBuildCost } from './build-cost.ts';
 import { withinLoad } from './load.ts';
 import { BUILT, readStage } from './stage.ts';
@@ -110,6 +111,15 @@ import {
 // and public/app/ui/wizard/. Only calculate() calls run, through its phase helpers (solvePhase,
 // draftStage, resolveEarlierPhases, solveUnfueled) and the two-step fit (fit.ts).
 export function run(config: CurrentSettings, phase: number, options: RunOptions = {}): RunResult {
+  const result = runBuilt(config, phase, options);
+  // The somersloop pins the phase could not keep (#1235), on the outer call only, which the inner
+  // solves of the two-step fit return through.
+  return options.recipeIds
+    ? result
+    : withPinDrops(result, config, phase, options.conversion ?? false);
+}
+// One phase's solve with the built lines counted as standing, else as if none stood (#1176).
+function runBuilt(config: CurrentSettings, phase: number, options: RunOptions): RunResult {
   const result = planRun(config, phase, options);
   // Counting the built lines as standing (#1176) only adds cheaper ways to make what the phase
   // needs, so it never makes the exact plan infeasible; but the network the exact solve then picks
@@ -286,10 +296,15 @@ export const phaseContext = (
     buildCost = false,
   }: RunOptions,
 ): PhaseContext => ({
-  config:
+  // Only the somersloop pins the phase can keep (keptPins, #1235); the settings as they are
+  // without pins.
+  config: keptPins(
     config.amplifySloops > 0 && !amplifiesIn(config, phase)
       ? { ...config, amplifySloops: 0 }
       : config,
+    phase,
+    conversion,
+  ),
   phase,
   maximum,
   conversion,
@@ -333,7 +348,8 @@ export interface PhaseDemands {
 export type Solution = ReturnType<typeof solve>;
 // Recipe pool. With `recipeIds` (the inner integer fit) only the chosen network, plus the
 // conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
-// and only for the baseline's candidate lines.
+// and only for the baseline's candidate lines, a built amplified line and a line pinned to
+// somersloops; a line pinned to none gets no twin (#1235).
 export function phasePool({
   config,
   phase,
@@ -355,6 +371,7 @@ export function phasePool({
         !recipe.onSite &&
         Object.keys(recipe.outputs).some(item => RAW.includes(item) && item !== 'Water')),
   );
+  const pins = phasePins(config, phase);
   return [
     ...selected,
     ...(config.amplifySloops > 0 && recipeIds
@@ -363,8 +380,10 @@ export function phasePool({
             recipe =>
               amplifiable(recipe) &&
               !recipe.onSite &&
-              (baseline?.[recipe.id] !== undefined ||
-                !!config.builtLines?.[String(phase) as StageKey]?.['amp:' + recipe.id]),
+              (pins[recipe.id] !== undefined
+                ? pins[recipe.id]! > 0
+                : baseline?.[recipe.id] !== undefined ||
+                  !!config.builtLines?.[String(phase) as StageKey]?.['amp:' + recipe.id]),
           )
           .map(amplified)
       : []),
@@ -638,6 +657,7 @@ function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[], r
           need === undefined ? 1e9 : Math.ceil(need / 2) + 1,
         ),
       );
+      addPin(model, config, context.phase, recipe);
     }
     if (wholeLine(config, context.phase, recipe)) (model.ints ??= {})[recipe.id] = 1;
   }
@@ -654,6 +674,21 @@ function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[], r
       model.constraints['cap:' + recipe.id] = { max: cap };
       model.variables[recipe.id]!['cap:' + recipe.id] = 1;
     }
+}
+// A somersloop pin on an amplified twin's line (#1235, settings.sloopPins, only the pins the phase
+// keeps, keptPins in pins.ts): 'pin:<recipe id>' holds its amplified machines at exactly the pin
+// over its slots, and its bound at that, so the rest of the budget goes where the planner places
+// it. Added before the built lines, which copy the twin's coefficients, so the pin counts the
+// amplified machines that stand and the new ones together: those that stand beyond it are spare.
+function addPin(model: LpModel, config: CurrentSettings, phase: number, twin: PoolRecipe) {
+  const sloops = phasePins(config, phase)[twin.id.slice(4)];
+  if (!sloops || !twin.slots) return;
+  const machines = sloops / twin.slots,
+    row = 'pin:' + twin.id.slice(4);
+  model.constraints[row] = { equal: machines };
+  // addRecipes set the twin's variable just before calling this.
+  model.variables[twin.id]![row] = 1;
+  (model.bounds ??= {})[twin.id] = machines;
 }
 // The caps per phase (#1221, settings.phaseCaps), only for a cap that is set (or the one a
 // draft's measurement minimises, `measure`, leastCapNeed): 'phaseCap:buildings' counts every
