@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–22). Later versions only add optional sections, so an older
+//                  version (1–23). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -22,7 +22,8 @@ import type { ExactClocks } from './calculated.ts';
 // factory-group link on Fluid Trucks (mode 'fluidTruck', #1177), 19 the machines that stand on a
 // production line a recalculation grew (builtMachines, #1174), 20 a factory group's owner
 // (groups[].owner, #1199), 21 who ticked a step and when (tickedBy, #1206), 22 a factory's flow
-// graph layout (groups[].layout, #1224).
+// graph layout (groups[].layout, #1224), 23 storage and the sink shown as tags in a factory's
+// flow graph (groups[].layout.tags, #1231).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -48,7 +49,8 @@ export type StateVersion =
   | 19
   | 20
   | 21
-  | 22;
+  | 22
+  | 23;
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
 // time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
@@ -172,12 +174,15 @@ export interface FactoryGroup {
 // user put a production line's box, by plan row id (the line's id in every phase): its top-left
 // corner in the drawing's own units, whole numbers. `zoom` and `pan` are the last view: the zoom
 // (1 is natural size, two decimals) and the box's scroll offsets into the zoomed drawing, whole
-// px. Each part is left out when it says nothing (no line moved, natural size, the top-left
-// corner).
+// px. `tags` (#1231) is the factory's "Show storage and sink as tags": the flows to Protected
+// storage and the AWESOME Sink drawn as tags on their lines instead of quiet lines to two boxes
+// (version 23 while any group has it). Each part is left out when it says nothing (no line moved,
+// natural size, the top-left corner, storage and the sink as lines).
 export interface GroupLayout {
   nodes?: Record<string, [x: number, y: number]>;
   zoom?: number;
   pan?: [left: number, top: number];
+  tags?: true;
 }
 
 // Named production areas and the plan rows assigned to them (version 3).

@@ -18,12 +18,30 @@
   layout at natural size, after a confirmation when a line was moved. "The graph as a table"
   lists every arrow again as text, which the drawing's accessible name points to. A group gone
   since the dialog opened says so.
+  Storage and the sink (#1231): the arrows into Protected storage and the AWESOME Sink are quiet
+  (thin, grey, behind the others, no label or arrowhead); pointing at one lights it up with its
+  label. "Show storage and sink as tags", stored with the layout (`tags`, state version 23),
+  draws them as tags on their lines instead and leaves out the two boxes. Pointing at a box or
+  focusing it lights up its arrows (and tags) and fades the rest: a line's quiet arrows light up
+  without labels, every arrow into storage or the sink with its label, and the lit labels are
+  spread so none overlap (spreadLabels, graph-labels.ts); one with no room is left out, its value
+  in its arrow's hover title and the table. Every box and tag takes focus and is named.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { openCalculatedFactory } from '../../factory-detail.ts';
 import { itemRate } from '../../flow.ts';
-import { flowGraph, GRAPH, shortText, type GraphEdge, type GraphNode } from '../../flow-graph.ts';
+import {
+  flowGraph,
+  GRAPH,
+  labelObstacles,
+  shortText,
+  tagBox,
+  type GraphEdge,
+  type GraphNode,
+  type GraphTag,
+} from '../../flow-graph.ts';
+import { spreadLabels, type PlacedLabel } from '../../graph-labels.ts';
 import type { FlowLine } from '../../group-flow.ts';
 import { num } from '../../format.ts';
 import { phase, phaseLabel } from '../../session.ts';
@@ -44,12 +62,23 @@ const machines = (line: FlowLine) =>
   (line.share < 1 - 1e-6 ? `≈ ${num(line.machinesHere)} of ` : '') +
   machineLine(line.machines, line.machine, line.lastClock);
 
+// The scrolling box. The stored layout and the lines' spots while the dialog is open; the view
+// on screen is the zoom and the box's scroll offsets.
+const box = ref<HTMLElement | null>(null);
+const layout = useGraphLayout(props.id, () =>
+  box.value ? { zoom: zoom.value, left: box.value.scrollLeft, top: box.value.scrollTop } : null,
+);
+
 const view = computed(() =>
   legacy(() => {
     const name = factoryGroupsState().groups.find(group => group.id === props.id)?.name ?? null;
     const flow = name === null ? null : shownGroupFlow(props.id);
-    const graph = flow?.lines.length ? flowGraph(flow, itemRate, machines) : null;
-    return { name, phase: phaseLabel(phase()), graph };
+    const graph = flow?.lines.length
+      ? flowGraph(flow, itemRate, machines, { tags: layout.tags.value })
+      : null;
+    // The tags switch is offered while something goes to storage or the sink.
+    const quiet = !!graph?.edges.some(edge => edge.quiet);
+    return { name, phase: phaseLabel(phase()), graph, quiet };
   }),
 );
 
@@ -71,24 +100,104 @@ const NOTES: Record<GraphEdge['note'], string> = {
   loop: 'loop: seed a starter batch',
   self: 'back into the same line',
 };
-// Where a side of the arrow ends in the drawing: an item coming in, between lines, or leaving.
-const edgeClass = (edge: GraphEdge) => [
-  'fgraph-edge',
-  edge.from.startsWith('in:') ? 'from-place' : edge.to.startsWith('out:') ? 'to-place' : 'inside',
-  edge.note,
-];
-
-// The scrolling box. The stored layout and the lines' spots while the dialog is open; the view
-// on screen is the zoom and the box's scroll offsets.
-const box = ref<HTMLElement | null>(null);
-const layout = useGraphLayout(props.id, () =>
-  box.value ? { zoom: zoom.value, left: box.value.scrollLeft, top: box.value.scrollTop } : null,
-);
 // The graph as drawn: the automatic one with the stored and dragged spots.
 const placed = computed(
   () => view.value.graph && placedGraph(view.value.graph, layout.spots.value),
 );
-const drawn = computed(() => placed.value?.edges.filter(edge => edge.path) ?? []);
+// The drawn arrows, the quiet ones (into storage and the sink, #1231) first, so every other arrow
+// is drawn over them.
+const drawn = computed(() => {
+  const edges = placed.value?.edges.filter(edge => edge.path) ?? [];
+  return [...edges.filter(edge => edge.quiet), ...edges.filter(edge => !edge.quiet)];
+});
+
+// The box under the pointer or with keyboard focus, and the arrow under the pointer (#1231).
+const activeNode = ref<string | null>(null);
+const hoveredEdge = ref<string | null>(null);
+const leaveNode = (id: string) => {
+  if (activeNode.value === id) activeNode.value = null;
+};
+const leaveEdge = (id: string) => {
+  if (hoveredEdge.value === id) hoveredEdge.value = null;
+};
+// What the active box lights up: its arrows and tags, and where the lit labels go, spread so none
+// overlap (null: no room, left out). A production line's quiet arrows light up without a label;
+// on storage or the sink every arrow in has one.
+const lit = computed(() => {
+  const graph = placed.value,
+    id = activeNode.value;
+  if (!graph || !id || !graph.nodes.some(node => node.id === id)) return null;
+  const edges = new Set(
+    drawn.value.filter(edge => edge.from === id || edge.to === id).map(edge => edge.id),
+  );
+  const labelled = drawn.value.filter(
+    edge => edges.has(edge.id) && edge.label && edge.curve && (!edge.quiet || edge.to === id),
+  );
+  const labels: Map<string, PlacedLabel | null> = spreadLabels(
+    labelled.map(edge => ({ id: edge.id, width: edge.label!.width, curves: [edge.curve!] })),
+    GRAPH.labelHeight,
+    labelObstacles(graph.nodes, graph.tags),
+    false,
+  );
+  const tags = new Set(graph.tags.filter(tag => tag.node === id).map(tag => tag.id));
+  return { node: id, edges, labels, tags };
+});
+
+// Where a side of the arrow ends in the drawing: an item coming in, between lines, or leaving;
+// quiet, and lit or faded by the active box, or under the pointer.
+const edgeClass = (edge: GraphEdge) => {
+  const on = lit.value;
+  const shining = !!on?.edges.has(edge.id);
+  return [
+    'fgraph-edge',
+    edge.from.startsWith('in:') ? 'from-place' : edge.to.startsWith('out:') ? 'to-place' : 'inside',
+    edge.note,
+    {
+      quiet: edge.quiet,
+      hl: shining,
+      faded: !!on && !shining,
+      hover: hoveredEdge.value === edge.id,
+    },
+  ];
+};
+// A quiet arrow has its arrowhead only while its box lights it up.
+const arrowOf = (edge: GraphEdge) =>
+  !edge.quiet || lit.value?.edges.has(edge.id) ? 'url(#fgraph-arrow)' : undefined;
+// An arrow's hover title, which keeps its value where its label has no room.
+const edgeTitle = (edge: GraphEdge) =>
+  `${edge.item}: ${edge.rateText} from ${edge.fromText} to ${edge.toText}`;
+// Where an arrow's label is drawn, and how: lit and spread, faded with its arrow, hidden (a quiet
+// arrow's not lit or pointed at, or a lit label with no room), or as it is at rest.
+function labelOf(edge: GraphEdge): { x: number; y: number; state: string } {
+  // Every drawn arrow has its label (placeEdgeLabels).
+  const rest = edge.label!;
+  const on = lit.value;
+  if (on?.edges.has(edge.id)) {
+    const spot = on.labels.get(edge.id);
+    return spot ? { x: spot.x, y: spot.y, state: 'lit' } : { ...rest, state: 'hidden' };
+  }
+  if (edge.quiet) return { ...rest, state: hoveredEdge.value === edge.id ? 'lit' : 'hidden' };
+  return { ...rest, state: on ? 'faded' : '' };
+}
+// The tags of the line with box `node`, and where each sits (its top-left corner).
+const tagsOf = (node: GraphNode): (GraphTag & { left: number; top: number })[] =>
+  (placed.value?.tags ?? [])
+    .filter(tag => tag.node === node.id)
+    .map(tag => {
+      const at = tagBox(tag, node);
+      return { ...tag, left: at.x - at.width / 2, top: at.y - at.height / 2 };
+    });
+const tagClass = (tag: GraphTag) => {
+  const on = lit.value;
+  return ['fgraph-tag', { hl: !!on?.tags.has(tag.id), faded: !!on && !on.tags.has(tag.id) }];
+};
+// "Show storage and sink as tags": redrawn at once and saved with the layout.
+function setTags(on: boolean) {
+  layout.tags.value = on;
+  activeNode.value = null;
+  hoveredEdge.value = null;
+  layout.now();
+}
 
 const nodeAt = (node: string): GraphPoint | null => {
   const shown = placed.value?.nodes.find(known => known.id === node);
@@ -131,6 +240,24 @@ const lineAttrs = (node: GraphNode) => ({
   role: 'button',
   'aria-label': `${node.label}, ${node.caption}. Enter opens it, the arrow keys move it.`,
 });
+// A place's box takes focus too (#1231), so the keyboard lights up its arrows: named with what
+// comes in from it or goes out to it.
+const flowList = (edges: GraphEdge[], end: (edge: GraphEdge) => string) =>
+  edges.map(edge => `${edge.item} ${edge.rateText} ${end(edge)}`).join(', ');
+function placeAttrs(node: GraphNode) {
+  const edges = placed.value?.edges ?? [];
+  const into = edges.filter(edge => edge.to === node.id),
+    out = edges.filter(edge => edge.from === node.id);
+  const parts = [
+    ...(into.length ? [`In: ${flowList(into, edge => 'from ' + edge.fromText)}`] : []),
+    ...(out.length ? [`Out: ${flowList(out, edge => 'to ' + edge.toText)}`] : []),
+  ];
+  return {
+    tabindex: 0,
+    role: 'img',
+    'aria-label': [`${node.label}, ${node.caption}`, ...parts].join('. ') + '.',
+  };
+}
 // Brings the box of `node` into view inside the scrolling box, as far as it is out of it.
 async function keepInView(node: string) {
   await nextTick();
@@ -204,6 +331,14 @@ async function resetLayout() {
         the background to move the graph, drag a production line to move it (or the arrow keys on a
         focused line), zoom with the mouse wheel, a pinch or the buttons, and press a production
         line to open it. The graph opens as you left it, until you reset the layout.
+        <template v-if="view.quiet && !layout.tags.value">
+          What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
+        </template>
+        <template v-else-if="view.quiet">
+          What goes to Protected storage (▣) and the AWESOME Sink (♻) is shown as tags on each
+          production line.
+        </template>
+        Point at a box or focus it to light up its arrows.
       </p>
       <div class="fgraph-tools" data-flow-graph-tools>
         <button
@@ -239,6 +374,15 @@ async function resetLayout() {
         <button class="btn" type="button" data-flow-layout-reset @click="resetLayout">
           Reset layout
         </button>
+        <label v-if="view.quiet" class="fgraph-switch">
+          <input
+            type="checkbox"
+            data-flow-tags
+            :checked="layout.tags.value"
+            @change="setTags(($event.target as HTMLInputElement).checked)"
+          />
+          Show storage and sink as tags
+        </label>
       </div>
       <div
         ref="box"
@@ -271,38 +415,66 @@ async function resetLayout() {
               <path d="M0,0 L8,4 L0,8 Z" />
             </marker>
           </defs>
-          <path
-            v-for="edge in drawn"
-            :key="edge.id"
-            :class="edgeClass(edge)"
-            :d="edge.path!"
-            :data-edge="edge.id"
-            marker-end="url(#fgraph-arrow)"
-            aria-hidden="true"
-          />
-          <g
-            v-for="node in placed.nodes"
-            :key="node.id"
-            :class="['fgraph-node', node.kind]"
-            :data-node="node.id"
-            :transform="`translate(${node.x},${node.y})`"
-            v-bind="node.kind === 'line' ? lineAttrs(node) : { 'aria-hidden': 'true' }"
-            @click="openNode(node.id)"
-            @keydown="onNodeKey($event, node)"
-          >
-            <rect :width="node.width" :height="node.height" />
-            <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
-            <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
-            <text v-if="node.selfNote" class="fgraph-caption" x="10" y="54">
-              {{ shortText(node.selfNote, GRAPH.captionChars) }}
-            </text>
-          </g>
+          <template v-for="edge in drawn" :key="edge.id">
+            <path
+              :class="edgeClass(edge)"
+              :d="edge.path!"
+              :data-edge="edge.id"
+              :marker-end="arrowOf(edge)"
+              aria-hidden="true"
+            />
+            <path
+              class="fgraph-hit"
+              :d="edge.path!"
+              :data-edge-hit="edge.id"
+              aria-hidden="true"
+              @pointerenter="hoveredEdge = edge.id"
+              @pointerleave="leaveEdge(edge.id)"
+            >
+              <title>{{ edgeTitle(edge) }}</title>
+            </path>
+          </template>
+          <template v-for="node in placed.nodes" :key="node.id">
+            <g
+              :class="['fgraph-node', node.kind, { on: lit?.node === node.id }]"
+              :data-node="node.id"
+              :transform="`translate(${node.x},${node.y})`"
+              v-bind="node.kind === 'line' ? lineAttrs(node) : placeAttrs(node)"
+              @click="openNode(node.id)"
+              @keydown="onNodeKey($event, node)"
+              @pointerenter="activeNode = node.id"
+              @pointerleave="leaveNode(node.id)"
+              @focus="activeNode = node.id"
+              @blur="leaveNode(node.id)"
+            >
+              <rect :width="node.width" :height="node.height" />
+              <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
+              <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
+              <text v-if="node.selfNote" class="fgraph-caption" x="10" y="54">
+                {{ shortText(node.selfNote, GRAPH.captionChars) }}
+              </text>
+            </g>
+            <g
+              v-for="tag in tagsOf(node)"
+              :key="tag.id"
+              :class="tagClass(tag)"
+              :data-tag="tag.id"
+              :transform="`translate(${tag.left},${tag.top})`"
+              tabindex="0"
+              role="img"
+              :aria-label="tag.name"
+            >
+              <title>{{ tag.name }}</title>
+              <rect :width="tag.width" :height="GRAPH.tagHeight" rx="2" />
+              <text x="6" y="12.5">{{ tag.text }}</text>
+            </g>
+          </template>
           <g
             v-for="edge in drawn"
             :key="'label-' + edge.id"
-            class="fgraph-label"
+            :class="['fgraph-label', labelOf(edge).state, { quiet: edge.quiet }]"
             :data-edge-label="edge.id"
-            :transform="`translate(${edge.label!.x},${edge.label!.y})`"
+            :transform="`translate(${labelOf(edge).x},${labelOf(edge).y})`"
             aria-hidden="true"
           >
             <rect

@@ -308,6 +308,31 @@ export const version22 = {
   },
 } satisfies SavedState;
 
+// Version 23: storage and the sink shown as tags in a factory's flow graph (#1231): the Plates
+// graph keeps its moved lines, zoom and scroll and shows them as tags; the Wire graph shows them
+// as tags with nothing else stored.
+export const version23 = {
+  ...version22,
+  version: 23,
+  factoryGroups: {
+    ...version22.factoryGroups,
+    groups: [
+      {
+        id: 'fg-plates1',
+        name: 'Plates',
+        owner: 'Anna',
+        layout: {
+          nodes: { 'iron-plate': [420, 96], Recipe_IronPlate_C: [16, 260] },
+          zoom: 0.8,
+          pan: [120, 40],
+          tags: true,
+        },
+      },
+      { id: 'fg-wires1', name: 'Wire', layout: { tags: true } },
+    ],
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -333,6 +358,7 @@ export const states: [SavedState, number][] = [
   [version20, 20],
   [version21, 21],
   [version22, 22],
+  [version23, 23],
 ];
 
 export const backup = {

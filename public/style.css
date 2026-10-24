@@ -4211,9 +4211,34 @@ button.rail-tile:hover {
 }
 .fgraph-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 12px 0 0;
+}
+/* "Show storage and sink as tags" (#1231): a checkbox beside the zoom buttons, wrapping under
+   them on a phone, its whole label a 44px-high target there. */
+.fgraph-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.fgraph-switch input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+@media (max-width: 720px) {
+  .fgraph-switch {
+    min-height: 44px;
+    margin-left: 0;
+  }
 }
 /* − / + / Fit: compact square buttons, the signs in the text face (the heading face draws them
    tiny) at a size that reads. */
@@ -4263,12 +4288,20 @@ button.rail-tile:hover {
    arrow keys once focused (#1224): the focus ring is its box's outline, drawn thicker. */
 .fgraph-node.line {
   cursor: pointer;
+}
+.fgraph-node {
   outline: none;
 }
 .fgraph-node.line:hover rect {
   stroke: var(--accent);
 }
-.fgraph-node.line:focus-visible rect {
+/* Every box takes focus since #1231 (a place's lights up its arrows); the box pointed at or
+   focused gets the accent outline, a focused one drawn thicker. */
+.fgraph-node.on rect {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.fgraph-node:focus-visible rect {
   stroke: var(--accent);
   stroke-width: 3;
 }
@@ -4334,6 +4367,78 @@ button.rail-tile:hover {
 #fgraph-arrow path {
   fill: var(--dim);
   fill: context-stroke;
+}
+/* Storage and the sink (#1231): their arrows are quiet, thin, grey and drawn behind the others,
+   with no label or arrowhead until lit; pointed at, one turns light grey with its label. A box
+   pointed at or focused lights up its own arrows (a line's quiet ones light grey, a little wider,
+   with arrowheads) and fades the rest. Each arrow has a wider invisible twin for the pointer,
+   which also carries its hover title. */
+.fgraph {
+  --fgraph-quiet: #4a5560;
+  --fgraph-lit: #c9d3dc;
+}
+.fgraph-edge.quiet {
+  stroke: var(--fgraph-quiet);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+.fgraph-edge.quiet.hover,
+.fgraph-edge.quiet.hl {
+  stroke: var(--fgraph-lit);
+  opacity: 1;
+}
+.fgraph-edge.quiet.hl {
+  stroke-width: 1.6;
+}
+.fgraph-edge.hl:not(.quiet) {
+  filter: brightness(1.2);
+}
+.fgraph-edge.faded,
+.fgraph-label.faded {
+  opacity: 0.12;
+}
+.fgraph-label.hidden {
+  display: none;
+}
+.fgraph-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10;
+  pointer-events: stroke;
+}
+/* A line's storage and sink flows as tags on its box's right edge ("Show storage and sink as
+   tags"): named and focusable, lit with their line, faded with the rest. */
+.fgraph-tag {
+  outline: none;
+}
+.fgraph-tag rect {
+  fill: var(--panel2);
+  stroke: var(--fgraph-quiet);
+  stroke-width: 1;
+}
+.fgraph-tag text {
+  font-size: 11px;
+  fill: var(--muted);
+}
+.fgraph-tag:hover rect,
+.fgraph-tag.hl rect {
+  stroke: var(--accent);
+}
+.fgraph-tag:focus-visible rect {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.fgraph-tag.faded {
+  opacity: 0.25;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fgraph-edge,
+  .fgraph-label,
+  .fgraph-tag {
+    transition:
+      opacity 0.15s,
+      stroke 0.15s;
+  }
 }
 /* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,
    with the underline moved onto the text so it stays under the words in the taller box (#886).
