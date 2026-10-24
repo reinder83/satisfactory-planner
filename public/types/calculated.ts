@@ -182,6 +182,12 @@ export interface CurrentSettings {
   // Absent unless a recalculation the user started asked for it (the progress state's
   // `exactClocks`, saved from a line's dialog), so a plan without it calculates exactly as before.
   exactClocks?: ExactClocks;
+  // The somersloops pinned on production lines (#1235, slice 10 of #1079): per phase, by recipe
+  // id, the somersloops that line takes, which the solve keeps exactly (addPins in
+  // planner/model.ts) while the planner places the rest of the amplification budget itself.
+  // Absent unless a recalculation the user started asked for pins (the progress state's
+  // `sloopPins`, saved from a line's dialog), so a plan without it calculates exactly as before.
+  sloopPins?: SloopPins;
   // Production lines that already stand (#1176, slice 3 of #1172): per phase, the machines built
   // on each row id, from the lines ticked as built (or partly built, `builtMachines`) in the
   // profile a recalculation carries progress from (builtLinesOf in public/app/built-capacity.ts).
@@ -268,6 +274,24 @@ export interface CurrentSettings {
 // Per phase, the row ids of the production lines to run at exact clocks (#1066): in settings the
 // lines a plan was calculated with, in the progress state the lines the user asked for since.
 export type ExactClocks = Partial<Record<StageKey, string[]>>;
+
+// Per phase, the somersloops pinned on production lines (#1235), by recipe id: the plain row's id,
+// whose amplified twin ('amp:<id>') is the same line. A count is a multiple of the machine's
+// somersloop slots, as every amplified machine fills them all; 0 means none on that line. In
+// settings the pins a plan was calculated with, in the progress state the pins the user asked for
+// since.
+export type SloopPins = Partial<Record<StageKey, Record<string, number>>>;
+// Why a phase could not keep a somersloop pin (#1235): 'research' before the MAM's Production
+// Amplifier (Phases 1 and 2, #1056), 'budget' when the phase's pins add up to more than the
+// amplification budget (or it has none), 'unavailable' when the recipe is not in the phase's
+// recipe pool, 'fit' when no plan of the phase fits with them.
+export type SloopPinReason = 'research' | 'budget' | 'unavailable' | 'fit';
+// A pin a phase could not keep: its recipe id, the somersloops pinned and why.
+export interface SloopPinDrop {
+  recipe: string;
+  sloops: number;
+  reason: SloopPinReason;
+}
 
 // One factory group's part of settings.onSite (#875), keyed by group id: the items it makes on
 // site, its name when the plan was calculated (for the warnings), and per phase the share of each
@@ -567,6 +591,10 @@ export interface StageResult {
   // planned as if none stood.
   builtDropped?: boolean;
   amplificationDropped?: boolean;
+  // The somersloop pins of settings.sloopPins this phase could not keep (#1235), each with why:
+  // the phase is planned without them, never with a pin silently changed. Absent when it kept
+  // them all, and from every plan without pins.
+  sloopPinsDropped?: SloopPinDrop[];
   // Whole machines (#370): the recycle chain's period when the uranium plants came in multiples
   // of it, and whether whole nuclear plants did not fit and the phase kept them fractional.
   nuclearPeriod?: number;

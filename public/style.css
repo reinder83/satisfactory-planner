@@ -7362,3 +7362,25 @@ th.resource-cell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* A production line's somersloop pin in its dialog (#1235, ui/detail/SloopPinChoice.vue). */
+.sloop-pin {
+  margin: 14px 0 0;
+  padding: 10px 12px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.sloop-pin legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.sloop-pin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.sloop-pin-row input {
+  width: 6em;
+}

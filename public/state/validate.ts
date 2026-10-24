@@ -6,6 +6,7 @@
 // (public/types/state.ts). Input arrives as unknown and is narrowed by the checks below
 // (plain, safeKey, label, ...), which are type guards; nothing is trusted before them.
 import { laterVehicleFuels, vehicleFuels } from '../preferences.ts';
+import { SLOOP_PIN_MAX } from '../somersloops.ts';
 import { ALTERNATE_RECIPE_IDS } from './alternates.ts';
 import { ITEM_NAMES } from './items.ts';
 import type {
@@ -23,6 +24,7 @@ import type {
   LinkTransport,
   Phase,
   ProgressState,
+  SloopPins,
   StageKey,
   StorageEdits,
   StoredCalculatedPlan,
@@ -628,6 +630,34 @@ export function validateExactClocks(raw: unknown): ExactClocks | undefined {
   }
   return out;
 }
+// Returns a clean copy of sloopPins (#1235), or undefined when absent: the somersloops the user
+// pinned on production lines, { phase: { recipe id: somersloops } }. Recipe ids are record-key safe
+// and never an amplified twin ('amp:'), whose recipe the pin names; counts are whole, from 0 (no
+// somersloops on the line) to 106 (SLOOP_PIN_MAX), at most 1000 per phase. Keys are sorted and an
+// empty phase is dropped. An empty map stays: it asks for no pins, which differs from a plan
+// calculated with some. Whether a count fills whole machines is the planner's check (settings()),
+// which knows each recipe's machine.
+export function validateSloopPins(raw: unknown): SloopPins | undefined {
+  if (raw === undefined) return undefined;
+  const bad = () => fail('Invalid somersloop pins.');
+  if (!plain(raw) || Object.keys(raw).length > 5) bad();
+  const out: SloopPins = {};
+  for (const phase of Object.keys(raw as Raw).sort()) {
+    const lines = (raw as Raw)[phase];
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !plain(lines)) bad();
+    const ids = Object.keys(lines as Raw).sort();
+    if (ids.length > 1000) bad();
+    const clean: Record<string, number> = {};
+    for (const id of ids) {
+      const sloops = (lines as Raw)[id];
+      if (!safeKey(id) || id.startsWith('amp:') || !Number.isInteger(sloops)) bad();
+      if ((sloops as number) < 0 || (sloops as number) > SLOOP_PIN_MAX) bad();
+      clean[id] = sloops as number;
+    }
+    if (ids.length) out[phase as StageKey] = clean;
+  }
+  return out;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -858,12 +888,13 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24].includes(
       state.version as number,
     )
   )
     fail(
       // Compared as the old code did, so a version given as "23" also gets the update message.
+      // Version 23 is the flow graph's (#1231), which this release does not read: it is newer too.
       ((state as Raw | null | undefined)?.version as number) > 22
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
@@ -927,6 +958,8 @@ export function validateState(state: unknown): ProgressState {
   // Read against the ticks as merged above: a record of a step no longer ticked goes.
   const tickedBy = validateTickedBy(state.tickedBy, clean.checks);
   if (tickedBy) clean.tickedBy = tickedBy;
+  const pins = validateSloopPins(state.sloopPins);
+  if (pins) clean.sloopPins = pins;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -959,51 +992,55 @@ export function validateState(state: unknown): ProgressState {
   // release's validateGroups would drop the owner. Who ticked a step and when (tickedBy, #1206) is
   // 21: an older release would drop the records. It is kept only while a ticked step has one. A
   // factory group with a flow graph layout (groups[].layout, #1224) is 22: an older release's
-  // validateGroups would drop it and draw the graph as if nothing had been moved.
-  clean.version = hasLayouts(clean.factoryGroups)
-    ? 22
-    : clean.tickedBy
-      ? 21
-      : hasOwners(clean.factoryGroups)
-        ? 20
-        : clean.builtMachines
-          ? 19
-          : linksNeedV18(clean.factoryGroups)
-            ? 18
-            : linksNeedV17(clean.factoryGroups)
-              ? 17
-              : clean.exactClocks
-                ? 16
-                : clean.onSiteReview
-                  ? 15
-                  : clean.factoryGroups.local
-                    ? 14
-                    : clean.handbookOrigin?.mapping
-                      ? 13
-                      : clean.handbookOrigin
-                        ? 12
-                        : linksNeedV11(clean.factoryGroups)
-                          ? 11
-                          : clean.storageEdits.bayOrder
-                            ? 10
-                            : linksNeedV9(clean.factoryGroups)
-                              ? 9
-                              : clean.storageEdits.bayFloors
-                                ? 8
-                                : clean.factoryGroups.links
-                                  ? 7
-                                  : clean.storageEdits.hiddenFloors.length
-                                    ? 6
-                                    : clean.storageEdits.hiddenBays.length
-                                      ? 5
-                                      : hasAddedSlots(clean.storageEdits)
-                                        ? 4
-                                        : hasTaskEdits(clean.taskEdits) ||
-                                            hasGroups(clean.factoryGroups)
-                                          ? 3
-                                          : hasEdits(clean.storageEdits)
-                                            ? 2
-                                            : 1;
+  // validateGroups would drop it and draw the graph as if nothing had been moved. The somersloops
+  // pinned on production lines (sloopPins, #1235) are 24 (23 is the flow graph's, #1231): an older
+  // release would drop the pins, and the next recalculation would place those somersloops itself.
+  clean.version = clean.sloopPins
+    ? 24
+    : hasLayouts(clean.factoryGroups)
+      ? 22
+      : clean.tickedBy
+        ? 21
+        : hasOwners(clean.factoryGroups)
+          ? 20
+          : clean.builtMachines
+            ? 19
+            : linksNeedV18(clean.factoryGroups)
+              ? 18
+              : linksNeedV17(clean.factoryGroups)
+                ? 17
+                : clean.exactClocks
+                  ? 16
+                  : clean.onSiteReview
+                    ? 15
+                    : clean.factoryGroups.local
+                      ? 14
+                      : clean.handbookOrigin?.mapping
+                        ? 13
+                        : clean.handbookOrigin
+                          ? 12
+                          : linksNeedV11(clean.factoryGroups)
+                            ? 11
+                            : clean.storageEdits.bayOrder
+                              ? 10
+                              : linksNeedV9(clean.factoryGroups)
+                                ? 9
+                                : clean.storageEdits.bayFloors
+                                  ? 8
+                                  : clean.factoryGroups.links
+                                    ? 7
+                                    : clean.storageEdits.hiddenFloors.length
+                                      ? 6
+                                      : clean.storageEdits.hiddenBays.length
+                                        ? 5
+                                        : hasAddedSlots(clean.storageEdits)
+                                          ? 4
+                                          : hasTaskEdits(clean.taskEdits) ||
+                                              hasGroups(clean.factoryGroups)
+                                            ? 3
+                                            : hasEdits(clean.storageEdits)
+                                              ? 2
+                                              : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

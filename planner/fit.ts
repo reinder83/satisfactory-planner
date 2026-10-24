@@ -7,6 +7,7 @@ import { AMPLIFY_CANDIDATES } from './recipes.ts';
 import { run, stockedFromSurplus, type PhaseContext } from './model.ts';
 import { stoppedSearch, ROUNDING_MS, roundedFallback, easyClockFallback } from './rounding.ts';
 import { sharedSettings } from './on-site.ts';
+import { placedPins, withPhasePins, zeroPins } from './pins.ts';
 
 // The options the two-step fit passes on to each of its solves unchanged.
 type FitOptions = Pick<RunOptions, 'maximum' | 'conversion' | 'ignoreLimits' | 'caps'>;
@@ -22,7 +23,10 @@ export function twoStepFit(context: PhaseContext): RunResult {
   // If even the exact LP fails, rounding cannot help; calculate() explains the failure.
   const base = exactFit(config, phase, sharedOptions);
   if (!base.feasible) return base;
-  const ids = new Set(base.rows.map(row => row.id));
+  // A line pinned to somersloops (#1235) is in the network the fit chooses from, whether the exact
+  // LP picked its recipe or not.
+  const pinned = placedPins(config, phase);
+  const ids = new Set([...base.rows.map(row => row.id), ...pinned.map(([recipe]) => recipe)]);
   const baseline = amplifyCandidates(config, base);
   const supply = Object.keys(config.existingSupply).length
     ? supplyFallback(context, sharedOptions, ids, baseline)
@@ -33,10 +37,34 @@ export function twoStepFit(context: PhaseContext): RunResult {
   // amplification (marked `amplificationDropped`), and the credit for existing production is kept
   // as long as either fits before it is dropped: the same steps in the same order as with
   // `amplifySloops` 0, so turning amplification on never gives a worse plan than turning it off
-  // (#597).
-  const variants = config.amplifySloops > 0 ? [config, { ...config, amplifySloops: 0 }] : [config];
+  // (#597). Somersloop pins (#1235) come first: with them, then with the planner's own choice of
+  // somersloops (the pins this phase gives up, `sloopPinsDropped` 'fit'), then without
+  // amplification. A capped re-solve keeps the pins or fails, so the phase keeps the plan it had
+  // rather than finishing sooner by moving a pinned somersloop.
+  const unpinned = pinned.length ? withPhasePins(config, phase, zeroPins(config, phase)) : config;
+  const variants = [
+    config,
+    ...(pinned.length && !caps ? [unpinned] : []),
+    ...(config.amplifySloops > 0 && !(pinned.length && caps)
+      ? [{ ...unpinned, amplifySloops: 0 }]
+      : []),
+  ];
   const marked = (variant: CurrentSettings, result: Solved): Solved =>
-    variant === config ? result : { ...result, amplificationDropped: true };
+    variant === config
+      ? result
+      : {
+          ...result,
+          ...(variant.amplifySloops === 0 ? { amplificationDropped: true } : {}),
+          ...(pinned.length
+            ? {
+                sloopPinsDropped: pinned.map(([recipe, sloops]) => ({
+                  recipe,
+                  sloops,
+                  reason: 'fit' as const,
+                })),
+              }
+            : {}),
+        };
   let fit: RunResult | null = null;
   for (const variant of variants) {
     const credited = integerFit(variant, phase, { ...sharedOptions, recipeIds: ids, baseline });

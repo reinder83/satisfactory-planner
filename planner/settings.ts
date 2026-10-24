@@ -28,6 +28,7 @@ import type {
   MainPower,
   NodeCounts,
   Purity,
+  SloopPins,
   SloopUse,
   OnSiteGroup,
   OnSiteRate,
@@ -36,7 +37,12 @@ import type {
   StorageChoice,
 } from '../public/types/index.ts';
 import { DATA, powerNeedsTurbofuel, ALT_IDS, RAW } from './data.ts';
-import { sloopCommitment, sloopRefusal } from '../public/somersloops.ts';
+import {
+  amplifySlots,
+  SLOOP_PIN_MAX,
+  sloopCommitment,
+  sloopRefusal,
+} from '../public/somersloops.ts';
 
 // An untrusted object: a record whose fields are not checked yet.
 type Raw = Record<string, unknown>;
@@ -225,6 +231,42 @@ const exactClockLines = (raw: unknown): { exactClocks?: ExactClocks } => {
     if (clean.length) out[phase as StageKey] = clean;
   }
   return Object.keys(out).length ? { exactClocks: out } : {};
+};
+// The somersloops pinned on production lines (#1235): `{ sloopPins: { phase: { recipe: sloops } } }`
+// from the progress state's sloopPins when the user starts a recalculation (sloopPinsSettings in
+// public/app/sloop-pins.ts) and frozen with the plan. A recipe is one the game data has whose
+// machine production amplification can amplify (amplifySlots), and a count a whole number from 0
+// to 106 that fills whole machines (a multiple of the machine's slots); anything else is refused,
+// never corrected. Whether a phase can keep a pin is the solve's question (checkPins in
+// planner/pins.ts), never a refusal here. Keys are sorted, empty phases dropped, and with nothing
+// left the field is absent, so settings without it stay as they were.
+const PIN_REFUSAL = 'Invalid somersloop pins.';
+const sloopPinsSetting = (raw: unknown): { sloopPins?: SloopPins } => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) fail(PIN_REFUSAL);
+  const out: SloopPins = {};
+  for (const phase of Object.keys(raw).sort()) {
+    const lines = raw[phase];
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(lines)) fail(PIN_REFUSAL);
+    const ids = Object.keys(lines).sort();
+    if (ids.length > 1000) fail(PIN_REFUSAL);
+    const clean: Record<string, number> = {};
+    for (const id of ids) {
+      const recipe = DATA.recipes.find(entry => entry.id === id);
+      const sloops = lines[id];
+      if (!recipe || !amplifySlots(recipe) || !Number.isInteger(sloops)) fail(PIN_REFUSAL);
+      const slots = amplifySlots(recipe),
+        count = sloops as number;
+      if (count < 0 || count > SLOOP_PIN_MAX) fail(PIN_REFUSAL);
+      if (count % slots)
+        fail(
+          `A somersloop pin fills whole machines: ${recipe.name} takes ${slots} per ${recipe.machine}, so pin a multiple of ${slots}.`,
+        );
+      clean[id] = count;
+    }
+    if (ids.length) out[phase as StageKey] = clean;
+  }
+  return Object.keys(out).length ? { sloopPins: out } : {};
 };
 // The production lines that already stand (#1176): `{ builtLines: { phase: { rowId: machines } } }`
 // with row ids as a plan names them and whole counts from 1 to 100,000 (the limits of the
@@ -532,6 +574,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     transportFuel: transportFuelRates(input.transportFuel),
     ...onSiteSetting(input.onSite),
     ...exactClockLines(input.exactClocks),
+    // The somersloops pinned on production lines (#1235): absent unless a recalculation asks for
+    // pins, so settings without them, and every plan stored before them, stay as they were.
+    ...sloopPinsSetting(input.sloopPins),
     // The production lines that already stand (#1176): absent unless a recalculation carries
     // them, so settings without them, and every plan stored before them, stay as they were.
     ...builtLinesSetting(input.builtLines),

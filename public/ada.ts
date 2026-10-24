@@ -120,6 +120,12 @@ export interface AdaFacts {
   // with (exactClocksChange in app/exact-clocks.ts, #1066): how many lines a recalculation would
   // change.
   exactClocksPending?: number;
+  // The somersloop pins asked for are not the ones the plan was calculated with (sloopPinsChange in
+  // app/sloop-pins.ts, #1235): how many lines a recalculation would change.
+  sloopPinsPending?: number;
+  // The pins the plan could not keep (sloopPinsDropped, #1235): how many, and the lines as a name
+  // list, "Heavy Modular Frame in Phase 4 and Iron Rod in Phase 3"; absent when it kept them all.
+  sloopPinsDropped?: { count: number; lines: string };
   // What the ticks show the player already has beyond the plan's settings (#1068, ownedFromTicks in
   // app/owned-ticks.ts), as the build plan's notice lists it ("Miner Mk.3 and Mk.5 belts"); absent
   // when nothing, or when the notice was dismissed.
@@ -731,6 +737,24 @@ const RULES: AdaRule[] = [
     when: facts => (facts.exactClocksPending ?? 0) > 0,
     text: facts =>
       `You changed the clocks of ${plural(facts.exactClocksPending!, 'production line')}, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with exact clocks plans ${facts.exactClocksPending === 1 ? 'it' : 'them'} and keeps this version as a backup. Precision, deferred.`,
+  },
+  {
+    // The somersloop pins asked for differ from the plan's (#1235).
+    id: 'sloop-pins-pending',
+    on: ['factories', 'plan'],
+    tone: 'calm',
+    when: facts => (facts.sloopPinsPending ?? 0) > 0,
+    text: facts =>
+      `You pinned the somersloops of ${plural(facts.sloopPinsPending!, 'production line')} differently, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with somersloop pins plans ${facts.sloopPinsPending === 1 ? 'it' : 'them'} and keeps this version as a backup. The slugs can wait. They have waited this long.`,
+  },
+  {
+    // Pins the plan could not keep and planned without (#1235), never silently.
+    id: 'sloop-pins-dropped',
+    on: ['factories', 'plan'],
+    tone: 'warn',
+    when: facts => (facts.sloopPinsDropped?.count ?? 0) > 0,
+    text: facts =>
+      `This plan could not keep the somersloops you pinned on ${facts.sloopPinsDropped!.lines}, so it planned without ${facts.sloopPinsDropped!.count === 1 ? 'that pin' : 'those pins'}. The warnings above the plan say why, and the line's dialog says what to change. Better a loud no than a quiet maybe.`,
   },
   {
     // The ticks show more than the plan's "What you already have" settings count (#1068).

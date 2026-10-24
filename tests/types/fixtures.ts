@@ -308,6 +308,17 @@ export const version22 = {
   },
 } satisfies SavedState;
 
+// Version 24 (23 is the flow graph's, #1231): somersloops pinned on production lines (#1235), 4 on
+// Phase 4's Heavy Modular Frame line (one Manufacturer) and none on Phase 3's Iron Rod line.
+export const version24 = {
+  ...version22,
+  version: 24,
+  sloopPins: {
+    '3': { Recipe_IronRod_C: 0 },
+    '4': { Recipe_ModularFrameHeavy_C: 4 },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -333,6 +344,7 @@ export const states: [SavedState, number][] = [
   [version20, 20],
   [version21, 21],
   [version22, 22],
+  [version24, 24],
 ];
 
 export const backup = {

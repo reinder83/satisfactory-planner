@@ -4,7 +4,10 @@
 // same way. Each Alien Power Augmenter costs 10 somersloops, each hand-fed use 1, and production
 // amplification its whole budget; the save has `somersloops` to spend. A calculation that commits
 // more is refused, never clamped: the user decides what to give up.
+// Also the words for a somersloop pin a phase could not keep (#1235), which the planner's warning,
+// ADA and the production line dialog share.
 import { listNames, localeNumber } from './wording.ts';
+import type { SloopPinReason } from './types/index.ts';
 
 // The settings the budget reads; absent fields count as none, as settings() defaults them.
 export interface SloopSettings {
@@ -50,6 +53,13 @@ export const AMPLIFY_SLOTS: Record<string, number> = {
 // this many times the power, per (1 + filled/total)^2.
 export const AMPLIFIED_OUTPUT = 2;
 export const AMPLIFIED_POWER = 4;
+// The somersloop slots of a recipe's machine when production amplification can amplify it (a
+// machine with slots that draws power), else 0 (amplifiable in planner/recipes.ts): one amplified
+// machine's somersloops, which a pin on its line counts in (#1235).
+export const amplifySlots = (recipe: { machine: string; power: number }): number =>
+  recipe.power > 0 ? (AMPLIFY_SLOTS[recipe.machine] ?? 0) : 0;
+// The most somersloops a pin may name: the game's 106, as `somersloops` and `amplifySloops`.
+export const SLOOP_PIN_MAX = 106;
 
 // Production amplification needs the MAM research Production Amplifier (#1056,
 // Research_Alien_ProductionBooster_C in progression.json): machines take somersloops only once it
@@ -68,6 +78,25 @@ export const AMPLIFIER_WORDS = `Machines take somersloops once the MAM research 
 // The phase whose build plan lists the hand-fed constructors' step (#1150): the profile's start
 // phase, but not before the research their somersloops wait for.
 export const handFedPhase = (startPhase: number): number => Math.max(startPhase, AMPLIFIER_PHASE);
+// Why a phase could not keep a somersloop pin (#1235, SloopPinReason), as a clause: "machines take
+// somersloops only once …". `amplifySloops` is the plan's amplification budget per phase.
+export function pinReasonWords(reason: SloopPinReason, amplifySloops: number): string {
+  if (reason === 'research')
+    return `machines take somersloops only once the MAM research ${AMPLIFIER_RESEARCH} is done, from Phase ${AMPLIFIER_PHASE} on`;
+  if (reason === 'budget')
+    return amplifySloops > 0
+      ? `the phase’s pins add up to more than the ${localeNumber(amplifySloops)} somersloop${amplifySloops === 1 ? '' : 's'} production amplification may place in a phase`
+      : 'production amplification has no somersloops to place in this plan';
+  if (reason === 'unavailable') return 'the recipe is not available in this phase of the plan';
+  return 'no plan of the phase fits with it, so the planner placed the phase’s somersloops itself';
+}
+// What changes a pin a phase could not keep, after the reason: Edit settings for the budget, the
+// line's dialog otherwise.
+export function pinRemedyWords(reason: SloopPinReason): string {
+  return reason === 'budget'
+    ? 'Raise the amplification budget on step 2 of Edit settings, or lower or clear the pins in the production line’s dialog.'
+    : 'Change or clear the pin in the production line’s dialog.';
+}
 
 export function sloopCommitment(settings: SloopSettings): SloopCommitment {
   const whole = (value: number | undefined) =>

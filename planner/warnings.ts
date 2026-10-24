@@ -2,7 +2,12 @@
 // Re-exported by ../planner.ts.
 import { durationOfHours, listNames } from '../public/wording.ts';
 import { extractionEquipment } from '../public/power.ts';
-import { AMPLIFIER_PHASE, AMPLIFIER_RESEARCH } from '../public/somersloops.ts';
+import {
+  AMPLIFIER_PHASE,
+  AMPLIFIER_RESEARCH,
+  pinReasonWords,
+  pinRemedyWords,
+} from '../public/somersloops.ts';
 import { ownedBeltsWords, phaseMinersWords } from '../public/mining.ts';
 import type {
   CurrentSettings,
@@ -54,6 +59,36 @@ function amplificationWarnings({ config, stages }: FinishedPlan): string[] {
     warnings.push(
       `${dropped.length > 1 ? 'Phases' : 'Phase'} ${listNames(dropped)} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
     );
+  return warnings;
+}
+// Somersloop pins (#1235): the lines whose somersloops the plan keeps as pinned, and per phase and
+// reason the pins it could not keep, which it planned without (pins.ts), never silently.
+function sloopPinWarnings({ config, stages }: FinishedPlan): string[] {
+  if (!config.sloopPins) return [];
+  const name = (recipe: string) => DATA.recipes.find(entry => entry.id === recipe)?.name ?? recipe;
+  const warnings: string[] = [];
+  const kept = Object.entries(stages).flatMap(([phase, stage]) =>
+    stage.feasible
+      ? Object.entries(config.sloopPins?.[phase as StageKey] ?? {})
+          .filter(([recipe]) => !stage.sloopPinsDropped?.some(drop => drop.recipe === recipe))
+          .map(
+            ([recipe, sloops]) =>
+              `${name(recipe)} in Phase ${phase} (${sloops ? `${sloops} somersloop${sloops === 1 ? '' : 's'}` : 'none'})`,
+          )
+      : [],
+  );
+  if (kept.length)
+    warnings.push(
+      `${kept.length === 1 ? 'One production line has' : `${kept.length} production lines have`} the somersloops you pinned, which the plan keeps exactly: ${listNames(kept)}. The planner places the rest of each phase's amplification budget itself.`,
+    );
+  for (const [phase, stage] of Object.entries(stages))
+    for (const reason of ['research', 'budget', 'unavailable', 'fit'] as const) {
+      const drops = (stage.sloopPinsDropped ?? []).filter(drop => drop.reason === reason);
+      if (drops.length)
+        warnings.push(
+          `Phase ${phase} could not keep the somersloops pinned on ${listNames(drops.map(drop => `${name(drop.recipe)} (${drop.sloops})`))}: ${pinReasonWords(reason, config.amplifySloops)}. That phase is planned without ${drops.length > 1 ? 'those pins' : 'that pin'}. ${pinRemedyWords(reason)}`,
+        );
+    }
   return warnings;
 }
 // Existing production: which credits some phase drew on, and phases that had to drop them.
@@ -446,6 +481,7 @@ function scopeWarnings({ config }: FinishedPlan): string[] {
 const WARNING_GROUPS: WarningGroup[] = [
   somersloopWarnings,
   amplificationWarnings,
+  sloopPinWarnings,
   existingSupplyWarnings,
   builtLineWarnings,
   vehicleFuelWarnings,
