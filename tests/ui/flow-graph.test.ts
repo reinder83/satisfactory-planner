@@ -9,14 +9,17 @@
 // to the automatic layout, and the graph opens again as it was left. Storage and the sink (#1231):
 // their arrows are quiet until lit, a box pointed at or focused lights up its own arrows and
 // fades the rest, and "Show storage and sink as tags" draws them as named tags, saved with the
-// layout. Where the boxes land is checked in a real browser (browser-check.ts); happy-dom lays
-// nothing out, so a test gives the box its size.
+// layout. Inputs and outputs (#1240): a drag (mouse or finger) or the arrow keys move them too,
+// their arrows follow and they are saved with the layout (version 25), kept while storage and the
+// sink are tags and put back by Reset layout; every move snaps to a 5 px grid. Where the boxes land
+// is checked in a real browser (browser-check.ts); happy-dom lays nothing out, so a test gives the
+// box its size.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { itemRate } from '../../public/app/flow.ts';
 import { flowGraph, type FlowGraph } from '../../public/app/flow-graph.ts';
-import { placedGraph } from '../../public/app/graph-layout.ts';
+import { placedGraph, snapSpot, snapUnit } from '../../public/app/graph-layout.ts';
 import { setQuery, state } from '../../public/app/session.ts';
 import { LAYOUT_SAVE_DELAY } from '../../public/app/ui/detail/graph-layout-save.ts';
 import { render } from '../../public/app/shell.ts';
@@ -354,25 +357,34 @@ test('a drag of a line moves its box and its arrows, saves once it ends, and ope
   line.dispatchEvent(pointer('pointerdown', 100, 100));
   line.dispatchEvent(pointer('pointermove', 102, 101));
   assert.deepEqual(drawnAt(first), start);
+  // While it moves it snaps to the 5 px grid (#1240).
+  line.dispatchEvent(pointer('pointermove', 162, 143));
+  await settle();
+  assert.deepEqual(drawnAt(first), snapSpot(start[0] + 62, start[1] + 43));
   line.dispatchEvent(pointer('pointermove', 160, 140));
   await settle();
-  assert.deepEqual(drawnAt(first), [start[0] + 60, start[1] + 40]);
+  const dropped = snapSpot(start[0] + 60, start[1] + 40);
+  assert.deepEqual(drawnAt(first), dropped);
   assert.equal(box.scrollLeft, 50, 'the drawing stays where it is');
   assert.ok(box.classList.contains('moving'), 'the grabbing cursor while it moves');
   assert.notDeepEqual(arrows(), arrowsBefore, 'its arrows follow');
-  assert.deepEqual(drawnAt(second), otherStart, 'the other lines stay');
+  assert.deepEqual(drawnAt(second), snapSpot(...otherStart), 'the other lines stay, on the grid');
+  assert.ok(Math.abs(drawnAt(second)[0] - otherStart[0]) <= 2.5);
+  assert.ok(Math.abs(drawnAt(second)[1] - otherStart[1]) <= 2.5);
   assert.deepEqual(layoutSaves(calls), [], 'nothing is saved while it moves');
   line.dispatchEvent(pointer('pointerup', 160, 140));
   line.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await settle();
   assert.ok($('#detail [data-flow-graph]'), 'the click that ends the drag opens nothing');
   assert.equal(box.classList.contains('moving'), false);
-  // One save, at once: every line's spot, the moved one where it was put.
+  // One save, at once: every line's spot on the grid, the moved one where it was put.
   const saves = layoutSaves(calls) as { layout: GroupLayout }[];
   assert.equal(saves.length, 1);
   const nodes = saves[0]!.layout.nodes!;
   assert.deepEqual(Object.keys(nodes).sort(), lineIds(graph).map(rowOf).sort());
-  assert.deepEqual(nodes[rowOf(first)], [start[0] + 60, start[1] + 40]);
+  assert.deepEqual(nodes[rowOf(first)], dropped);
+  for (const [x, y] of Object.values(nodes)) assert.deepEqual([x % 5, y % 5], [0, 0]);
+  assert.equal(saves[0]!.layout.places, undefined, 'no input or output moved');
   assert.deepEqual(storedLayout()?.nodes, nodes, 'and the state keeps it');
   assert.equal(state.version, 22);
 });
@@ -405,10 +417,12 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
     $(`#detail [data-node="${first}"]`)!.dispatchEvent(event);
     return event;
   };
+  // A grid step (5 px, #1240) at a time, Shift ten of them; a spot off the grid lands on it.
   assert.equal(key('ArrowRight').defaultPrevented, true, 'the box does not scroll');
   key('ArrowDown', true);
   await settle();
-  assert.deepEqual(drawnAt(first), [start[0] + 10, start[1] + 50]);
+  const nudged = [snapUnit(start[0] + 5), snapUnit(start[1]) + 50];
+  assert.deepEqual(drawnAt(first), nudged);
   assert.equal(document.activeElement, $(`#detail [data-node="${first}"]`), 'focus stays on it');
   assert.deepEqual(
     focusable(),
@@ -420,7 +434,7 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
   await rest();
   const saves = layoutSaves(calls) as { layout: GroupLayout }[];
   assert.equal(saves.length, 1);
-  assert.deepEqual(saves[0]!.layout.nodes![rowOf(first)], [start[0] + 10, start[1] + 50]);
+  assert.deepEqual(saves[0]!.layout.nodes![rowOf(first)], nudged);
   // Enter opens the line, as a press does.
   key('Enter');
   await settle();
@@ -682,4 +696,189 @@ test('a layout stored before the switch opens with storage and the sink as lines
   assert.equal($('#detail [data-tag]'), null);
   assert.ok($('#detail path[data-edge].quiet'));
   assert.deepEqual(drawnAt(first), [900, 30]);
+});
+
+// #1240: inputs and outputs move too, everything on a 5 px grid.
+const placeIds = (graph: FlowGraph, kind: 'in' | 'out') =>
+  graph.nodes.filter(node => node.kind === kind).map(node => node.id);
+const arrowsOf = (graph: FlowGraph, id: string) =>
+  $$('#detail path[data-edge]')
+    .filter(path => {
+      const edge = graph.edges.find(known => known.id === path.dataset.edge)!;
+      return edge.from === id || edge.to === id;
+    })
+    .map(path => path.getAttribute('d'));
+// A drag of the box of node `id` by (dx, dy) screen px at 100%, ended with the click a browser sends.
+async function dragBox(id: string, dx: number, dy: number, pointerType = 'mouse') {
+  const rect = $(`#detail [data-node="${id}"] rect`)!;
+  rect.dispatchEvent(pointer('pointerdown', 100, 100, { pointerType }));
+  rect.dispatchEvent(pointer('pointermove', 100 + dx / 2, 100 + dy / 2, { pointerType }));
+  rect.dispatchEvent(pointer('pointermove', 100 + dx, 100 + dy, { pointerType }));
+  await settle();
+  rect.dispatchEvent(pointer('pointerup', 100 + dx, 100 + dy, { pointerType }));
+  rect.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await settle();
+}
+
+test('a drag of an input or an output moves it on the grid, its arrows follow, and it is saved as version 25', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await openGraph();
+  const graph = graphOf();
+  const box = sizedBox();
+  box.scrollLeft = 30;
+  const [input] = placeIds(graph, 'in') as [string];
+  const [output] = placeIds(graph, 'out') as [string];
+  assert.ok(input && output, 'the iron group has inputs and outputs');
+  const [line] = lineIds(graph) as [string];
+  const inStart = drawnAt(input),
+    lineStart = drawnAt(line);
+  const before = arrowsOf(graph, input);
+  assert.ok(before.length, 'the input has arrows');
+  await dragBox(input, 37, 152);
+  assert.deepEqual(drawnAt(input), snapSpot(inStart[0] + 37, inStart[1] + 152));
+  assert.notDeepEqual(arrowsOf(graph, input), before, 'its arrows follow');
+  assert.deepEqual(drawnAt(line), snapSpot(...lineStart), 'the lines stay, on the grid');
+  assert.equal(box.scrollLeft, 30, 'the drawing does not move');
+  assert.ok($('#detail [data-flow-graph]'), 'the click that ends the drag opens nothing');
+  // Saved at once: the lines held where they are, the input where it was put.
+  let saves = layoutSaves(calls) as { layout: GroupLayout }[];
+  assert.equal(saves.length, 1);
+  assert.deepEqual(saves[0]!.layout.places, {
+    [input]: snapSpot(inStart[0] + 37, inStart[1] + 152),
+  });
+  assert.deepEqual(Object.keys(saves[0]!.layout.nodes!).sort(), lineIds(graph).map(rowOf).sort());
+  assert.deepEqual(storedLayout()?.places, saves[0]!.layout.places, 'and the state keeps it');
+  assert.equal(state.version, 25);
+  const outStart = drawnAt(output);
+  // An output moves the same way, here with a finger, and is saved beside the input.
+  await dragBox(output, 64, -33, 'touch');
+  const outSpot = snapSpot(outStart[0] + 64, Math.max(0, outStart[1] - 33));
+  assert.deepEqual(drawnAt(output), outSpot);
+  saves = layoutSaves(calls) as { layout: GroupLayout }[];
+  assert.equal(saves.length, 2);
+  assert.deepEqual(Object.keys(saves[1]!.layout.places!).sort(), [input, output].sort());
+  assert.deepEqual(saves[1]!.layout.places![output], outSpot);
+  // Every box is on the grid now.
+  for (const node of graph.nodes) {
+    const [x, y] = drawnAt(node.id);
+    assert.deepEqual([x % 5, y % 5], [0, 0], node.id);
+  }
+  // Pointing at the moved input still lights up its arrows.
+  enter(nodeEl(input));
+  await nextTick();
+  for (const edge of graph.edges.filter(edge => edge.from === input && edge.path))
+    assert.ok(has(edgeEl(edge.id), 'hl'), edge.id);
+  leave(nodeEl(input));
+  // A press on a place without a drag opens nothing and saves nothing.
+  const rect = $(`#detail [data-node="${input}"] rect`)!;
+  rect.dispatchEvent(pointer('pointerdown', 100, 100));
+  rect.dispatchEvent(pointer('pointermove', 102, 101));
+  rect.dispatchEvent(pointer('pointerup', 102, 101));
+  rect.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await settle();
+  assert.ok($('#detail [data-flow-graph]'), 'still the graph');
+  assert.equal(layoutSaves(calls).length, 2);
+});
+
+test('the arrow keys move a focused input or output a grid step, and the graph opens with it there', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await openGraph();
+  const graph = graphOf();
+  sizedBox();
+  const [output] = placeIds(graph, 'out') as [string];
+  const place = $(`#detail [data-node="${output}"]`)!;
+  assert.match(place.getAttribute('aria-label')!, /\. The arrow keys move it\.$/);
+  const start = drawnAt(output);
+  place.focus();
+  const key = (name: string, shiftKey = false) => {
+    const event = new KeyboardEvent('keydown', {
+      key: name,
+      shiftKey,
+      bubbles: true,
+      cancelable: true,
+    });
+    $(`#detail [data-node="${output}"]`)!.dispatchEvent(event);
+    return event;
+  };
+  assert.equal(key('ArrowLeft').defaultPrevented, true, 'the box does not scroll');
+  key('ArrowDown', true);
+  await settle();
+  const spot = [snapUnit(start[0] - 5), snapUnit(start[1]) + 50];
+  assert.deepEqual(drawnAt(output), spot);
+  assert.equal(document.activeElement, $(`#detail [data-node="${output}"]`), 'focus stays on it');
+  // Enter on a place opens nothing.
+  assert.equal(key('Enter').defaultPrevented, false);
+  await settle();
+  assert.ok($('#detail [data-flow-graph]'));
+  await rest();
+  const saves = layoutSaves(calls) as { layout: GroupLayout }[];
+  assert.equal(saves.length, 1);
+  assert.deepEqual(saves[0]!.layout.places, { [output]: spot });
+  dialog().close();
+  await settle();
+  await openGraph();
+  assert.deepEqual(drawnAt(output), spot, 'it opens where it was put');
+});
+
+test('Reset layout puts moved inputs and outputs back too, asking first', async () => {
+  const automatic = graphOf();
+  const [input] = placeIds(automatic, 'in') as [string];
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await showFactories(arrangedGroups({ places: { [input]: [15, 400] } }));
+  await openGraph();
+  sizedBox();
+  assert.deepEqual(drawnAt(input), [15, 400]);
+  const asked = answerConfirms(true);
+  $<HTMLButtonElement>('#detail [data-flow-layout-reset]')!.click();
+  await settle();
+  assert.equal(asked.length, 1, 'a moved input is work to redo');
+  assert.match(asked[0]!, /production lines, inputs and outputs you moved/);
+  const spot = automatic.nodes.find(node => node.id === input)!;
+  assert.deepEqual(drawnAt(input), [spot.x, spot.y]);
+  assert.deepEqual(layoutSaves(calls), [{ type: 'factoryGroupLayout', id: GROUP, layout: null }]);
+  assert.equal(storedLayout(), undefined);
+  assert.ok(state.version < 22);
+});
+
+test('storage and the sink keep their stored spots while they are tags', async () => {
+  const automatic = graphOf();
+  const quiet = automatic.edges.find(edge => edge.quiet && edge.path)!.to;
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await showFactories(arrangedGroups({ places: { [quiet]: [1500, 20] } }));
+  await openGraph();
+  sizedBox();
+  assert.deepEqual(drawnAt(quiet), [1500, 20]);
+  const toggle = () => {
+    const input = $<HTMLInputElement>('#detail [data-flow-tags]')!;
+    input.checked = !input.checked;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  toggle();
+  await settle();
+  assert.equal($(`#detail [data-node="${quiet}"]`), null, 'a tag now');
+  assert.deepEqual(layoutSaves(calls).at(-1), {
+    type: 'factoryGroupLayout',
+    id: GROUP,
+    layout: { tags: true, places: { [quiet]: [1500, 20] } },
+  });
+  toggle();
+  await settle();
+  assert.deepEqual(drawnAt(quiet), [1500, 20], 'back where it was put');
+  assert.deepEqual(storedLayout(), { places: { [quiet]: [1500, 20] } });
+});
+
+test('a layout stored before #1240 opens as it was: its lines unmoved, inputs and outputs automatic', async () => {
+  const automatic = graphOf();
+  const [first] = lineIds(automatic) as [string];
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await showFactories(arrangedGroups({ nodes: { [rowOf(first)]: [903, 31] } }));
+  await openGraph();
+  assert.deepEqual(drawnAt(first), [903, 31], 'a spot off the grid stays where it is');
+  for (const id of [...placeIds(automatic, 'in'), ...placeIds(automatic, 'out')]) {
+    const spot = automatic.nodes.find(node => node.id === id)!;
+    const [x, y] = drawnAt(id);
+    assert.ok(Math.abs(x - spot.x) <= 2.5 && Math.abs(y - spot.y) <= 2.5, id);
+  }
+  await rest();
+  assert.deepEqual(layoutSaves(calls), [], 'opening it saves nothing');
 });

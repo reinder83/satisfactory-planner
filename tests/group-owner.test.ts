@@ -96,7 +96,7 @@ test('version 20 is set only while a group has an owner, and dropped when none h
   assert.equal(validateState({ ...json(grouped()), version: 20 }).version, 3);
   // A higher version gets the update message.
   assert.throws(
-    () => validateState({ ...json(owned), version: 25 }),
+    () => validateState({ ...json(owned), version: 26 }),
     /newer planner version\. Update the app to import it\./,
   );
   // An owner beside the other contents still wins: version19 with an owner is 20, and without it

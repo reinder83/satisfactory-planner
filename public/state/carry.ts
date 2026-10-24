@@ -543,8 +543,9 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
   const carried = validateGroups(raw);
   if (!carried.groups.length) return defaults;
   const rows = new Set([...planRows(plan).values()].map(row => row.id));
-  // A group's flow graph layout (#1224) comes along, its zoom and scroll offsets as they were and
-  // the spots of the lines the new plan still has.
+  // A group's flow graph layout (#1224) comes along, its zoom and scroll offsets, its tags switch
+  // and its moved inputs and outputs (#1240) as they were, and the spots of the lines the new plan
+  // still has.
   const groups = carried.groups.map(group => carriedLayout(group, rows));
   const known = new Set(groups.map(group => group.id));
   const assignments: Record<string, GroupAssignment[]> = {};

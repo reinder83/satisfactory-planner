@@ -1,19 +1,27 @@
-// A factory's flow graph as the user arranged it (#1224, slice 2 of #1201): production lines moved
-// by a drag or the arrow keys keep their spots, stored per factory group (groups[].layout,
-// state version 22, with the zoom and scroll offsets), and the arrows follow them. Plain
-// arithmetic, no session: the dialog (ui/detail/FlowGraphDialog.vue) passes the automatic graph
-// (flowGraph in flow-graph.ts) and the stored spots, and saves what layoutToSave gives back.
+// A factory's flow graph as the user arranged it (#1224, slice 2 of #1201): production lines, and
+// since #1240 inputs and outputs, moved by a drag or the arrow keys keep their spots, stored per
+// factory group (groups[].layout, state version 22, with the zoom and scroll offsets), and the
+// arrows follow them. Plain arithmetic, no session: the dialog (ui/detail/FlowGraphDialog.vue)
+// passes the automatic graph (flowGraph in flow-graph.ts) and the stored spots, and saves what
+// layoutToSave gives back.
 //
-// - Without a stored spot for any of its lines the graph is drawn exactly as flowGraph lays it out.
-// - The first move of a line stores the spots of all the graph's lines (heldSpots), so the others
+// - Without a stored spot for any of its boxes the graph is drawn exactly as flowGraph lays it out.
+// - The first move of a box stores the spots of all the graph's lines (heldSpots), so the others
 //   stay where they were drawn. After that each line with a spot sits there, and a line without one
 //   (new in the plan, or new in this phase) takes its automatic spot moved as far as the lines it is linked to were moved on
 //   average, then down below any box it would cover. Places (what comes in, what leaves) keep
-//   their automatic spots. Every arrow then runs from its source's right side to its target's
-//   left side as one curve, its label at the curve's middle, slid along it where it would cover a
-//   box, a tag or another label (placeEdgeLabels, #1231). Tags stay on their lines' boxes.
+//   their automatic spots until one is moved too (#1240): a moved place's spot is stored by its
+//   node id ('in:<place>', 'out:<place>'; groups[].layout.places, version 25). Every arrow then
+//   runs from its source's right side to its target's left side as one curve, its label at the
+//   curve's middle, slid along it where it would cover a box, a tag or another label
+//   (placeEdgeLabels, #1231). Tags stay on their lines' boxes.
 // - Saving keeps the spots of the lines the factory still has in some phase of the plan
 //   (factoryLineRows), whole units, so a line the plan dropped loses its spot then.
+// - Everything moved snaps to a 5-unit grid (GRAPH_GRID, #1240), while it is dragged, nudged and
+//   as it is stored. Once the graph is arranged the boxes without a stored spot (places at their
+//   automatic spots, lines new to it) are drawn on the grid too, and the first move stores the
+//   other lines on it, so every box can be lined up with every other: that moves a box at most
+//   2.5 units. A spot stored before the grid stays where it is until its box is moved.
 // The boxes stay in the automatic order in the drawing (and so in the tab order) wherever they sit.
 import {
   GRAPH,
@@ -29,11 +37,14 @@ import { LINK_DUST, rowPlaces, type GroupsInput } from './group-order.ts';
 import type { GraphView } from './graph-view.ts';
 import type { CalcRow, GroupLayout } from '../types/index.ts';
 
-// Where a moved line's box sits: its top-left corner in the drawing's units, by plan row id.
+// Where a moved box sits: its top-left corner in the drawing's units, by plan row id for a line and
+// by node id for a place.
 export type GraphSpots = Readonly<Record<string, readonly [number, number]>>;
 
-// An arrow key moves a focused line by `step` units, with Shift by `big`.
-export const GRAPH_NUDGE = { step: 10, big: 50 } as const;
+// The grid (drawing units) every moved box snaps to (#1240).
+export const GRAPH_GRID = 5;
+// An arrow key moves a focused box by `step` units, with Shift by `big`: both on the grid.
+export const GRAPH_NUDGE = { step: GRAPH_GRID, big: 10 * GRAPH_GRID } as const;
 
 const LINE_PREFIX = 'line:';
 // The plan row id of a line's box ('line:<row id>'), or null for a place's box.
@@ -42,13 +53,26 @@ export const lineRowOf = (nodeId: string): string | null =>
 
 // A corner as kept: whole units, never left of or above the drawing's edge.
 export const spotUnit = (value: number): number => Math.max(0, Math.round(value));
+// A corner on the grid (#1240): the nearest grid line, never left of or above the drawing's edge.
+export const snapUnit = (value: number): number =>
+  Math.max(0, Math.round(value / GRAPH_GRID) * GRAPH_GRID);
+// A point on the grid, as a drag puts a box (#1240).
+export const snapSpot = (x: number, y: number): [number, number] => [snapUnit(x), snapUnit(y)];
+// Whether node `nodeId` is a place's box (an input or an output) rather than a line's.
+export const isPlaceNode = (nodeId: string): boolean =>
+  nodeId.startsWith('in:') || nodeId.startsWith('out:');
 
-// `graph` with the stored spots applied and its arrows drawn to them; `graph` itself when no line
-// of it has a spot. Never changes `graph`.
-export function placedGraph(graph: FlowGraph, spots: GraphSpots | undefined): FlowGraph {
+// `graph` with the stored spots applied (`spots` of lines by row id, `places` of inputs and
+// outputs by node id) and its arrows drawn to them; `graph` itself when no box of it has a spot.
+// A place without a spot sits at its automatic spot on the grid. Never changes `graph`.
+export function placedGraph(
+  graph: FlowGraph,
+  spots: GraphSpots | undefined,
+  places?: GraphSpots,
+): FlowGraph {
   const spotOf = (node: GraphNode) => {
     const row = lineRowOf(node.id);
-    return row === null ? undefined : spots?.[row];
+    return row === null ? places?.[node.id] : spots?.[row];
   };
   if (!graph.nodes.some(node => spotOf(node))) return graph;
   const nodes = graph.nodes.map(node => ({ ...node }));
@@ -58,6 +82,7 @@ export function placedGraph(graph: FlowGraph, spots: GraphSpots | undefined): Fl
     const spot = spotOf(node);
     if (spot) [node.x, node.y] = spot;
     else if (node.kind === 'line') fresh.push(node);
+    else [node.x, node.y] = snapSpot(node.x, node.y);
   }
   const automatic = new Map(graph.nodes.map(node => [node.id, node]));
   placeFreshLines(fresh, nodes, graph.edges, automatic, spots ?? {});
@@ -72,7 +97,8 @@ export function placedGraph(graph: FlowGraph, spots: GraphSpots | undefined): Fl
 }
 
 // Each line without a spot, in order: its automatic spot moved by the mean move of the lines it
-// is linked to that have one, then down a row at a time until it covers no box placed so far.
+// is linked to that have one, on the grid, then down a row at a time (a row on the grid) until it
+// covers no box placed so far.
 function placeFreshLines(
   fresh: GraphNode[],
   nodes: GraphNode[],
@@ -98,13 +124,16 @@ function placeFreshLines(
       dy += spot[1] - before.y;
       count++;
     }
-    node.x = spotUnit(node.x + (count ? dx / count : 0));
-    node.y = spotUnit(node.y + (count ? dy / count : 0));
+    node.x = snapUnit(node.x + (count ? dx / count : 0));
+    node.y = snapUnit(node.y + (count ? dy / count : 0));
     for (let tries = 0; tries < 200 && settled.some(box => boxesMeet(box, node)); tries++)
-      node.y += GRAPH.nodeHeight + GRAPH.rowGap;
+      node.y += FRESH_ROW;
     settled.push(node);
   }
 }
+
+// How far a line new to the graph moves down past a box on its spot: a row, on the grid.
+const FRESH_ROW = Math.ceil((GRAPH.nodeHeight + GRAPH.rowGap) / GRAPH_GRID) * GRAPH_GRID;
 
 // Whether two boxes overlap, with a row's gap kept between them.
 const boxesMeet = (one: GraphNode, other: GraphNode): boolean =>
@@ -195,15 +224,16 @@ function arrangedSize(
   return { width: Math.ceil(right + GRAPH.pad), height: Math.ceil(bottom + GRAPH.pad) };
 }
 
-// `spots` with a spot for every line of `graph` as drawn (placedGraph) that has none yet: the
-// first move of a line keeps where all the others are, so they stay put when it moves, and a line
-// without a spot is always one the arrangement has not seen (new in the plan or in this phase).
+// `spots` with a spot for every line of `graph` as drawn (placedGraph) that has none yet, on the
+// grid (#1240): the first move of a box (a line's or a place's) keeps where all the lines are, so
+// they stay put when it moves, and a line without a spot is always one the arrangement has not seen
+// (new in the plan or in this phase). Spots it has stay as they are, on the grid or not.
 export function heldSpots(graph: FlowGraph, spots: GraphSpots): Record<string, [number, number]> {
   const held: Record<string, [number, number]> = {};
   for (const [row, [x, y]] of Object.entries(spots)) held[row] = [x, y];
   for (const node of graph.nodes) {
     const row = lineRowOf(node.id);
-    if (row !== null && !held[row]) held[row] = [spotUnit(node.x), spotUnit(node.y)];
+    if (row !== null && !held[row]) held[row] = snapSpot(node.x, node.y);
   }
   return held;
 }
@@ -223,21 +253,27 @@ export function factoryLineRows(
 }
 
 // What a save stores (groups[].layout): the spots of the lines in `keep`, whole units, the view,
-// the zoom to two decimals and the scroll offsets in whole px, and `tags: true` while storage and
-// the sink are shown as tags (#1231); each left out when it says nothing, and null when nothing is
-// left.
+// the zoom to two decimals and the scroll offsets in whole px, `tags: true` while storage and the
+// sink are shown as tags (#1231), and the spots of the moved inputs and outputs (#1240), whole
+// units: every one, also of a box the graph does not draw now (storage and the sink while they are
+// tags, a place of another phase), so it is there when the box is back. Each is left out when it
+// says nothing, and null when nothing is left.
 export function layoutToSave(
   spots: GraphSpots,
   view: GraphView | null,
   keep: ReadonlySet<string>,
   tags = false,
+  places: GraphSpots = {},
 ): GroupLayout | null {
   const layout: GroupLayout = tags ? { tags: true } : {};
-  const nodes = Object.entries(spots).filter(([row]) => keep.has(row));
-  if (nodes.length)
-    layout.nodes = Object.fromEntries(
-      nodes.map(([row, [x, y]]) => [row, [spotUnit(x), spotUnit(y)] as [number, number]]),
+  const whole = (list: [string, readonly [number, number]][]) =>
+    Object.fromEntries(
+      list.map(([key, [x, y]]) => [key, [spotUnit(x), spotUnit(y)] as [number, number]]),
     );
+  const nodes = Object.entries(spots).filter(([row]) => keep.has(row));
+  if (nodes.length) layout.nodes = whole(nodes);
+  const moved = Object.entries(places).filter(([node]) => isPlaceNode(node));
+  if (moved.length) layout.places = whole(moved);
   if (view) {
     const zoom = Math.round(view.zoom * 100) / 100;
     if (zoom !== 1) layout.zoom = zoom;
@@ -247,8 +283,8 @@ export function layoutToSave(
   return Object.keys(layout).length ? layout : null;
 }
 
-// A spot moved by an arrow key: by GRAPH_NUDGE's step, with Shift by its big step; null for any
-// other key.
+// A spot moved by an arrow key: by GRAPH_NUDGE's step, with Shift by its big step, onto the grid
+// (#1240; a spot stored off it lands on the grid line nearest the step); null for any other key.
 export function nudgedSpot(
   spot: readonly [number, number],
   key: string,
@@ -262,5 +298,5 @@ export function nudgedSpot(
     ArrowDown: [0, step],
   };
   const move = moves[key];
-  return move ? [spotUnit(spot[0] + move[0]), spotUnit(spot[1] + move[1])] : null;
+  return move ? snapSpot(spot[0] + move[0], spot[1] + move[1]) : null;
 }

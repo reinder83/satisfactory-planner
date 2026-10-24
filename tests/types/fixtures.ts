@@ -1,7 +1,12 @@
 // Saved data of every released shape, typed with public/types/. The type check proves the
 // types accept them (npm run typecheck); tests/data-types.test.ts proves validateState and
 // validateTransfer accept them too, so the types and the run-time gate agree.
-import type { ProgressBackup, SaveExport, SavedState } from '../../public/types/index.ts';
+import type {
+  GroupLayout,
+  ProgressBackup,
+  SaveExport,
+  SavedState,
+} from '../../public/types/index.ts';
 import firstPlan from '../fixtures/calculated-plan-2026-09-12.json' with { type: 'json' };
 
 // The first release's initial state (2026-09-12): no layout, step edits or groups.
@@ -344,6 +349,42 @@ export const version24 = {
   },
 } satisfies SavedState;
 
+// Version 25: inputs and outputs moved in a factory's flow graph (#1240), on top of version 24: the
+// Plates graph keeps its moved lines, zoom, scroll and tags and has its ore input, the Wire factory
+// and the AWESOME Sink (hidden while it is a tag, its spot kept) moved onto the 5-unit grid; the
+// Wire graph keeps its tags and has its plate input moved.
+const wireLayout25: GroupLayout = { places: { 'in:fg-plates1': [30, 120] }, tags: true };
+export const version25 = {
+  ...version24,
+  version: 25,
+  factoryGroups: {
+    ...version24.factoryGroups,
+    groups: [
+      {
+        id: 'fg-plates1',
+        name: 'Plates',
+        owner: 'Anna',
+        layout: {
+          nodes: { 'iron-plate': [420, 96], Recipe_IronPlate_C: [16, 260] },
+          places: {
+            'in:supply/Iron Ore': [15, 40],
+            'out:fg-wires1': [900, 95],
+            'out:sink': [900, 300],
+          },
+          zoom: 0.8,
+          pan: [120, 40],
+          tags: true,
+        },
+      },
+      {
+        id: 'fg-wires1',
+        name: 'Wire',
+        layout: wireLayout25,
+      },
+    ],
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -371,6 +412,7 @@ export const states: [SavedState, number][] = [
   [version22, 22],
   [version23, 23],
   [version24, 24],
+  [version25, 25],
 ];
 
 export const backup = {

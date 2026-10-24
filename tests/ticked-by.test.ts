@@ -202,7 +202,7 @@ test('every released state loads unchanged; version 21 is set only while a recor
   // message.
   assert.equal(validateState({ ...json(version21), version: 3 }).version, 21);
   assert.throws(
-    () => validateState({ ...json(version21), version: 25 }),
+    () => validateState({ ...json(version21), version: 26 }),
     /newer planner version\. Update the app to import it\./,
   );
 });

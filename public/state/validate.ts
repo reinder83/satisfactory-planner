@@ -163,6 +163,7 @@ const hasOwners = (factoryGroups: FactoryGroups) => factoryGroups.groups.some(gr
 // app/graph-view.ts; a test keeps the two in step) and scroll offsets from 0 to `pan` px.
 export const LAYOUT_LIMITS = {
   nodes: 1000,
+  places: 500,
   coordinate: 100000,
   zoomMin: 0.1,
   zoomMax: 3,
@@ -178,10 +179,18 @@ function layoutPair(value: unknown, max: number): [number, number] {
   if (!Array.isArray(value) || value.length !== 2) fail('Invalid factory layout.');
   return [layoutUnit(value[0], max), layoutUnit(value[1], max)];
 }
+// An input's or an output's box in a flow graph (#1240), as flowGraph names it: 'in:' or 'out:'
+// and its place, a factory group or one of linkPlaces (a safe key) or a source of its own
+// ('supply/<item name>').
+const placeNode = (key: string): boolean => {
+  const place = key.startsWith('in:') ? key.slice(3) : key.startsWith('out:') ? key.slice(4) : '';
+  return safeKey(place) || sourcePlace(place);
+};
 // A factory group's flow graph layout as kept (#1224), or undefined when it says nothing: the
 // moved lines' corners by row id, rounded to whole units; the zoom to two decimals, left out at
 // natural size; the scroll offsets in whole px, left out at the top-left corner; `tags: true`
-// while storage and the sink are shown as tags (#1231), left out when off. Positions of
+// while storage and the sink are shown as tags (#1231), left out when off; the moved inputs' and
+// outputs' corners by node id (#1240), whole units, left out when none moved. Positions of
 // lines the plan no longer has are kept here (the graph drops them on its next save), since a
 // state is checked without its plan. Anything malformed throws, as for every other field.
 export function groupLayout(value: unknown): GroupLayout | undefined {
@@ -197,6 +206,18 @@ export function groupLayout(value: unknown): GroupLayout | undefined {
       nodes[row] = layoutPair(corner, LAYOUT_LIMITS.coordinate);
     }
     if (Object.keys(nodes).length) layout.nodes = nodes;
+  }
+  // Moved inputs and outputs (#1240), by node id: kept as stored, rounded to whole units like the
+  // lines (a spot is stored on the grid already; one off it stays where it is).
+  if (value.places !== undefined) {
+    if (!plain(value.places) || Object.keys(value.places).length > LAYOUT_LIMITS.places)
+      fail('Invalid factory layout.');
+    const places: Record<string, [number, number]> = {};
+    for (const [place, corner] of Object.entries(value.places)) {
+      if (!placeNode(place)) fail('Invalid factory layout.');
+      places[place] = layoutPair(corner, LAYOUT_LIMITS.coordinate);
+    }
+    if (Object.keys(places).length) layout.places = places;
   }
   if (value.zoom !== undefined) {
     const zoom = value.zoom;
@@ -227,6 +248,9 @@ const hasLayouts = (factoryGroups: FactoryGroups) =>
 // Whether any group's flow graph shows storage and the sink as tags: version 23 (#1231).
 const hasTagLayouts = (factoryGroups: FactoryGroups) =>
   factoryGroups.groups.some(group => group.layout?.tags);
+// Whether any group's flow graph has a moved input or output: version 25 (#1240).
+const hasPlaceLayouts = (factoryGroups: FactoryGroups) =>
+  factoryGroups.groups.some(group => group.layout?.places);
 const hasTaskEdits = (edits: TaskEdits) =>
   edits.removed.length ||
   Object.keys(edits.order).length +
@@ -898,12 +922,12 @@ export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
     ![
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     ].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "25" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 24
+      // Compared as the old code did, so a version given as "26" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 25
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -1004,55 +1028,59 @@ export function validateState(state: unknown): ProgressState {
   // shows storage and the sink as tags (groups[].layout.tags, #1231) is 23: a release before it
   // would drop the choice and draw them as lines again. The somersloops pinned on production lines
   // (sloopPins, #1235) are 24: an older release would drop the pins, and the next recalculation
-  // would place those somersloops itself.
-  clean.version = clean.sloopPins
-    ? 24
-    : hasTagLayouts(clean.factoryGroups)
-      ? 23
-      : hasLayouts(clean.factoryGroups)
-        ? 22
-        : clean.tickedBy
-          ? 21
-          : hasOwners(clean.factoryGroups)
-            ? 20
-            : clean.builtMachines
-              ? 19
-              : linksNeedV18(clean.factoryGroups)
-                ? 18
-                : linksNeedV17(clean.factoryGroups)
-                  ? 17
-                  : clean.exactClocks
-                    ? 16
-                    : clean.onSiteReview
-                      ? 15
-                      : clean.factoryGroups.local
-                        ? 14
-                        : clean.handbookOrigin?.mapping
-                          ? 13
-                          : clean.handbookOrigin
-                            ? 12
-                            : linksNeedV11(clean.factoryGroups)
-                              ? 11
-                              : clean.storageEdits.bayOrder
-                                ? 10
-                                : linksNeedV9(clean.factoryGroups)
-                                  ? 9
-                                  : clean.storageEdits.bayFloors
-                                    ? 8
-                                    : clean.factoryGroups.links
-                                      ? 7
-                                      : clean.storageEdits.hiddenFloors.length
-                                        ? 6
-                                        : clean.storageEdits.hiddenBays.length
-                                          ? 5
-                                          : hasAddedSlots(clean.storageEdits)
-                                            ? 4
-                                            : hasTaskEdits(clean.taskEdits) ||
-                                                hasGroups(clean.factoryGroups)
-                                              ? 3
-                                              : hasEdits(clean.storageEdits)
-                                                ? 2
-                                                : 1;
+  // would place those somersloops itself. A layout with a moved input or output
+  // (groups[].layout.places, #1240) is 25: a release before it would drop those spots and draw the
+  // boxes at their automatic places again.
+  clean.version = hasPlaceLayouts(clean.factoryGroups)
+    ? 25
+    : clean.sloopPins
+      ? 24
+      : hasTagLayouts(clean.factoryGroups)
+        ? 23
+        : hasLayouts(clean.factoryGroups)
+          ? 22
+          : clean.tickedBy
+            ? 21
+            : hasOwners(clean.factoryGroups)
+              ? 20
+              : clean.builtMachines
+                ? 19
+                : linksNeedV18(clean.factoryGroups)
+                  ? 18
+                  : linksNeedV17(clean.factoryGroups)
+                    ? 17
+                    : clean.exactClocks
+                      ? 16
+                      : clean.onSiteReview
+                        ? 15
+                        : clean.factoryGroups.local
+                          ? 14
+                          : clean.handbookOrigin?.mapping
+                            ? 13
+                            : clean.handbookOrigin
+                              ? 12
+                              : linksNeedV11(clean.factoryGroups)
+                                ? 11
+                                : clean.storageEdits.bayOrder
+                                  ? 10
+                                  : linksNeedV9(clean.factoryGroups)
+                                    ? 9
+                                    : clean.storageEdits.bayFloors
+                                      ? 8
+                                      : clean.factoryGroups.links
+                                        ? 7
+                                        : clean.storageEdits.hiddenFloors.length
+                                          ? 6
+                                          : clean.storageEdits.hiddenBays.length
+                                            ? 5
+                                            : hasAddedSlots(clean.storageEdits)
+                                              ? 4
+                                              : hasTaskEdits(clean.taskEdits) ||
+                                                  hasGroups(clean.factoryGroups)
+                                                ? 3
+                                                : hasEdits(clean.storageEdits)
+                                                  ? 2
+                                                  : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

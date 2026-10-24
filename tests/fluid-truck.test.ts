@@ -285,7 +285,7 @@ test('a link on Fluid Trucks is state version 18; switching back restores the ol
   // It loads again as it was; a newer version is refused with the update message.
   const round = validateState(json(state));
   assert.deepEqual(round, state);
-  assert.throws(() => validateState({ ...json(round), version: 25 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(round), version: 26 }), /newer planner version/);
   // A state that says less than it needs is marked for what it holds.
   assert.equal(validateState({ ...json(state), version: 7 }).version, 18);
   // A later fuel on it is still 18; a Fluid Truck burns a fuel like a truck, never none.
