@@ -5,6 +5,7 @@ import {
   droneFuels,
   vehicleFuels,
   storageOptions,
+  beltCapMark,
   distributions,
   purities,
   ownedGeneratorCounts,
@@ -400,6 +401,16 @@ const ownedMinerSetting = (value: unknown): { ownedMiner?: 2 | 3 } =>
 // unless chosen.
 const ownedBeltSetting = (value: unknown): { ownedBelt?: 3 | 4 | 5 | 6 } =>
   value === 3 || value === 4 || value === 5 || value === 6 ? { ownedBelt: value } : {};
+// The best belt the plan may assume (#1232): `{ beltCap: 2 | 3 | 4 | 5 }` for Mk.2 to Mk.5,
+// nothing when absent or null, so a plan without a cap, and every plan stored before it, has no
+// field and calculates exactly as before. Any other value is refused, never corrected, as the
+// caps per phase are (Mk.6 is the best belt: a cap there would cap nothing).
+const BELT_CAP_REFUSAL = 'Choose the best belt the plan may use: Mk.2 to Mk.5, or no cap.';
+const beltCapSetting = (value: unknown): Pick<CurrentSettings, 'beltCap'> => {
+  if (value === undefined || value === null) return {};
+  if (!beltCapMark(value)) fail(BELT_CAP_REFUSAL);
+  return { beltCap: value as 2 | 3 | 4 | 5 };
+};
 // The alternate recipes the player already owns (#1068): known alternate ids, deduplicated and
 // sorted, so equal choices give equal settings; the field is absent unless one is left.
 const ownedAlternatesSetting = (value: unknown): { ownedAlternates?: string[] } => {
@@ -574,6 +585,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The caps per phase (#1221): absent without one, so settings without them, and every plan
     // stored before them, stay as they were.
     ...phaseCapsSetting(input.phaseCaps),
+    // The belt cap (#1232): absent without one, so settings without it, and every plan stored
+    // before it, plan each phase's belt as before.
+    ...beltCapSetting(input.beltCap),
     phaseTime: choice(input.phaseTime, ['every', 'final'], 'every'),
     hours: number(input.hours, 0.25, 2000, 8),
     roundRates: input.roundRates !== false,

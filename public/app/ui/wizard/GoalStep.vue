@@ -44,6 +44,7 @@ const view = computed(() =>
       name: wizardDraft.name,
       objective: settings.objective,
       caps: settings.phaseCaps,
+      beltCap: settings.beltCap,
       hours: settings.hours,
       phaseTime: settings.phaseTime || 'every',
       roundRates: !!settings.roundRates,
@@ -85,7 +86,7 @@ const view = computed(() =>
     >
   </div>
   <ObjectiveChoice :objective="view.objective" />
-  <PhaseCaps :caps="view.caps" />
+  <PhaseCaps :caps="view.caps" :belt-cap="view.beltCap" />
   <div class="form-grid">
     <InputField
       label="Profile name"

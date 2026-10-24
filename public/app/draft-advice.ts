@@ -20,7 +20,7 @@ import { recipeIdOf } from '../progression.ts';
 import { sloopPayoffOf, sloopUpstream, takesSloops } from './sloop-payoff.ts';
 import { listNames } from '../wording.ts';
 import { minerWords } from '../mining.ts';
-import { mapSupply, rawResources } from '../preferences.ts';
+import { beltCapMark, mapSupply, phaseBelt, rawResources } from '../preferences.ts';
 import { AMPLIFIER_PHASE, AMPLIFIER_RESEARCH } from '../somersloops.ts';
 import type {
   CalcRow,
@@ -55,7 +55,8 @@ export type DraftLeverId =
   | 'amplify'
   | 'sam'
   | 'nuclear'
-  | 'buildCost';
+  | 'buildCost'
+  | 'beltCap';
 export interface DraftLever {
   id: DraftLeverId;
   text: string;
@@ -263,6 +264,27 @@ function draftAmplified(snapshot: StoredStage, settings: DraftSettings, needs: D
   return found;
 }
 
+// The belt cap's lever (#1232): only with mining per phase, a belt cap that lowered this phase's
+// belt, and a short resource mined onto belts (not Water, nor the fluids from oil nodes and wells).
+function beltCapLever(
+  snapshot: StoredStage,
+  settings: DraftSettings,
+  phase: number | undefined,
+  shortfalls: Shortfall[],
+): DraftLever | null {
+  const mining = snapshot.mining;
+  if (!mining || phase === undefined || !beltCapMark(settings?.beltCap)) return null;
+  const free = phaseBelt(phase, settings?.ownedBelt);
+  if (!(free.cap > mining.belt.cap)) return null;
+  if (!shortfalls.some(shortfall => !DRAFT_FLUIDS.includes(shortfall.name))) return null;
+  return {
+    id: 'beltCap',
+    text: `Raise or clear the belt cap (Goals): this phase taps its nodes on ${mining.belt.mark} belts (${num(mining.belt.cap)}/min), where ${free.mark} belts (${num(free.cap)}/min) would let each node give more.`,
+    step: 3,
+    label: 'Change the belt cap in Edit settings →',
+  };
+}
+
 // The advice for infeasible phase `snapshot` under `settings` (see the header). Every lever needs
 // the draft to have measured something: an older snapshot, a stopped search or recipes that cannot
 // make the goal at all get none, and their reason says why.
@@ -285,6 +307,11 @@ export function draftAdvice(
       step: 4,
       label: 'Change budgets in Edit settings →',
     });
+  // A belt cap (#1232) that holds this phase's nodes to a worse belt than its milestones (or a belt
+  // the player has) give, while a mined resource that rides belts is short: a better belt lets
+  // each node give more. Read from the stored stage, so it names the belt the plan used.
+  const capped = beltCapLever(snapshot, settings, phase, shortfalls);
+  if (capped) levers.push(capped);
   if (snapshot.wholeMachinesOnly)
     levers.push({
       id: 'whole',

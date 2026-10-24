@@ -14,6 +14,7 @@ import {
   isWellKind,
   leftOutCounts,
   miningAdvice,
+  beltCapMark,
   phaseBelt,
   phaseMiner,
   phaseMining,
@@ -105,25 +106,39 @@ export function phaseMinersWords(
 }
 
 // The belts of each phase from `from` to 5 with a belt the player already has (settings.ownedBelt,
-// #1068), consecutive phases with the same belt together: "Mk.4 belts in Phases 2 and 3, Mk.5 in
-// Phase 4 and Mk.6 in Phase 5, at least the Mk.4 belts you already have". Empty without one, or
-// with one no phase from `from` on is raised to.
-export function ownedBeltsWords(from = 1, owned?: number): string {
+// #1068) or a belt cap (settings.beltCap, #1232), consecutive phases with the same belt together:
+// "Mk.4 belts in Phases 2 and 3, Mk.5 in Phase 4 and Mk.6 in Phase 5, at least the Mk.4 belts you
+// already have", "Mk.2 belts in Phase 1, Mk.3 in Phase 2 and Mk.4 in Phases 3 to 5, no better
+// than the Mk.4 belts your belt cap allows". Empty without either, or with ones that change no
+// phase from `from` on.
+export function ownedBeltsWords(from = 1, owned?: number, cap?: number): string {
   const runs: { mark: string; phases: number[] }[] = [];
-  let raised = false;
+  let raised = false,
+    lowered = false;
   for (let phase = from; phase <= 5; phase++) {
-    const belt = phaseBelt(phase, owned);
-    raised ||= belt !== phaseBelt(phase);
+    const belt = phaseBelt(phase, owned, cap);
+    raised ||= belt.cap > phaseBelt(phase).cap;
+    lowered ||= belt.cap < phaseBelt(phase, owned).cap;
     const run = runs.at(-1);
     if (run?.mark === belt.mark) run.phases.push(phase);
     else runs.push({ mark: belt.mark, phases: [phase] });
   }
-  if (!raised) return '';
+  if (!raised && !lowered) return '';
   const words = runs.map(
     (run, index) =>
       `${run.mark}${index ? '' : ' belts'} in Phase${run.phases.length > 1 ? 's' : ''} ${listNames(run.phases.map(String))}`,
   );
-  return `${listNames(words)}, at least the Mk.${owned} belts you already have`;
+  // An owned belt above the cap counts as the cap's: the player has that one too.
+  const capMark = beltCapMark(cap);
+  const why = [
+    ...(raised
+      ? [
+          `at least the Mk.${capMark ? Math.min(owned!, Number(capMark.mark.slice(3))) : owned} belts you already have`,
+        ]
+      : []),
+    ...(lowered ? [`no better than the ${capMark!.mark} belts your belt cap allows`] : []),
+  ];
+  return `${listNames(words)}, ${why.join(' and ')}`;
 }
 
 // How many nodes of each kind an advice taps, in words: "6 pure and 7 normal nodes",
