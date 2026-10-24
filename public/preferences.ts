@@ -130,6 +130,7 @@ export {
   uniformPurities,
 } from './preferences/presets.ts';
 export {
+  BELT_CAP_MARKS,
   BELT_MARKS,
   EXTRACTOR_OPTIONS,
   EXTRACTOR_TIERS,
@@ -140,6 +141,8 @@ export {
   phaseClock,
   PIPE_MARKS,
   SHARD_RECIPE_RESEARCH,
+  beltCapMark,
+  beltCapWords,
   bestMark,
   budgetLimit,
   budgetLimits,

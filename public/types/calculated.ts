@@ -204,6 +204,12 @@ export interface CurrentSettings {
   // advice (bestLane in public/app/flow.ts) counts that mark as available. Absent unless chosen,
   // and from every plan made before it.
   ownedBelt?: 3 | 4 | 5 | 6;
+  // The best belt the plan may assume (#1232, slice 9 of #1079, the caps on All settings step 3):
+  // 2 to 5 for Mk.2 to Mk.5. Every phase's belt is lowered to at most that mark, an owned belt's
+  // too (phaseBelt in public/preferences/mining.ts), so with mining per phase a node gives no more
+  // than the capped belt carries, and the belt advice (bestLane in public/app/flow.ts) never
+  // counts a better one. Absent unless chosen, and from every plan made before it.
+  beltCap?: 2 | 3 | 4 | 5;
   // The player can overclock (#1137: the MAM's Power Shards research, or "I can overclock" in
   // "What you already have"): with mining per phase every phase's miners and extractors run up to
   // 250%, capped by a node's belt or pipe (phaseClock in public/preferences/mining.ts). Absent

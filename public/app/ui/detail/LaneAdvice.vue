@@ -52,11 +52,14 @@ const advice = computed(() => {
   const belts = bestLane(false, model.stage),
     pipes = bestLane(true, model.stage);
   return {
-    // A belt the player already has (#1068) is theirs, not the phase's milestones'.
+    // A belt the player already has (#1068) is theirs, not the phase's milestones'; a belt cap
+    // (#1232) is the plan's own limit.
     intro:
-      (belts.owned
-        ? `${phaseLabel(model.stage)} plans with the ${belts.mark} belts you already have (${num(belts.cap)}/min); its milestones give `
-        : `${phaseLabel(model.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and `) +
+      (belts.capped
+        ? `${phaseLabel(model.stage)} plans with ${belts.mark} belts (${num(belts.cap)}/min), the best your belt cap allows, and `
+        : belts.owned
+          ? `${phaseLabel(model.stage)} plans with the ${belts.mark} belts you already have (${num(belts.cap)}/min); its milestones give `
+          : `${phaseLabel(model.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and `) +
       `${pipes.mark} pipes (${num(pipes.cap)} m³/min).` +
       (belts.next?.milestone
         ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${belts.next.milestone.name} in Phase ${belts.next.milestone.phase}.`

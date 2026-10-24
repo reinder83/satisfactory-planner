@@ -263,6 +263,8 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
   ['phaseMining', 'Mining and belts per phase', onOff],
   ['ownedMiner', 'Miners you already have', value => (value ? `Miner Mk.${value}` : 'None')],
   ['ownedBelt', 'Belts you already have', value => (value ? `Mk.${value} belts` : 'None')],
+  // The belt cap (#1232), absent as no cap.
+  ['beltCap', 'Best belt the plan may use', value => (value ? `Mk.${value} belts` : 'No cap')],
   ['overclock', 'I can overclock', onOff],
   // Which Water Extractor option the plan suggests (#1142); both are always shown.
   ['waterOverclock', 'Suggested Water Extractors', value => (value ? 'Overclocked' : 'At 100%')],
@@ -280,6 +282,7 @@ const ABSENT_IS_NONE = new Set([
   'phaseMining',
   'ownedMiner',
   'ownedBelt',
+  'beltCap',
   'overclock',
   'waterOverclock',
   'ownedAlternates',

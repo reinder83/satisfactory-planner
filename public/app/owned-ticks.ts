@@ -99,7 +99,9 @@ function beltFound(settings: StoredSettings, checks: Checks, phase: number): num
     checks,
   );
   if (!settings.phaseMining || ticked < 3) return undefined;
-  return phaseBelt(phase, ticked).cap > phaseBelt(phase, settings.ownedBelt).cap
+  // A belt cap (#1232) caps both, so a ticked belt above it is not more.
+  return phaseBelt(phase, ticked, settings.beltCap).cap >
+    phaseBelt(phase, settings.ownedBelt, settings.beltCap).cap
     ? ticked
     : undefined;
 }

@@ -251,10 +251,10 @@ function budgetWarnings({ config }: FinishedPlan): string[] {
   return warnings;
 }
 // Mining and belts per phase (#1065): what each phase's budgets follow, with the belts the player
-// already has (#1068) where they raise a phase's.
+// already has (#1068) where they raise a phase's, and the belt cap (#1232) where it lowers one.
 function miningWarnings({ config }: FinishedPlan): string[] {
   if (!config.phaseMining) return [];
-  const belts = ownedBeltsWords(Number(config.phase), config.ownedBelt);
+  const belts = ownedBeltsWords(Number(config.phase), config.ownedBelt, config.beltCap);
   return [
     `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner, config.overclock)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. ${overclockWords(config)} The entered budgets are the most any phase draws.`,
   ];
