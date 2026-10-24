@@ -6,9 +6,11 @@
 // drawing zooms it, a drag on its background moves it while a press on a line's box without a
 // drag opens that line, and − / + / Fit zoom it. Rearranging (#1224): a drag of a line's box moves
 // it and saves the layout once it ends, an arrow key moves a focused line, Reset layout goes back
-// to the automatic layout, and the graph opens again as it was left. Where the boxes land is
-// checked in a real browser (browser-check.ts); happy-dom lays nothing out, so a test gives the
-// box its size.
+// to the automatic layout, and the graph opens again as it was left. Storage and the sink (#1231):
+// their arrows are quiet until lit, a box pointed at or focused lights up its own arrows and
+// fades the rest, and "Show storage and sink as tags" draws them as named tags, saved with the
+// layout. Where the boxes land is checked in a real browser (browser-check.ts); happy-dom lays
+// nothing out, so a test gives the box its size.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
@@ -101,12 +103,20 @@ test('the keyboard opens the flow graph and Escape or × closes it, focus back o
   const box = $('#detail [data-flow-graph]')!;
   assert.equal(box.tabIndex, 0);
   assert.match(box.getAttribute('aria-label')!, /^Flow graph of .+ lists every flow\.$/);
-  // Only the lines' boxes are there for the keyboard and screen readers (#1224); the arrows, their
-  // labels and the places are the table's.
-  for (const hidden of box.querySelectorAll('path[data-edge], [data-edge-label], defs'))
+  // The arrows and their labels are the table's; every box is there for the keyboard and screen
+  // readers (#1224), the places' too since #1231, named with what comes in or goes out.
+  for (const hidden of box.querySelectorAll(
+    'path[data-edge], path[data-edge-hit], [data-edge-label], defs',
+  ))
     assert.equal(hidden.getAttribute('aria-hidden'), 'true');
-  for (const place of box.querySelectorAll('[data-node]:not([data-node^="line:"])'))
-    assert.equal(place.getAttribute('aria-hidden'), 'true');
+  const places = [...box.querySelectorAll<SVGElement>('[data-node]:not([data-node^="line:"])')];
+  assert.ok(places.length, 'the graph has places');
+  for (const place of places) {
+    assert.equal(place.getAttribute('aria-hidden'), null);
+    assert.equal(place.getAttribute('tabindex'), '0');
+    assert.equal(place.getAttribute('role'), 'img');
+    assert.match(place.getAttribute('aria-label')!, /^.+, .+\. (In|Out): .+\.$/);
+  }
   // Escape: the browser closes the dialog after its cancel event, which nothing holds up here.
   const escape = new Event('cancel', { cancelable: true });
   cancelDetail(escape);
@@ -128,12 +138,14 @@ test('one arrow per flow, and the table lists every flow with its rate', async (
   await openGraph();
   const graph = graphOf();
   assert.ok(graph.edges.length > 10, 'the iron group has flows');
-  // Every flow but a line's own output back into itself is drawn, each once.
+  // Every flow but a line's own output back into itself is drawn, each once, those into storage
+  // and the sink first, behind the others (#1231).
   const drawn = $$('#detail [data-flow-graph] path[data-edge]').map(path => path.dataset.edge);
-  assert.deepEqual(
-    drawn,
-    graph.edges.filter(edge => edge.note !== 'self').map(edge => edge.id),
-  );
+  const shown = graph.edges.filter(edge => edge.note !== 'self');
+  assert.deepEqual(drawn, [
+    ...shown.filter(edge => edge.quiet).map(edge => edge.id),
+    ...shown.filter(edge => !edge.quiet).map(edge => edge.id),
+  ]);
   assert.equal(
     $$('#detail [data-edge-label]').length,
     drawn.length,
@@ -370,10 +382,13 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
   await openGraph();
   const graph = graphOf();
   sizedBox();
-  // Every line's box takes focus, in the graph's own order; the places' boxes do not.
+  // Every box takes focus, in the graph's own order (the places' too since #1231).
   const focusable = () =>
     $$('#detail [data-flow-graph] [tabindex="0"]').map(node => node.dataset.node);
-  assert.deepEqual(focusable(), lineIds(graph));
+  assert.deepEqual(
+    focusable(),
+    graph.nodes.map(node => node.id),
+  );
   const [first] = lineIds(graph) as [string];
   const line = $(`#detail [data-node="${first}"]`)!;
   assert.equal(line.getAttribute('role'), 'button');
@@ -395,7 +410,11 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
   await settle();
   assert.deepEqual(drawnAt(first), [start[0] + 10, start[1] + 50]);
   assert.equal(document.activeElement, $(`#detail [data-node="${first}"]`), 'focus stays on it');
-  assert.deepEqual(focusable(), lineIds(graph), 'a moved line keeps its place in the tab order');
+  assert.deepEqual(
+    focusable(),
+    graph.nodes.map(node => node.id),
+    'a moved line keeps its place in the tab order',
+  );
   // The nudges are saved together once they rest.
   assert.deepEqual(layoutSaves(calls), []);
   await rest();
@@ -475,4 +494,192 @@ test('Reset layout goes back to the automatic layout at 100%, asking first when 
   await settle();
   assert.deepEqual(zoomOnly, []);
   assert.equal(zoomLevel(), '100%');
+});
+
+// #1231: the classes an arrow, its label and a box have now.
+const edgeEl = (id: string) => $<SVGPathElement>(`#detail path[data-edge="${id}"]`)!;
+const labelEl = (id: string) => $<SVGGElement>(`#detail [data-edge-label="${id}"]`)!;
+const nodeEl = (id: string) => $<SVGGElement>(`#detail [data-node="${id}"]`)!;
+const has = (el: Element, name: string) => el.classList.contains(name);
+const enter = (el: Element) => el.dispatchEvent(new PointerEvent('pointerenter'));
+const leave = (el: Element) => el.dispatchEvent(new PointerEvent('pointerleave'));
+
+test('the arrows into storage and the sink are quiet: no label or arrowhead until pointed at', async () => {
+  await openGraph();
+  const graph = graphOf();
+  const quiet = graph.edges.filter(edge => edge.quiet && edge.path);
+  const loud = graph.edges.filter(edge => !edge.quiet && edge.path);
+  assert.ok(quiet.length && loud.length, 'the iron group sends to storage or the sink');
+  for (const edge of quiet) {
+    assert.ok(has(edgeEl(edge.id), 'quiet'), edge.id);
+    assert.equal(edgeEl(edge.id).getAttribute('marker-end'), null, 'no arrowhead');
+    assert.ok(has(labelEl(edge.id), 'hidden'), 'no label');
+  }
+  for (const edge of loud) {
+    assert.equal(has(edgeEl(edge.id), 'quiet'), false, edge.id);
+    assert.equal(edgeEl(edge.id).getAttribute('marker-end'), 'url(#fgraph-arrow)');
+    assert.equal(has(labelEl(edge.id), 'hidden'), false);
+  }
+  // Every arrow has a hover title with its value; pointing at a quiet one lights it with its label.
+  const first = quiet[0]!;
+  const hit = $(`#detail path[data-edge-hit="${first.id}"]`)!;
+  assert.equal(
+    hit.querySelector('title')!.textContent,
+    `${first.item}: ${first.rateText} from ${first.fromText} to ${first.toText}`,
+  );
+  enter(hit);
+  await nextTick();
+  assert.ok(has(edgeEl(first.id), 'hover'));
+  assert.ok(has(labelEl(first.id), 'lit'), 'its label shows');
+  leave(hit);
+  await nextTick();
+  assert.ok(has(labelEl(first.id), 'hidden'), 'and goes again');
+});
+
+test('pointing at a line lights up its arrows, its quiet ones without labels, and fades the rest', async () => {
+  await openGraph();
+  const graph = graphOf();
+  const source = graph.edges.find(edge => edge.quiet && edge.path)!.from;
+  const own = graph.edges.filter(edge => edge.path && (edge.from === source || edge.to === source));
+  const others = graph.edges.filter(edge => edge.path && !own.includes(edge));
+  enter(nodeEl(source));
+  await nextTick();
+  assert.ok(has(nodeEl(source), 'on'), 'the box gets the accent outline');
+  for (const edge of own) {
+    assert.ok(has(edgeEl(edge.id), 'hl'), edge.id + ' lit');
+    assert.equal(edgeEl(edge.id).getAttribute('marker-end'), 'url(#fgraph-arrow)', 'arrowhead');
+    if (edge.quiet) assert.ok(has(labelEl(edge.id), 'hidden'), edge.id + ' without its label');
+    else
+      assert.ok(
+        ['lit', 'hidden'].some(state => has(labelEl(edge.id), state)),
+        edge.id,
+      );
+  }
+  for (const edge of others) {
+    assert.ok(has(edgeEl(edge.id), 'faded'), edge.id + ' faded');
+    if (!edge.quiet) assert.ok(has(labelEl(edge.id), 'faded'));
+  }
+  // Leaving the box puts everything back.
+  leave(nodeEl(source));
+  await nextTick();
+  assert.equal($$('#detail .fgraph-edge.hl, #detail .fgraph-edge.faded').length, 0);
+  assert.equal(has(nodeEl(source), 'on'), false);
+});
+
+test('focusing the sink or storage lights up every arrow into it with its label, spread apart', async () => {
+  await openGraph();
+  const graph = graphOf();
+  const place = graph.edges.find(edge => edge.quiet && edge.path)!.to;
+  const into = graph.edges.filter(edge => edge.to === place && edge.path);
+  nodeEl(place).dispatchEvent(new FocusEvent('focus'));
+  await nextTick();
+  assert.ok(has(nodeEl(place), 'on'), 'focus lights it as the pointer does');
+  for (const edge of into) assert.ok(has(edgeEl(edge.id), 'hl'), edge.id);
+  const shown = into.filter(edge => has(labelEl(edge.id), 'lit'));
+  assert.ok(shown.length, 'the lit arrows show their labels');
+  // No two shown labels overlap.
+  const spot = (id: string) => {
+    const [, x, y] = labelEl(id)
+      .getAttribute('transform')!
+      .match(/translate\(([-\d.]+),([-\d.]+)\)/)!;
+    return { x: Number(x), y: Number(y) };
+  };
+  for (const one of shown)
+    for (const other of shown)
+      if (one !== other) {
+        const a = spot(one.id),
+          b = spot(other.id);
+        assert.ok(
+          Math.abs(a.x - b.x) >= (one.label!.width + other.label!.width) / 2 - 0.2 ||
+            Math.abs(a.y - b.y) >= 30 - 0.2,
+          `${one.id} and ${other.id} overlap`,
+        );
+      }
+  nodeEl(place).dispatchEvent(new FocusEvent('blur'));
+  await nextTick();
+  assert.equal(has(nodeEl(place), 'on'), false);
+  for (const edge of into) assert.ok(has(labelEl(edge.id), 'hidden'), 'back at rest');
+});
+
+test('"Show storage and sink as tags" draws them as named tags, keeps the table and is saved per factory', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await openGraph();
+  const lines = graphOf();
+  const toggle = $<HTMLInputElement>('#detail [data-flow-tags]')!;
+  assert.equal(toggle.type, 'checkbox');
+  assert.equal(toggle.checked, false, 'off by default');
+  assert.equal(toggle.closest('label')!.textContent!.trim(), 'Show storage and sink as tags');
+  toggle.checked = true;
+  toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  const tagged = flowGraph(shownGroupFlow(GROUP)!, itemRate, () => '', { tags: true });
+  // The two boxes and their arrows go; each line with such flows has its tags, named.
+  assert.equal($('#detail [data-node="out:storage"], #detail [data-node="out:sink"]'), null);
+  assert.equal($$('#detail path[data-edge].quiet').length, 0);
+  const tags = $$('#detail [data-tag]');
+  assert.ok(tags.length, 'the lines have tags');
+  assert.deepEqual(
+    tags.map(tag => tag.dataset.tag),
+    tagged.tags.map(tag => tag.id),
+  );
+  for (const [i, tag] of tags.entries()) {
+    const model = tagged.tags[i]!;
+    assert.equal(tag.getAttribute('tabindex'), '0');
+    assert.equal(tag.getAttribute('role'), 'img');
+    assert.equal(tag.getAttribute('aria-label'), model.name);
+    assert.match(model.name, /^To (protected storage|the AWESOME Sink): .+/);
+    assert.equal(tag.querySelector('title')!.textContent, model.name);
+    assert.equal(tag.querySelector('text')!.textContent, model.text);
+  }
+  // A tag follows its line in the tab order.
+  const order = $$('#detail [data-flow-graph] [tabindex="0"]').map(
+    el => el.dataset.node ?? el.dataset.tag,
+  );
+  for (const tag of tagged.tags)
+    assert.equal(order.indexOf(tag.id) > order.indexOf(tag.node), true, tag.id);
+  // Pointing at a line lights its tags and fades the others.
+  const line = tagged.tags[0]!.node;
+  enter(nodeEl(line));
+  await nextTick();
+  for (const tag of tags) {
+    const mine = tagged.tags.find(model => model.id === tag.dataset.tag)!.node === line;
+    assert.ok(has(tag, mine ? 'hl' : 'faded'), tag.dataset.tag);
+  }
+  leave(nodeEl(line));
+  // The table still lists every flow.
+  assert.deepEqual(
+    $$('#detail [data-flow-graph-table] [data-flow-edge]').map(row => row.dataset.flowEdge),
+    lines.edges.map(edge => edge.id),
+  );
+  // Saved at once with the layout: version 23, and it opens that way again.
+  assert.deepEqual(layoutSaves(calls), [
+    { type: 'factoryGroupLayout', id: GROUP, layout: { tags: true } },
+  ]);
+  assert.deepEqual(storedLayout(), { tags: true });
+  assert.equal(state.version, 23);
+  dialog().close();
+  await settle();
+  await openGraph();
+  assert.equal($<HTMLInputElement>('#detail [data-flow-tags]')!.checked, true);
+  assert.ok($('#detail [data-tag]'));
+  // Off again: the lines are back and the layout says nothing.
+  const again = $<HTMLInputElement>('#detail [data-flow-tags]')!;
+  again.checked = false;
+  again.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.ok($('#detail path[data-edge].quiet'));
+  assert.equal($('#detail [data-tag]'), null);
+  assert.equal(storedLayout(), undefined);
+  assert.ok(state.version < 22);
+});
+
+test('a layout stored before the switch opens with storage and the sink as lines', async () => {
+  const automatic = graphOf();
+  const [first] = lineIds(automatic) as [string];
+  await showFactories(arrangedGroups({ nodes: { [rowOf(first)]: [900, 30] } }));
+  await openGraph();
+  assert.equal($<HTMLInputElement>('#detail [data-flow-tags]')!.checked, false);
+  assert.equal($('#detail [data-tag]'), null);
+  assert.ok($('#detail path[data-edge].quiet'));
+  assert.deepEqual(drawnAt(first), [900, 30]);
 });

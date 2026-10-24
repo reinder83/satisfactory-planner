@@ -16,7 +16,8 @@
 //                  Trucks (mode 'fluidTruck', #1177), version 18; a group's owner (#1199,
 //                  groups[].owner, the factoryGroupOwner update), version 20; a group's
 //                  flow graph layout (#1224, groups[].layout, the factoryGroupLayout
-//                  update), version 22
+//                  update), version 22; storage and the sink shown as tags in that
+//                  graph (#1231, groups[].layout.tags), version 23
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
 //                  not place (validateOrigin), version 12; with what the migration mapped
 //                  (mapping, #606), version 13; no update op edits it
@@ -32,8 +33,8 @@
 //                  version 21; kept by a tick of a step not ticked yet (the check and checks
 //                  updates' ticked or tickedBy), only while its step is ticked
 //   sloopPins      { phase: { recipe: sloops } } somersloops pinned on production lines
-//                  (validateSloopPins, #1235), version 24 (23 is #1231's); absent means the
-//                  plan's own; the sloopPins update sends the whole map
+//                  (validateSloopPins, #1235), version 24; absent means the plan's
+//                  own; the sloopPins update sends the whole map
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),

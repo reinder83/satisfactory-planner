@@ -30,7 +30,7 @@ import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
-import { states, version22, version24 } from './types/fixtures.ts';
+import { states, version22, version23, version24 } from './types/fixtures.ts';
 import type {
   ProgressState,
   SaveExport,
@@ -275,7 +275,7 @@ test('the pins are state version 24; every released format loads unchanged witho
   assert.equal(clean.version, 24);
   assert.deepEqual(clean.sloopPins, version24.sloopPins);
   // An empty map is still a choice: it asks for no pins where the plan has some.
-  assert.equal(validateState(json({ ...version22, sloopPins: {} })).version, 24);
+  assert.equal(validateState(json({ ...version23, sloopPins: {} })).version, 24);
   for (const bad of [
     [],
     { post: { a: 1 } },
@@ -290,10 +290,14 @@ test('the pins are state version 24; every released format loads unchanged witho
       /Invalid somersloop pins/,
     );
   assert.throws(() => validateState({ ...json(clean), version: 25 }), /newer planner version/);
-  // 23 is the flow graph's (#1231), which this release does not read.
-  assert.throws(() => validateState({ ...json(clean), version: 23 }), /newer planner version/);
+  // From version 23 (#1231): the pins come on top, and the flow graph's tags stay as they were.
+  const upgraded = validateState(
+    json({ ...version23, sloopPins: { '4': { Recipe_IronRod_C: 2 } } }),
+  );
+  assert.equal(upgraded.version, 24);
+  assert.deepEqual(upgraded.factoryGroups, validateState(json(version23)).factoryGroups);
   // The update saves the whole map; null forgets it and the state goes back to its version.
-  const asked = mutate(json(version22), {
+  const asked = mutate(json(version23), {
     type: 'sloopPins',
     value: { '4': { b: 4, a: 0 } },
   });
@@ -301,7 +305,7 @@ test('the pins are state version 24; every released format loads unchanged witho
   assert.equal(asked.version, 24);
   const forgotten = mutate(json(asked), { type: 'sloopPins', value: null });
   assert.equal('sloopPins' in forgotten, false);
-  assert.equal(forgotten.version, 22);
+  assert.equal(forgotten.version, 23);
   assert.throws(
     () => mutate(json(version22), { type: 'sloopPins', value: { '9': { a: 1 } } as SloopPins }),
     /Invalid somersloop pins/,
