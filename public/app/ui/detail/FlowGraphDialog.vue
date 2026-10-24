@@ -15,9 +15,13 @@
   it and the arrow keys move it (Shift: bigger steps). Where the lines sit, the zoom and the
   scroll offsets are stored per factory (useGraphLayout, graph-layout-save.ts; groups[].layout,
   state version 22) and put back on the next opening; "Reset layout" goes back to the automatic
-  layout at natural size, after a confirmation when a line was moved. "The graph as a table"
-  lists every arrow again as text, which the drawing's accessible name points to. A group gone
-  since the dialog opened says so.
+  layout at natural size, after a confirmation when a box was moved. Inputs and outputs (#1240): a
+  drag of an input's or an output's box, or the arrow keys on it, moves it the same way (stored by
+  node id, `places`, state version 25; the lines are held where they are on its first move), and
+  every move snaps to a 5 px grid (GRAPH_GRID, graph-layout.ts), the arrow keys a grid step at a
+  time (Shift: ten). Storage and the sink keep their stored spots while they are tags.
+  "The graph as a table" lists every arrow again as text, which the drawing's accessible name
+  points to. A group gone since the dialog opened says so.
   Storage and the sink (#1231): the arrows into Protected storage and the AWESOME Sink are quiet
   (thin, grey, behind the others, no label or arrowhead); pointing at one lights it up with its
   label. "Show storage and sink as tags", stored with the layout (`tags`, state version 23),
@@ -51,7 +55,14 @@ import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
 import DialogFrame from './DialogFrame.vue';
 import { GRAPH_ZOOM, type GraphPoint } from '../../graph-view.ts';
-import { heldSpots, lineRowOf, nudgedSpot, placedGraph } from '../../graph-layout.ts';
+import {
+  heldSpots,
+  isPlaceNode,
+  lineRowOf,
+  nudgedSpot,
+  placedGraph,
+  snapSpot,
+} from '../../graph-layout.ts';
 import { useGraphPanZoom } from './graph-pan-zoom.ts';
 import { useGraphLayout } from './graph-layout-save.ts';
 
@@ -100,9 +111,9 @@ const NOTES: Record<GraphEdge['note'], string> = {
   loop: 'loop: seed a starter batch',
   self: 'back into the same line',
 };
-// The graph as drawn: the automatic one with the stored and dragged spots.
+// The graph as drawn: the automatic one with the stored and dragged spots of lines and places.
 const placed = computed(
-  () => view.value.graph && placedGraph(view.value.graph, layout.spots.value),
+  () => view.value.graph && placedGraph(view.value.graph, layout.spots.value, layout.places.value),
 );
 // The drawn arrows, the quiet ones (into storage and the sink, #1231) first, so every other arrow
 // is drawn over them.
@@ -203,19 +214,23 @@ const nodeAt = (node: string): GraphPoint | null => {
   const shown = placed.value?.nodes.find(known => known.id === node);
   return shown ? { x: shown.x, y: shown.y } : null;
 };
-// Line `row` put at `to`, every other line of the graph kept where it is drawn now.
-const putLine = (row: string, to: [number, number]) => {
+// The box of `node` (a line's or, since #1240, an input's or an output's) put at `to`, every line
+// of the graph kept where it is drawn now (so none takes a new spot round a moved place).
+const putNode = (node: string, to: [number, number]) => {
   const graph = placed.value;
-  if (graph) layout.spots.value = { ...heldSpots(graph, layout.spots.value), [row]: to };
-};
-const moveLine = (node: string, to: GraphPoint) => {
+  if (!graph) return;
   const row = lineRowOf(node);
-  if (row !== null) putLine(row, [to.x, to.y]);
+  const held = heldSpots(graph, layout.spots.value);
+  layout.spots.value = row === null ? held : { ...held, [row]: to };
+  if (row === null && isPlaceNode(node))
+    layout.places.value = { ...layout.places.value, [node]: to };
 };
+// A dragged box follows the pointer on the grid (#1240).
+const moveNode = (node: string, to: GraphPoint) => putNode(node, snapSpot(to.x, to.y));
 const { zoom, panning, moving, show, zoomIn, zoomOut, fit, handlers, onClickCapture } =
   useGraphPanZoom(box, () => placed.value, {
     at: nodeAt,
-    move: moveLine,
+    move: moveNode,
     drop: () => layout.now(),
   });
 const zoomText = computed(() => `${Math.round(zoom.value * 100)}%`);
@@ -255,7 +270,8 @@ function placeAttrs(node: GraphNode) {
   return {
     tabindex: 0,
     role: 'img',
-    'aria-label': [`${node.label}, ${node.caption}`, ...parts].join('. ') + '.',
+    'aria-label':
+      [`${node.label}, ${node.caption}`, ...parts].join('. ') + '. The arrow keys move it.',
   };
 }
 // Brings the box of `node` into view inside the scrolling box, as far as it is out of it.
@@ -280,11 +296,10 @@ async function keepInView(node: string) {
     el.clientHeight,
   );
 }
-// Enter or Space opens a focused line; an arrow key moves it, Shift by a bigger step.
+// Enter or Space opens a focused line; an arrow key moves a focused box (a line's, an input's or an
+// output's, #1240) a grid step, Shift by a bigger one.
 function onNodeKey(e: KeyboardEvent, node: GraphNode) {
-  const row = lineRowOf(node.id);
-  if (row === null) return;
-  if (e.key === 'Enter' || e.key === ' ') {
+  if (lineRowOf(node.id) !== null && (e.key === 'Enter' || e.key === ' ')) {
     e.preventDefault();
     return openNode(node.id);
   }
@@ -294,23 +309,24 @@ function onNodeKey(e: KeyboardEvent, node: GraphNode) {
   if (!to) return;
   e.preventDefault();
   e.stopPropagation();
-  putLine(row, to);
+  putNode(node.id, to);
   layout.later();
   void keepInView(node.id);
 }
-// Back to the automatic layout at natural size, from the top-left corner; asked first when a line
+// Back to the automatic layout at natural size, from the top-left corner; asked first when a box
 // was moved, since that is work to redo.
 async function resetLayout() {
   if (
-    Object.keys(layout.spots.value).length &&
+    (Object.keys(layout.spots.value).length || Object.keys(layout.places.value).length) &&
     !(await confirmAction({
       title: 'Reset the layout?',
-      body: 'The production lines you moved go back to their automatic places, and the graph to 100%.',
+      body: 'The production lines, inputs and outputs you moved go back to their automatic places, and the graph to 100%.',
       confirmLabel: 'Reset layout',
     }))
   )
     return;
   layout.spots.value = {};
+  layout.places.value = {};
   await show({ zoom: 1, left: 0, top: 0 });
   layout.now();
 }
@@ -328,9 +344,10 @@ async function resetLayout() {
       <p class="small muted">
         What comes in on the left, this factory's production lines from left to right in the order
         they feed each other, and what leaves on the right. Each arrow is one item, per minute. Drag
-        the background to move the graph, drag a production line to move it (or the arrow keys on a
-        focused line), zoom with the mouse wheel, a pinch or the buttons, and press a production
-        line to open it. The graph opens as you left it, until you reset the layout.
+        the background to move the graph, drag a production line, an input or an output to move it
+        (or the arrow keys on a focused box), zoom with the mouse wheel, a pinch or the buttons, and
+        press a production line to open it. Moved boxes snap to a 5 px grid, so they line up. The
+        graph opens as you left it, until you reset the layout.
         <template v-if="view.quiet && !layout.tags.value">
           What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
         </template>

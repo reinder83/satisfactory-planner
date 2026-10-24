@@ -17,7 +17,8 @@
 //                  groups[].owner, the factoryGroupOwner update), version 20; a group's
 //                  flow graph layout (#1224, groups[].layout, the factoryGroupLayout
 //                  update), version 22; storage and the sink shown as tags in that
-//                  graph (#1231, groups[].layout.tags), version 23
+//                  graph (#1231, groups[].layout.tags), version 23; inputs and outputs
+//                  moved in that graph (#1240, groups[].layout.places), version 25
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
 //                  not place (validateOrigin), version 12; with what the migration mapped
 //                  (mapping, #606), version 13; no update op edits it

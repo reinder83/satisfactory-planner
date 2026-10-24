@@ -292,7 +292,8 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
 }
 // Rearranging the flow graph (#1224): a drag of a line's box moves it, the layout is stored with
 // the factory once the drag ends, and after a reload the graph opens with the line where it was
-// put. `stored` reads the open profile's progress state from the browser edition.
+// put. Since #1240 an input and an output are dragged too, and every box lands on the 5 px grid.
+// `stored` reads the open profile's progress state from the browser edition.
 async function checkGraphLayout(
   page: Page,
   graphGroup: string,
@@ -303,40 +304,70 @@ async function checkGraphLayout(
     await page.locator('#detail [data-flow-graph] svg').waitFor();
   };
   await openGraph();
-  const line = page.locator('#detail [data-node^="line:"]').first();
-  const node = (await line.getAttribute('data-node'))!;
-  const transform = () => page.locator(`#detail [data-node="${node}"]`).getAttribute('transform');
-  const before = await transform();
-  const rect = await line.locator('rect').boundingBox();
-  assert.ok(rect, 'the line has a box on screen');
-  await page.mouse.move(rect.x + 20, rect.y + 20);
-  await page.mouse.down();
-  await page.mouse.move(rect.x + 100, rect.y + 80, { steps: 6 });
-  await page.mouse.up();
-  const after = await transform();
-  assert.notEqual(after, before, 'a drag moves the line');
-  assert.ok(
-    await page.evaluate(() => !!document.querySelector('#detail [data-flow-graph]')),
-    'and does not open it',
-  );
+  const transform = (node: string) =>
+    page.locator(`#detail [data-node="${node}"]`).getAttribute('transform');
+  // A drag of the box of `node` by (dx, dy) screen px; where it is drawn after it.
+  const drag = async (node: string, dx: number, dy: number) => {
+    const before = await transform(node);
+    const rect = await page.locator(`#detail [data-node="${node}"] rect`).boundingBox();
+    assert.ok(rect, node + ' has a box on screen');
+    await page.mouse.move(rect.x + 20, rect.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(rect.x + 20 + dx, rect.y + 20 + dy, { steps: 6 });
+    await page.mouse.up();
+    const after = await transform(node);
+    assert.notEqual(after, before, 'a drag moves ' + node);
+    assert.ok(
+      await page.evaluate(() => !!document.querySelector('#detail [data-flow-graph]')),
+      'and does not open it',
+    );
+    const moved = (after ?? '').match(/translate\(([\d.]+),([\d.]+)\)/);
+    assert.ok(moved, 'the box is drawn at a spot: ' + after);
+    const spot = [Number(moved[1]), Number(moved[2])];
+    // On the 5 px grid (#1240).
+    assert.deepEqual(
+      spot.map(value => value % 5),
+      [0, 0],
+      node + ' snaps to the grid: ' + after,
+    );
+    return { after: after!, spot };
+  };
+  const firstNode = async (prefix: string) =>
+    (await page.locator(`#detail [data-node^="${prefix}"]`).first().getAttribute('data-node'))!;
+  const node = await firstNode('line:');
+  const line = await drag(node, 80, 60);
   const row = node.slice('line:'.length);
-  const moved = (after ?? '').match(/translate\(([\d.]+),([\d.]+)\)/);
-  assert.ok(moved, 'the box is drawn at a spot: ' + after);
-  const spot = [Number(moved[1]), Number(moved[2])];
   // The save goes as the drag ends; the browser edition writes it to IndexedDB.
-  let layout;
-  for (let tries = 0; tries < 50 && !layout?.nodes?.[row]; tries++) {
-    layout = (await stored()).factoryGroups.groups.find(group => group.id === graphGroup)?.layout;
-    if (!layout?.nodes?.[row]) await page.waitForTimeout(100);
-  }
-  assert.deepEqual(layout?.nodes?.[row], spot, 'the spot is stored with the factory');
+  const layoutOf = async () =>
+    (await stored()).factoryGroups.groups.find(group => group.id === graphGroup)?.layout;
+  const waitFor = async (done: (layout: Awaited<ReturnType<typeof layoutOf>>) => boolean) => {
+    let layout = await layoutOf();
+    for (let tries = 0; tries < 50 && !done(layout); tries++) {
+      await page.waitForTimeout(100);
+      layout = await layoutOf();
+    }
+    return layout;
+  };
+  let layout = await waitFor(stored => !!stored?.nodes?.[row]);
+  assert.deepEqual(layout?.nodes?.[row], line.spot, 'the spot is stored with the factory');
   assert.equal((await stored()).version, 22);
+  // An input and an output move the same way (#1240), stored by node id as version 25.
+  const input = await firstNode('in:');
+  const output = await firstNode('out:');
+  const inputMove = await drag(input, 30, 90);
+  const outputMove = await drag(output, -40, 70);
+  layout = await waitFor(stored => !!stored?.places?.[input] && !!stored?.places?.[output]);
+  assert.deepEqual(layout?.places?.[input], inputMove.spot, 'the input is stored');
+  assert.deepEqual(layout?.places?.[output], outputMove.spot, 'the output is stored');
+  assert.equal((await stored()).version, 25);
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   await page.reload();
   await page.locator(`#main [data-group-graph="${graphGroup}"]`).waitFor();
   await openGraph();
-  assert.equal(await transform(), after, 'after a reload the line is where it was put');
+  assert.equal(await transform(node), line.after, 'after a reload the line is where it was put');
+  assert.equal(await transform(input), inputMove.after, 'and the input');
+  assert.equal(await transform(output), outputMove.after, 'and the output');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
 }
@@ -1351,7 +1382,9 @@ try {
   assert.ok(
     reexport.saves.some(save =>
       save.profiles.some(profile =>
-        profile.state.factoryGroups?.groups?.some(group => group.layout?.nodes),
+        profile.state.factoryGroups?.groups?.some(
+          group => group.layout?.nodes && group.layout.places,
+        ),
       ),
     ),
     'the Docker edition keeps the flow graph layout',

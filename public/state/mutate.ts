@@ -302,7 +302,8 @@ function setGroupOwner(factory: FactoryGroups, update: Raw) {
   else delete group.owner;
 }
 // How a group's flow graph is drawn (#1224): its moved lines, zoom and scroll offsets, and whether
-// storage and the sink are shown as tags (#1231, version 23 while on), sent whole
+// storage and the sink are shown as tags (#1231, version 23 while on) and its moved inputs and
+// outputs (#1240, version 25 while any), sent whole
 // by the graph after a drag, a nudge or a zoom or scroll settles (ui/detail/graph-layout-save.ts).
 // Null or a layout that says nothing (groupLayout) drops the field, and with it version 22 once no
 // group has one. Presentation only, so it is not base-sensitive: a tab that has not seen another

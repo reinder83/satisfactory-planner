@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–24). Later versions only add optional sections, so an older
+//                  version (1–25). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -24,7 +24,8 @@ import type { ExactClocks, SloopPins } from './calculated.ts';
 // (groups[].owner, #1199), 21 who ticked a step and when (tickedBy, #1206), 22 a factory's flow
 // graph layout (groups[].layout, #1224), 23 storage and the sink shown as tags in a factory's
 // flow graph (groups[].layout.tags, #1231), 24 the somersloops pinned on production lines
-// (sloopPins, #1235).
+// (sloopPins, #1235), 25 inputs and outputs moved in a factory's flow graph
+// (groups[].layout.places, #1240).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -52,7 +53,8 @@ export type StateVersion =
   | 21
   | 22
   | 23
-  | 24;
+  | 24
+  | 25;
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
 // time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
@@ -178,10 +180,16 @@ export interface FactoryGroup {
 // (1 is natural size, two decimals) and the box's scroll offsets into the zoomed drawing, whole
 // px. `tags` (#1231) is the factory's "Show storage and sink as tags": the flows to Protected
 // storage and the AWESOME Sink drawn as tags on their lines instead of quiet lines to two boxes
-// (version 23 while any group has it). Each part is left out when it says nothing (no line moved,
-// natural size, the top-left corner, storage and the sink as lines).
+// (version 23 while any group has it). `places` (#1240) is where the user put an input's or an
+// output's box (what comes in on the left; the factories, Protected storage and the AWESOME Sink
+// on the right), by the box's node id ('in:<place>' or 'out:<place>', as flowGraph names it), in
+// the same units (version 25 while any group has one). Moved boxes are stored on a 5-unit grid
+// (graph-layout.ts); spots stored before it are kept as they are. Each part is left out when it
+// says nothing (no line or place moved, natural size, the top-left corner, storage and the sink as
+// lines).
 export interface GroupLayout {
   nodes?: Record<string, [x: number, y: number]>;
+  places?: Record<string, [x: number, y: number]>;
   zoom?: number;
   pan?: [left: number, top: number];
   tags?: true;

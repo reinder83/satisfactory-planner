@@ -3,11 +3,12 @@
 // keyboard once it has focus); on top of that:
 // - the wheel over the box zooms around the pointer, and only there: the page and the dialog
 //   outside the box scroll as usual (a sideways wheel or touchpad swipe still scrolls the box);
-// - a press on the background or on a place's box followed by a drag of a few px moves the drawing
-//   (mouse, pen or one finger: the box has touch-action: none, nowhere else does);
-// - a press on a production line's box followed by a drag of as many px moves that box (#1224,
-//   `lines`: where it is, where it goes, and the drop, which the dialog saves), while a press on a
-//   box without a drag stays a click;
+// - a press on the background followed by a drag of a few px moves the drawing (mouse, pen or one
+//   finger: the box has touch-action: none, nowhere else does);
+// - a press on a box (a production line's, #1224, or since #1240 an input's or an output's)
+//   followed by a drag of as many px moves that box (`lines`: where it is, where it goes, and the
+//   drop, which the dialog saves; the dialog snaps it to the grid), while a press on a box without
+//   a drag stays a click;
 // - two fingers pinch to zoom around their middle, and move the drawing as they move;
 // - zoomIn, zoomOut and fit for the buttons, around the middle of the box.
 // show() puts a view back (the stored zoom and scroll offsets, #1224); the dialog saves them.
@@ -32,13 +33,14 @@ interface Press {
   left: number;
   top: number;
   panning: boolean;
-  // A press on a production line's box: its node id and where the box was (drawing units).
+  // A press on a box (a line's or a place's): its node id and where the box was (drawing units).
   line?: { node: string; from: GraphPoint; moved: boolean };
 }
 
-// What a drag of a production line's box does (#1224): `at` gives where the box with node id
-// `node` is now, `move` puts it somewhere else (drawing units, whole and never above or left of
-// the drawing) as the pointer moves, and `drop` runs once when a drag that moved it ends.
+// What a drag of a box does (#1224, #1240): `at` gives where the box with node id `node` is now
+// (null for one that does not move), `move` puts it somewhere else (drawing units, whole and never
+// above or left of the drawing) as the pointer moves, and `drop` runs once when a drag that moved
+// it ends.
 export interface GraphLineDrag {
   at(node: string): GraphPoint | null;
   move(node: string, to: GraphPoint): void;
@@ -52,7 +54,7 @@ export function useGraphPanZoom(
 ) {
   const zoom = ref(1);
   const panning = ref(false);
-  // A line's box is being dragged, for the grabbing cursor.
+  // A box is being dragged, for the grabbing cursor.
   const moving = ref(false);
   // Where each pointer on the box is (client px), for a pinch; the press a pan may start from.
   const pointers = new Map<number, GraphPoint>();
@@ -122,11 +124,11 @@ export function useGraphPanZoom(
     const [a, b] = [...pointers.values()];
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   };
-  // A press on a line's box moves the box once it is a drag; one anywhere else moves the drawing.
+  // A press on a box moves the box once it is a drag; one anywhere else moves the drawing.
   function startPress(el: HTMLElement, e: PointerEvent) {
     const onNode = e.target instanceof Element ? e.target.closest('[data-node]') : null;
     const node = onNode?.getAttribute('data-node') ?? '';
-    const from = node.startsWith('line:') ? lines?.at(node) : null;
+    const from = node ? lines?.at(node) : null;
     press = {
       id: e.pointerId,
       start: { x: e.clientX, y: e.clientY },
@@ -136,7 +138,7 @@ export function useGraphPanZoom(
       ...(from ? { line: { node, from, moved: false } } : {}),
     };
   }
-  // The line's box under a drag, moved as far as the pointer, in the drawing's units.
+  // The box under a drag, moved as far as the pointer, in the drawing's units.
   function dragLine(el: HTMLElement, current: Press, dx: number, dy: number) {
     const line = current.line;
     if (!line) return;
@@ -155,7 +157,7 @@ export function useGraphPanZoom(
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     dragged = false;
     if (pointers.size === 1) return startPress(el, e);
-    // A second finger: a pinch, which no click follows. A line's box it was moving stays there.
+    // A second finger: a pinch, which no click follows. A box it was moving stays there.
     if (press?.line?.moved) lines?.drop(press.line.node);
     press = null;
     moving.value = false;

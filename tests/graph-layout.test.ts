@@ -27,11 +27,14 @@ import { flowGraph, type FlowGraph, type GraphNode } from '../public/app/flow-gr
 import { groupFlow } from '../public/app/group-flow.ts';
 import {
   factoryLineRows,
+  GRAPH_GRID,
   GRAPH_NUDGE,
   heldSpots,
   layoutToSave,
   nudgedSpot,
   placedGraph,
+  snapSpot,
+  snapUnit,
 } from '../public/app/graph-layout.ts';
 import { GRAPH_ZOOM } from '../public/app/graph-view.ts';
 import { createApp } from '../server.ts';
@@ -158,7 +161,7 @@ test('every released state loads unchanged; version 22 is set only while a layou
   // message, so a release before this one refuses a version-22 state the same way.
   assert.equal(validateState({ ...json(version22), version: 3 }).version, 22);
   assert.throws(
-    () => validateState({ ...json(version22), version: 25 }),
+    () => validateState({ ...json(version22), version: 26 }),
     /newer planner version\. Update the app to import it\./,
   );
 });
@@ -266,23 +269,28 @@ test('without a stored spot the graph is the automatic one; with one, the line s
   assert.equal(placedGraph(graph, undefined), graph);
   assert.equal(placedGraph(graph, {}), graph);
   assert.equal(placedGraph(graph, { 'not-here': [5, 5] }), graph, 'a spot of no line here');
-  // The first move holds every other line where it is, so only the moved line moves.
+  // The first move holds every other line where it is, on the 5-unit grid (#1240), so only the
+  // moved line moves (the others by less than half a grid step).
   const held = heldSpots(graph, {});
   assert.deepEqual(Object.keys(held).sort(), ['ingot', 'plate', 'rod', 'screw']);
-  assert.deepEqual(held.plate, [box(graph, 'line:plate').x, box(graph, 'line:plate').y]);
+  assert.deepEqual(held.plate, snapSpot(box(graph, 'line:plate').x, box(graph, 'line:plate').y));
   assert.deepEqual(heldSpots(graph, { rod: [1, 2] }).rod, [1, 2], 'a spot it has stays');
   const placed = placedGraph(graph, { ...held, rod: [700, 400] });
   assert.deepEqual(json(graph), before, 'the automatic graph is not changed');
   const rod = box(placed, 'line:rod');
   assert.deepEqual([rod.x, rod.y], [700, 400]);
-  // The other boxes stay where flowGraph put them, in the same order (the tab order).
+  // The other boxes stay where flowGraph put them, on the grid (never more than 2.5 units off), in
+  // the same order (the tab order).
   assert.deepEqual(
     placed.nodes.map(node => node.id),
     graph.nodes.map(node => node.id),
   );
   for (const node of placed.nodes)
-    if (node.id !== 'line:rod')
-      assert.deepEqual([node.x, node.y], [box(graph, node.id).x, box(graph, node.id).y], node.id);
+    if (node.id !== 'line:rod') {
+      const automatic = box(graph, node.id);
+      assert.deepEqual([node.x, node.y], snapSpot(automatic.x, automatic.y), node.id);
+      assert.ok(Math.abs(node.x - automatic.x) <= 2.5 && Math.abs(node.y - automatic.y) <= 2.5);
+    }
   // Each arrow into the rod line ends on its left side, each out of it starts on its right side.
   for (const edge of placed.edges) {
     if (!edge.path) continue;
@@ -318,17 +326,18 @@ test('a line new to the plan sits near the lines it is linked to, on no other bo
   const placed = placedGraph(graph, spots);
   const screw = box(placed, 'line:screw'),
     automatic = box(graph, 'line:screw');
-  // Its one link in is from the rod line, moved 300 down, so it moves 300 down too.
-  assert.equal(screw.x, automatic.x);
-  assert.equal(screw.y, automatic.y + 300);
+  // Its one link in is from the rod line, moved 300 down, so it moves 300 down too, on the grid.
+  assert.deepEqual([screw.x, screw.y], snapSpot(automatic.x, automatic.y + 300));
+  assert.ok(Math.abs(screw.y - (automatic.y + 300)) <= 2.5);
   for (const node of placed.nodes)
     if (node.id !== screw.id) assert.equal(overlap(node, screw), false, node.id);
   // A new line whose spot is taken goes below the box there.
   const rod = box(graph, 'line:rod');
   const taken = placedGraph(graph, { ingot: [automatic.x, automatic.y], rod: [rod.x, rod.y] });
   const moved = box(taken, 'line:screw');
-  assert.equal(moved.x, automatic.x);
+  assert.equal(moved.x, snapUnit(automatic.x));
   assert.ok(moved.y > automatic.y, 'pushed down past the box on its spot');
+  assert.equal(moved.y % GRAPH_GRID, 0, 'onto the grid');
   for (const node of taken.nodes)
     if (node.id !== moved.id) assert.equal(overlap(node, moved), false, node.id);
 });
@@ -370,14 +379,25 @@ test('a save keeps whole spots of the factory’s lines in any phase, and the vi
   });
 });
 
-test('an arrow key nudges a spot, Shift by a bigger step, never past the drawing’s edge', () => {
+test('an arrow key nudges a spot a grid step, Shift by a bigger step, never past the drawing’s edge', () => {
+  // #1240: the step is the 5-unit grid, the big step ten of them.
+  assert.equal(GRAPH_GRID, 5);
+  assert.deepEqual(GRAPH_NUDGE, { step: 5, big: 50 });
   assert.deepEqual(nudgedSpot([100, 100], 'ArrowRight', false), [100 + GRAPH_NUDGE.step, 100]);
   assert.deepEqual(nudgedSpot([100, 100], 'ArrowLeft', false), [100 - GRAPH_NUDGE.step, 100]);
   assert.deepEqual(nudgedSpot([100, 100], 'ArrowDown', true), [100, 100 + GRAPH_NUDGE.big]);
   assert.deepEqual(nudgedSpot([100, 100], 'ArrowUp', true), [100, 100 - GRAPH_NUDGE.big]);
-  assert.deepEqual(nudgedSpot([4, 3], 'ArrowUp', false), [4, 0]);
-  assert.deepEqual(nudgedSpot([4, 3], 'ArrowLeft', true), [0, 3]);
+  assert.deepEqual(nudgedSpot([5, 3], 'ArrowUp', false), [5, 0]);
+  assert.deepEqual(nudgedSpot([5, 3], 'ArrowLeft', true), [0, 5]);
   assert.equal(nudgedSpot([4, 3], 'Enter', false), null);
+  // A spot stored off the grid (before #1240) lands on it, always in the key's direction.
+  for (let x = 10; x < 15; x++) {
+    const [right] = nudgedSpot([x, 100], 'ArrowRight', false)!;
+    const [left] = nudgedSpot([x, 100], 'ArrowLeft', false)!;
+    assert.ok(right > x && right % 5 === 0 && right - x <= 7.5, `right from ${x}: ${right}`);
+    assert.ok(left < x && x - left <= 7.5, `left from ${x}: ${left}`);
+    assert.equal(left % 5, 0);
+  }
   assert.ok(GRAPH_NUDGE.big > GRAPH_NUDGE.step);
 });
 

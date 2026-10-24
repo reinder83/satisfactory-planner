@@ -4273,7 +4273,7 @@ button.rail-tile:hover {
 }
 .fgraph-scroll.panning,
 .fgraph-scroll.moving,
-.fgraph-scroll.moving .fgraph-node.line {
+.fgraph-scroll.moving .fgraph-node {
   cursor: grabbing;
 }
 .fgraph-scroll:focus-visible {
