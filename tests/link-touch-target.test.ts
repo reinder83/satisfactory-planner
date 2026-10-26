@@ -1,5 +1,6 @@
 // The vehicle, round trip and fuel controls of a link on the Logistics page (#674,
-// ui/factories/GroupLinks.vue) are 44px touch targets on a phone, and unchanged on wider screens.
+// ui/factories/GroupLinks.vue) are 44px touch targets on a phone, and on wider screens at least 24px
+// (#1256), as every field is.
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,4 +47,16 @@ test("a link row's controls are 44px tall at phone widths (#674)", () => {
 test('wider screens are unchanged: no min-height on the link controls outside the phone block', () => {
   const outside = mediaBlocks(style).reduce((css, b) => css.replace(b.body, ''), style);
   for (const rule of linkRules(outside)) assert.doesNotMatch(rule.body, /min-height/);
+});
+
+test("on wider screens a link's controls are 24px tall through the field floor (#1256)", () => {
+  // The By select was 19.6px tall at 1440px. The :where() floor in style.css gives every field
+  // and select at least WCAG 2.5.8's 24px; no link rule sets a smaller height.
+  const outside = mediaBlocks(style).reduce((css, b) => css.replace(b.body, ''), style);
+  const floor = [...outside.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+    m => m[1]!.trim().startsWith(':where(') && /\bselect\s*\)\s*$/.test(m[1]!),
+  );
+  assert.ok(floor, 'a :where() floor for fields and selects outside the media blocks');
+  assert.match(floor[2]!, /(^|[;\s])min-height:\s*24px\s*;/);
+  for (const rule of linkRules(outside)) assert.doesNotMatch(rule.body, /(^|[;\s])(min-)?height:/);
 });

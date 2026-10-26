@@ -242,15 +242,17 @@ async function deletePersonal(event: Event) {
     ]"
   >
     <div v-if="lead" class="step-no">Next step</div>
-    <input
-      type="checkbox"
-      :data-check="step.id"
-      @change="check"
-      :aria-label="'Complete: ' + step.title"
-      :aria-describedby="describedBy"
-      :checked="step.done"
-      :disabled="lockedDone || undefined"
-    /><StepIcon :icon="step.icon" />
+    <!-- The label is the tick's 24px target, 44px on a phone (#1256); the box keeps its name. -->
+    <label class="task-check"
+      ><input
+        type="checkbox"
+        :data-check="step.id"
+        @change="check"
+        :aria-label="'Complete: ' + step.title"
+        :aria-describedby="describedBy"
+        :checked="step.done"
+        :disabled="lockedDone || undefined" /></label
+    ><StepIcon :icon="step.icon" />
     <details :data-task="step.id" :open="lead">
       <summary>
         {{ step.title

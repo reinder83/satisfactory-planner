@@ -49,6 +49,8 @@
   --ink: #dce3e8;
   --bright: #ffffff;
   --muted: #8a949c;
+  /* Also every text field's border: at least 3:1 against each surface (#1256, WCAG 1.4.11);
+     --line, the border before, was 1.4:1 (tests/field-contrast.test.ts). */
   --dim: #7d878f;
   --kicker: #8a949c;
   --accent: #f89c1c;
@@ -104,6 +106,28 @@ summary {
 }
 button {
   cursor: pointer;
+}
+/* Target size (#1256): a field and a disclosure's summary are at least 24px tall, the minimum
+   WCAG 2.5.8 asks, and a field is 44px tall on a phone (below). :where() keeps the floor at no
+   specificity, so a control's own min-height (a phone's 44px rules) still wins. Check boxes and
+   radios are sized by their own rules or their label; a visually hidden file input is not a
+   target (its label is). Textareas are several lines tall anyway. */
+:where(
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='hidden'], .visually-hidden),
+  select
+) {
+  min-height: 24px;
+}
+summary {
+  min-height: 24px;
+}
+@media (max-width: 720px) {
+  :where(
+    input:not([type='checkbox'], [type='radio'], [type='file'], [type='hidden'], .visually-hidden),
+    select
+  ) {
+    min-height: 44px;
+  }
 }
 /* A disabled button has nothing to do (a completed room, a floor that still has bays, a Save
    with nothing left to save): dimmed, with a normal cursor (#948). A control busy with its save
@@ -646,7 +670,7 @@ input[type='radio'] {
   vertical-align: top;
 }
 .topbar select {
-  border: 1px solid #343b41;
+  border: 1px solid var(--dim);
   background: #171a1d;
   color: var(--bright);
   box-shadow: inset 0 1px 0 #2d343a;
@@ -1064,6 +1088,33 @@ p {
   margin: 3px 0;
   flex: none;
 }
+/* A step's tick (ui/plan/PlanStep.vue) sits in a label that is its target (#1256): 24px square
+   around the 18px box (WCAG 2.5.8), 44px on a phone, below. The box is drawn where it was: the
+   label reaches 3px past it on each side, and its negative margin keeps its place in the grid at
+   the 18 by 24px the box took. */
+.task-check {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 -3px;
+  cursor: pointer;
+}
+.task-check input[type='checkbox'] {
+  margin: 0;
+}
+/* On a phone the tick's label is 44px square, its margin still keeping the 18 by 24px place, and a
+   labelled check box row (Running, the plan's switches) is 44px tall (#1256). */
+@media (max-width: 720px) {
+  .task-check {
+    width: 44px;
+    height: 44px;
+    margin: -10px -13px;
+  }
+  .check-row {
+    min-height: 44px;
+  }
+}
 .task summary {
   font-family: var(--head);
   font-size: 16.5px;
@@ -1268,6 +1319,12 @@ p {
   border-color: var(--accent-hi);
   color: #0b0d0e;
 }
+/* A quiet button is at least 24px tall on every screen (#1256, WCAG 2.5.8): ADA's tools and the
+   step tools were 21-22px. The label stays centred and its underline 1-2px lower at most. At no
+   specificity, so a phone's 44px rule for one of them (.task-link) still wins. */
+:where(.btn.quiet) {
+  min-height: 24px;
+}
 .btn.quiet {
   border: 0;
   background: transparent;
@@ -1299,8 +1356,8 @@ p {
     min-height: 44px;
   }
   /* The quiet buttons in these rows are 44px touch targets too (#832): All settings → and
-     ← Guided start, a factory's ✕ per group and its Add (#856), ADA's tools and Unmute, and the
-     alternates' tools. Height only, as above. The underline moves from the box's bottom edge to
+     ← Guided start, a factory's ✕ per group and its Add (#856), ADA's tools and Unmute, the
+     alternates' tools, and a notice's or the somersloop ranking's (#1256). Height only, as above. The underline moves from the box's bottom edge to
      the text (text-decoration), so it stays under the words in the taller box. The storage bays'
      quiet buttons are drawn as boxes and have their own rule (.bay-actions). */
   .guided-escape .btn.quiet,
@@ -1308,7 +1365,9 @@ p {
   .assign-add .btn.quiet,
   .ada-tools .btn.quiet,
   .ada.is-muted .btn.quiet,
-  .alt-tools .btn.quiet {
+  .alt-tools .btn.quiet,
+  .notice .btn.quiet,
+  .sloop-payoff .btn.quiet {
     min-height: 44px;
     border-bottom: 0;
     text-decoration: underline 1px rgba(248, 156, 28, 0.5);
@@ -1377,6 +1436,42 @@ p {
   margin: 0 12px;
   color: var(--dim);
 }
+/* Links on a line of their own (#1256): the plan summary's parts, "Today's session" and "Phase
+   notes →" were 15-16px tall. An invisible box 24px tall around the text is their target (WCAG
+   2.5.8), so the text and its underline stay where they were; the summary's wrapped rows are 9px
+   apart, more than the 8px the boxes add. On a phone each is a 44px row instead, the underline
+   moving from the box's edge to the text as for the quiet links (#832). */
+.plan-summary a,
+[data-session-link],
+[data-phase-notes-link] {
+  position: relative;
+}
+.plan-summary a::after,
+[data-session-link]::after,
+[data-phase-notes-link]::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 24px;
+  transform: translateY(-50%);
+}
+@media (max-width: 720px) {
+  .plan-summary a,
+  [data-session-link],
+  [data-phase-notes-link] {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    border-bottom: 0;
+    text-decoration: underline dotted 1px rgba(248, 156, 28, 0.5);
+    text-underline-offset: 4px;
+  }
+  .plan-summary a::after,
+  [data-session-link]::after,
+  [data-phase-notes-link]::after {
+    content: none;
+  }
+}
 
 /* ── Toolbars, tabs, search ────────────────────────────── */
 .toolbar {
@@ -1389,7 +1484,7 @@ p {
 .search {
   flex: 1;
   min-width: 200px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   box-shadow: inset 0 1px 0 #2d343a;
   padding: 11px 14px;
   background: var(--panel);
@@ -1401,7 +1496,7 @@ textarea::placeholder {
 }
 .toolbar select {
   padding: 11px 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   box-shadow: inset 0 1px 0 #2d343a;
   background: var(--panel);
   font-family: var(--head);
@@ -1556,7 +1651,7 @@ textarea::placeholder {
   min-width: 0;
   background: #0f1214;
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   padding: 5px 8px;
 }
 .mine-bar [data-mine-note] {
@@ -1611,7 +1706,7 @@ textarea::placeholder {
   max-width: 14em;
   background: #0f1214;
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   padding: 5px 8px;
 }
 .activity-list {
@@ -2169,7 +2264,7 @@ p.eyebrow {
 .delivery input {
   width: 112px;
   padding: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0b0d0e;
   color: var(--ink);
   font-size: 12px;
@@ -2813,6 +2908,12 @@ tr.muted td:first-child {
 .slot.done .slot-complete {
   color: var(--green);
 }
+/* A slot's Complete label, the tick's target, is 44px tall on a phone (#1256). */
+@media (max-width: 720px) {
+  .slot-complete {
+    min-height: 44px;
+  }
+}
 .walkway {
   grid-column: 1/-1;
   text-align: center;
@@ -2944,7 +3045,7 @@ tr.muted td:first-child {
   flex: 1;
   background: #0f1214;
   color: var(--bright);
-  border: 1px solid var(--warm-border);
+  border: 1px solid var(--dim);
   padding: 6px 9px;
   font-family: var(--head);
   font-size: 15px;
@@ -3036,7 +3137,7 @@ tr.muted td:first-child {
 .notes {
   width: 100%;
   min-height: 118px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   padding: 12px;
   resize: vertical;
   background: #0b0d0e;
@@ -3052,7 +3153,7 @@ tr.muted td:first-child {
 .inline-form input {
   min-width: 0;
   flex: 1;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0b0d0e;
   color: var(--ink);
   padding: 10px 12px;
@@ -3665,6 +3766,8 @@ button.rail-tile:hover {
   border-bottom: 1px solid rgba(248, 156, 28, 0.4);
   overflow-wrap: anywhere;
   cursor: pointer;
+  /* At least 24px tall on every screen (#1256, WCAG 2.5.8); 44px on a phone, below. */
+  min-height: 24px;
 }
 .rail-link:hover {
   color: var(--accent-hi);
@@ -3746,7 +3849,7 @@ button.rail-tile:hover {
 }
 .alt-picker-head input {
   background: #0f1214;
-  border: 1px solid #343b41;
+  border: 1px solid var(--dim);
   padding: 7px 10px;
   min-width: min(280px, 100%);
 }
@@ -3774,7 +3877,7 @@ button.rail-tile:hover {
 }
 .alt-filters input[type='search'] {
   background: #0f1214;
-  border: 1px solid #343b41;
+  border: 1px solid var(--dim);
   padding: 7px 10px;
   min-width: min(280px, 100%);
 }
@@ -3930,7 +4033,7 @@ button.rail-tile:hover {
 }
 .owned-alt-tools input[type='search'] {
   background: #0f1214;
-  border: 1px solid #343b41;
+  border: 1px solid var(--dim);
   padding: 7px 10px;
   min-width: min(280px, 100%);
 }
@@ -4647,7 +4750,7 @@ button.rail-tile:hover {
 .field select,
 .inline-form select {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0f1214;
   box-shadow: inset 0 1px 0 #2d343a;
   padding: 10px 12px;
@@ -5252,7 +5355,7 @@ button.rail-tile:hover {
 }
 .rate-picker #rate-filter {
   background: #0f1214;
-  border: 1px solid #343b41;
+  border: 1px solid var(--dim);
   padding: 7px 10px;
   min-width: min(280px, 100%);
   margin: 0 0 12px;
@@ -6062,7 +6165,9 @@ button.rail-tile:hover {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+/* ↑ and ↓ are at least 24px wide (#1256, WCAG 2.5.8): 14px before. */
 .task-tools .btn.quiet {
+  min-width: 24px;
   padding: 2px 4px;
   font-size: 11px;
 }
@@ -6139,7 +6244,7 @@ button.rail-tile:hover {
   width: 100%;
   margin: 8px 0 12px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: var(--bg2);
   color: var(--ink);
   font: inherit;
@@ -6257,7 +6362,7 @@ button.rail-tile:hover {
   width: 100%;
   min-height: 110px;
   margin-top: 7px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0f1214;
   color: var(--ink);
   padding: 10px 12px;
@@ -6344,13 +6449,15 @@ button.rail-tile:hover {
 }
 .assign-row input {
   min-width: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0f1214;
   color: var(--ink);
   padding: 6px 8px;
   font-size: 12px;
 }
+/* A factory's ✕ per group is at least 24px wide on every screen (#1256): 12px before. */
 .assign-row .btn.quiet.danger {
+  min-width: 24px;
   color: var(--red);
   border-bottom-color: rgba(224, 85, 58, 0.5);
 }
@@ -6378,7 +6485,7 @@ button.rail-tile:hover {
 }
 .assign-editor select {
   min-width: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0f1214;
   color: var(--ink);
   padding: 7px 9px;
@@ -7411,7 +7518,7 @@ th.resource-cell {
 }
 .used-input {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--dim);
   background: #0f1214;
   box-shadow: inset 0 1px 0 #2d343a;
   padding: 8px 10px;
