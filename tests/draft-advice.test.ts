@@ -260,3 +260,59 @@ test('a draft that measured nothing gets no advice, whatever its reason says', (
     ['budget', 'time', 'alternates', 'sam'],
   );
 });
+
+test('a cap draft offers to raise the cap and words its other options by the cap (#1221, #1020)', () => {
+  const capped: StoredStage = {
+    feasible: false,
+    reason: "Without the cap, this phase's plan needs 920.5 MW; the cap is 700 MW.",
+    capShortfalls: [{ name: 'mw', needed: 920.5, cap: 700 }],
+    minHours: 10.5,
+  };
+  const options = levers(capped);
+  assert.deepEqual(
+    options.map(lever => lever.id),
+    ['phaseCap', 'time'],
+  );
+  assert.deepEqual(options[0], {
+    id: 'phaseCap',
+    text: "Raise the cap per phase (Goals): without it, this phase's plan needs 920.5 MW (the cap is 700 MW).",
+    step: 3,
+    label: 'Change the caps in Edit settings →',
+  });
+  assert.match(
+    options[1]!.text,
+    /^More time: raise “Hours per phase” \(Goals\) to at least 10[.,]5 h; this phase may fit within the cap from there\.$/,
+  );
+  assert.doesNotMatch(options.map(lever => lever.text).join(' '), /budget/);
+  // Without minHours (more time does not help) the cap is the only option.
+  const { minHours: _hours, ...stuck } = capped;
+  assert.deepEqual(
+    levers(stuck).map(lever => lever.id),
+    ['phaseCap'],
+  );
+  // Two caps, one only whole machines break.
+  const whole = levers({
+    feasible: false,
+    reason: 'Whole machines break the caps.',
+    wholeMachinesOnly: true,
+    capShortfalls: [
+      { name: 'buildings', needed: 104, cap: 100 },
+      { name: 'mw', needed: 950, cap: 900 },
+    ],
+  });
+  assert.equal(
+    whole[0]!.text,
+    "Raise the caps per phase (Goals): without them, this phase's plan needs 104 buildings (the cap is 100 buildings) and 950 MW (the cap is 900 MW).",
+  );
+  assert.equal(
+    whole.find(lever => lever.id === 'whole')!.text,
+    'Keep the caps instead: untick “Whole machines” (Goals). Exact clocks keep within them, with one adjustable machine per production line.',
+  );
+  // A build-cost draft over a cap as well (#1229): the budgets' wording stays, with the cap's lever.
+  const both = levers({ ...draft(), capShortfalls: [{ name: 'mw', needed: 48387.9, cap: 1000 }] });
+  assert.ok(both.some(lever => lever.id === 'phaseCap'));
+  assert.match(
+    both.find(lever => lever.id === 'time')!.text,
+    /this phase fits the current budgets from there\.$/,
+  );
+});

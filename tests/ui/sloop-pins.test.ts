@@ -145,6 +145,16 @@ test('a count that does not fill whole machines is refused with why, before anyt
   );
   assert.equal(field.getAttribute('aria-invalid'), 'true');
   assert.equal($('[data-sloop-pin-error]')!.getAttribute('role'), 'alert');
+  // A machine with one slot takes any whole number: no "multiple of 1" (#1020).
+  openCalculatedFactory(IRON_ROD);
+  await settle();
+  const rod = $<HTMLInputElement>(`[data-sloop-pin="${IRON_ROD}"]`)!;
+  assert.equal(rod.step, '1');
+  rod.value = '2.5';
+  $<HTMLButtonElement>('[data-sloop-pin-save]')!.click();
+  await settle();
+  assert.deepEqual(calls, [], 'still nothing is sent');
+  assert.equal(text('[data-sloop-pin-error]'), 'Pin a whole number from 0 to 106.');
 });
 
 test('no pin control without a budget, before Phase 3 or in New to Satisfactory mode', async () => {
@@ -252,6 +262,13 @@ test('pins over the budget are named on the notice; a pin the plan could not kee
     text('[data-sloop-pin-note]'),
     /^Pinned to 24 somersloops, but Phase 3 could not keep the pin: the phase’s pins add up to more than the 20 somersloops production amplification may place in a phase\. The phase is planned without it\. Raise the amplification budget/,
   );
+  // The note is in the line's dialog, so it says "here", not "in the production line’s dialog"
+  // (#1020).
+  assert.match(
+    text('[data-sloop-pin-note]'),
+    /or lower or clear this pin here \(or the phase’s other pins in their production lines’ dialogs\)\.$/,
+  );
+  assert.doesNotMatch(text('[data-sloop-pin-note]'), /in the production line’s dialog/);
 });
 
 test('Edit settings starts from the pins asked for, so its recalculation plans them', async () => {

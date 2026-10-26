@@ -216,6 +216,6 @@ export function pinNote(
     return 'The planner chooses how many somersloops this line takes. A pin fixes it in the next recalculation, and the planner places the rest of the phase’s budget itself.';
   const drop = droppedPin(plan, phase, recipe);
   if (drop)
-    return `Pinned to ${pinWords(planned)}, but Phase ${phase} could not keep the pin: ${pinReasonWords(drop.reason, plan.settings.amplifySloops ?? 0)}. The phase is planned without it. ${pinRemedyWords(drop.reason)}`;
+    return `Pinned to ${pinWords(planned)}, but Phase ${phase} could not keep the pin: ${pinReasonWords(drop.reason, plan.settings.amplifySloops ?? 0)}. The phase is planned without it. ${pinRemedyWords(drop.reason, true)}`;
   return `Pinned to ${pinWords(planned)}: the plan keeps it exactly, and the planner places the rest of the phase’s budget itself.`;
 }

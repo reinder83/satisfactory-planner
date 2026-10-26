@@ -36,8 +36,12 @@ const stages: Record<string, StoredStage> = {
 };
 const overBudget = new Set(['short', 'power', 'hours', 'whole']);
 
-// The bold heading of each warning notice on the page.
-const headings = () => $$('.notice.warn > b:first-child').map(b => (b.textContent || '').trim());
+// The bold heading of each warning notice on the page; Build sequence's repeat of the draft's
+// heading (#1020, data-draft-steps) is left out, as tests/ui/plan-tabs.test.ts covers it.
+const headings = () =>
+  $$('.notice.warn:not([data-draft-steps]) > b:first-child').map(b =>
+    (b.textContent || '').trim(),
+  );
 
 // The wizard opens over an open save, as boot() leaves one, and the frame around it reads it;
 // each test opens its own rather than relying on one an earlier test opened (#864).
@@ -150,4 +154,47 @@ test('an unconfirmed whole-machine draft amount reads "at least"', () => {
   assert.match(budget(), /Crude Oil to at least 8.081\sm/);
   delete snapshot.shortfalls![0]!.atLeast;
   assert.match(budget(), /Crude Oil to about 8.081\sm/);
+});
+
+// A cap draft with no time that fits (#1221: more time does not help) carries `capShortfalls`
+// alone; it is named as the cap it is, on the plan page and in Review, with the cap's lever (#1020).
+test('a cap draft without minHours is headed by its cap and offers to raise it', () => {
+  const cap: StoredStage = {
+    feasible: false,
+    reason:
+      "Without the cap, this phase's plan needs 4,141.4 MW; the cap is 900 MW. The planner found no plan within the cap. Raise the cap (Goals).",
+    capShortfalls: [{ name: 'mw', needed: 4141.4, cap: 900 }],
+  };
+  const plan = generated();
+  plan.stages['3'] = cap as (typeof plan.stages)['3'];
+  open({ calculated: plan });
+  go('plan');
+  render();
+  assert.deepEqual(headings(), ['Planning draft — cap exceeded.']);
+  assert.deepEqual(
+    $$<HTMLElement>('[data-draft-lever]').map(item => item.dataset.draftLever),
+    ['phaseCap'],
+  );
+  assert.ok($$('[data-draft-lever="phaseCap"] [data-draft-edit="3"]').length, 'opens step 3');
+  setWizard({
+    step: 5,
+    saveId: null,
+    saveName: 'World',
+    name: '',
+    settings: structuredClone(plan.settings),
+    preview: {
+      ...plan,
+      settings: { ...plan.settings, phase: '1' },
+      stages: { ...plan.stages, 5: cap as (typeof plan.stages)['5'] },
+    },
+    carryFrom: null,
+    carry: Object.fromEntries(carryOptions.map(([k]) => [k, true])),
+    mode: 'advanced',
+    guidedStep: 1,
+    guidedAsk: null,
+    tutorial: 'doing',
+  });
+  go('wizard');
+  render();
+  assert.ok(headings().includes('Phase 5 — cap exceeded:'), headings().join(' | '));
 });

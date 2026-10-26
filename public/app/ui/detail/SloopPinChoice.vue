@@ -97,7 +97,11 @@ function pin(event: Event) {
   const field = document.getElementById(current.inputId) as HTMLInputElement | null;
   const sloops = Number(field?.value ?? '');
   if (!field || field.value.trim() === '' || !validPin(sloops, current.slots)) {
-    error.value = `Pin a whole number of machines: a multiple of ${current.slots} from 0 to ${current.max}.`;
+    // A machine with one slot takes any whole number (#1020): "a multiple of 1" says nothing.
+    error.value =
+      current.slots === 1
+        ? `Pin a whole number from 0 to ${current.max}.`
+        : `Pin a whole number of machines: a multiple of ${current.slots} from 0 to ${current.max}.`;
     field?.focus();
     return;
   }

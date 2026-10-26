@@ -15,7 +15,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { calculate, catalog, settings } from '../planner.ts';
-import { ownedBeltsWords } from '../public/mining.ts';
+import { equipmentWords, miningStep, ownedBeltsWords } from '../public/mining.ts';
 import {
   BELT_CAP_MARKS,
   BELT_MARKS,
@@ -381,4 +381,21 @@ test('both editions create the same plan from the same request, and refuse an in
       return true;
     });
   }
+});
+
+test('under a low belt cap the mining step names the clock the belt allows, not 250% (#1020)', () => {
+  const words = (beltCap?: number) => {
+    const config = { ...settings({ phase: '3', phaseMining: true }), ...(beltCap ? { beltCap } : {}) };
+    const stage = { mining: phaseMining(config, 4), raw: { 'Iron Ore': 900 } };
+    return { equipment: equipmentWords(stage.mining), body: miningStep(stage, '4', config)!.body };
+  };
+  // Mk.2 belts carry 120/min: an impure node, the poorest, gives that at 100%.
+  const low = words(2);
+  assert.match(low.equipment, /^Miner Mk\.3 at up to 100% \(what a Mk\.2 belt carries\) · Mk\.2 belts/);
+  assert.match(low.body, /^Phase 4 mines with Miner Mk\.3 at up to 100% \(what a Mk\.2 belt carries\) and carries on Mk\.2 belts/);
+  assert.doesNotMatch(low.body, /250%/);
+  assert.match(words(3).equipment, /^Miner Mk\.3 at up to 225% \(what a Mk\.3 belt carries\)/);
+  // A belt that carries an impure node at 250%: the phase's clock, as before.
+  assert.match(words(4).equipment, /^Miner Mk\.3 at 250% · Mk\.4 belts/);
+  assert.match(words().equipment, /^Miner Mk\.3 at 250% · Mk\.5 belts/);
 });

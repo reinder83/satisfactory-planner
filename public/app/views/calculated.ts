@@ -454,17 +454,25 @@ import { listNames } from '../../wording.ts';
 export const andList = listNames;
 
 // Whether the planner measured a budget problem for infeasible stage `snapshot`: shortfalls, the
-// hours it would fit in, or whole machines breaking it. draftHeading and the wizard Review's
-// Budget column (ui/wizard/ReviewStep.vue) name a budget only then (#626, #632).
+// hours it would fit in, whole machines breaking it, or a cap per phase it needs more than (#1221,
+// `capShortfalls`, which a cap draft without `minHours` has alone, #1020). draftHeading and the
+// wizard Review's Budget column (ui/wizard/ReviewStep.vue) name a budget or cap only then (#626,
+// #632).
 export function budgetMeasured(snapshot: StoredStage): boolean {
-  return Boolean(snapshot.shortfalls || snapshot.minHours || snapshot.wholeMachinesOnly);
+  return Boolean(
+    snapshot.shortfalls ||
+      snapshot.minHours ||
+      snapshot.wholeMachinesOnly ||
+      snapshot.capShortfalls?.length,
+  );
 }
 
 // The bold heading over an infeasible phase `snapshot`'s reason: the plan page's draft notice
 // (ui/plan/CalcWarnings.vue), or with `phase` the wizard's Review (ui/wizard/ReviewStep.vue).
 // It names a budget only when the planner measured one (shortfalls, the hours it would fit in,
-// or whole machines breaking it), or a cap per phase when that is what it measured (#1221). A stopped search, recipes that cannot make the goal and an
-// older snapshot carry none of those, so the heading stays neutral and the reason says why (#626).
+// or whole machines breaking it), or a cap per phase when that is what it measured (#1221). A
+// stopped search, recipes that cannot make the goal and an older snapshot carry none of those, so
+// the heading stays neutral and the reason says why (#626).
 export function draftHeading(snapshot: StoredStage, phase?: string): string {
   // A cap per phase (#1221) that no budget shortfall comes with is named as the cap it is.
   const what = snapshot.capShortfalls?.length && !snapshot.shortfalls?.length ? 'cap' : 'budget';
