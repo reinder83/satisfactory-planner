@@ -125,7 +125,7 @@ The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs
 
 The build plan opens on **Build sequence**: the steps, with the Space Elevator delivery beside them. **Overview** has the phase's figures (production lines running, storage verified, power and delivery time, each a link to its page) and its notices; a number on the tab counts the notices that ask for something, such as a recalculation, power still short or the next phase, and goes once you act on them or dismiss them. **Hard drives** has Best next hard drive and **Somersloops** where a somersloop pays off most. A tab with nothing to show for the phase is left out. Arrow keys move between the tabs.
 
-When you tick a step on the build plan, or press **Mark done**, it is saved at once but stays where it is for a few seconds before it moves into **Done**, so the next step never slides under your pointer. A short message says what you finished, how many steps of the phase are done and which step is next, with **Undo** (or Ctrl+Z, ⌘Z on a Mac) to untick it again.
+When you tick a step on the build plan, or press **Mark done**, it is saved at once but stays where it is for a few seconds before it moves into **Done**, so the next step never slides under your pointer. A short message says what you finished, how many steps of the phase are done and which step is next, with **Undo** (or Ctrl+Z, ⌘Z on a Mac) to untick it again. Undo only ever unticks the step in the profile you ticked it in: opening another profile or signing out takes the message and its Undo away.
 
 ## Storage room and notes
 

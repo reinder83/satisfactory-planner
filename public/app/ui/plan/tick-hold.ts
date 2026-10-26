@@ -16,7 +16,7 @@
 // prefers-reduced-motion they go at once.
 import { nextTick } from 'vue';
 import { save, toast } from '../../api.ts';
-import { checked, stage } from '../../session.ts';
+import { checked, onProfile, profileScope, stage, type ProfileScope } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { filteredPlanTasks, idleStepNotes, planTasks, stepDone } from '../../tasks.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
@@ -148,16 +148,18 @@ export function tickNews(id: string, title: string, done: boolean) {
 }
 
 // Says what a tick did and offers Undo: the step unticked through the normal save path, focus on
-// its checkbox, wherever it is drawn by then.
+// its checkbox, wherever it is drawn by then. Only on the profile it was ticked on (#1166): the
+// profiles of a save share step ids, so once another one is open Undo does nothing there.
 export function announceTick(id: string, title: string) {
+  const profile = profileScope();
   toast(tickNews(id, title, true), false, {
     label: 'Undo',
-    run: () => void undoTick(id, title),
+    run: () => void undoTick(id, title, profile),
   });
 }
 
-async function undoTick(id: string, title: string) {
-  if (!checked(id)) return;
+async function undoTick(id: string, title: string, profile: ProfileScope) {
+  if (!onProfile(profile) || !checked(id)) return;
   letGo(id);
   try {
     await save({ type: 'check', key: id, value: false });

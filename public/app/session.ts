@@ -4,7 +4,7 @@
 import { readStoredData } from '../browser-store.ts';
 import { firstPlanPhase, milestoneOnlyPhase } from '../progression.ts';
 import { initialState } from '../state.ts';
-import { downloadJson, request, toast, writeQueue } from './api.ts';
+import { downloadJson, dropToastAction, request, toast, writeQueue } from './api.ts';
 import { required } from './format.ts';
 import { phaseToOpen } from './opening-phase.ts';
 import { render } from './shell.ts';
@@ -96,6 +96,19 @@ export let progressionData: Progression;
 export let workspace: WorkspaceSummary;
 export let currentSave: OpenSave;
 export let currentProfile: OpenProfile;
+
+// The save and profile open now, for an action offered later that must only ever reach them,
+// such as a toast's Undo (#1163, #1166): `onProfile` says whether they are still the ones open.
+export interface ProfileScope {
+  save: string;
+  profile: string;
+}
+export const profileScope = (): ProfileScope => ({
+  save: currentSave.id,
+  profile: currentProfile.id,
+});
+export const onProfile = (scope: ProfileScope) =>
+  currentSave?.id === scope.save && currentProfile?.id === scope.profile;
 // The open profile's frozen calculated plan; null only while no save is open (the empty
 // workspace's placeholder profile).
 export let calculated: StoredCalculatedPlan | null = null;
@@ -389,6 +402,9 @@ export const phaseLabel = (phaseKey: string) =>
 // writes queued there name the plan they were made on and are refused (checkPlan). The tab
 // remembers what it opened (rememberTab), so a reload opens it again (#1052).
 export async function loadContext(saveId: string, profileId: string, afterWrites = true) {
+  // A toast's Undo belongs to the profile it was offered on (#1166): opening another one (the
+  // profile switcher, the profiles page, a new profile) takes it away with its toast.
+  if (!onProfile({ save: saveId, profile: profileId })) dropToastAction();
   if (afterWrites) await writeQueue;
   setContext(
     await request<ContextReply>(
@@ -576,6 +592,8 @@ export const calcStage = () => (milestoneOnly() ? undefined : calculated?.stages
 // Signed out: shows the sign-in screen. No saves yet: opens the wizard with a blank
 // placeholder save/profile. Otherwise opens the active save and renders the routed view.
 export async function boot() {
+  // Signing in or out, an import or a removed profile starts again: no toast's Undo carries over.
+  dropToastAction();
   try {
     workspace = await request<WorkspaceSummary>('/api/workspace');
     if (!workspace.user) {
