@@ -12,7 +12,8 @@
   recalculation would change (lineClockNote in app/exact-clocks.ts, #1066).
   The chip at the top says whether it runs, runs from the phase before with how many machines
   (#1069), or is held back by a missing supplier with the
-  reason above the footer (RunningChip.vue, SP-15); it follows the Running box.
+  reason above the footer (RunningChip.vue, SP-15); it follows the Running box. The box is named
+  "Running: <line name>" (#1254), so the page's many Running boxes can be told apart.
   Under the "Not running" or "Running" filter a tick takes the card off the page once it is
   saved; focus then goes to the Running box of the card that takes its place (ui/refocus.ts),
   else the chosen filter chip, never to <body> (#1019).
@@ -188,6 +189,7 @@ const card = computed(() =>
         ><input
           type="checkbox"
           :data-check="card.check"
+          :aria-label="'Running: ' + row.name"
           @change="tickRunning"
           :checked="card.done"
         />Running</label
