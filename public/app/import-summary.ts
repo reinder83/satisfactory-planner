@@ -16,11 +16,14 @@
 // "Steps done" counts a plan's build-plan steps over every phase the profile offers, ticked or
 // done by their own condition, as the profile card's progress bar does (profilePhases in
 // state/summary.ts). A profile without a plan (an export from before the original profile type
-// was retired) has its ticks counted instead.
+// was retired) has its ticks counted instead. Ticks of keys no build-plan step has (the storage
+// room's containers among them, which the profile card's "1 check complete" counts too) are
+// added (#1219): "+ 3 other ticks" on a profile's line when it has any, and "; 3 other ticks now,
+// 0 in the file" to a restore's comparison when the backup has another number of them.
 //
 // This module reads no session state, so the node tests import it; the Backup page
 // (ui/pages/BackupPage.vue) hands it the workspace, the open profile and progression.json.
-import { profilePhases, validateState } from '../state.ts';
+import { planStepIds, profilePhases, validateState } from '../state.ts';
 import { labelImport, localStamp, validateTransfer } from '../transfer.ts';
 import { restoreProgress } from '../handbook-migration.ts';
 import { plural } from './format.ts';
@@ -65,8 +68,11 @@ export function profileProgressText(
   const phase = context.phaseLabel(state.settings.phase);
   const steps = stepsDone(plan, state, context.progression);
   if (!steps) return `${phase}, ${Object.values(state.checks).filter(Boolean).length} ticked`;
-  return `${phase}, ${steps.done} of ${plural(steps.total, 'step')} done`;
+  return `${phase}, ${steps.done} of ${plural(steps.total, 'step')} done${otherWords(steps.other)}`;
 }
+
+// " + 3 other ticks" for ticks outside the build-plan steps, nothing for none.
+const otherWords = (other: number) => (other ? ` + ${plural(other, 'other tick')}` : '');
 
 // The build-plan steps of `plan` done in `state`, over every phase the profile offers: the counts
 // of profilePhases with no phase worked on, which gives every phase its steps.
@@ -74,7 +80,7 @@ function stepsDone(
   plan: StoredCalculatedPlan | null | undefined,
   state: SavedState,
   progression: Progression | null | undefined,
-): { done: number; total: number } | null {
+): { done: number; total: number; other: number } | null {
   if (!plan || !progression) return null;
   const { settings: _working, ...progress } = state;
   const phases = profilePhases(plan, progress, progression) || [];
@@ -86,7 +92,14 @@ function stepsDone(
     { done: 0, total: 0 },
   );
   // A plan without steps to count ("0 of 0") says nothing; its ticks are counted instead.
-  return steps.total ? steps : null;
+  if (!steps.total) return null;
+  // The ticks of keys none of those phases lists as a step.
+  const memo = {};
+  const listed = new Set(
+    phases.flatMap(entry => planStepIds(plan, progress, progression, entry.phase, memo)),
+  );
+  const other = Object.entries(state.checks).filter(([id, ticked]) => ticked && !listed.has(id));
+  return { ...steps, other: other.length };
 }
 
 const summaryRecord = (value: unknown): value is Record<string, unknown> =>
@@ -157,6 +170,11 @@ export interface RestoreTarget {
   state: ProgressState;
 }
 
+// "; 3 other ticks now, 0 in the file": the ticks outside the build-plan steps, only when the
+// backup has another number of them, so a restore that changes only those says so.
+const otherTicksCompared = (now: number, file: number) =>
+  now === file ? '' : `; ${plural(now, 'other tick')} now, ${file} in the file`;
+
 // "Restore this profile…": the question for a progress backup (or a bare state, which /api/import
 // takes too), after the server's checks of it. Its progress is counted as it would be restored
 // onto the open profile (restoreProgress, which re-keys a backup made before a migration from the
@@ -178,7 +196,8 @@ export function backupQuestion(
   const ticks = (state: SavedState) => Object.values(state.checks).filter(Boolean).length;
   const compared =
     now && after
-      ? `${now.done} of ${plural(now.total, 'step')} done now, ${after.done} in the file`
+      ? `${now.done} of ${plural(now.total, 'step')} done now, ${after.done} in the file` +
+        otherTicksCompared(now.other, after.other)
       : `${ticks(target.state)} ticked now, ${ticks(restored)} in the file`;
   const phaseNow = context.phaseLabel(target.state.settings.phase);
   const phaseAfter = context.phaseLabel(restored.settings.phase);

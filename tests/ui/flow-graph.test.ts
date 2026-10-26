@@ -896,3 +896,41 @@ test('a layout stored before #1240 opens as it was: its lines unmoved, inputs an
   await rest();
   assert.deepEqual(layoutSaves(calls), [], 'opening it saves nothing');
 });
+
+// At rest a label with no free spot on its curve stayed at its middle, over another label (#1019:
+// Phase 3's Oil & fuel campus had four such pairs). It is left out until its arrow is pointed at;
+// its value stays in the arrow's hover title and the table.
+test('at rest a label with no free spot is left out until its arrow is pointed at', async () => {
+  const OIL = 'fg-oilcp1';
+  await openGraph(OIL);
+  const edges = graphOf(OIL).edges.filter(edge => edge.path && !edge.quiet);
+  const crowded = edges.filter(edge => edge.label?.crowded);
+  assert.ok(crowded.length, 'the campus has labels with no free spot');
+  const label = (id: string) => $(`#detail [data-edge-label="${id}"]`)!;
+  for (const edge of crowded) assert.ok(label(edge.id).classList.contains('hidden'), edge.id);
+  for (const edge of edges.filter(other => !other.label?.crowded))
+    assert.ok(!label(edge.id).classList.contains('hidden'), edge.id);
+  const [first] = crowded as [(typeof crowded)[number]];
+  const hit = $(`#detail [data-edge-hit="${first.id}"]`)!;
+  assert.ok(hit.querySelector('title')!.textContent!.includes(first.rateText));
+  hit.dispatchEvent(new Event('pointerenter'));
+  await nextTick();
+  assert.ok(label(first.id).classList.contains('lit'), 'shown while pointed at');
+  hit.dispatchEvent(new Event('pointerleave'));
+  await nextTick();
+  assert.ok(label(first.id).classList.contains('hidden'));
+});
+
+// A box the keyboard focuses at the scroll box's edge is brought into view (#1019), as one the
+// arrow keys move is.
+test('a box the keyboard focuses is scrolled into view', async () => {
+  await openGraph();
+  const box = sizedBox(400, 300);
+  const far = graphOf().nodes.find(node => node.x + node.width > 600)!;
+  assert.ok(far, 'a box beyond the right edge');
+  assert.equal(box.scrollLeft, 0);
+  $<SVGGElement>(`#detail [data-node="${far.id}"]`)!.focus();
+  await settle();
+  assert.ok(box.scrollLeft > 0, String(box.scrollLeft));
+  assert.ok(far.x >= box.scrollLeft && far.x + far.width <= box.scrollLeft + 400);
+});

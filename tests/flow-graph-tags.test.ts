@@ -274,7 +274,8 @@ test('spread labels slide along their own curve to the first free spot, and one 
   assert.ok(Math.abs(b.x - 450) >= 100 && Math.abs(c.x - 450) >= 100);
   assert.ok(Math.abs(b.x - c.x) >= 100);
   for (const spot of [b, c]) assert.equal(spot.y, 100);
-  // A short curve with no room: left out when lit, kept at the middle at rest.
+  // A short curve with no room: left out when lit; at rest kept at the middle, marked crowded
+  // (the dialog leaves it out until pointed at, #1019), taking no room from the labels after it.
   const short: GraphCurve = {
     from: { x: 100, y: 50 },
     c1: { x: 110, y: 50 },
@@ -286,7 +287,19 @@ test('spread labels slide along their own curve to the first free spot, and one 
   assert.ok(lit.get('x'));
   assert.equal(lit.get('y'), null);
   const rest = spreadLabels(crowd, 30, [], true);
-  assert.deepEqual(rest.get('y'), { x: 115, y: 50, curve: short });
+  assert.deepEqual(rest.get('x'), { x: 115, y: 50, curve: short });
+  assert.deepEqual(rest.get('y'), { x: 115, y: 50, curve: short, crowded: true });
+  const below: GraphCurve = {
+    from: { x: 400, y: 60 },
+    c1: { x: 410, y: 60 },
+    c2: { x: 420, y: 60 },
+    to: { x: 430, y: 60 },
+  };
+  const wide = [...crowd, { id: 'z', width: 100, curves: [below] }].map(label =>
+    label.id === 'y' ? { ...label, width: 700 } : label,
+  );
+  // y, 700 wide at the middle of its curve, would cover z; crowded, it leaves z its middle.
+  assert.deepEqual(spreadLabels(wide, 30, [], true).get('z'), { x: 415, y: 60, curve: below });
   // Top to bottom: the higher label keeps its middle even when given last.
   const high: GraphCurve = { ...short, from: { x: 100, y: 40 }, c1: { x: 110, y: 40 } };
   const order = spreadLabels(

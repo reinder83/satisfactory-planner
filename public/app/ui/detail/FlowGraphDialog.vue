@@ -30,7 +30,9 @@
   the quiet ones too (a line's arrows to storage and the sink since #1242, and every arrow into
   storage or the sink), and the lit labels are spread so none overlap (spreadLabels,
   graph-labels.ts); one with no room is left out, its value in its arrow's hover title and the
-  table. Every box and tag takes focus and is named.
+  table. At rest a label with no free spot on its curve is left out too (`crowded`, #1019), until
+  its arrow is pointed at or its box lit. Every box and tag takes focus and is named; a box the
+  keyboard focuses is scrolled into view, as one it moves is.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -177,7 +179,7 @@ const arrowOf = (edge: GraphEdge) =>
 const edgeTitle = (edge: GraphEdge) =>
   `${edge.item}: ${edge.rateText} from ${edge.fromText} to ${edge.toText}`;
 // Where an arrow's label is drawn, and how: lit and spread, faded with its arrow, hidden (a quiet
-// arrow's not lit or pointed at, or a lit label with no room), or as it is at rest.
+// or crowded arrow's not lit or pointed at, or a lit label with no room), or as it is at rest.
 function labelOf(edge: GraphEdge): { x: number; y: number; state: string } {
   // Every drawn arrow has its label (placeEdgeLabels).
   const rest = edge.label!;
@@ -186,7 +188,8 @@ function labelOf(edge: GraphEdge): { x: number; y: number; state: string } {
     const spot = on.labels.get(edge.id);
     return spot ? { x: spot.x, y: spot.y, state: 'lit' } : { ...rest, state: 'hidden' };
   }
-  if (edge.quiet) return { ...rest, state: hoveredEdge.value === edge.id ? 'lit' : 'hidden' };
+  if (edge.quiet || rest.crowded)
+    return { ...rest, state: hoveredEdge.value === edge.id ? 'lit' : 'hidden' };
   return { ...rest, state: on ? 'faded' : '' };
 }
 // The tags of the line with box `node`, and where each sits (its top-left corner).
@@ -294,6 +297,13 @@ async function keepInView(node: string) {
     el.scrollTop,
     el.clientHeight,
   );
+}
+// A box the keyboard focuses lights up its arrows and is brought into view (#1019): a focused box
+// of the drawing at the scroll box's edge stayed where it was. Focus from a press leaves the scroll
+// alone, so a drag starts where it was pressed.
+function onNodeFocus(e: FocusEvent, node: GraphNode) {
+  activeNode.value = node.id;
+  if ((e.currentTarget as Element).matches(':focus-visible')) void keepInView(node.id);
 }
 // Enter or Space opens a focused line; an arrow key moves a focused box (a line's, an input's or an
 // output's, #1240) a grid step, Shift by a bigger one.
@@ -460,7 +470,7 @@ async function resetLayout() {
               @keydown="onNodeKey($event, node)"
               @pointerenter="activeNode = node.id"
               @pointerleave="leaveNode(node.id)"
-              @focus="activeNode = node.id"
+              @focus="onNodeFocus($event, node)"
               @blur="leaveNode(node.id)"
             >
               <rect :width="node.width" :height="node.height" />

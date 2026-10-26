@@ -25,7 +25,7 @@ import {
 } from '../public/app/sloop-pins.ts';
 import { settingsChanges } from '../public/app/profile-edit.ts';
 import { checkBase, mutate, newProfileState, shareState, validateState } from '../public/state.ts';
-import { validateTransfer } from '../public/transfer.ts';
+import { importableTransfer, validateTransfer } from '../public/transfer.ts';
 import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
@@ -481,4 +481,95 @@ test('every amplifiable recipe takes a pin of one machine, and no other recipe d
     if (slots) assert.deepEqual(pin().sloopPins, { '3': { [recipe.id]: slots } }, recipe.id);
     else assert.throws(pin, /Invalid somersloop pins/, recipe.id);
   }
+});
+
+// A hand-edited file with a pin on a recipe the game data does not have (or one production
+// amplification cannot amplify) made every recalculation of the profile fail until the pin was
+// cleared, which no line offers. An import drops those pins, from the progress and the plan's
+// settings, and keeps the rest; a file without pins never loads the recipes.
+test('an import drops pins on unknown or unamplifiable recipes and keeps the rest', async () => {
+  const plan = json(
+    JSON.parse(
+      await fs.readFile(
+        new URL('./fixtures/calculated-plan-2026-09-12.json', import.meta.url),
+        'utf8',
+      ),
+    ) as StoredCalculatedPlan,
+  );
+  const SMELTER = 'Recipe_IngotIron_C';
+  assert.equal(amplifySlots(DATA.recipes.find(recipe => recipe.id === SMELTER)!), 1);
+  // A Packager recipe: its machine takes no somersloops.
+  const UNAMPLIFIED = DATA.recipes.find(recipe => !amplifySlots(recipe))!.id;
+  const file = (state: object, settingsPins?: SloopPins): SaveExport => ({
+    format: 'satisfactory-planner-saves',
+    version: 1,
+    exportedAt: '2026-10-26T08:00:00.000Z',
+    saves: [
+      {
+        id: 's1',
+        name: 'World',
+        activeProfile: 'p1',
+        profiles: [
+          {
+            id: 'p1',
+            name: 'Pinned',
+            kind: 'calculated',
+            plan: { ...plan, settings: { ...plan.settings, sloopPins: settingsPins } },
+            state: { ...json(version24), ...state },
+          },
+        ],
+      },
+    ],
+  });
+  const recipes = async () => ({ recipes: DATA.recipes, pureLimits: catalog().pureLimits });
+  const edited = file(
+    {
+      sloopPins: {
+        '3': { Recipe_Hand_Edited_C: 4 },
+        '4': { Recipe_ModularFrameHeavy_C: 4, [UNAMPLIFIED]: 0, Recipe_Hand_Edited_C: 2 },
+      },
+    },
+    { '3': { Recipe_Hand_Edited_C: 1 }, '4': { [SMELTER]: 2 } },
+  );
+  const imported = (await importableTransfer(json(edited), recipes)).saves[0]!.profiles[0]!;
+  assert.deepEqual(imported.state.sloopPins, { '4': { Recipe_ModularFrameHeavy_C: 4 } });
+  assert.deepEqual(imported.plan!.settings.sloopPins, { '4': { [SMELTER]: 2 } });
+  // Nothing known left: the progress keeps an empty map (no pins asked for), the plan no field.
+  const unknownOnly = file(
+    { sloopPins: { '3': { Recipe_Hand_Edited_C: 4 } } },
+    {
+      '5': { Recipe_Hand_Edited_C: 4 },
+    },
+  );
+  const cleared = (await importableTransfer(json(unknownOnly), recipes)).saves[0]!.profiles[0]!;
+  assert.deepEqual(cleared.state.sloopPins, {});
+  assert.equal('sloopPins' in cleared.plan!.settings, false);
+  // Pins it knows import as they are; a file without pins never loads the recipes.
+  const known = (await importableTransfer(json(file({})), recipes)).saves[0]!.profiles[0]!;
+  assert.deepEqual(known.state.sloopPins, version24.sloopPins);
+  const unpinned = file({ sloopPins: undefined });
+  const kept = await importableTransfer(json(unpinned), async () => {
+    throw Error('not needed');
+  });
+  assert.equal('sloopPins' in kept.saves[0]!.profiles[0]!.state, false);
+  // The browser edition's import goes the same way.
+  const records = new Map<string, unknown>();
+  const api = createBrowserApi(
+    openBrowserStore(fakeIndexedDB(2, records), undefined, recipes),
+    calculate,
+    catalog(),
+    undefined,
+    recipes,
+  );
+  const summary = (await api('/api/import-saves', {
+    body: JSON.stringify(edited),
+  })) as WorkspaceSummary;
+  const stored = (
+    records.get('main') as {
+      saves: { profiles: { state: ProgressState; plan: StoredCalculatedPlan }[] }[];
+    }
+  ).saves.at(-1)!.profiles[0]!;
+  assert.ok(summary.saves.length);
+  assert.deepEqual(stored.state.sloopPins, { '4': { Recipe_ModularFrameHeavy_C: 4 } });
+  assert.deepEqual(stored.plan.settings.sloopPins, { '4': { [SMELTER]: 2 } });
 });

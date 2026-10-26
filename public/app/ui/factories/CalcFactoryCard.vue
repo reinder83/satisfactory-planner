@@ -13,6 +13,9 @@
   The chip at the top says whether it runs, runs from the phase before with how many machines
   (#1069), or is held back by a missing supplier with the
   reason above the footer (RunningChip.vue, SP-15); it follows the Running box.
+  Under the "Not running" or "Running" filter a tick takes the card off the page once it is
+  saved; focus then goes to the Running box of the card that takes its place (ui/refocus.ts),
+  else the chosen filter chip, never to <body> (#1019).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -41,12 +44,23 @@ import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
 import RunningChip from './RunningChip.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import type { CalcRow } from '../../../types/index.ts';
 
 // group is the factory group this card sits in, or null outside the groups.
 const props = withDefaults(defineProps<{ row: CalcRow; group?: string | null }>(), {
   group: null,
 });
+
+// The Running box: saved as every check is; focus lost with the card goes to the next card's box.
+async function tickRunning(event: Event) {
+  const refocus = refocusAfterRemoval(event.target, {
+    row: '#main .factory-card',
+    control: 'input[data-check]',
+    fallback: ['#factory-filter [aria-checked="true"]'],
+  });
+  if (await toggleCheck(event)) await refocus();
+}
 
 const card = computed(() =>
   legacy(() => {
@@ -174,7 +188,7 @@ const card = computed(() =>
         ><input
           type="checkbox"
           :data-check="card.check"
-          @change="toggleCheck"
+          @change="tickRunning"
           :checked="card.done"
         />Running</label
       >
