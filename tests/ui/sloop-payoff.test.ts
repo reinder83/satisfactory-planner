@@ -110,7 +110,7 @@ test('each line says what one amplified machine saves, best first', async () => 
   assert.deepEqual(plan, before, 'the plan is not changed');
 });
 
-test('a count stays with its machine, a rate with its item, at 390 px (#1020)', async () => {
+test('a count stays with its machine, a rate with its whole item name, at 390 px (#1020, #1019)', async () => {
   await show(ironPlan(), '3');
   // Ordinary spaces and the template's line breaks collapse; the non-breaking ones stay.
   const text = $('[data-sloop-line="Iron Plate"]')!
@@ -118,7 +118,7 @@ test('a count stays with its machine, a rate with its item, at 390 px (#1020)', 
     .trim();
   assert.equal(
     text,
-    '1\u00a0somersloop on Iron Plate: −1\u00a0Constructor, −30\u00a0Iron Ore/min, +1\u00a0MW',
+    '1\u00a0somersloop on Iron Plate: −1\u00a0Constructor, −30\u00a0Iron\u00a0Ore/min, +1\u00a0MW',
   );
 });
 

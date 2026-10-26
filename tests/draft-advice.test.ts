@@ -316,3 +316,29 @@ test('a cap draft offers to raise the cap and words its other options by the cap
     /this phase fits the current budgets from there\.$/,
   );
 });
+
+test('a build-cost draft with no budget shortfall words its time by the budgets, not the cap (#1019)', () => {
+  // No budget makes the buildings' parts in time (noBudgetWords): no shortfalls, minHours from the
+  // budgets, and its own plan over a cap as well.
+  const counted: StoredStage = {
+    feasible: false,
+    reason:
+      'Counting what its buildings cost to build, this phase does not fit in its 1 h. No budget makes them in that time, but it fits the current budgets at 3 h for this phase. Its plan is over the cap per phase too. Raise the cap (Goals) as well: the time above fits the budgets, not the cap.',
+    buildCost: { hours: 1, buildings: { Miner: 4 }, parts: { 'Iron Plate': 40 } },
+    capShortfalls: [{ name: 'mw', needed: 48387.9, cap: 1000 }],
+    minHours: 3,
+  };
+  const options = levers(counted);
+  assert.ok(options.some(lever => lever.id === 'phaseCap'));
+  assert.match(
+    options.find(lever => lever.id === 'time')!.text,
+    /to at least 3 h; this phase fits the current budgets from there\.$/,
+  );
+  assert.doesNotMatch(options.find(lever => lever.id === 'time')!.text, /cap/);
+  // The same figures without the build cost are the cap's draft, as before.
+  const { buildCost: _cost, ...capDraft } = counted;
+  assert.match(
+    levers(capDraft).find(lever => lever.id === 'time')!.text,
+    /this phase may fit within the cap from there\.$/,
+  );
+});

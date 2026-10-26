@@ -374,8 +374,9 @@ export function draftAdvice(
   // A cap per phase (#1221) the plan needs more than: raise it (#1020).
   const overCap = phaseCapLever(snapshot);
   if (overCap) levers.push(overCap);
-  // A draft about the caps alone words its other levers by them, not by budgets.
-  const capOnly = !!overCap && !shortfalls.length;
+  // A draft about the caps alone words its other levers by them, not by budgets; a build-cost
+  // draft (#1229) is about its build cost first, and its hours measure the budgets (#1019).
+  const capOnly = !!overCap && !shortfalls.length && !snapshot.buildCost;
   const capWord = (snapshot.capShortfalls?.length ?? 0) > 1 ? 'caps' : 'cap';
   // A belt cap (#1232) that holds this phase's nodes to a worse belt than its milestones (or a belt
   // the player has) give, while a mined resource that rides belts is short: a better belt lets

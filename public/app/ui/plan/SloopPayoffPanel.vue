@@ -35,9 +35,9 @@ const oneDecimal = (value: number | null | undefined) => localeNumber(value, 1);
 // How many raw resources a line names.
 const RAW_NAMED = 3;
 
-// A count and what it counts kept on one line at 390 px (#1020): the first space becomes a
-// non-breaking one, "−1 Constructor", "−340 Iron Ore/min", "+30 MW".
-const together = (words: string) => words.replace(' ', '\u00a0');
+// A count and what it counts kept on one line at 390 px (#1020): every space becomes a
+// non-breaking one, so a two-word name stays whole too (#1019): "−1 Constructor", "−340 Iron Ore/min".
+const together = (words: string) => words.replace(/ /g, '\u00a0');
 // "1 somersloop", "4 somersloops": what one amplified machine of the line takes.
 const sloopsWords = (entry: SloopPayoff) =>
   together(`${num(entry.sloops)} somersloop${entry.sloops === 1 ? '' : 's'}`);
