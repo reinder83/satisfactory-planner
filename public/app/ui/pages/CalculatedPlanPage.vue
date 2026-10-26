@@ -12,9 +12,17 @@
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
   "Built so far" (ui/plan/BuildStatusPanel.vue), what whole machines cost (ui/plan/RoundingCost.vue,
-  #1066) and the profile's assumptions. The best next hard drive (ui/plan/PayoffPanel.vue, the
-  hard-drive payoff table) sits above the checklist, after the handover (#1075), and where a
-  somersloop pays off most (ui/plan/SloopPayoffPanel.vue, #1215) right after it. Everything
+  #1066) and the profile's assumptions, the best next hard drive (ui/plan/PayoffPanel.vue, the
+  hard-drive payoff table, #1075) and where a somersloop pays off most
+  (ui/plan/SloopPayoffPanel.vue, #1215).
+
+  Tabs under the phase title sort them (#1243, ui/plan/plan-tabs.ts): Build sequence, which the
+  page opens on, holds the notices about which phase the steps are for (OpenedEarlierNotice,
+  MilestoneOnlyNotice), the checklist and the side column; Overview the warnings, the
+  recalculation offers, the summary line, the next phase or finish card, the handover and the
+  former lines; Hard drives the payoff table; Somersloops the somersloop ranking. A tab whose
+  panel draws nothing is left out, the tab list too when Build sequence is all that is left, and a
+  tab counts the notices in it that ask for something. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
   (#759) has no stage to read: its checklist is its milestones, with ui/plan/MilestoneOnlyNotice.vue
@@ -23,7 +31,7 @@
   about production.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, onMounted, onUpdated, ref } from 'vue';
 import { deliveryHoursLeft } from '../../delivered.ts';
 import { deliveryKey } from '../../../progression.ts';
 import { durationOfHours, num } from '../../format.ts';
@@ -66,6 +74,13 @@ import PayoffPanel from '../plan/PayoffPanel.vue';
 import SloopPayoffPanel from '../plan/SloopPayoffPanel.vue';
 import { powerView } from '../../../power.ts';
 import RoundingCost from '../plan/RoundingCost.vue';
+import {
+  PLAN_TABS,
+  tabContents,
+  tabKeyTarget,
+  type PlanTab,
+  type PlanTabContent,
+} from '../plan/plan-tabs.ts';
 
 // The summary's power line, from the one power model every page reads (powerView in
 // public/power.ts, #1064): what the phase has against what it needs, as the Resources page's bar
@@ -173,6 +188,59 @@ const page = computed(() =>
     };
   }),
 );
+
+// The open tab (#1243): Build sequence until another is picked, never stored.
+const active = ref<PlanTab>('build');
+const overviewPanel = ref<HTMLElement | null>(null);
+const hardDrivesPanel = ref<HTMLElement | null>(null);
+const sloopsPanel = ref<HTMLElement | null>(null);
+// What each panel drew, read after every redraw (null until the page is mounted).
+const contents = ref<Record<PlanTab, PlanTabContent> | null>(null);
+
+function measureTabs() {
+  const found = tabContents({
+    overview: overviewPanel.value,
+    'hard-drives': hardDrivesPanel.value,
+    somersloops: sloopsPanel.value,
+  });
+  if (JSON.stringify(found) !== JSON.stringify(contents.value)) contents.value = found;
+  // A tab that went empty (another phase, a notice dismissed) hands over to Build sequence.
+  if (!found[active.value].filled) active.value = 'build';
+}
+onMounted(measureTabs);
+onUpdated(measureTabs);
+
+const tabs = computed(() =>
+  PLAN_TABS.filter(([id]) => contents.value?.[id].filled ?? id === 'build').map(([id, label]) => ({
+    id,
+    label,
+    news: contents.value?.[id].news ?? 0,
+  })),
+);
+// No tab list for Build sequence alone (a milestone-only phase without notices).
+const tabbed = computed(() => tabs.value.length > 1);
+
+// A panel's attributes: a tab panel while there is a tab list, hidden unless its tab is open.
+const panelAttrs = (tab: PlanTab) => ({
+  id: 'plan-panel-' + tab,
+  role: tabbed.value ? 'tabpanel' : undefined,
+  'aria-labelledby': tabbed.value ? 'plan-tab-' + tab : undefined,
+  tabindex: tabbed.value ? 0 : undefined,
+  hidden: active.value !== tab || undefined,
+});
+
+// Arrow keys, Home and End move between the tabs and open the one they reach.
+function tabKey(event: KeyboardEvent) {
+  const at = tabs.value.findIndex(tab => tab.id === active.value);
+  const next = tabKeyTarget(event.key, at, tabs.value.length);
+  if (next === null) return;
+  event.preventDefault();
+  const target = tabs.value[next]!.id; // tabKeyTarget stays inside the list
+  active.value = target;
+  void nextTick(() =>
+    document.querySelector<HTMLButtonElement>(`[data-plan-tab="${target}"]`)?.focus(),
+  );
+}
 </script>
 
 <template>
@@ -183,70 +251,108 @@ const page = computed(() =>
       :subtitle="page.profileName"
     />
     <PlanEditBar />
-    <CalcWarnings />
-    <ExactClocksRecalc />
-    <SloopPinsRecalc />
-    <OwnedTicksNotice />
-    <PlanSummary v-if="!page.milestones" :items="page.summary" />
-    <NextPhase />
-    <div v-if="page.post" class="notice info" data-finish-card>
-      <b>{{ page.finished ? 'Project Assembly complete.' : 'After Phase 5.' }}</b> Post Phase 5 is
-      not a sixth phase: it has no Space Elevator delivery and no new production lines.<br />
-      Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
-      elevator exports as needed and sink spare parts.
+    <!-- A tab's count is part of its name as words ("Overview, 1 new"); the figure drawn beside
+         the label is hidden from a screen reader, as the storage room's floor tabs do. -->
+    <div
+      v-if="tabbed"
+      class="tabs plan-tabs"
+      role="tablist"
+      aria-label="Build plan"
+      data-plan-tabs
+      @keydown="tabKey"
+    >
+      <button
+        v-for="tab in tabs"
+        :id="'plan-tab-' + tab.id"
+        :key="tab.id"
+        type="button"
+        role="tab"
+        :class="['tab', tab.id === active ? 'active' : '']"
+        :aria-selected="tab.id === active ? 'true' : 'false'"
+        :aria-controls="'plan-panel-' + tab.id"
+        :tabindex="tab.id === active ? 0 : -1"
+        :data-plan-tab="tab.id"
+        @click="active = tab.id"
+      >
+        {{ tab.label
+        }}<template v-if="tab.news"
+          ><span class="count" aria-hidden="true" data-plan-tab-count>{{ tab.news }}</span
+          ><span class="visually-hidden">, {{ tab.news }} new</span></template
+        >
+      </button>
     </div>
-    <OpenedEarlierNotice />
-    <MilestoneOnlyNotice />
-    <HandoverSummary />
-    <FormerLines v-if="!page.milestones" />
-    <PayoffPanel />
-    <SloopPayoffPanel />
-    <div :class="page.milestones ? undefined : 'split'">
-      <section>
-        <div class="section-head">
-          <h2>Build sequence</h2>
-          <EditStepsToggle />
-        </div>
-        <PlanProgress />
-        <!-- A guided plan's steps are the guide's own (#466), not the startup, unlock and factory
-             steps this describes (#479). -->
-        <p v-if="page.guided" class="small muted" data-guided-intro>
-          Work through the steps in order and tick each one as it is done.
-        </p>
-        <p v-else-if="page.milestones" class="small muted" data-milestone-intro>
-          Mark each HUB milestone and MAM node as you complete it; these carry across phases.
-          Production starts in {{ page.start }}, so gather, handcraft or build a starter supply of
-          what each one costs.
-        </p>
-        <p v-else class="small muted">
-          Start with construction stock and currently available power. Mark HUB, MAM and recipe
-          unlocks as you complete them; these carry across phases. Milestone cost guidance updates
-          from production lines marked running. Full-phase production lines follow the startup and
-          unlock steps.
-        </p>
-        <p v-if="!page.milestones && !page.guided" class="small" data-session-link-row>
-          <a href="#session" data-session-link>Today's session: the next builds, printable →</a>
-        </p>
-        <Checklist />
-        <AddTaskForm placeholder="Add a task…" />
-        <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
-      </section>
-      <aside v-if="!page.milestones">
-        <section v-if="!page.milestones" class="panel">
-          <h2>Elevator delivery</h2>
-          <DeliveryCounter
-            v-for="delivery in page.deliveries"
-            :key="delivery.id"
-            :delivery="delivery"
-          />
+    <div v-bind="panelAttrs('build')" data-plan-panel="build">
+      <OpenedEarlierNotice />
+      <MilestoneOnlyNotice />
+      <div :class="page.milestones ? undefined : 'split'">
+        <section>
+          <div class="section-head">
+            <h2>Build sequence</h2>
+            <EditStepsToggle />
+          </div>
+          <PlanProgress />
+          <!-- A guided plan's steps are the guide's own (#466), not the startup, unlock and factory
+               steps this describes (#479). -->
+          <p v-if="page.guided" class="small muted" data-guided-intro>
+            Work through the steps in order and tick each one as it is done.
+          </p>
+          <p v-else-if="page.milestones" class="small muted" data-milestone-intro>
+            Mark each HUB milestone and MAM node as you complete it; these carry across phases.
+            Production starts in {{ page.start }}, so gather, handcraft or build a starter supply of
+            what each one costs.
+          </p>
+          <p v-else class="small muted">
+            Start with construction stock and currently available power. Mark HUB, MAM and recipe
+            unlocks as you complete them; these carry across phases. Milestone cost guidance updates
+            from production lines marked running. Full-phase production lines follow the startup and
+            unlock steps.
+          </p>
+          <p v-if="!page.milestones && !page.guided" class="small" data-session-link-row>
+            <a href="#session" data-session-link>Today's session: the next builds, printable →</a>
+          </p>
+          <Checklist />
+          <AddTaskForm placeholder="Add a task…" />
+          <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
         </section>
-        <BuildStatusPanel />
-        <RoundingCost :entries="page.rounding" />
-        <section class="panel">
-          <h2>Profile assumptions</h2>
-          <p v-for="(warning, i) in page.warnings" :key="i" class="small">{{ warning }}</p>
-        </section>
-      </aside>
+        <aside v-if="!page.milestones">
+          <section class="panel">
+            <h2>Elevator delivery</h2>
+            <DeliveryCounter
+              v-for="delivery in page.deliveries"
+              :key="delivery.id"
+              :delivery="delivery"
+            />
+          </section>
+          <BuildStatusPanel />
+          <RoundingCost :entries="page.rounding" />
+          <section class="panel">
+            <h2>Profile assumptions</h2>
+            <p v-for="(warning, i) in page.warnings" :key="i" class="small">{{ warning }}</p>
+          </section>
+        </aside>
+      </div>
+    </div>
+    <div ref="overviewPanel" v-bind="panelAttrs('overview')" data-plan-panel="overview">
+      <CalcWarnings />
+      <ExactClocksRecalc />
+      <SloopPinsRecalc />
+      <OwnedTicksNotice />
+      <PlanSummary v-if="!page.milestones" :items="page.summary" />
+      <NextPhase />
+      <div v-if="page.post" class="notice info" data-finish-card>
+        <b>{{ page.finished ? 'Project Assembly complete.' : 'After Phase 5.' }}</b> Post Phase 5 is
+        not a sixth phase: it has no Space Elevator delivery and no new production lines.<br />
+        Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
+        elevator exports as needed and sink spare parts.
+      </div>
+      <HandoverSummary />
+      <FormerLines v-if="!page.milestones" />
+    </div>
+    <div ref="hardDrivesPanel" v-bind="panelAttrs('hard-drives')" data-plan-panel="hard-drives">
+      <PayoffPanel />
+    </div>
+    <div ref="sloopsPanel" v-bind="panelAttrs('somersloops')" data-plan-panel="somersloops">
+      <SloopPayoffPanel />
     </div>
   </template>
 </template>

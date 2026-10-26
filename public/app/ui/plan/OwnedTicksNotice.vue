@@ -56,7 +56,9 @@ function recalculate(event: Event) {
 function dismiss(event: Event) {
   const shown = notice.value;
   if (!shown) return;
-  const refocus = refocusAfterRemoval(event.currentTarget, { fallback: ['#main h1'] });
+  const refocus = refocusAfterRemoval(event.currentTarget, {
+    fallback: ['[data-plan-tab="overview"]', '#main h1'],
+  });
   setTicksNoticeDismissed(shown.found);
   render();
   void refocus();

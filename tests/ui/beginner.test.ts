@@ -4,7 +4,6 @@
 // save's stock starts at "Nothing", and the build plan hides what whole machines cost and the
 // hard-drive payoff; switched off, everything is back. Switching never calculates anything.
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { BEGINNER_KEY, beginnerMode, setBeginnerMode } from '../../public/app/beginner.ts';
@@ -125,6 +124,8 @@ test('the build plan hides what whole machines cost and the payoff, and shows th
   render();
   await settle();
   assert.ok($('#main [data-rounding-cost]'), 'off: whole-machine cost shown');
+  assert.ok($('#main [data-payoff]'), 'off: the payoff shown');
+  assert.ok($('[data-plan-tab="hard-drives"]'), 'in its own tab (#1243)');
   const before = JSON.stringify(calculated);
   let requests = 0;
   const fetch = globalThis.fetch;
@@ -136,9 +137,13 @@ test('the build plan hides what whole machines cost and the payoff, and shows th
     await flip(true);
     assert.equal($('#main [data-rounding-cost]'), null);
     assert.ok($('#main [data-beginner-note]'), 'the page says what it hides');
-    assert.equal(document.documentElement.hasAttribute('data-beginner'), true, 'payoff hidden');
+    assert.equal(document.documentElement.hasAttribute('data-beginner'), true);
+    assert.equal($('#main [data-payoff]'), null, 'payoff hidden');
+    assert.equal($('[data-plan-tab="hard-drives"]'), null, 'its tab too');
     await flip(false);
     assert.ok($('#main [data-rounding-cost]'));
+    assert.ok($('#main [data-payoff]'));
+    assert.ok($('[data-plan-tab="hard-drives"]'));
     assert.equal($('#main [data-beginner-note]'), null);
     assert.equal(document.documentElement.hasAttribute('data-beginner'), false);
   } finally {
@@ -146,9 +151,4 @@ test('the build plan hides what whole machines cost and the payoff, and shows th
   }
   assert.equal(requests, 0, 'nothing saved or recalculated');
   assert.equal(JSON.stringify(calculated), before, 'the plan is unchanged');
-});
-
-test('style.css hides the payoff in beginner mode', () => {
-  const css = fs.readFileSync('public/style.css', 'utf8');
-  assert.match(css, /:root\[data-beginner\] \[data-payoff\] \{\s*display: none;/);
 });

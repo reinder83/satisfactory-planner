@@ -130,7 +130,11 @@ test('Dismiss hides the notice until the ticks show something new', async () => 
   button.click();
   await settle();
   assert.equal($('[data-owned-ticks]'), null, 'dismissed');
-  assert.equal(document.activeElement, $('#main h1'), 'focus goes to the page heading');
+  assert.equal(
+    document.activeElement,
+    $('[data-plan-tab="overview"]'),
+    'focus goes to the Overview tab, which the summary line keeps (#1243)',
+  );
   // Remembered in this browser for this save and profile, nothing saved.
   const stored = JSON.parse(localStorage.getItem('planner-ticks-notice') || '{}');
   assert.deepEqual(stored['s/' + profileId], { miner: 2, alternates: [], generators: {} });
