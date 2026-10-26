@@ -16,7 +16,7 @@ import { createBrowserApi } from '../public/browser-api.ts';
 import { calculate } from '../planner.ts';
 import { powerView } from '../public/power.ts';
 import { alternateHunts } from '../public/progression.ts';
-import { minedResources } from '../public/preferences.ts';
+import { BUILD_COSTS, buildParts, minedResources } from '../public/preferences.ts';
 import { cachedPlanFigures, planFigures } from '../public/state.ts';
 import {
   compareView,
@@ -31,6 +31,7 @@ import type {
   PlanFigures,
   Progression,
   StoredCalculatedPlan,
+  StoredStage,
   WorkspaceFile,
   WorkspaceSummary,
 } from '../public/types/index.ts';
@@ -53,9 +54,16 @@ const plans = PACES.map(pace => calculate(pace.settings) as StoredCalculatedPlan
 // Every number in the figures, for the NaN check.
 const numbers = (figures: PlanFigures) =>
   figures.phases.flatMap(phase =>
-    [phase.buildings, phase.powerMW, phase.ore, phase.oil, phase.alternates, phase.hours].filter(
-      value => value !== null,
-    ),
+    [
+      phase.buildings,
+      phase.newBuildings,
+      phase.buildParts,
+      phase.powerMW,
+      phase.ore,
+      phase.oil,
+      phase.alternates,
+      phase.hours,
+    ].filter(value => value != null),
   );
 
 test("a plan's figures are the ones the stored plan holds, phase by phase", () => {
@@ -67,8 +75,24 @@ test("a plan's figures are the ones the stored plan holds, phase by phase", () =
       ['1', '2', '3', '4', '5'],
     );
     const hunts = alternateHunts(plan, progression);
+    let before: StoredStage | undefined;
     for (const phase of figures.phases) {
       const stage = plan.stages[phase.phase];
+      // The machines the phase adds: a line the phase before also ran adds only the machines
+      // beyond its count there, as the build plan's handover counts it; and what they cost.
+      let added = 0,
+        parts = 0;
+      for (const row of stage.rows!) {
+        const kept = before?.rows!.find(old => old.id === row.id && old.machine === row.machine);
+        const count = Math.max(0, row.machines - (kept?.machines ?? 0));
+        added += count;
+        for (const amount of Object.values(BUILD_COSTS[row.machine]!.cost)) parts += amount * count;
+      }
+      assert.equal(phase.newBuildings, added);
+      assert.equal(phase.buildParts, parts);
+      if (!before) assert.equal(phase.newBuildings, phase.buildings, 'the first phase adds all');
+      else assert.ok(phase.newBuildings! < phase.buildings!, 'a later phase keeps lines');
+      before = stage;
       assert.equal(phase.feasible, stage.feasible);
       assert.equal(
         phase.buildings,
@@ -120,8 +144,17 @@ test('an older plan shows "—" for what it does not hold, never NaN', () => {
   const sparse = planFigures(older)!;
   const [three, four, five] = sparse.phases;
   assert.deepEqual(
-    [three!.buildings, three!.powerMW, three!.ore, three!.oil, three!.alternates, three!.hours],
-    [null, null, null, null, null, null],
+    [
+      three!.buildings,
+      three!.newBuildings,
+      three!.buildParts,
+      three!.powerMW,
+      three!.ore,
+      three!.oil,
+      three!.alternates,
+      three!.hours,
+    ],
+    [null, null, null, null, null, null, null, null],
   );
   assert.equal(four!.ore, null);
   assert.equal(four!.oil, null);
@@ -140,19 +173,23 @@ test('an older plan shows "—" for what it does not hold, never NaN', () => {
     ],
     'new',
     '3',
+    3,
   )!;
   const old = view.rows.find(row => row.id === 'old')!;
   assert.equal(old.note, 'Does not fit');
   assert.deepEqual(
     old.cells.map(cell => cell.text),
-    ['—', '—', '—', '—', '—', '—'],
+    ['—', '—', '—', '—', '—', '—', '—', '—'],
   );
   assert.ok(
     old.cells.every(cell => !cell.delta),
     'no difference from a missing figure',
   );
   const time = view.time.find(row => row.id === 'old')!;
-  assert.deepEqual(time.phases.slice(-3), ['—', '—', 'Never']);
+  assert.deepEqual(
+    time.phases.slice(-3).map(cell => cell.text),
+    ['—', '—', 'Never'],
+  );
   assert.equal(time.total.text, '—');
   assert.equal(time.fastest, false);
   const text = JSON.stringify(view);
@@ -166,7 +203,7 @@ test('the differences are against the baseline, with their sign', () => {
     figures: planFigures(plans[index]),
   }));
   for (const baseline of profiles) {
-    const view = compareView(profiles, baseline.id, '4')!;
+    const view = compareView(profiles, baseline.id, '4', 3)!;
     assert.equal(view.baselineId, baseline.id);
     assert.equal(view.phase, '4');
     const base = baseline.figures!.phases.find(phase => phase.phase === '4')!;
@@ -211,6 +248,8 @@ test('the fastest total is marked, among the profiles that plan the same phases'
       phase: String(from + index) as '1',
       feasible: true,
       buildings: 10,
+      newBuildings: 10,
+      buildParts: 100,
       powerMW: 100,
       ore: 60,
       oil: 0,
@@ -229,7 +268,7 @@ test('the fastest total is marked, among the profiles that plan the same phases'
     { id: 'e', name: 'Echo', figures: figures(1, [1, null, 1, 1, 1]) },
     { id: 'f', name: 'No plan' },
   ];
-  const view = compareView(profiles, 'a', '2')!;
+  const view = compareView(profiles, 'a', '2', 0)!;
   assert.deepEqual(
     view.rows.map(row => row.id),
     ['a', 'b', 'c', 'd', 'e'],
@@ -249,18 +288,120 @@ test('the fastest total is marked, among the profiles that plan the same phases'
   assert.equal(view.time.find(row => row.id === 'd')!.total.delta, undefined);
   assert.equal(view.time.find(row => row.id === 'e')!.total.text, '—');
   // With Delta as the baseline only Delta plans Phases 3-5: nothing to call fastest.
-  assert.ok(compareView(profiles, 'd', '')!.time.every(row => !row.fastest));
-  assert.equal(compareView(profiles, 'd', '')!.phase, '3', "the baseline's first phase");
+  assert.ok(compareView(profiles, 'd', '', 0)!.time.every(row => !row.fastest));
+  assert.equal(compareView(profiles, 'd', '', 0)!.phase, '3', "the baseline's first phase");
   // An unknown baseline falls back to the first profile compared.
-  assert.equal(compareView(profiles, 'gone', '')!.baselineId, 'a');
+  assert.equal(compareView(profiles, 'gone', '', 0)!.baselineId, 'a');
   // One profile has nothing to compare against.
-  assert.equal(compareView(profiles.slice(0, 1), 'a', '1'), null);
+  assert.equal(compareView(profiles.slice(0, 1), 'a', '1', 0), null);
   // What ADA says.
-  assert.deepEqual(fastestProfiles(profiles, 'a'), {
+  assert.deepEqual(fastestProfiles(profiles, 'a', 0), {
     names: ['Bravo', 'Charlie'],
     total: 'about 5 h',
   });
-  assert.deepEqual(fastestProfiles(profiles, 'd').names, []);
+  assert.deepEqual(fastestProfiles(profiles, 'd', 0).names, []);
+});
+
+// The time to finish (#1074): the plan's delivery time plus an estimated building time, the
+// buildings each phase adds times the minutes per building the user sets. Measured and estimated
+// stay apart in the words, 0 minutes is delivery time only, and the estimate decides "Fastest".
+test('the time to finish adds the estimated building time to the delivery time', () => {
+  const figures = (hours: number[], added: number[]): PlanFigures => ({
+    from: 1,
+    phases: hours.map((hour, index) => ({
+      phase: String(index + 1) as '1',
+      feasible: true,
+      buildings: added[index]!,
+      newBuildings: added[index]!,
+      buildParts: added[index]! * 10,
+      powerMW: 100,
+      ore: 60,
+      oil: 0,
+      alternates: 0,
+      hours: hour,
+    })),
+    totalHours: hours.reduce((sum, hour) => sum + hour, 0),
+  });
+  // Quick delivers sooner but builds far more; Lean builds little.
+  const profiles: ComparedProfile[] = [
+    { id: 'q', name: 'Quick', figures: figures([2, 3], [60, 120]) },
+    { id: 'l', name: 'Lean', figures: figures([4, 5], [10, 20]) },
+  ];
+  const deliveryOnly = compareView(profiles, 'q', '1', 0)!;
+  assert.equal(deliveryOnly.minutes, 0);
+  const quick0 = deliveryOnly.time.find(row => row.id === 'q')!;
+  assert.deepEqual(quick0.phases, [{ text: 'about 2 h' }, { text: 'about 3 h' }]);
+  assert.equal(quick0.total.text, 'about 5 h');
+  assert.equal(quick0.total.parts, undefined, 'no estimate at 0 minutes');
+  assert.ok(quick0.fastest);
+
+  const estimated = compareView(profiles, 'q', '1', 3)!;
+  const quick = estimated.time.find(row => row.id === 'q')!,
+    lean = estimated.time.find(row => row.id === 'l')!;
+  // 60 buildings at 3 minutes are 3 h of building on top of 2 h of delivery.
+  assert.deepEqual(quick.phases[0], {
+    text: 'about 5 h',
+    parts: ['2 h delivery', '+ est. 3 h building'],
+  });
+  assert.equal(quick.total.text, 'about 14 h');
+  assert.deepEqual(quick.total.parts, ['5 h delivery', '+ est. 9 h building']);
+  assert.equal(lean.total.text, 'about 10 h 30 min');
+  assert.deepEqual(lean.total.parts, ['9 h delivery', '+ est. 1 h 30 min building']);
+  assert.deepEqual(lean.total.delta, { text: '−3 h 30 min', trend: 'lower' });
+  assert.ok(lean.fastest && !quick.fastest, 'the estimate decides the fastest');
+  assert.deepEqual(fastestProfiles(profiles, 'q', 3), {
+    names: ['Lean'],
+    total: 'about 10 h 30 min',
+  });
+  assert.deepEqual(fastestProfiles(profiles, 'q', 0).names, ['Quick']);
+
+  // Buildings to add a reply did not send: the delivery time stays, the total is unknown.
+  const older = structuredClone(profiles);
+  delete older[1]!.figures!.phases[0]!.newBuildings;
+  const partial = compareView(older, 'q', '1', 3)!.time.find(row => row.id === 'l')!;
+  assert.deepEqual(partial.phases[0], {
+    text: 'about 4 h',
+    parts: ['delivery only', 'buildings unknown'],
+  });
+  assert.equal(partial.total.text, '—');
+  assert.equal(partial.fastest, false);
+  assert.doesNotMatch(JSON.stringify(compareView(older, 'q', '1', 3)), /NaN|undefined|Infinity/);
+});
+
+test('the phase table shows the buildings to add and their build materials', () => {
+  const profiles: ComparedProfile[] = PACES.map((pace, index) => ({
+    id: 'p' + index,
+    name: pace.name,
+    figures: planFigures(plans[index]),
+  }));
+  const view = compareView(profiles, 'p0', '3', 3)!;
+  assert.deepEqual(view.columns.slice(0, 3), ['Buildings', 'Buildings to add', 'Build materials']);
+  const own = profiles[1]!.figures!.phases.find(phase => phase.phase === '3')!;
+  const cells = view.rows.find(row => row.id === 'p1')!.cells;
+  assert.equal(cells[1]!.text, own.newBuildings!.toLocaleString(undefined));
+  assert.equal(cells[2]!.text, own.buildParts!.toLocaleString(undefined) + ' parts');
+});
+
+test('build parts are counted once per building, and a building without a cost is named', () => {
+  const { parts, unknown } = buildParts([
+    ['Constructor', 2],
+    ['Smelter', 1],
+    ['Mystery Machine', 3],
+    ['Mystery Machine', 1],
+  ]);
+  assert.deepEqual(Object.fromEntries(parts), {
+    'Reinforced Iron Plate': 4,
+    Cable: 16,
+    'Iron Rod': 5,
+    Wire: 8,
+  });
+  assert.deepEqual(unknown, ['Mystery Machine']);
+  // A plan whose line runs on a building the table has no cost for: no part count is guessed.
+  const plan = structuredClone(plans[0]!);
+  plan.stages['1'].rows![0]!.machine = 'Mystery Machine';
+  const phase = planFigures(plan)!.phases[0]!;
+  assert.equal(phase.buildParts, null);
+  assert.ok(phase.newBuildings! > 0);
 });
 
 test('cachedPlanFigures gives each caller its own copy of the same figures', () => {

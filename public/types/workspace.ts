@@ -181,6 +181,12 @@ export interface ComparedPhase {
   feasible: boolean;
   // Machines of every line, and the power the phase needs (powerView's needMW).
   buildings: number | null;
+  // The machines the phase adds (#1074): every machine of its lines in the first planned phase,
+  // later only those beyond what the phase before ran on the same line, as the build plan's
+  // handover counts them; and the parts they cost to build together (BUILD_COSTS), null when one
+  // of them has no cost in the table. Optional: replies before them have neither.
+  newBuildings?: number | null;
+  buildParts?: number | null;
   powerMW: number | null;
   // Per-minute draw on the mined resources together, and on Crude Oil.
   ore: number | null;

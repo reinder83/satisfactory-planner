@@ -1,16 +1,21 @@
 <!--
   "Compare profiles" under a save's cards on Saves & profiles (#1074, compareView in
-  app/profile-compare.ts): with two or more calculated profiles, one phase's buildings, power,
-  ore, oil, alternates and delivery time per profile, each with its difference from the baseline,
-  then every planned phase's delivery time and the total, the fastest marked. All from the stored
-  plans, nothing calculated again. The baseline starts as the open profile (else the save's active
-  one) and the phase as the one the baseline works on; both pickers are view state, never stored.
-  Each table scrolls sideways inside its own box when it does not fit (ui/scroll-box.ts), with the
-  profile column kept in view.
+  app/profile-compare.ts): with two or more calculated profiles, one phase's buildings, buildings
+  to add, build materials, power, ore, oil, alternates and delivery time per profile, each with its
+  difference from the baseline, then every planned phase's time to finish and the total, the
+  fastest marked. The figures come from the stored plans, nothing calculated again; the time to
+  finish adds an estimated building time, the buildings to add times the minutes per building set
+  here (buildMinutes in session.ts, a view preference remembered in this browser, never stored
+  with a profile; 0 compares delivery time only). The baseline starts as the open profile (else
+  the save's active one) and the phase as the one the baseline works on; both pickers are view
+  state, never stored. Each table scrolls sideways inside its own box when it does not fit
+  (ui/scroll-box.ts), with the profile column kept in view.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { compareView, type ComparedProfile } from '../../profile-compare.ts';
+import { BUILD_MINUTES_MAX, buildMinutes, setBuildMinutes } from '../../session.ts';
+import { render } from '../../shell.ts';
 import { useScrollBox } from '../scroll-box.ts';
 
 const props = defineProps<{
@@ -23,7 +28,19 @@ const props = defineProps<{
 
 const chosenBaseline = ref(props.baseline);
 const chosenPhase = ref(props.phase);
-const view = computed(() => compareView(props.profiles, chosenBaseline.value, chosenPhase.value));
+const minutes = ref(buildMinutes);
+const view = computed(() =>
+  compareView(props.profiles, chosenBaseline.value, chosenPhase.value, minutes.value),
+);
+// A new estimate is remembered in this browser; one out of range puts the field back. ADA's line
+// follows it, so the page is drawn again.
+function changeMinutes(event: Event) {
+  const input = event.target as HTMLInputElement;
+  setBuildMinutes(input.value);
+  minutes.value = buildMinutes;
+  input.value = String(buildMinutes);
+  render();
+}
 const baselineName = computed(
   () => view.value?.rows.find(row => row.id === view.value?.baselineId)?.name ?? '',
 );
@@ -108,21 +125,42 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
         </tbody>
       </table>
     </div>
-    <h4>Time to finish</h4>
-    <p class="small muted">
-      Delivery time: how long each phase's production lines take to make its Space Elevator parts,
-      as the build plan gives it. The time you spend building is not included: the planner does not
-      estimate it.
+    <p class="small muted" data-compare-workload-note>
+      Buildings to add: the machines each phase adds to its production lines, all of them in the
+      first phase and then those beyond what the phase before runs on the same line. Build
+      materials: the parts those buildings cost. Miners, extractors, belts and pipes are not
+      counted.
     </p>
+    <h4>Time to finish</h4>
+    <p class="small muted" data-compare-time-note>
+      Delivery time, how long each phase's production lines take to make its Space Elevator parts as
+      the build plan gives it, plus an estimated building time: the buildings to add times the
+      minutes per building below. The planner does not measure building time, so that part is your
+      estimate, remembered in this browser; set 0 to compare delivery time only.
+    </p>
+    <div class="compare-pickers">
+      <label
+        >Minutes per building (estimate)
+        <input
+          type="number"
+          min="0"
+          :max="BUILD_MINUTES_MAX"
+          step="0.5"
+          inputmode="decimal"
+          :value="minutes"
+          data-compare-build-minutes
+          @change="changeMinutes"
+      /></label>
+    </div>
     <div
       ref="timeTable"
       class="compare-table"
       data-compare-time-table
-      v-bind="timeBox.scrollAttrs('Delivery time by profile')"
+      v-bind="timeBox.scrollAttrs('Time to finish by profile')"
     >
       <table>
         <caption class="visually-hidden">
-          Delivery time by profile, against
+          Time to finish by profile, against
           {{
             baselineName
           }}
@@ -145,10 +183,26 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
               {{ row.name }}
               <span v-if="row.baseline" class="compare-tag">Baseline</span>
             </th>
-            <td v-for="(text, index) in row.phases" :key="index">{{ text }}</td>
+            <td v-for="(cell, index) in row.phases" :key="index" :data-compare-time-cell="index">
+              <span class="compare-value">{{ cell.text }}</span>
+              <span
+                v-for="part in cell.parts ?? []"
+                :key="part"
+                class="compare-note"
+                data-compare-time-parts
+                >{{ part }}</span
+              >
+            </td>
             <td data-compare-total>
               <span class="compare-value">{{ row.total.text }}</span>
               <span v-if="row.covers" class="compare-note">{{ row.covers }}</span>
+              <span
+                v-for="part in row.total.parts ?? []"
+                :key="part"
+                class="compare-note"
+                data-compare-total-parts
+                >{{ part }}</span
+              >
               <span
                 v-if="row.total.delta"
                 :class="['delta', row.total.delta.trend]"

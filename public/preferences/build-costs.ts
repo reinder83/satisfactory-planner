@@ -149,3 +149,25 @@ export const BUILD_COSTS: Readonly<Record<string, BuildCost>> = {
     cost: { 'Steel Beam': 10, 'Aluminum Casing': 10 },
   },
 };
+
+// The parts `buildings` cost together ([building, count] pairs), and the buildings with no cost in
+// the table, whose parts are left out rather than guessed. Shared by the build plan's steps and
+// the session view (app/build-materials.ts) and by Saves & profiles' comparison (#1074,
+// state/figures.ts), so both add a building's parts up the same way.
+export function buildParts(buildings: Iterable<readonly [building: string, count: number]>): {
+  parts: Map<string, number>;
+  unknown: string[];
+} {
+  const parts = new Map<string, number>(),
+    unknown: string[] = [];
+  for (const [building, count] of buildings) {
+    const cost = BUILD_COSTS[building]?.cost;
+    if (!cost) {
+      if (!unknown.includes(building)) unknown.push(building);
+      continue;
+    }
+    for (const [item, amount] of Object.entries(cost))
+      parts.set(item, (parts.get(item) ?? 0) + amount * count);
+  }
+  return { parts, unknown };
+}

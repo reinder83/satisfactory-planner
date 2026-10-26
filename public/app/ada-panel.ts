@@ -23,6 +23,7 @@ import {
   importedSaves,
   mergedProgress,
   sessionSize,
+  buildMinutes,
   milestoneOnly,
   openedFrom,
   payoff,
@@ -435,15 +436,18 @@ function unplacedCount(): number {
 }
 
 // The open save's fastest profiles in "Compare profiles" (#1074), against the open profile as the
-// page starts, in quotes as a name list; null when fewer than two can be compared.
+// page starts, at the minutes per building set there, in quotes as a name list; null when fewer
+// than two can be compared.
 function fastestFact(): AdaFacts['fastest'] {
   const save = workspace.saves.find(s => s.id === currentSave.id);
-  const fastest = save ? fastestProfiles(save.profiles, currentProfile.id) : null;
+  const fastest = save ? fastestProfiles(save.profiles, currentProfile.id, buildMinutes) : null;
   if (!fastest?.names.length) return null;
   return {
     names: listNames(fastest.names.map(name => `“${name}”`)),
     total: fastest.total,
     count: fastest.names.length,
+    perBuilding:
+      buildMinutes > 0 ? `${num(buildMinutes)} minute${buildMinutes === 1 ? '' : 's'}` : '',
   };
 }
 

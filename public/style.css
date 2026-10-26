@@ -5079,6 +5079,9 @@ button.rail-tile:hover {
   align-items: center;
   gap: 8px;
 }
+.compare-pickers input[type='number'] {
+  width: 6em;
+}
 .compare-table {
   max-width: 100%;
   overflow-x: auto;
@@ -5122,6 +5125,14 @@ button.rail-tile:hover {
 }
 .compare-table thead th:first-child {
   color: var(--muted);
+}
+/* On a phone the profile column gives up some width, so the widest time-to-finish cell (#1074)
+   still shows whole beside it when the table is scrolled to its end. */
+@media (max-width: 480px) {
+  .compare-table tbody th,
+  .compare-table thead th:first-child {
+    min-width: 90px;
+  }
 }
 .compare-table tbody tr.baseline th,
 .compare-table tbody tr.baseline td {

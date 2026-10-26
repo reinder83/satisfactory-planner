@@ -18,7 +18,8 @@ const modules = fs
 // helpers, #1180), the caps per phase beside it (PHASE_CAP_LIMITS and its helpers, #1221), and
 // what each building costs to build, which the planner counts (BUILD_COSTS, #1229), and the belt
 // cap (BELT_CAP_MARKS, beltCapMark, beltCapWords, #1232), and the cap on hard drives
-// (DRIVE_CAP_MAX, driveCapOf, driveCapWords, #1233).
+// (DRIVE_CAP_MAX, driveCapOf, driveCapWords, #1233), and the parts buildings cost together
+// (buildParts, #1074).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_CAP_MARKS',
@@ -64,6 +65,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'blankExtraction',
     'budgetLimit',
     'budgetLimits',
+    'buildParts',
     'clockChoices',
     'constructionItems',
     'distributions',
