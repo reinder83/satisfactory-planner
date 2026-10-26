@@ -796,7 +796,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
     started.profile.plan,
   );
   if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
-  keepAskedClocks(state, previous.state, started.profile.plan);
+  keepAsked(state, previous.state, started.profile.plan);
   // The steps kept above keep who ticked them too (#1206), and the version follows.
   carryTickers(state, previous.state);
   state.revision = (previous.state.revision ?? 0) + 1;
@@ -822,24 +822,35 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
     carried: Object.values(state.checks).filter(Boolean).length,
   };
 }
-// The lines asked to run at exact clocks (`exactClocks`, #1066) after a recalculation in place
-// (#1237): every recalculation the user starts plans the choice, freezing it in the new plan's
-// settings, so the state needs none and follows the plan. A choice the new plan was not
-// calculated with (saved after Edit settings started its draft, or a request from an older page)
-// stays asked for, so the plan offers "Recalculate in place with exact clocks" again rather than
-// dropping it. Compared as the planner stores it: each phase's ids sorted, no empty phase.
-const clocksKey = (clocks: SavedState['exactClocks']): string =>
-  (['1', '2', '3', '4', '5'] as StageKey[])
-    .map(phase => [...(clocks?.[phase] ?? [])].sort().join('\n'))
-    .join('|');
-function keepAskedClocks(
+// The choices the progress state asks for beyond the plan (the lines asked to run at exact clocks,
+// `exactClocks`, #1066, and the somersloops pinned on lines, `sloopPins`, #1235) after a
+// recalculation in place (#1237, #1258): every recalculation the user starts plans the choice,
+// freezing it in the new plan's settings, so the state needs none and follows the plan. A choice
+// the new plan was not calculated with (saved after Edit settings started its draft, or a request
+// from an older page) stays asked for, so the plan offers "Recalculate in place with exact clocks"
+// or "... with somersloop pins" again rather than dropping it. An empty choice stays too: it asks
+// for none, which differs from a plan calculated with some. Compared as the planner stores them:
+// each phase's ids (clocks) or ids and counts (pins) sorted, no empty phase.
+const ASKED_PHASES = ['1', '2', '3', '4', '5'] as StageKey[];
+const askedKey = (
+  asked: Partial<Record<StageKey, string[] | Record<string, number>>> | undefined,
+) =>
+  ASKED_PHASES.map(phase => {
+    const lines = asked?.[phase] ?? [];
+    return (Array.isArray(lines) ? lines : Object.entries(lines).map(entry => entry.join('=')))
+      .sort()
+      .join('\n');
+  }).join('|');
+function keepAsked(
   state: ProgressState,
-  source: Pick<SavedState, 'exactClocks'>,
+  source: Pick<SavedState, 'exactClocks' | 'sloopPins'>,
   plan: Pick<StoredCalculatedPlan, 'settings'>,
 ): void {
-  const asked = source.exactClocks;
-  if (asked && clocksKey(asked) !== clocksKey(plan.settings?.exactClocks))
-    state.exactClocks = structuredClone(asked);
+  for (const field of ['exactClocks', 'sloopPins'] as const) {
+    const asked = source[field];
+    if (asked && askedKey(asked) !== askedKey(plan.settings?.[field]))
+      (state as Pick<SavedState, typeof field>)[field] = structuredClone(asked) as never;
+  }
 }
 // The phase worked on after a recalculation in place (#1112): the one the user had, unless the
 // edit moved the plan's start phase past it, which raises it to the new start phase. A phase the

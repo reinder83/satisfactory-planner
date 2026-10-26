@@ -421,6 +421,44 @@ async function checkEdition(
     ],
     'the version without the pin is kept',
   );
+  // A pin the new plan is not calculated with (saved after Edit settings started its draft, or
+  // sent by an older page) stays asked for through a recalculation in place (#1258): a different
+  // count, then the line asked back to the planner's choice, each recalculated with the plan's
+  // own settings, which keep the pin it was calculated with.
+  const recalculateWithPlan = async (backupName: string) => {
+    const shown = await context();
+    await request('/api/recalculate', {
+      name: 'Sloops',
+      backupName,
+      settings: shown.plan.settings,
+      planCreatedAt: shown.plan.createdAt,
+    });
+    const next = await context();
+    assert.notEqual(next.plan.createdAt, shown.plan.createdAt, 'recalculated');
+    assert.deepEqual(next.plan.settings.sloopPins, pins, 'the plan keeps its own pins');
+    return next;
+  };
+  const eight = { '3': { Recipe_IronRod_C: 8 } };
+  await request('/api/update', { type: 'sloopPins', value: eight });
+  const differing = await recalculateWithPlan('Sloops (before edit 2)');
+  assert.deepEqual(differing.state.sloopPins, eight, 'the pin asked for is kept');
+  assert.deepEqual(
+    sloopPinsChange(differing.plan, differing.state)?.lines.map(line => [line.before, line.after]),
+    [[4, 8]],
+    'and still offered',
+  );
+  await request('/api/update', { type: 'sloopPins', value: {} });
+  const forgotten = await recalculateWithPlan('Sloops (before edit 3)');
+  assert.deepEqual(forgotten.state.sloopPins, {}, 'the ask for no pins is kept');
+  assert.deepEqual(
+    sloopPinsChange(forgotten.plan, forgotten.state)?.lines.map(line => [line.before, line.after]),
+    [[4, undefined]],
+    'and still offered',
+  );
+  // Pins the plan was calculated with are dropped, as before.
+  await request('/api/update', { type: 'sloopPins', value: pins });
+  const same = await recalculateWithPlan('Sloops (before edit 4)');
+  assert.equal('sloopPins' in same.state, false, 'the same pins are planned, not asked');
 }
 
 test('the Docker server saves a pin without recalculating the plan', async () => {
