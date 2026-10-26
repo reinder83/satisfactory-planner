@@ -12,7 +12,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
-import { calcStage, currentProfile, currentSave, stage, state } from '../../session.ts';
+import {
+  calcStage,
+  onProfile,
+  profileScope,
+  stage,
+  state,
+  type ProfileScope,
+} from '../../session.ts';
 import { render } from '../../shell.ts';
 import { membershipsOf } from '../../views/factories.ts';
 import {
@@ -45,7 +52,7 @@ async function apply(event: Event) {
   const { change } = shown,
     name = props.groupName,
     groupId = props.groupId,
-    profile = { save: currentSave.id, profile: currentProfile.id };
+    profile = profileScope();
   const refocus = refocusAfterRemoval(trigger, {
     row: '#main .user-group',
     control: '[data-group-running]',
@@ -70,13 +77,8 @@ async function apply(event: Event) {
 
 // Undo, from the toast: only on the profile the press changed, and only for the lines that still
 // have the value it gave them. Focus lost with the toast goes back to the factory's button.
-async function undo(
-  change: RunningChange,
-  name: string,
-  groupId: string,
-  profile: { save: string; profile: string },
-) {
-  if (currentSave.id !== profile.save || currentProfile.id !== profile.profile) return;
+async function undo(change: RunningChange, name: string, groupId: string, profile: ProfileScope) {
+  if (!onProfile(profile)) return;
   const updates = undoUpdates(change, state.checks);
   try {
     for (const update of updates) await save(update);

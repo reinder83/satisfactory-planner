@@ -50,6 +50,7 @@ import {
 import { allowSwitch, notesNotSaved, pending, save, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
+import { PAGE_NAMES } from '../page-title.ts';
 import { leftOutNote } from '../../mining.ts';
 import {
   calculated,
@@ -79,16 +80,18 @@ import { legacy } from './bridge.ts';
 import ActionMenu from './ActionMenu.vue';
 import { openProfile, signOut } from './actions.ts';
 
-// The sidebar's navigation: route, icon, label.
-const NAV: [id: string, icon: string, label: string][] = [
-  ['plan', '◫', 'Build plan'],
-  ['factories', '▥', 'Factories'],
-  ['logistics', '⇄', 'Logistics'],
-  ['storage', '▦', 'Storage room'],
-  ['resources', '↗', 'Power & resources'],
-  ['notes', '✎', 'Notes'],
-  ['backup', '⇅', 'Backup'],
-];
+// The sidebar's navigation: route, icon, label (the page's name, as its tab title has it, #1254).
+const NAV: [id: View, icon: string, label: string][] = (
+  [
+    ['plan', '◫'],
+    ['factories', '▥'],
+    ['logistics', '⇄'],
+    ['storage', '▦'],
+    ['resources', '↗'],
+    ['notes', '✎'],
+    ['backup', '⇅'],
+  ] as const
+).map(([id, icon]) => [id, icon, PAGE_NAMES[id]]);
 
 // A notes box that says "Not saved" (a failed write, or a version to choose, #1052) is never
 // outshone by "Saved": the status says a note is not saved until the box saves it or goes.

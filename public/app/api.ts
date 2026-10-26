@@ -70,6 +70,14 @@ export function toast(message: string, error = false, action: ToastAction | null
   toastTimer = setTimeout(hide, toastMs(error, action));
 }
 
+// Hides the toast showing if it offers a button (#1166): that action, such as Undo, belongs to
+// the profile open when it was made, so opening another profile, signing out and boot() take it
+// away, and neither the button nor Ctrl+Z reaches the profile opened next. A toast without a
+// button stays up: it only says what happened.
+export function dropToastAction() {
+  if (toastAction) hideToast();
+}
+
 function hideToast() {
   clearTimeout(toastTimer);
   toastAction = null;

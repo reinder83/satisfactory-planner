@@ -241,7 +241,7 @@ test('flowNotes splits the machines across deliveries, and says when the item is
   const outputs = splitMachines(plates, flowOutputs(plates, stage));
   assert.deepEqual(flowNotes(plates, outputs, stage), {
     split: ' · split ≈ 3 / 1 across the deliveries below',
-    clock: '@ 100%',
+    clock: 'all at 100%',
     bankNote: { shared: false },
   });
   const morePlates = row('more-plates', {}, { 'Iron Plate': 40 });
@@ -255,9 +255,35 @@ test('flowNotes splits the machines across deliveries, and says when the item is
   assert.equal(flowNotes(plates, [outputs[0]!], stage).split, '');
   assert.equal(flowNotes(plates, [outputs[0]!, sink], stage).split, '');
   assert.equal(flowNotes(plates, [], stage).bankNote, null);
-  // A fractional equivalent is whole machines plus one adjustable machine.
+  // A fractional equivalent is whole machines plus one adjustable machine, with its clock (#1173).
   const clocked = { ...plates, equivalent: 3.5 };
-  assert.equal(flowNotes(clocked, [], stage).clock, '@ 100% + 1 adjustable');
+  assert.equal(flowNotes(clocked, [], stage).clock, '3 at 100% + 1 at 50%');
+});
+
+// The machine card says how the machines run (#1173): a line whose only machine is the adjustable
+// one runs it at its clock, never "@ 100% + 1 adjustable", which read as one machine at 100% and
+// another beside it; a single machine at 100% is "at 100%". The clock is the one the factory card
+// shows (one decimal, never rounded up to 100%).
+test('the machine card gives the clock of a line whose only machine runs slower (#1173)', () => {
+  const refinery = {
+    ...row('pure-copper', { 'Copper Ore': 3.14, Water: 2.09 }, { 'Copper Ingot': 7.85 }),
+    name: 'Alternate: Pure Copper Ingot',
+    machine: 'Refinery',
+    machines: 1,
+    equivalent: 7.85 / 37.5,
+    lastClock: (7.85 / 37.5) * 100,
+  };
+  const stage = context({ rows: [refinery] });
+  assert.equal(flowNotes(refinery, [], stage).clock, 'at 20.9%');
+  assert.equal(
+    flowNotes({ ...refinery, equivalent: 1, lastClock: 100 }, [], stage).clock,
+    'at 100%',
+  );
+  assert.equal(
+    flowNotes({ ...refinery, machines: 3, equivalent: 2.999999 }, [], stage).clock,
+    '2 at 100% + 1 at 99.9%',
+    'never rounded up to 100%',
+  );
 });
 
 // A generator line of a plan made since #1064 runs whole generators at 100%, burning fuel only
@@ -275,11 +301,11 @@ test('flowNotes gives a whole generator line no adjustable machine, as Machine s
     generationMW: 1900,
   };
   const stage = context({ rows: [generator] });
-  assert.equal(flowNotes(generator, generatorOutputs(generator), stage).clock, '@ 100%');
+  assert.equal(flowNotes(generator, generatorOutputs(generator), stage).clock, 'all at 100%');
   const older = { ...generator, lastClock: 60 };
   assert.equal(
     flowNotes(older, generatorOutputs(older), stage).clock,
-    '@ 100% + 1 adjustable',
+    '7 at 100% + 1 at 60%',
     'a plan made before #1064 underclocks its last generator',
   );
 });

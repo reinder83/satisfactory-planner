@@ -573,8 +573,12 @@ input[type='radio'] {
 .ada-ticker {
   display: none;
 }
+/* Under reduced motion nothing blinks (#1254, WCAG 2.2.2): not the save status's dot, not ADA's
+   mark in any tone (the fault tone's faster blink is more specific than .ada-mark alone). */
 @media (prefers-reduced-motion: reduce) {
-  .ada-mark {
+  .dot,
+  .ada-mark,
+  .ada[data-tone] .ada-mark {
     animation: none;
   }
   .sidebar {

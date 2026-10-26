@@ -45,6 +45,7 @@ import {
   wizard,
   workspace,
 } from '../session.ts';
+import { exactClocksSettings, wantedExactClocks } from '../exact-clocks.ts';
 import { foundWords, ownedFromTicks, ticksPhase, withOwnedFound } from '../owned-ticks.ts';
 import { sloopPinsSettings, wantedPins } from '../sloop-pins.ts';
 import type { FoundWords } from '../owned-ticks.ts';
@@ -60,6 +61,7 @@ import type {
   CurrentSettings,
   FirstReleaseSettings,
   ItemRates,
+  ObjectiveWeights,
   PhaseCaps,
   SaveSummary,
   StoredCalculatedPlan,
@@ -206,11 +208,15 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
       alternates,
     );
   // The built lines the plan counted are worked out again before each calculation
-  // (withDraftBuiltLines, #1176), from the profile as it is then. The somersloop pins are the ones
-  // asked for in the lines' dialogs (#1235), so Edit settings plans them and Review names them.
-  const settings = sloopPinsSettings(
-    withBuiltLines(structuredClone(context.plan.settings), undefined),
-    wantedPins(context.plan, context.state ?? {}),
+  // (withDraftBuiltLines, #1176), from the profile as it is then. The somersloop pins (#1235) and
+  // the lines at exact clocks (#1237) are the ones asked for in the lines' dialogs, so Edit
+  // settings plans them and Review names them.
+  const settings = exactClocksSettings(
+    sloopPinsSettings(
+      withBuiltLines(structuredClone(context.plan.settings), undefined),
+      wantedPins(context.plan, context.state ?? {}),
+    ),
+    wantedExactClocks(context.plan, context.state ?? {}),
   );
   const wizardDraft = newDraft(
     saveId,
@@ -478,7 +484,13 @@ function readRecipeCost(settings: WizardSettings, value: FormDataEntryValue) {
 function readObjective(data: FormData, settings: WizardSettings) {
   if (!data.has('objective')) return;
   const [kind] = data.getAll('objective');
-  const weight = (name: string) => Number(data.getAll('objectiveWeight:' + name)[0]);
+  // A mix picked a moment ago has no weight boxes on screen yet when the live estimate reads the
+  // step (#1180): each weight then stays as the draft had it, else 1, as the boxes will start.
+  const previous = typeof settings.objective === 'object' ? settings.objective : null;
+  const weight = (name: keyof ObjectiveWeights) =>
+    data.has('objectiveWeight:' + name)
+      ? Number(data.getAll('objectiveWeight:' + name)[0])
+      : (previous?.[name] ?? 1);
   if (kind === 'power' || kind === 'raw') settings.objective = kind;
   else if (kind === 'weighted')
     settings.objective = {
@@ -562,10 +574,15 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
 }
 
 // The MAM recipes box (#1058, ui/wizard/MamRecipes.vue), when it is on screen: ticked is
-// settings.mamRecipes true, unticked false. Every plan the wizard calculates with it on screen
-// therefore has the field; a plan made before it has none (mamRecipesOn in planner/recipes.ts).
+// settings.mamRecipes true, unticked false. A draft from a plan made before the box (no field,
+// mamRecipesOn in planner/recipes.ts) keeps having none while the box shows what that plan did
+// (mamRecipesShown): false would also bring Distilled Silica into a custom pool, and Review would
+// list a change nobody made. Every new draft starts with the field (startingSettings).
 function readMamRecipes(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
-  if (form.querySelector('[data-mam-recipes]')) settings.mamRecipes = data.has('mamRecipes');
+  if (!form.querySelector('[data-mam-recipes]')) return;
+  const ticked = data.has('mamRecipes');
+  if (settings.mamRecipes === undefined && ticked === mamRecipesShown(settings)) return;
+  settings.mamRecipes = ticked;
 }
 
 // "Alternates you already own" on All settings step 2 (#1068, ui/wizard/OwnedAlternates.vue),

@@ -39,6 +39,7 @@ import {
   currentPayoff,
   phaseProgress,
   rankScope,
+  RANK_BUDGET_MS,
   recipeBook,
   roundUpSettings,
   wholeMachineProfile,
@@ -92,8 +93,6 @@ export type Ranker = (
   scope?: RankScope,
 ) => Promise<AlternateRanking> | AlternateRanking;
 
-// A ranking in this edition runs on the worker, so the page stays usable; it still stops here.
-const RANK_BUDGET_MS = 120000;
 // What every route handler in createBrowserApi gets: the route as a URL, app/api.ts's plain
 // headers object, the parsed JSON body ({} when there is none) and the request options, which
 // carry the progress callbacks. A handler in readRoutes or writeRoutes also gets the workspace

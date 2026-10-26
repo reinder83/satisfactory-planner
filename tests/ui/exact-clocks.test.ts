@@ -10,8 +10,11 @@ import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-pan
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { roundingCost } from '../../public/app/exact-clocks.ts';
 import { num } from '../../public/app/format.ts';
-import { calculated, setWizard, state, workspace } from '../../public/app/session.ts';
+import { settingsChanges } from '../../public/app/profile-edit.ts';
+import { calculated, draft, setWizard, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { recalculateOffer } from '../../public/app/ui/recalc-offer.ts';
+import { startEdit } from '../../public/app/wizard/wizard.ts';
 import { cancelEstimate, setEstimatePaused } from '../../public/app/wizard/estimate.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { carryOptions } from '../../public/state.ts';
@@ -278,6 +281,60 @@ test('“Recalculate in place with exact clocks” does nothing when the questio
   assert.equal(asked.length, 1);
   assert.deepEqual(calls, [], 'nothing is sent');
   assert.ok($('[data-exact-clocks-recalc]'), 'the notice stays');
+});
+
+// The choice goes with every recalculation the user starts (#1237), not only its own offer, as the
+// somersloop pins do (#1235): Edit settings starts from it and Review names it, and the plan's
+// other recalculation offers send it.
+test('Edit settings and the other recalculation offers plan the clocks asked for (#1237)', async () => {
+  const plan = wholePlan(),
+    line = overflowing(plan);
+  openWhole(plan, { version: 16, exactClocks: { '3': [line.id] } });
+  await settle();
+  stubFetch({});
+  await startEdit('s', 'p');
+  assert.deepEqual(draft().settings.exactClocks, { '3': [line.id] });
+  assert.deepEqual(
+    settingsChanges(plan.settings, draft().settings, []).changes.find(
+      change => change.label === 'Exact clocks',
+    ),
+    { label: 'Exact clocks', before: 'None', after: '1 line' },
+  );
+  setWizard(null);
+  // Every line asked back to whole machines: the draft plans none, and Review says so.
+  const exact = { ...plan, settings: { ...plan.settings, exactClocks: { '3': [line.id] } } };
+  openWhole(exact, { version: 16, exactClocks: {} });
+  await settle();
+  await startEdit('s', 'p');
+  assert.equal('exactClocks' in draft().settings, false);
+  assert.deepEqual(
+    settingsChanges(exact.settings, draft().settings, []).changes.find(
+      change => change.label === 'Exact clocks',
+    ),
+    { label: 'Exact clocks', before: '1 line', after: 'None' },
+  );
+  // Without a choice, the plan's own lines.
+  setWizard(null);
+  openWhole(exact);
+  await settle();
+  await startEdit('s', 'p');
+  assert.deepEqual(draft().settings.exactClocks, { '3': [line.id] });
+  setWizard(null);
+  // Another offer ("… with what you have", "… with transport fuel", …) sends the choice too.
+  openWhole(plan, { version: 16, exactClocks: { '3': [line.id] } });
+  await settle();
+  const calls = stubFetch<{ settings: StoredCalculatedPlan['settings'] }>({});
+  answerConfirms(true);
+  const button = document.createElement('button');
+  document.body.append(button);
+  await recalculateOffer(button, {
+    settings: plan.settings,
+    change: 'with what you have',
+    label: 'Recalculate in place with what you have',
+  });
+  const sent = calls.find(([path]) => path === '/api/recalculate')?.[1];
+  assert.deepEqual(sent?.settings.exactClocks, { '3': [line.id] });
+  button.remove();
 });
 
 test('a fluid line always runs at exact clocks; an exact plan offers no choice and no cost', async () => {

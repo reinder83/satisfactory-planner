@@ -11,6 +11,7 @@ import { createApp } from '../server.ts';
 import { seedLegacy } from './helpers/seed.ts';
 import { createBrowserApi, workerJobs, type CalculatorWorker } from '../public/browser-api.ts';
 import { calculate, rankAlternates } from '../planner.ts';
+import { RANK_BUDGET_MS } from '../public/state.ts';
 import type {
   BrowserWorkspace,
   Catalog,
@@ -200,7 +201,9 @@ test('a ranking runs as a job on the calculator worker, with per-candidate progr
   const done = Promise.resolve(
     rank({ n: 1 }, '3', (finished, total) => seen.push([finished, total])),
   );
-  assert.deepEqual(posted, [{ id: 1, settings: { n: 1 }, rank: { phase: '3', budgetMs: 120000 } }]);
+  assert.deepEqual(posted, [
+    { id: 1, settings: { n: 1 }, rank: { phase: '3', budgetMs: RANK_BUDGET_MS } },
+  ]);
   const reply = (data: object) => worker.onmessage?.(new MessageEvent('message', { data }));
   reply({ id: 1, done: 1, total: 2 });
   reply({ id: 1, done: 2, total: 2 });
@@ -210,4 +213,18 @@ test('a ranking runs as a job on the calculator worker, with per-candidate progr
     [1, 2],
     [2, 2],
   ]);
+});
+
+// #1257: an "All recipes" ranking of Phase 4 or 5 needs about 50 seconds. The server stopped every
+// ranking at 20 seconds, so it never finished there and Re-rank stopped at the same place; both
+// editions now allow the one shared limit of 2 minutes.
+test('both editions stop a ranking at the one shared limit of 2 minutes', async () => {
+  assert.equal(RANK_BUDGET_MS, 120000);
+  // The browser edition's worker job carries it (see the worker test above); the server's default,
+  // which server.ts leaves in place unless a test passes its own, is the same constant.
+  const source = await fs.readFile(new URL('../workspace.ts', import.meta.url), 'utf8');
+  assert.match(source, /^\s*rankBudgetMs = RANK_BUDGET_MS,\r?$/m);
+  assert.match(source, /import \{ RANK_BUDGET_MS \} from '\.\/public\/state\.ts';/);
+  const browser = await fs.readFile(new URL('../public/browser-api.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(browser, /const RANK_BUDGET_MS/);
 });

@@ -34,6 +34,8 @@ import { calculate } from './calculate.ts';
 //   recipe picker's hunting ones, app/recipe-states.ts) are ranked too, each tried with the pool
 //   less it; their deltas are the plan with it minus that trial, so negative is what finding it
 //   saves, and 'infeasible' that the plan does not fit without it (`hunting` on the candidate).
+//   They are tried before the others (#1156), so a ranking that stops at `budgetMs` still has
+//   the "If found" figures the recipe picker shows.
 // The alternates the game unlocks with neither a hard drive nor research that costs one (#1044):
 // Polyester Fabric's MAM research and Distilled Silica's milestone. The MAM research for Turbofuel
 // and Compacted Coal costs a Hard Drive each, so a profile with the MAM recipes off still ranks them.
@@ -136,9 +138,10 @@ export function rankAlternates(
   const base = summed(baseStages)!;
   const list: AlternatePayoff[] = [];
   let stopped = false;
+  // The hunting ones first (#1156, see above).
   const jobs = [
-    ...candidates.map(recipe => ({ recipe, hunt: false })),
     ...hunted.map(recipe => ({ recipe, hunt: true })),
+    ...candidates.map(recipe => ({ recipe, hunt: false })),
   ];
   for (const { recipe: candidate, hunt } of jobs) {
     if (Date.now() - started > budgetMs) {

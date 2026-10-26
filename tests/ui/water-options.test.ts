@@ -37,11 +37,16 @@ let items: Catalog;
 let plain100: CurrentCalculatedPlan,
   overclocked: CurrentCalculatedPlan,
   early: CurrentCalculatedPlan;
+// The three plans are calculated once, in a hook of their own: in a full parallel run three whole
+// calculations take longer than the default 10 s hook limit, which the beforeEach that made them
+// on its first run hit. The limit only matters for a hook that hangs, so it is generous.
+beforeAll(() => {
+  items = catalog();
+  plain100 = generatedWith({ phase: '4', phaseMining: true });
+  overclocked = generatedWith({ phase: '4', phaseMining: true, waterOverclock: true });
+  early = generatedWith({ phase: '2', phaseMining: true });
+}, 120_000);
 beforeEach(() => {
-  items ??= catalog();
-  plain100 ??= generatedWith({ phase: '4', phaseMining: true });
-  overclocked ??= generatedWith({ phase: '4', phaseMining: true, waterOverclock: true });
-  early ??= generatedWith({ phase: '2', phaseMining: true });
   page();
   setQuery('');
 });

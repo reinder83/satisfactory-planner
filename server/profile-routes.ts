@@ -17,11 +17,12 @@ import {
 } from '../public/state.ts';
 import { needsFrozenMapping, restoreProgress } from '../public/handbook-migration.ts';
 import type { FrozenMapping } from '../public/handbook-migration.ts';
-import { calculate, rankAlternates } from '../planner.ts';
+import { calculate } from '../planner.ts';
 import { reviewedReplacement } from '../public/reviewed-plans.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { frozenMapping } from './persistence.ts';
+import { rankOffThread } from './ranking.ts';
 import { response } from './routing.ts';
 import { progressionData, recipeBookData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
@@ -168,7 +169,10 @@ export function profileRoutes({
   // Hard-drive payoff (#203): ranks the alternates the scoped calculated profile does not
   // allow yet for body.phase (rankAlternates in planner.ts) and stores the result on the
   // profile with the createdAt of its plan. Throttled at the cost of five calculations and
-  // stopped after rankBudgetMs; progress is untouched.
+  // stopped after rankBudgetMs; progress is untouched. It ranks on a worker thread (#1156,
+  // rankOffThread in ranking.ts), so the server answers other requests meanwhile; a profile
+  // recalculated or restored during the ranking keeps its plan and the ranking is refused (409),
+  // as the browser edition refuses it.
   async function rankPayoff({ req, user, save, profile, body }: ScopedRequest) {
     const plan = profile.plan;
     if (profile.kind !== 'calculated' || !plan)
@@ -180,10 +184,9 @@ export function profileRoutes({
     const payoff: StoredPayoff = {
       planCreatedAt: plan.createdAt,
       rankedAt: new Date().toISOString(),
-      ranking: rankAlternates(plan.settings, {
-        phase,
-        budgetMs: rankBudgetMs,
-        ...rankScope(input),
+      ranking: await rankOffThread({
+        settings: plan.settings,
+        options: { phase, budgetMs: rankBudgetMs, ...rankScope(input) },
       }),
     };
     await commit(draft => {
@@ -191,6 +194,8 @@ export function profileRoutes({
         .find(s => s.id === save.id && s.userId === user.id)
         ?.profiles.find(p => p.id === profile.id);
       if (!draftProfile) fail('Profile not found.', 404);
+      if (draftProfile.plan?.createdAt !== plan.createdAt)
+        fail('The profile changed while ranking. Rank again.', 409);
       draftProfile.payoff = payoff;
     });
     return response(payoff);

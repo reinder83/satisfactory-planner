@@ -261,6 +261,44 @@ test('a backup on another phase says so, and a bare state reads without a source
   );
 });
 
+// Ticks of keys no build-plan step has (a storage room container's) count as other ticks (#1219):
+// a restore that drops only those said "0 of N steps done now, 0 in the file".
+test('ticks outside the build-plan steps are named as other ticks', () => {
+  const withSlots = (state: SavedState, slots: number) => ({
+    ...state,
+    checks: {
+      ...state.checks,
+      ...Object.fromEntries(['A01', 'A02', 'B01'].slice(0, slots).map(at => ['slot-' + at, true])),
+    },
+  });
+  assert.equal(
+    backupQuestion(backupFile(ticking(0)), target(withSlots(ticking(0), 3)), context()).body,
+    `This replaces the progress of “Main”: 0 of ${total} steps done now, 0 in the file; 3 other ticks now, 0 in the file.`,
+  );
+  assert.equal(
+    backupQuestion(backupFile(withSlots(ticking(4), 1)), target(ticking(2)), context()).body,
+    `This replaces the progress of “Main”: 2 of ${total} steps done now, 4 in the file; 0 other ticks now, 1 in the file.`,
+  );
+  // The same number of them on both sides adds nothing.
+  assert.equal(
+    backupQuestion(
+      backupFile(withSlots(ticking(4), 2)),
+      target(withSlots(ticking(2), 2)),
+      context(),
+    ).body,
+    `This replaces the progress of “Main”: 2 of ${total} steps done now, 4 in the file.`,
+  );
+  // A profile's line in the import question adds them when it has any, as its card counts them.
+  assert.equal(
+    profileProgressText(plan, withSlots(ticking(2), 1), context()),
+    `Phase 3, 2 of ${total} steps done + 1 other tick`,
+  );
+  assert.equal(
+    profileProgressText(plan, withSlots(ticking(2), 3), context()),
+    `Phase 3, 2 of ${total} steps done + 3 other ticks`,
+  );
+});
+
 test('a refused backup reads exactly as the Docker server refuses it', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'import-summary-'));
   await seedLegacy(dir);

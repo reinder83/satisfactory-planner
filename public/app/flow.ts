@@ -12,17 +12,20 @@
 // After a group edit, or where the plan routed their excess to the central demand (#1063), a
 // group's own lines may make more than the sink has room for (#918, ItemBooks.offered): that part
 // is shared with the other lines' supply (ordinaryShares).
-// Every other item, and every item of a plan without such lines, is shared plan-wide.
+// A storage-only line (#1061) delivers only to storage, through the other storage-only lines, at
+// its own rates (stock-flow.ts, #1173). Every other item, and every item of a plan without such
+// lines, is shared plan-wide.
 import { num, num3 } from './format.ts';
 import { wholeShares } from './apportion.ts';
 import { itemBooks, placeTotal, sharedRate } from './group-links.ts';
 import { LINK_DUST, rowPlaces } from './group-order.ts';
 import { calcStage, calculated, checked, progressionData, stage } from './session.ts';
-import { factoryGroupsState } from './views/factories.ts';
+import { factoryGroupsState, machineCounts } from './views/factories.ts';
 import { power } from './wizard/fields.ts';
 import { sinkCaption, sinkCause } from './sink-cause.ts';
 import { lineSink, recycleModel } from './recycle.ts';
 import { recycleModelOf } from './stage-recycle.ts';
+import { stockShares } from './stock-flow.ts';
 import { BELT_MARKS, PIPE_MARKS, beltCapMark, phaseForTier } from '../preferences.ts';
 import { rowStepTitle } from '../progression.ts';
 import type { ItemBooks } from './group-links.ts';
@@ -164,6 +167,11 @@ export interface BankNote extends SupplyNote {
   // An own line's outputs its group does not mark, such as a byproduct (#1001): they go to the
   // plan-wide demand for them, as any other line's do.
   planWide?: SupplyNote & { items: string[] };
+  // A storage-only line (#1173): its destinations are its own, at its own rates (stockOutputs),
+  // with `shared` when the plan's other lines make one of its items too and `powers` when it
+  // also feeds the generators burning more fuel for the storage-only lines' power.
+  storageOnly?: true;
+  powers?: true;
 }
 
 // A factory's flow at one phase (see the top of this file).
@@ -755,16 +763,64 @@ function sinkOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext)
   return outputs;
 }
 
+// A storage-only line's own destinations (#1173): the other storage-only lines and the plan's
+// generators it feeds, protected storage and the sink, each at this line's own rate (stockShares
+// in stock-flow.ts), never the item's demand across the plan. They add up to what it makes.
+function stockOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext): FlowOutput[] {
+  const { item, fluid, unit, pre, mach } = output;
+  const { storedStage, settings } = context;
+  const shares = stockShares(row, item, storedStage);
+  const outputs: FlowOutput[] = [...shares.lines, ...shares.plan]
+    .filter(({ rate }) => rate > LINK_DUST)
+    .map(({ consumer, rate }) => ({
+      kind: 'consumer',
+      label: lineName(consumer, context),
+      icon: Object.keys(consumer.outputs || {})[0] || item,
+      link: { calcFactory: consumer.id },
+      rate,
+      unit,
+      pre,
+      mach: mach(rate),
+      beltTxt: beltTxt(lanePlan(rate, fluid, context.stageKey)),
+    }));
+  if (shares.storage > LINK_DUST)
+    outputs.push({
+      kind: 'store',
+      label: 'Protected storage',
+      icon: item,
+      rate: shares.storage,
+      unit,
+      pre,
+      mach: mach(shares.storage),
+    });
+  if (shares.sink > 0.002 && (storedStage.surplus?.[item] ?? 0) > 0) {
+    const surplus = Math.max(storedStage.surplus?.[item] ?? 0, shares.sink);
+    const cause = sinkCause(row, item, surplus, storedStage, !!settings?.wholeMachines, isFluid);
+    outputs.push({
+      kind: 'sink',
+      label: 'AWESOME Sink',
+      subTxt: sinkCaption(cause),
+      icon: item,
+      rate: shares.sink,
+      unit,
+      pre,
+    });
+  }
+  return outputs;
+}
+
 // The destinations of a calculated row's output items, largest rate first: one pass per item,
 // with its consuming rows, then its books, reserves and sinks. With byproducts, every
 // destination is prefixed with its item name and carries no machine count. A group's own line
 // made on site delivers an item its group marks to the group's consumers and the sink alone
 // (#876, #956): storage, deliveries and reserves draw on the other lines making the item. After a
 // group edit its group may offer the excess the sink has no room for (#918): then the line also
-// shares the other consumers, storage, deliveries and drone fuel (bookOutputs).
+// shares the other consumers, storage, deliveries and drone fuel (bookOutputs). A storage-only
+// line has its own destinations at its own rates (stockOutputs, #1173).
 export function flowOutputs(row: CalcRow, context: CalcFlowContext): FlowOutput[] {
   const outputs = Object.keys(row.outputs || {}).flatMap(item => {
     const output = outputItem(row, item, context);
+    if (row.stock) return stockOutputs(row, output, context);
     if (output.site?.group)
       return [
         ...consumerOutputs(row, output, context),
@@ -930,11 +986,22 @@ function ownLineNote(
   };
 }
 
-// The bank note of a calculated row: its own line's note when it is a group's own line made on
-// site for one of its outputs (ownLineNote), else what it says of the lines it shares its
-// destinations with (supplyNote).
+// The bank note of a storage-only line (#1173, BankNote.storageOnly): whether a line of the plan
+// that is not one makes one of its items, and whether it feeds the plan's generators.
+function storageOnlyNote(row: CalcRow, items: string[], context: CalcFlowContext): BankNote {
+  const shared = items.some(item => otherMakers(row, item, context).some(other => !other.stock));
+  const powers = items.some(item =>
+    stockShares(row, item, context.storedStage).plan.some(({ rate }) => rate > LINK_DUST),
+  );
+  return { shared, storageOnly: true, ...(powers ? { powers: true as const } : {}) };
+}
+
+// The bank note of a calculated row: a storage-only line's (storageOnlyNote), its own line's note
+// when it is a group's own line made on site for one of its outputs (ownLineNote), else what it
+// says of the lines it shares its destinations with (supplyNote).
 function bankNoteOf(row: CalcRow, context: CalcFlowContext): BankNote {
   const items = Object.keys(row.outputs || {});
+  if (row.stock) return storageOnlyNote(row, items, context);
   const site = context.site;
   const group = site && items.map(item => ownLineGroup(row, item, site)).find(Boolean);
   if (site && group)
@@ -948,16 +1015,36 @@ function bankNoteOf(row: CalcRow, context: CalcFlowContext): BankNote {
   return supplyNote(row, items, context);
 }
 
+// The machine card's clock (#1173): "at 20.9%" when the line's only machine is the adjustable one,
+// "29 at 100% + 1 at 62.4%" with whole machines beside it, and "at 100%" (one machine) or "all at
+// 100%" when none runs slower. The clock is the one the factory card and Machine setup's cells
+// show (machineCounts: one decimal, never rounded up to 100%); Machine setup also gives it exact.
+// A whole-generator line (#1064) burns fuel for a fractional equivalent but underclocks no
+// generator, as Machine setup says (#1087 review).
+export function machineClockWords(row: CalcRow): string {
+  const equivalent = rowEquivalent(row),
+    fraction = equivalent - Math.floor(equivalent + 1e-7);
+  const counts = machineCounts(
+    row.machines,
+    fraction > 1e-7 && !wholeGenerators(row) ? fraction * 100 : 100,
+  );
+  if (!counts.clock) return row.machines > 1 ? 'all at 100%' : 'at 100%';
+  return counts.full
+    ? `${num(counts.full)} at 100% + 1 at ${counts.clock}%`
+    : `at ${counts.clock}%`;
+}
+
 // The notes for a calculated row whose (capped) destinations are `outputs`. With more than one
 // delivery, the split suggests how the machines divide between them, the sink included, adding up
-// to the line's machines (splitMachines, #1067). A calculated row is whole
-// machines at 100% plus, when the equivalent is fractional, one adjustable machine; its clock
-// is in the dialog's Machine setup table. Consumer, storage and delivery rates are the item's
-// plan-wide demand, not this row's share: the bank note under the destinations says so, and
-// `shared` adds that another row makes one of the same items. A group's own line made on site
-// delivers to its group alone, and the other lines making its item leave that out (#956):
-// the note names the group, or says so (bankNoteOf). No item destinations (none, or a
-// generator's power grid alone), no bank note (#560).
+// to the line's machines (splitMachines, #1067). A calculated row is whole machines at 100% plus,
+// when the equivalent is fractional, one adjustable machine: `clock` says how they run
+// (machineClockWords), and the dialog's Machine setup gives the exact clock. Consumer, storage and
+// delivery rates are the item's plan-wide demand, not this row's share: the bank note under the
+// destinations says so, and `shared` adds that another row makes one of the same items. A group's
+// own line made on site delivers to its group alone, and the other lines making its item leave
+// that out (#956): the note names the group, or says so (bankNoteOf). A storage-only line's rates
+// are its own, and its note says so (#1173). No item destinations (none, or a generator's power
+// grid alone), no bank note (#560).
 export function flowNotes(
   row: CalcRow,
   outputs: FlowOutput[],
@@ -969,12 +1056,7 @@ export function flowNotes(
       splits.length > 1
         ? ` · split ≈ ${splits.map(o => machinesText(o.machines!)).join(' / ')} across the deliveries below`
         : '',
-    // A whole-generator line (#1064) burns fuel for a fractional equivalent but underclocks no
-    // generator, as Machine setup says (#1087 review).
-    clock:
-      row.machines - rowEquivalent(row) > 1e-7 && !wholeGenerators(row)
-        ? '@ 100% + 1 adjustable'
-        : '@ 100%',
+    clock: machineClockWords(row),
     bankNote: outputs.some(o => !o.noItem) ? bankNoteOf(row, context) : null,
   };
 }
@@ -1002,14 +1084,16 @@ function flowRecipe(row: CalcRow, inputs: FlowInput[]): RecipeView {
 
 // The machine bar of a calculated row: recipe, clock, per-machine rate and split, then the
 // row's output. A generator's bar leads with its power; a nuclear plant's waste follows in the
-// line under it, with the belts that carry it (#373).
+// line under it, with the belts that carry it (#373). Beside a slower machine's clock, the rate
+// per machine says it is at 100% (#1173), so "at 20.9%" never reads as making that rate.
 function flowBar(row: CalcRow, notes: FlowNotes, stageKey: string): NonNullable<FlowModel['bar']> {
   const equivalent = rowEquivalent(row),
     multi = Object.keys(row.outputs || {}).length > 1,
     generator = row.generationMW > 0,
-    outName = Object.keys(row.outputs || {})[0];
+    outName = Object.keys(row.outputs || {})[0],
+    atFull = notes.clock.endsWith('at 100%') ? '' : ' at 100%';
   return {
-    sub: `${row.name} · ${notes.clock}${outName && !multi ? ` · ${generator ? num3(row.generationMW / equivalent) + ' MW + ' : ''}${rateOfItem(outName, row.outputs[outName]! / equivalent, num3)} out per machine` : ''}${notes.split}`,
+    sub: `${row.name} · ${notes.clock}${outName && !multi ? ` · ${generator ? num3(row.generationMW / equivalent) + ' MW + ' : ''}${rateOfItem(outName, row.outputs[outName]! / equivalent, num3)} out per machine${atFull}` : ''}${notes.split}`,
     out:
       outName && !generator
         ? { rate: num(row.outputs[outName]), unit: FLUIDS.has(outName) ? ' m³/min' : '/min' }
@@ -1031,7 +1115,8 @@ function flowBar(row: CalcRow, notes: FlowNotes, stageKey: string): NonNullable<
 // delivery, drone fuel, augmenter fuel, extra cells, plutonium and surplus sinks. Those are
 // totals for the item, not this row's share, when several rows make it (bankNote says so). An
 // item a group makes on site follows the Logistics page's books for the profile's groups
-// instead (siteBooks, #956; see the top of this file). Links are { calcFactory: <row id> }.
+// instead (siteBooks, #956; see the top of this file), and a storage-only line its own (#1173).
+// Links are { calcFactory: <row id> }.
 export function calcFlowModel(row: CalcRow): FlowModel {
   // A dialog of the profile just left can be drawn once more; it then shows no destinations.
   const storedStage = calcStage() ?? { feasible: false };

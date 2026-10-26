@@ -59,7 +59,7 @@ import {
 } from './setup.ts';
 import { openAltRecipe } from '../../public/app/wizard/recipes.ts';
 import { NAME_HINT, noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
-import { nameDate } from '../../public/app/profile-edit.ts';
+import { nameDate, settingsChanges } from '../../public/app/profile-edit.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
 
@@ -542,6 +542,28 @@ test('the MAM recipes are their own box under every recipe access (#1058)', asyn
   assert.equal(legacy({ recipes: 'standard' }), true);
   assert.equal(legacy({ recipes: 'custom', alternateRecipes: [] }), false);
   assert.equal(legacy({ recipes: 'custom', alternateRecipes: [POLYESTER] }), true);
+});
+
+// Edit settings on a custom plan made before the box: visiting step 2 wrote false, so Review
+// listed "MAM recipes: Only the ones picked → Off" and Distilled Silica joined the pool. The field
+// stays absent until the box is changed.
+test('leaving step 2 untouched keeps a plan made before the MAM recipes box without the field', async () => {
+  for (const alternateRecipes of [[], ['Recipe_Alternate_PolyesterFabric_C']]) {
+    const before = { ...generated().settings, recipes: 'custom' as const, alternateRecipes };
+    wizardAt(2, {}, before);
+    await click('[data-wizard-step="1"]');
+    assert.equal('mamRecipes' in wizard!.settings, false, String(alternateRecipes));
+    const review = settingsChanges(before, wizard!.settings, []).changes;
+    assert.equal(
+      review.some(change => change.label === 'MAM recipes'),
+      false,
+    );
+  }
+  // A change of the box is stored.
+  wizardAt(2, {}, { recipes: 'custom', alternateRecipes: [] });
+  await change('[data-mam-recipes] input[name=mamRecipes]', true);
+  await click('[data-wizard-step="1"]');
+  assert.equal(wizard!.settings.mamRecipes, true);
 });
 
 test('Planner’s choice ticks the hard-drive alternates the plan uses, as recipes to hunt (#1058)', async () => {

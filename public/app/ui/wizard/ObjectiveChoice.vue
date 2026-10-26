@@ -8,7 +8,7 @@
   hides the weights at once; nothing is read until the step is left.
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import {
   OBJECTIVE_WEIGHT_MAX,
   OBJECTIVE_WEIGHTS,
@@ -33,8 +33,18 @@ const LABELS = {
 };
 const ZERO = 'Give at least one weight above 0.';
 
-function choose(e: Event) {
-  kind.value = (e.target as HTMLInputElement).value as ObjectiveKind;
+async function choose(e: Event) {
+  const card = e.target as HTMLInputElement;
+  kind.value = card.value as ObjectiveKind;
+  if (kind.value !== 'weighted') return;
+  // The weight boxes appear on the next render, after the live estimate read the step without
+  // them (readObjective then keeps the draft's weights, else 1 each): an input from the first box
+  // once it is there has the estimate read the weights it shows.
+  await nextTick();
+  card
+    .closest('[data-objective]')
+    ?.querySelector('[data-objective-weights] input')
+    ?.dispatchEvent(new Event('input', { bubbles: true }));
 }
 // While every weight is 0 the first box carries the message, so Continue stops there.
 function typed(e: Event) {

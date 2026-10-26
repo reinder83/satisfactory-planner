@@ -123,6 +123,9 @@ const view = computed(() =>
         to: link.to,
         fromName: name(link.from),
         toName: name(link.to),
+        // What the link's transport controls are named after, "Smelting to Parts" (#1254): the
+        // page has one By, Round trip and Fuel per link, so their names tell them apart.
+        between: `${name(link.from)} to ${name(link.to)}`,
         transport,
         mode,
         modes: linkModeOptions(link.items, FLUIDS, mode, stageKey()),
@@ -404,6 +407,7 @@ function recalculate(event: Event) {
                     >By
                     <select
                       :data-link-mode="link.key"
+                      :aria-label="`By: ${link.between}`"
                       :value="link.mode"
                       @change="
                         setTransport($event.target as HTMLSelectElement, link, {
@@ -429,6 +433,7 @@ function recalculate(event: Event) {
                       max="1440"
                       step="0.1"
                       :data-link-trip="link.key"
+                      :aria-label="`Round trip in minutes: ${link.between}`"
                       :value="trips[link.key]"
                       @input="trips[link.key] = ($event.target as HTMLInputElement).value"
                       @change="setTrip($event, link)"
@@ -440,6 +445,7 @@ function recalculate(event: Event) {
                     >Fuel
                     <select
                       :data-link-fuel="link.key"
+                      :aria-label="`Fuel: ${link.between}`"
                       :value="link.transport!.fuel"
                       @change="
                         setTransport($event.target as HTMLSelectElement, link, {

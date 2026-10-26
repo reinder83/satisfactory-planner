@@ -232,7 +232,8 @@ test('the import asks with what the file holds, and Cancel changes nothing', asy
     asked[0]!,
     /^anna\.json holds the save “<x-evil.*” with 1 profile, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}:$/,
   );
-  assert.match(shown.list, /^Main: Phase 2, \d+ of \d+ steps done$/);
+  // Its one tick outside the build-plan steps is named too (#1219), as the profile card counts it.
+  assert.match(shown.list, /^Main: Phase 2, \d+ of \d+ steps done \+ 1 other tick$/);
   assert.match(
     shown.note,
     /^Importing adds it as a new copy, “<x-evil.* \(from anna\.json, exported .*\)”, next to your 2 profiles\. Nothing you have is replaced, and you stay on the profile you have open\.$/,
