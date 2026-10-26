@@ -196,9 +196,13 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
             <td data-compare-total>
               <span class="compare-value">{{ row.total.text }}</span>
               <span v-if="row.covers" class="compare-note">{{ row.covers }}</span>
-              <span v-if="row.total.note" class="compare-note" data-compare-total-building>{{
-                row.total.note
-              }}</span>
+              <span
+                v-for="part in row.total.parts ?? []"
+                :key="part"
+                class="compare-note"
+                data-compare-total-parts
+                >{{ part }}</span
+              >
               <span
                 v-if="row.total.delta"
                 :class="['delta', row.total.delta.trend]"

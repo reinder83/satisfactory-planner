@@ -51,8 +51,8 @@ export interface TimeRow {
   baseline: boolean;
   // One cell per phase of `phases`, '—' for a phase the profile does not plan.
   phases: TimeCell[];
-  // The time to finish every planned phase; `note` the estimated building time it includes.
-  total: CompareCell & { note?: string };
+  // The time to finish every planned phase, with its parts as a phase's cell gives them.
+  total: CompareCell & { parts?: string[] };
   // The planned phases the total covers ("Phases 3–5").
   covers: string;
   // The shortest total among the profiles that plan the same phases as the baseline.
@@ -220,9 +220,15 @@ function timeCell(entry: ComparedPhase | undefined, minutes: number): TimeCell {
     return { text: durationOfHours(entry.hours), parts: ['delivery only', 'buildings unknown'] };
   return {
     text: durationOfHours(entry.hours + building),
-    parts: [`${shortDuration(entry.hours)} delivery`, `+ est. ${shortDuration(building)} building`],
+    parts: estimateParts(entry.hours + building, building),
   };
 }
+
+// The parts of a time to finish of `hours`, `building` of them estimated, a line each.
+const estimateParts = (hours: number, building: number): string[] => [
+  `${shortDuration(hours - building)} delivery`,
+  `+ est. ${shortDuration(building)} building`,
+];
 
 // A profile's time to finish every planned phase, and the estimated building time in it: null
 // unless each planned phase fits and has a delivery time (totalHours) and its building time is
@@ -290,9 +296,7 @@ export function compareView(
         phases: phases.map(key => timeCell(phaseOf(profile, key), minutes)),
         total: {
           text: total === null ? '—' : durationOfHours(total.hours),
-          ...(total && minutes > 0
-            ? { note: `incl. est. ${shortDuration(total.building)} building` }
-            : {}),
+          ...(total && minutes > 0 ? { parts: estimateParts(total.hours, total.building) } : {}),
           delta:
             profile.id === base.id || !same(profile)
               ? undefined

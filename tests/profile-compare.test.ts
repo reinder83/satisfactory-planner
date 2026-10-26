@@ -332,7 +332,7 @@ test('the time to finish adds the estimated building time to the delivery time',
   const quick0 = deliveryOnly.time.find(row => row.id === 'q')!;
   assert.deepEqual(quick0.phases, [{ text: 'about 2 h' }, { text: 'about 3 h' }]);
   assert.equal(quick0.total.text, 'about 5 h');
-  assert.equal(quick0.total.note, undefined, 'no estimate at 0 minutes');
+  assert.equal(quick0.total.parts, undefined, 'no estimate at 0 minutes');
   assert.ok(quick0.fastest);
 
   const estimated = compareView(profiles, 'q', '1', 3)!;
@@ -344,9 +344,9 @@ test('the time to finish adds the estimated building time to the delivery time',
     parts: ['2 h delivery', '+ est. 3 h building'],
   });
   assert.equal(quick.total.text, 'about 14 h');
-  assert.equal(quick.total.note, 'incl. est. 9 h building');
+  assert.deepEqual(quick.total.parts, ['5 h delivery', '+ est. 9 h building']);
   assert.equal(lean.total.text, 'about 10 h 30 min');
-  assert.equal(lean.total.note, 'incl. est. 1 h 30 min building');
+  assert.deepEqual(lean.total.parts, ['9 h delivery', '+ est. 1 h 30 min building']);
   assert.deepEqual(lean.total.delta, { text: '−3 h 30 min', trend: 'lower' });
   assert.ok(lean.fastest && !quick.fastest, 'the estimate decides the fastest');
   assert.deepEqual(fastestProfiles(profiles, 'q', 3), {

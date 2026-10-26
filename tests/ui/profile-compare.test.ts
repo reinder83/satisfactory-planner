@@ -121,7 +121,7 @@ test('the minutes per building set the estimated building time of the time to fi
   assert.equal(parts.length, 2);
   assert.match(parts[0]!, /delivery$/);
   assert.match(parts[1]!, /^\+ est\. .* building$/);
-  assert.ok($('[data-compare-time="p"] [data-compare-total-building]'));
+  assert.ok($('[data-compare-time="p"] [data-compare-total-parts]'));
   assert.match($('[data-compare-time-note]')!.textContent!, /estimate/);
   // The buildings to add and their parts, measured from the plan.
   assert.equal(
@@ -136,7 +136,7 @@ test('the minutes per building set the estimated building time of the time to fi
   assert.equal(buildMinutes, 0);
   assert.equal(localStorage.getItem('planner-build-minutes'), '0');
   assert.equal($('[data-compare-time-parts]'), null, 'delivery time only');
-  assert.equal($('[data-compare-total-building]'), null);
+  assert.equal($('[data-compare-total-parts]'), null);
   assert.equal(
     $('[data-compare-time="p"] [data-compare-time-cell="1"] .compare-value')!.textContent,
     durationOfHours(four.hours!),
