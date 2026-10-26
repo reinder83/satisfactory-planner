@@ -85,7 +85,10 @@ test('each link’s By, Round trip and Fuel are named after the link, names esca
   }
   const labels = selects.map(select => select.getAttribute('aria-label'));
   assert.equal(new Set(labels).size, labels.length, 'every link its own name');
-  assert.ok(labels.some(label => label!.startsWith(`By: ${evil} to `)), 'user text as text');
+  assert.ok(
+    labels.some(label => label!.startsWith(`By: ${evil} to `)),
+    'user text as text',
+  );
   // A road vehicle adds a round trip and a fuel, named after the same link.
   const select = selects.find(one =>
     [...one.options].some(option => option.value === 'truck' && !option.disabled),
@@ -111,7 +114,7 @@ test('under reduced motion the save dot and ADA’s mark, in every tone, do not 
   const still = [...blocks.matchAll(/([^{}]+)\{\s*animation: none;/g)].flatMap(match =>
     match[1]!.split(',').map(selector => selector.trim()),
   );
-  for (const selector of ['.dot', '.ada-mark', ".ada[data-tone] .ada-mark"])
+  for (const selector of ['.dot', '.ada-mark', '.ada[data-tone] .ada-mark'])
     assert.ok(still.includes(selector), `${selector} in ${JSON.stringify(still)}`);
   // The fault tone's blink is .ada[data-tone='fault'] .ada-mark: the reduced-motion rule needs
   // the same weight and comes later in the file to win.
