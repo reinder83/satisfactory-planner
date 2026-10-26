@@ -130,26 +130,25 @@ const settle = async () => {
 };
 const rowIds = () => $$('[data-payoff-row]').map(row => row.dataset.payoffRow);
 
-test('#1075: the best next hard drive sits above the build sequence, with a threshold and the first rows', async () => {
+test('#1075, #1243: the best next hard drive has the Hard drives tab, with a threshold and every row', async () => {
   const ids = catalog()
     .alternates.filter(a => !a.mam && !a.milestone)
     .slice(0, 12)
     .map(a => a.id);
   planAt(ids.map((id, i) => entry(id, -(i + 1))));
+  await nextTick();
   const panel = $('[data-payoff]')!;
   assert.equal(text('[data-payoff] h2'), 'Best next hard drive');
-  const checklist = $$('h2').find(h => h.textContent === 'Build sequence')!;
-  assert.ok(
-    panel.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING,
-    'before the build sequence',
-  );
-  assert.match(text('[data-payoff-summary]'), /12 of 12 alternates checked for Phases 3–5/);
-  // Sorted by buildings, the first eight shown.
-  assert.equal(rowIds().length, 8);
-  assert.equal(rowIds()[0], ids[11]);
-  $('[data-payoff-more]')!.click();
+  assert.equal(panel.closest('[role="tabpanel"]')!.id, 'plan-panel-hard-drives');
+  assert.equal($('#plan-panel-hard-drives')!.hidden, true, 'the page opens on Build sequence');
+  $<HTMLButtonElement>('[data-plan-tab="hard-drives"]')!.click();
   await nextTick();
+  assert.equal($('#plan-panel-hard-drives')!.hidden, false);
+  assert.match(text('[data-payoff-summary]'), /12 of 12 alternates checked for Phases 3–5/);
+  // Sorted by buildings, every row shown: the tab has room (#1243).
   assert.equal(rowIds().length, 12);
+  assert.equal(rowIds()[0], ids[11]);
+  assert.equal($('[data-payoff-more]'), null, 'no "Show all"');
   // The threshold hides the rows that save fewer buildings, and says how many.
   const threshold = $<HTMLSelectElement>('[data-payoff-threshold]')!;
   threshold.value = '10';

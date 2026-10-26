@@ -1,7 +1,8 @@
 // "Where a somersloop pays off most" on the build plan (#1215, ui/plan/SloopPayoffPanel.vue): what
 // one amplified machine saves on each line of the phase, best first by raw resources per
-// somersloop, the first five until "Show all", each name opening its line's dialog. Nothing before
-// Phase 3 or in New to Satisfactory mode, and nothing is stored or recalculated.
+// somersloop, every line in the build plan's Somersloops tab (#1243), each name opening its line's
+// dialog. Nothing before Phase 3 or in New to Satisfactory mode, and nothing is stored or
+// recalculated.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
@@ -109,19 +110,24 @@ test('each line says what one amplified machine saves, best first', async () => 
   assert.deepEqual(plan, before, 'the plan is not changed');
 });
 
-test('a real plan shows the first five until "Show all", in the ranking’s order', async () => {
+test('a real plan shows every line in the Somersloops tab, in the ranking’s order', async () => {
   const plan = generated();
   const ranked = sloopPayoffs(plan.stages['4'], '4', plan.settings).map(entry => entry.id);
   assert.ok(ranked.length > 5, 'the default Phase 4 has more than five candidates');
   await show(plan, '4');
   const shown = () => $$<HTMLElement>('[data-sloop-line]').map(item => item.dataset.sloopLine);
-  assert.deepEqual(shown(), ranked.slice(0, 5));
-  const more = $<HTMLButtonElement>('[data-sloop-more]')!;
-  assert.equal(words(more), `Show all ${ranked.length}`);
-  more.click();
+  assert.deepEqual(shown(), ranked, 'the tab has room for the whole list (#1243)');
+  assert.equal($('[data-sloop-more]'), null, 'no "Show all"');
+  assert.equal(
+    $('[data-sloop-payoff]')!.closest('[role="tabpanel"]')!.id,
+    'plan-panel-somersloops',
+  );
+  const tab = $<HTMLButtonElement>('[data-plan-tab="somersloops"]')!;
+  assert.equal(tab.getAttribute('aria-selected'), 'false');
+  tab.click();
   await nextTick();
-  assert.deepEqual(shown(), ranked);
-  assert.equal(words($('[data-sloop-more]')), 'Show fewer');
+  assert.equal(tab.getAttribute('aria-selected'), 'true');
+  assert.equal($('#plan-panel-somersloops')!.hidden, false);
   // Amplified twins, generators and machines without slots are never listed.
   const rows = new Map((plan.stages['4'].rows || []).map(row => [row.id, row]));
   for (const id of shown()) {
@@ -135,6 +141,7 @@ test('nothing before Phase 3, nor in New to Satisfactory mode', async () => {
   const plan = generated();
   await show(plan, '2');
   assert.equal($('[data-sloop-payoff]'), null, 'machines take no somersloops before Phase 3');
+  assert.equal($('[data-plan-tab="somersloops"]'), null, 'and no tab for it');
   setBeginnerMode(true);
   await show(plan, '4');
   assert.equal($('[data-sloop-payoff]'), null, 'New to Satisfactory hides it');
