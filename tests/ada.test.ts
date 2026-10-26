@@ -663,6 +663,20 @@ test('ADA names the objective a plan was calculated with, when not the fewest bu
   }
 });
 
+test('ADA names the cap on hard drives a plan was calculated with, only when it has one (#1233)', () => {
+  const line = (driveCap?: string) =>
+    adaRemarks(facts({ view: 'plan', ...(driveCap === undefined ? {} : { driveCap }) })).find(
+      r => r.id === 'drive-cap',
+    );
+  assert.equal(line('at most 3 hard-drive alternates')!.tone, 'calm');
+  assert.equal(
+    line('at most 3 hard-drive alternates')!.text,
+    'This plan counts on at most 3 hard-drive alternates beyond the ones you own, over all its phases: its hard-drive steps list only those, and every number here already counts the cap. Fewer crash sites, same deadline.',
+  );
+  assert.match(line('no hard-drive alternates')!.text, /^This plan counts on no hard-drive/);
+  assert.equal(line(), undefined, 'absent means no cap');
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

@@ -45,6 +45,7 @@ const view = computed(() =>
       objective: settings.objective,
       caps: settings.phaseCaps,
       beltCap: settings.beltCap,
+      driveCap: settings.driveCap,
       hours: settings.hours,
       phaseTime: settings.phaseTime || 'every',
       roundRates: !!settings.roundRates,
@@ -86,7 +87,7 @@ const view = computed(() =>
     >
   </div>
   <ObjectiveChoice :objective="view.objective" />
-  <PhaseCaps :caps="view.caps" :belt-cap="view.beltCap" />
+  <PhaseCaps :caps="view.caps" :belt-cap="view.beltCap" :drive-cap="view.driveCap" />
   <div class="form-grid">
     <InputField
       label="Profile name"

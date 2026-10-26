@@ -84,7 +84,7 @@ import { sloopPayoffs } from './sloop-payoff.ts';
 import { draftNeeds } from './draft-advice.ts';
 import { unlockGroups } from './unlock-groups.ts';
 import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
-import { OWNED_GENERATORS, objectiveWords, phaseBelt } from '../preferences.ts';
+import { OWNED_GENERATORS, driveCapWords, objectiveWords, phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 import type { Step } from './tasks.ts';
 
@@ -531,6 +531,10 @@ function adaFacts(): AdaFacts {
     ...(calculated?.settings.objective === undefined
       ? {}
       : { objective: objectiveWords(calculated.settings.objective, true) }),
+    // The cap on hard drives the open plan was calculated with (#1233), only when it has one.
+    ...(calculated?.settings.driveCap === undefined
+      ? {}
+      : { driveCap: driveCapWords(calculated.settings.driveCap) }),
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,

@@ -506,6 +506,11 @@ function readPhaseCaps(data: FormData, settings: WizardSettings) {
   const belt = Number(data.get('beltCap') ?? '');
   if (beltCapMark(belt)) settings.beltCap = belt as 2 | 3 | 4 | 5;
   else delete settings.beltCap;
+  // The cap on hard drives (#1233): the box's number, which settings() checks; blank leaves the
+  // field out.
+  const drives = String(data.get('driveCap') ?? '').trim();
+  if (drives !== '') settings.driveCap = Number(drives);
+  else delete settings.driveCap;
 }
 
 // A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:

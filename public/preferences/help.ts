@@ -21,6 +21,8 @@ export const helpText: Record<string, string> = {
     'The most a phase may build and draw. Buildings count every machine and generator on the production lines, as the plan counts them; miners and extractors are not lines. MW is the power the phase needs: its lines with the utility allowance, and its miners and extractors. A plan keeps the caps it was calculated with until you change them in Edit settings.',
   beltCap:
     'The best conveyor belt the plan may count on, in every phase, even where its milestones unlock a better one or you already have one. With mining and belts per phase, a node then gives no more than that belt carries, so the plan taps more nodes; the belt advice on Logistics and in a production line never suggests a better belt. A plan keeps the cap it was calculated with until you change it in Edit settings.',
+  driveCap:
+    'The most hard-drive alternates the whole plan may count on, beyond the ones you already own; recipes a MAM node or a milestone unlocks need no hard drive and do not count. Hard drives stay found, so the cap covers every phase together. When the plan would use more, the planner picks the set that serves the last phase best and plans every phase from it; its hard-drive steps then list only those. 0 means none but the ones you own. A plan keeps the cap it was calculated with until you change it in Edit settings.',
   availablePowerMW:
     'Enter unused capacity after existing consumption. Reserve existing generator fuel separately in Resources.',
   recipes:

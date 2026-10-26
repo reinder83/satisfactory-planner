@@ -14,6 +14,7 @@ import { fail, settings } from './settings.ts';
 import { capExcess, cappedRun, withoutCaps } from './model.ts';
 import { draftStage } from './draft.ts';
 import { buildCostDraft } from './build-cost-draft.ts';
+import { holdToDriveCap } from './drive-cap.ts';
 import {
   pullFinalPhaseForward,
   judgeAugmenterFuel,
@@ -73,9 +74,17 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // phase whose plan is over one is planned again (holdToCaps), so a cap that the plan keeps
   // within changes nothing at all.
   const caps = config.phaseCaps;
-  const { stages, warnings } = planStages(caps ? withoutCaps(config) : config, onPhase);
+  const free = planStages(caps ? withoutCaps(config) : config, onPhase);
+  // The cap on hard drives (#1233) comes before them: a plan that counts on at most the cap stays
+  // as it is; otherwise every phase is planned again from the set the cap picks, and the caps per
+  // phase hold the phases of that plan (`planned`, the settings with the set).
+  const {
+    stages,
+    warnings,
+    config: planned,
+  } = holdToDriveCap(config, free, settings => planStages(settings, onPhase));
   if (caps)
-    for (const warning of holdToCaps(config, caps, stages, onPhase))
+    for (const warning of holdToCaps(planned, caps, stages, onPhase))
       if (!warnings.includes(warning)) warnings.push(warning);
   // Each phase keeps the generators the phase before built, where it still fuels them (#1064),
   // and counts those the player already has (#1068) the same way.

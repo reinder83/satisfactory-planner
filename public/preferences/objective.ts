@@ -91,3 +91,22 @@ export function phaseCapWords(caps: PhaseCaps | undefined): string {
   );
   return amounts.length ? `at most ${amounts.join(' and ')} per phase` : '';
 }
+
+// The cap on hard drives (#1233, `settings.driveCap`): the most hard-drive alternates the whole
+// plan may count on beyond the ones the player owns, a whole number from 0 (none but those) to
+// DRIVE_CAP_MAX, more than the game has. settings() in planner/settings.ts refuses anything else,
+// and absent means no cap.
+export const DRIVE_CAP_MAX = 200;
+// A cap on hard drives that settings() keeps, or undefined for any other value.
+export const driveCapOf = (value: unknown): number | undefined =>
+  Number.isInteger(value) && (value as number) >= 0 && (value as number) <= DRIVE_CAP_MAX
+    ? (value as number)
+    : undefined;
+// The cap in words: "at most 3 hard-drive alternates", "no hard-drive alternates" for 0, or ''
+// without one (en-US grouping, as the caps per phase are worded).
+export function driveCapWords(cap: unknown): string {
+  const most = driveCapOf(cap);
+  if (most === undefined) return '';
+  if (most === 0) return 'no hard-drive alternates';
+  return `at most ${most.toLocaleString('en-US')} hard-drive alternate${most === 1 ? '' : 's'}`;
+}
