@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { calcFlowModel, flowOutputs, rowEquivalent } from '../../public/app/flow.ts';
-import type { CalcFlowContext, FlowOutput } from '../../public/app/flow.ts';
+import type { CalcFlowContext } from '../../public/app/flow.ts';
 import { num } from '../../public/app/format.ts';
 import { render } from '../../public/app/shell.ts';
 import { calcStage } from '../../public/app/session.ts';
