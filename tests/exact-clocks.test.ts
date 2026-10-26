@@ -29,6 +29,7 @@ import {
   wantedExactClocks,
   withExactClock,
 } from '../public/app/exact-clocks.ts';
+import { settingsChanges } from '../public/app/profile-edit.ts';
 import {
   checkBase,
   initialState,
@@ -433,6 +434,13 @@ test('the exact-clock choice: toggles, compares and names what a recalculation c
   const precise = { ...plan, settings: { ...plan.settings, wholeMachines: false } };
   assert.equal(exactClocksChange(precise, { exactClocks: asked }), null);
   assert.equal(lineClockNote(precise, { exactClocks: asked }, '3', line.id), '');
+  // Edit settings' Review names a change of the lines (#1237), not another order of them.
+  const lines = (exactClocks: ExactClocks) =>
+    settingsChanges({ exactClocks: { '3': ['b', 'a'] } }, { exactClocks }, []).changes;
+  assert.deepEqual(lines({ '3': ['a', 'b'], '4': [] }), []);
+  assert.deepEqual(lines({ '3': ['a'], '4': ['c', 'd'] }), [
+    { label: 'Exact clocks', before: '2 lines', after: '3 lines' },
+  ]);
 });
 
 test('the choice is state version 16; every released format loads unchanged without it', () => {
@@ -538,6 +546,26 @@ async function checkEdition(
       [done.backupId, 'Whole (before edit)'],
     ],
     'the version with the choice unplanned is kept',
+  );
+  // A choice the new plan is not calculated with (saved after Edit settings started its draft)
+  // stays asked for through a recalculation in place (#1237): the line asked back to whole
+  // machines, then a recalculation with the plan's own settings, which keep it at exact clocks.
+  await request('/api/update', { type: 'exactClocks', value: {} });
+  const whole = await context();
+  await request('/api/recalculate', {
+    name: 'Whole',
+    backupName: 'Whole (before edit 2)',
+    settings: whole.plan.settings,
+    planCreatedAt: whole.plan.createdAt,
+  });
+  const kept = await context();
+  assert.notEqual(kept.plan.createdAt, whole.plan.createdAt, 'recalculated');
+  assert.deepEqual(kept.plan.settings.exactClocks, { '3': [line.id] });
+  assert.deepEqual(kept.state.exactClocks, {}, 'the choice is kept');
+  assert.deepEqual(
+    exactClocksChange(kept.plan, kept.state)?.whole.map(entry => entry.id),
+    [line.id],
+    'and still offered',
   );
 }
 
