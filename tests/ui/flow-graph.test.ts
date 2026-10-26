@@ -7,8 +7,8 @@
 // drag opens that line, and − / + / Fit zoom it. Rearranging (#1224): a drag of a line's box moves
 // it and saves the layout once it ends, an arrow key moves a focused line, Reset layout goes back
 // to the automatic layout, and the graph opens again as it was left. Storage and the sink (#1231):
-// their arrows are quiet until lit, a box pointed at or focused lights up its own arrows and
-// fades the rest, and "Show storage and sink as tags" draws them as named tags, saved with the
+// their arrows are quiet until lit, a box pointed at or focused lights up its own arrows with
+// their labels (a line's quiet ones too, #1242) and fades the rest, and "Show storage and sink as tags" draws them as named tags, saved with the
 // layout. Inputs and outputs (#1240): a drag (mouse or finger) or the arrow keys move them too,
 // their arrows follow and they are saved with the layout (version 25), kept while storage and the
 // sink are tags and put back by Reset layout; every move snaps to a 5 px grid. Where the boxes land
@@ -550,10 +550,37 @@ test('the arrows into storage and the sink are quiet: no label or arrowhead unti
   assert.ok(has(labelEl(first.id), 'hidden'), 'and goes again');
 });
 
-test('pointing at a line lights up its arrows, its quiet ones without labels, and fades the rest', async () => {
+// Where a label is drawn (its middle), from its transform.
+const labelSpot = (id: string) => {
+  const [, x, y] = labelEl(id)
+    .getAttribute('transform')!
+    .match(/translate\(([-\d.]+),([-\d.]+)\)/)!;
+  return { x: Number(x), y: Number(y) };
+};
+// No two of the shown labels of `edges` overlap.
+function assertApart(edges: FlowGraph['edges']) {
+  for (const one of edges)
+    for (const other of edges)
+      if (one !== other) {
+        const a = labelSpot(one.id),
+          b = labelSpot(other.id);
+        assert.ok(
+          Math.abs(a.x - b.x) >= (one.label!.width + other.label!.width) / 2 - 0.2 ||
+            Math.abs(a.y - b.y) >= 30 - 0.2,
+          `${one.id} and ${other.id} overlap`,
+        );
+      }
+}
+
+test('pointing at a line lights up its arrows, its quiet ones with labels too, and fades the rest', async () => {
   await openGraph();
   const graph = graphOf();
-  const source = graph.edges.find(edge => edge.quiet && edge.path)!.from;
+  // The line with the most arrows to storage and the sink.
+  const quietFrom = (id: string) => graph.edges.filter(e => e.quiet && e.path && e.from === id);
+  const source = graph.nodes
+    .map(node => node.id)
+    .sort((a, b) => quietFrom(b).length - quietFrom(a).length)[0]!;
+  assert.ok(quietFrom(source).length, 'a line of the iron group sends to storage or the sink');
   const own = graph.edges.filter(edge => edge.path && (edge.from === source || edge.to === source));
   const others = graph.edges.filter(edge => edge.path && !own.includes(edge));
   enter(nodeEl(source));
@@ -562,22 +589,26 @@ test('pointing at a line lights up its arrows, its quiet ones without labels, an
   for (const edge of own) {
     assert.ok(has(edgeEl(edge.id), 'hl'), edge.id + ' lit');
     assert.equal(edgeEl(edge.id).getAttribute('marker-end'), 'url(#fgraph-arrow)', 'arrowhead');
-    if (edge.quiet) assert.ok(has(labelEl(edge.id), 'hidden'), edge.id + ' without its label');
+    if (edge.quiet) assert.ok(has(labelEl(edge.id), 'lit'), edge.id + ' with its label (#1242)');
     else
       assert.ok(
         ['lit', 'hidden'].some(state => has(labelEl(edge.id), state)),
         edge.id,
       );
   }
+  // The quiet ones' labels go through the same spreading as the others: none overlap.
+  assertApart(own.filter(edge => has(labelEl(edge.id), 'lit')));
   for (const edge of others) {
     assert.ok(has(edgeEl(edge.id), 'faded'), edge.id + ' faded');
-    if (!edge.quiet) assert.ok(has(labelEl(edge.id), 'faded'));
+    if (edge.quiet) assert.ok(has(labelEl(edge.id), 'hidden'), edge.id + ' another line’s');
+    else assert.ok(has(labelEl(edge.id), 'faded'));
   }
-  // Leaving the box puts everything back.
+  // Leaving the box puts everything back: the quiet arrows unlabelled again.
   leave(nodeEl(source));
   await nextTick();
   assert.equal($$('#detail .fgraph-edge.hl, #detail .fgraph-edge.faded').length, 0);
   assert.equal(has(nodeEl(source), 'on'), false);
+  for (const edge of quietFrom(source)) assert.ok(has(labelEl(edge.id), 'hidden'), edge.id);
 });
 
 test('focusing the sink or storage lights up every arrow into it with its label, spread apart', async () => {
@@ -591,24 +622,7 @@ test('focusing the sink or storage lights up every arrow into it with its label,
   for (const edge of into) assert.ok(has(edgeEl(edge.id), 'hl'), edge.id);
   const shown = into.filter(edge => has(labelEl(edge.id), 'lit'));
   assert.ok(shown.length, 'the lit arrows show their labels');
-  // No two shown labels overlap.
-  const spot = (id: string) => {
-    const [, x, y] = labelEl(id)
-      .getAttribute('transform')!
-      .match(/translate\(([-\d.]+),([-\d.]+)\)/)!;
-    return { x: Number(x), y: Number(y) };
-  };
-  for (const one of shown)
-    for (const other of shown)
-      if (one !== other) {
-        const a = spot(one.id),
-          b = spot(other.id);
-        assert.ok(
-          Math.abs(a.x - b.x) >= (one.label!.width + other.label!.width) / 2 - 0.2 ||
-            Math.abs(a.y - b.y) >= 30 - 0.2,
-          `${one.id} and ${other.id} overlap`,
-        );
-      }
+  assertApart(shown);
   nodeEl(place).dispatchEvent(new FocusEvent('blur'));
   await nextTick();
   assert.equal(has(nodeEl(place), 'on'), false);
