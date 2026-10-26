@@ -243,11 +243,9 @@ test('the phone ticker keeps the remark announced while folded (style.css, SP-38
   const folded = rule('.ada:not(.is-open) .ada-line');
   assert.match(folded, /clip-path: inset\(50%\)/);
   assert.doesNotMatch(folded, /display: none|visibility: hidden/);
-  // Wider screens never show the ticker.
-  assert.match(
-    css.slice(0, css.indexOf('@media (max-width: 720px)')),
-    /\n\.ada-ticker \{\n  display: none;/,
-  );
+  // Wider screens never show the ticker: its top-level rule (not indented in a media block) hides
+  // it. A phone block now comes before that rule (#1256), so this looks at the whole sheet.
+  assert.match(css, /\n\.ada-ticker \{\n  display: none;/);
 });
 
 test('ADA repeats a renamed step escaped', async () => {
