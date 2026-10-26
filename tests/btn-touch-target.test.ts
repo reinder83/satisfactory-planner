@@ -277,3 +277,15 @@ test('check box rows, a slot tick and the links on a line of their own are 44px 
     assert.match(phoneRule(selector + '::after'), /content:\s*none/, selector);
   }
 });
+
+test("the build sequence draft notice's Open Overview is a notice's quiet button, 44px on a phone (#1256)", () => {
+  // 34px tall at 390px before (#1262): it takes the notices' 44px phone rule.
+  const page = fs
+    .readFileSync(new URL('../public/app/ui/pages/CalculatedPlanPage.vue', import.meta.url), 'utf8')
+    .replace(/\r\n/g, '\n');
+  const notice =
+    /<div v-if="draftNotice" class="notice[^"]*" data-draft-steps>([\s\S]*?)<\/div>/.exec(page);
+  assert.ok(notice, 'the draft notice of the build sequence');
+  assert.match(notice[1]!, /<button type="button" class="btn quiet" data-draft-overview/);
+  assert.match(phoneRule('.notice .btn.quiet'), /(^|[;\s])min-height:\s*44px\s*;/);
+});
