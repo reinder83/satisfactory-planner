@@ -215,14 +215,29 @@ test('with build costs counted, a phase keeps within the caps and still checks i
   assert.ok(needOf(three) <= 900, String(needOf(three)));
   for (const phase of ['1', '2'] as const)
     assert.equal(JSON.stringify(capped.stages[phase]), JSON.stringify(counted.stages[phase]));
-  // A phase that cannot make its buildings' parts in time is that draft, cap or not.
+  // A phase that cannot make its buildings' parts in time is that draft, cap or not. Its own plan
+  // is over the cap as well, so its reason names the cap too (#1020): its time fits the budgets
+  // only, and at that time the phase is the cap's draft.
   const short = { phase: '3', goal: 'timed', hours: 1, buildCost: true } as const;
   const plain = calculate(short),
     tight = calculate({ ...short, phaseCaps: { mw: 1000 } });
   for (const phase of ['4', '5'] as const) {
-    assert.ok(tight.stages[phase].buildCost, `Phase ${phase}`);
-    assert.equal(JSON.stringify(tight.stages[phase]), JSON.stringify(plain.stages[phase]));
+    const { reason, capShortfalls, ...draft } = tight.stages[phase];
+    const { reason: before, ...unchanged } = plain.stages[phase];
+    assert.ok(draft.buildCost, `Phase ${phase}`);
+    assert.equal(JSON.stringify(draft), JSON.stringify(unchanged), 'the draft is the same');
+    assert.equal(capShortfalls!.length, 1);
+    assert.equal(capShortfalls![0]!.name, 'mw');
+    assert.equal(capShortfalls![0]!.cap, 1000);
+    assert.ok(reason!.startsWith(before! + ' '), `Phase ${phase}: the build-cost reason first`);
+    assert.equal(
+      reason!.slice(before!.length + 1),
+      `Its plan is over the cap per phase too. Without the cap, this phase's plan needs ${phaseCapAmount('mw', capShortfalls![0]!.needed)}; the cap is 1,000 MW. Raise the cap (Goals) as well: the time above fits the budgets, not the cap.`,
+    );
   }
+  assert.equal(tight.stages['4'].capShortfalls![0]!.needed, 48387.9);
+  // Without the cap, the same draft names none.
+  assert.equal(plain.stages['4'].capShortfalls, undefined);
 });
 
 test('storage-only lines keep within the caps: storage then takes only the surplus', () => {

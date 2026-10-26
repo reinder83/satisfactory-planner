@@ -163,6 +163,18 @@ test('the belt advice never counts a belt above the cap, and says the cap is why
     /^Phase 4 plans with Mk\.4 belts \(480\/min\), the best your belt cap allows, and Mk\.2 pipes \(600 m³\/min\)\./,
   );
   assert.match(plain(dialog.querySelector('.logi-row')?.textContent), /2 × Mk\.4 belts/);
+  // Milestones ticked out of order (#1020): Mk.5's ticked in Phase 2 while the cap's Mk.4 is
+  // neither ticked nor due. The best belt is Mk.3, below the cap, so the cap is not why, and
+  // Mk.4 is still the next belt up.
+  open({
+    calculated: withSettings({}),
+    phase: '2',
+    state: { checks: { 'unlock-Schematic_7-2_C': true } },
+  });
+  const early2 = bestLane(false, '2');
+  assert.equal(early2.mark, 'Mk.3');
+  assert.equal('capped' in early2, false);
+  assert.equal(early2.next?.mark, 'Mk.4');
   // Without a cap the plan advises as before.
   open({ calculated: structuredClone(mined), phase: '4' });
   assert.equal(bestLane(false, '4').mark, 'Mk.5');

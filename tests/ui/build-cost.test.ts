@@ -116,7 +116,7 @@ test('a phase its buildings do not fit shows the reason and an option on Edit se
   render();
   assert.match(
     plain($('[data-draft]')?.textContent),
-    /Counting what its buildings cost to build, this phase does not fit in its 1 h: its [\d,]+ .+ to build/,
+    /Counting what its buildings cost to build, this phase does not fit in its 1 h: to also make its buildings' parts within its 1 h, this phase would need [\d,]+ .+ to build/,
   );
   assert.ok($$('[data-draft-lever]').some(item => item.dataset.draftLever === 'buildCost'));
   const lever = $('[data-draft-lever="buildCost"]')!;

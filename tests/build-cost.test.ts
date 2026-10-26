@@ -146,12 +146,13 @@ test('a setup whose build cost does not fit is a draft whose reason names it', (
     assert.equal(cost.hours, 1);
     assert.ok(Object.keys(cost.buildings).length > 3);
     assert.deepEqual(cost.parts, partsOf(cost));
-    // "Counting what its buildings cost to build, this phase does not fit in its 1 h: its 154
-    // Miners Mk.3 need 7,700 × Steel Pipe, … to build, and its 8,761 other buildings need parts
-    // too, which it can't make in time along with its deliveries."
+    // "Counting what its buildings cost to build, this phase does not fit in its 1 h: to also make
+    // its buildings' parts within its 1 h, this phase would need 154 Miners Mk.3 (7,700 × Steel
+    // Pipe, … to build them) and 8,761 other buildings, and its budgets can't make all their parts
+    // in time along with its deliveries." The counts are of that plan, not the player's (#1020).
     assert.match(
       stage.reason!,
-      /^Counting what its buildings cost to build, this phase does not fit in its 1 h: its [\d,]+ [A-Z][^,]+ needs? [\d,]+ × [A-Z].* to build, and its [\d,]+ other buildings need parts too, which it can't make in time along with its deliveries\. /,
+      /^Counting what its buildings cost to build, this phase does not fit in its 1 h: to also make its buildings' parts within its 1 h, this phase would need [\d,]+ [A-Z][^(]+ \([\d,]+ × [A-Z].* to build (it|them)\) and [\d,]+ other buildings, and its budgets can't make all their parts in time along with its deliveries\. /,
     );
     // The budget reason follows, with the time it fits in.
     assert.match(
@@ -163,7 +164,7 @@ test('a setup whose build cost does not fit is a draft whose reason names it', (
   }
   // The named building, its count and its parts are the draft’s own.
   const { reason, buildCost } = counted.stages['4'];
-  const [, count, building] = reason!.match(/: its ([\d,]+) (.+?) needs? /)!;
+  const [, count, building] = reason!.match(/would need ([\d,]+) (.+?) \(/)!;
   const named = Object.entries(buildCost!.buildings).find(
     ([name, number]) => buildingName(name, number) === building,
   )!;
@@ -184,6 +185,9 @@ test('no budget making the parts in time still gives the time the phase fits in'
     stage.reason!,
     /^Counting what its buildings cost to build, this phase does not fit in its 0\.5 h: .* No budget makes them in that time, but it fits the current budgets at about 1 h 30 min for this phase\.$/,
   );
+  // Counted over a long time, these are close to the plan's own buildings: no "would need".
+  assert.match(stage.reason!, /: its [\d,]+ .+ needs? /);
+  assert.doesNotMatch(stage.reason!, /would need/);
   assert.equal(stage.minHours, 1.5);
   assert.ok(stage.buildCost!.buildings['Coal Generator']! > 0);
 });

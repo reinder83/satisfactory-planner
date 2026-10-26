@@ -110,6 +110,18 @@ test('each line says what one amplified machine saves, best first', async () => 
   assert.deepEqual(plan, before, 'the plan is not changed');
 });
 
+test('a count stays with its machine, a rate with its item, at 390 px (#1020)', async () => {
+  await show(ironPlan(), '3');
+  // Ordinary spaces and the template's line breaks collapse; the non-breaking ones stay.
+  const text = $('[data-sloop-line="Iron Plate"]')!
+    .textContent!.replace(/[ \t\r\n]+/g, ' ')
+    .trim();
+  assert.equal(
+    text,
+    '1\u00a0somersloop on Iron Plate: −1\u00a0Constructor, −30\u00a0Iron Ore/min, +1\u00a0MW',
+  );
+});
+
 test('a real plan shows every line in the Somersloops tab, in the ranking’s order', async () => {
   const plan = generated();
   const ranked = sloopPayoffs(plan.stages['4'], '4', plan.settings).map(entry => entry.id);

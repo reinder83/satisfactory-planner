@@ -82,3 +82,14 @@ test("on a phone the dialog's heading stays one line cut with an ellipsis (#318)
   assert.match(body, /(?:^|[;\s])text-overflow:\s*ellipsis\s*;/);
   assert.match(body, /(?:^|[;\s])overflow:\s*hidden\s*;/);
 });
+
+// Compare profiles (#1153): the Baseline drop-down takes the width of its longest option, a long
+// profile name, so at 390 px it would make the page scroll sideways. The label and the select may
+// shrink to the page instead (#1021).
+test('a long profile name in Compare profiles shrinks its drop-down, not widens the page', () => {
+  for (const selector of ['.compare-pickers label', '.compare-pickers select']) {
+    const body = declarations(outsideRules(), selector);
+    assert.match(body, /(?:^|[;\s])min-width:\s*0\s*;/, selector);
+    assert.match(body, /(?:^|[;\s])max-width:\s*100%\s*;/, selector);
+  }
+});

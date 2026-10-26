@@ -18,6 +18,7 @@ import {
   phaseBelt,
   phaseMiner,
   phaseMining,
+  sourceClock,
   waterClock,
 } from './preferences.ts';
 import { listNames, localeNumber, powerAmount } from './wording.ts';
@@ -71,10 +72,27 @@ export function leftOutNote(survey: MiningSettings['extraction']): string {
 export const minerWords = ({ mark, clock }: { mark: number; clock: number }): string =>
   `Miner Mk.${mark} at ${miningNumber(clock * 100)}%`;
 
+// A phase's miner as its belts let it run (#1232, #1020): minerWords, unless no ore node's belt
+// carries what the miner gives at the phase's clock (a low belt cap: Miner Mk.3 at 250% on Mk.2
+// belts), when it names the highest clock any of its nodes runs at: "Miner Mk.3 at up to 100%
+// (what a Mk.2 belt carries)". The planner's nodes already run at those clocks (sourceClock).
+export function stageMinerWords(mining: StageMining): string {
+  const clock = mining.miner.clock;
+  const clocks = Object.entries(mining.sources)
+    .filter(([resource]) => !MINED_FLUIDS.includes(resource))
+    .flatMap(([, sources]) => sources)
+    .filter(source => !isWellKind(source.kind) && source.machine.startsWith('Miner'))
+    .map(source => sourceClock(source, clock));
+  const top = clocks.length ? Math.max(...clocks) : clock;
+  return top < clock - 1e-9
+    ? `Miner Mk.${mining.miner.mark} at up to ${clockWords(top, false)} (what a ${mining.belt.mark} belt carries)`
+    : minerWords(mining.miner);
+}
+
 // "Miner Mk.2 at 100% · Mk.3 belts (270/min) · Mk.1 pipes (300 m³/min)": what a phase mines and
 // carries with.
 export const equipmentWords = (mining: StageMining): string =>
-  `${minerWords(mining.miner)} · ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) · ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min)`;
+  `${stageMinerWords(mining)} · ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) · ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min)`;
 
 // The miners of each phase from `from` to 5, consecutive phases with the same miner together:
 // "Miner Mk.1 at 100% in Phase 1, Mk.2 at 100% in Phases 2 and 3 and Mk.3 at 250% in Phases 4
@@ -760,7 +778,7 @@ export function miningStep(
   const skipped = leftOut
     ? ` Left out of this plan in your node survey, never tapped here: ${leftOut}.`
     : '';
-  const intro = `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.${upgraded}${skipped}`;
+  const intro = `Phase ${phase} mines with ${stageMinerWords(mining)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.${upgraded}${skipped}`;
   const ofUpgrade = (resource: string) =>
     upgrade?.resources.find(each => each.resource === resource);
   const body = [
@@ -834,30 +852,39 @@ function nodeCells(runs: MiningRun[]): string {
     );
   return parts.join('; ');
 }
-// A resource's machines for the mining table: "Miner Mk.2: 4 at 200% and 1 at 181.98%", a
-// resource well's "about 1 Resource Well Pressurizer at 85%", a fluid's other clocks after it
-// ("At 100%: 16 at 100% and 1 at 20.44%"), and what the nodes cannot give.
-function machineCells(entry: ResourceMining, mining: StageMining): string {
+// An advice's machines for the mining table: "Miner Mk.2: 4 at 200% and 1 at 181.98%" and a
+// resource well's "about 1 Resource Well Pressurizer at 85%". `other` words a fluid's other
+// clock: without the node machine's name ("16 at 100% and 1 at 20.44%") and with a well's
+// satellites, which the Nodes column counts only at the counted clock.
+function adviceMachines(advice: MiningAdvice, fluid: boolean, other = false): string {
   // Runs that tap a node: a draft's draw from a resource whose nodes are all left out (#1183)
   // has runs of none.
-  const runs = entry.advice.runs.filter(run => run.full > 0 || run.last !== null);
+  const runs = advice.runs.filter(run => run.full > 0 || run.last !== null);
   const nodeRuns = runs.filter(run => !isWellKind(run.kind)),
     wellRuns = runs.filter(run => isWellKind(run.kind));
   const parts: string[] = [];
   if (nodeRuns.length)
-    parts.push(`${nodeRuns[0]!.machine}: ${clockRunWords(nodeRuns, entry.fluid)}`);
-  if (wellRuns.length)
+    parts.push(`${other ? '' : nodeRuns[0]!.machine + ': '}${clockRunWords(nodeRuns, fluid)}`);
+  if (wellRuns.length) {
+    const satellites = `${miningNumber(advice.satellites)} well satellite${advice.satellites === 1 ? '' : 's'} on `;
     parts.push(
-      `about ${miningNumber(entry.advice.pressurizers)} Resource Well Pressurizer${entry.advice.pressurizers === 1 ? '' : 's'} at ${clockWords(wellRuns[0]!.clock, true)}`,
+      `${other ? satellites : ''}about ${miningNumber(advice.pressurizers)} Resource Well Pressurizer${advice.pressurizers === 1 ? '' : 's'} at ${clockWords(wellRuns[0]!.clock, true)}`,
     );
-  let text = parts.join('; ');
+  }
+  return parts.join('; ');
+}
+// A resource's machines for the mining table: the counted clock's (adviceMachines), a fluid's
+// other clocks after it ("At 100%: 16 at 100% and 1 at 20.44% (…)"; a resource well's satellites
+// and pressurizers too, as the step's text gives them, #1141), and what the nodes cannot give.
+function machineCells(entry: ResourceMining, mining: StageMining): string {
+  let text = adviceMachines(entry.advice, entry.fluid);
   if (entry.fluid)
     for (const at of fluidClocks(mining.miner.clock)) {
       if (Math.abs(at - mining.miner.clock) < 1e-9) continue;
       const option = miningAdvice(entry.rate, mining.sources[entry.resource]!, at);
-      const runs = option.runs.filter(run => !isWellKind(run.kind));
-      if (runs.length && !option.short)
-        text += `. At ${miningNumber(at * 100)}%: ${clockRunWords(runs, true)} (${powerAmount(option.mw)})`;
+      const machines = adviceMachines(option, true, true);
+      if (machines && !option.short)
+        text += `. At ${miningNumber(at * 100)}%: ${machines} (${powerAmount(option.mw)})`;
     }
   if (entry.advice.short)
     text += `${text ? '. ' : ''}${miningNumber(entry.advice.short)}${entry.fluid ? ' m³' : ''}/min more than this phase's nodes give`;

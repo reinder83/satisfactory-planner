@@ -5181,10 +5181,17 @@ button.rail-tile:hover {
   gap: 8px 18px;
   margin: 8px 0;
 }
+/* A long profile name in the Baseline drop-down shrinks the select, not widens the page (#1021). */
 .compare-pickers label {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.compare-pickers select {
+  min-width: 0;
+  max-width: 100%;
 }
 .compare-pickers input[type='number'] {
   width: 6em;

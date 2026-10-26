@@ -277,9 +277,11 @@ const beltCapLane = (): string | null => beltCapMark(calculated?.settings.beltCa
 // belts below it count as available too, as the plan's mining counts them. A belt cap
 // (beltCapLane, #1232) leaves out every belt above it, an owned one too, as the plan's mining
 // does: the lane is then `capped` where a better one would be available, and no next mark is
-// offered from the cap on. Returns the lane with its display unit, its milestone, whether only
-// owning it makes it available (`owned`) and the next mark up (with that mark's milestone), which
-// LaneAdvice.vue mentions as the next upgrade.
+// offered from the cap on. Only the cap's own belt is `capped`: with milestones ticked out of
+// order (one above the cap ticked, the cap's own neither ticked nor due) the best belt is below
+// the cap, and the cap is not why (#1020). Returns the lane with its display unit, its milestone,
+// whether only owning it makes it available (`owned`) and the next mark up (with that mark's
+// milestone), which LaneAdvice.vue mentions as the next upgrade.
 export function bestLane(fluid: boolean, stageKey?: string): BestLane {
   const lanes = laneMarks(fluid);
   const stageNo = Number(stageKey ?? stage());
@@ -303,6 +305,7 @@ export function bestLane(fluid: boolean, stageKey?: string): BestLane {
     owned = !unlocked;
   });
   const at = lanes.indexOf(best);
+  capped &&= at === capAt;
   const next = capAt >= 0 && at >= capAt ? undefined : lanes[at + 1];
   return {
     ...best,

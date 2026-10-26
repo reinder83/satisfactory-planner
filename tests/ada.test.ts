@@ -1038,25 +1038,30 @@ test('ADA says the ticks show more than the plan counts, while the build plan of
   assert.ok(!ids(facts({ view: 'plan' })).includes('owned-ticks'), 'absent means none');
 });
 
-test('ADA names the profile that delivers every phase soonest on Saves & profiles (#1074)', () => {
+test('ADA names the profile with the least time over all its phases on Saves & profiles (#1074)', () => {
   const fastest = { names: '“Balanced”', total: 'about 23 h 22 min', count: 1, perBuilding: '' };
   const line = adaRemarks(facts({ view: 'profiles', profiles: 3, fastest })).find(
     r => r.id === 'compare-fastest',
   )!;
   assert.equal(line.tone, 'calm');
-  assert.match(line.text, /“Balanced” delivers every phase soonest: about 23 h 22 min/);
+  // The comparison ranks the total, not each phase (#1021): no "every phase soonest".
+  assert.match(
+    line.text,
+    /“Balanced” takes the least time to deliver all its phases: about 23 h 22 min in all\./,
+  );
+  assert.doesNotMatch(line.text, /soonest/);
   assert.match(line.text, /Delivery time only/);
   const tie = adaRemarks(
     facts({ view: 'profiles', fastest: { ...fastest, names: '“A” and “B”', count: 2 } }),
   ).find(r => r.id === 'compare-fastest')!;
-  assert.match(tie.text, /“A” and “B” deliver every phase/);
+  assert.match(tie.text, /“A” and “B” take the least time to deliver all their phases/);
   // With minutes per building set, the time to finish, the estimate named as the user's.
   const estimated = adaRemarks(
     facts({ view: 'profiles', fastest: { ...fastest, perBuilding: '3 minutes' } }),
   ).find(r => r.id === 'compare-fastest')!;
   assert.match(
     estimated.text,
-    /“Balanced” finishes every phase soonest: about 23 h 22 min, at 3 minutes per building/,
+    /“Balanced” takes the least time to finish all its phases: about 23 h 22 min in all, at 3 minutes per building/,
   );
   assert.match(estimated.text, /building time is your estimate/);
   assert.doesNotMatch(estimated.text, /Delivery time only/);
@@ -1120,8 +1125,10 @@ test('ADA says pins wait for a recalculation, and names a pin the plan could not
     assert.equal(dropped.tone, 'warn');
     assert.match(
       dropped.text,
-      /^This plan could not keep the somersloops you pinned on Iron Rod in Phase 3, so it planned without that pin\. The warnings above the plan say why/,
+      /^This plan could not keep the somersloops you pinned on Iron Rod in Phase 3, so it planned without that pin\. Profile assumptions, beside the build plan's steps \(below them on a phone\), says why/,
     );
+    // The warning is in the Profile assumptions panel, not above the plan (#1020).
+    assert.doesNotMatch(dropped.text, /above the plan/);
   }
   assert.match(
     adaRemarks(facts({ view: 'plan', sloopPinsPending: 1 })).find(

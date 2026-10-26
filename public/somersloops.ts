@@ -91,8 +91,13 @@ export function pinReasonWords(reason: SloopPinReason, amplifySloops: number): s
   return 'no plan of the phase fits with it, so the planner placed the phase’s somersloops itself';
 }
 // What changes a pin a phase could not keep, after the reason: Edit settings for the budget, the
-// line's dialog otherwise.
-export function pinRemedyWords(reason: SloopPinReason): string {
+// line's dialog otherwise. `inDialog`: the note in that dialog itself (pinNote in
+// app/sloop-pins.ts), whose pin field is right above it, says "here" (#1020).
+export function pinRemedyWords(reason: SloopPinReason, inDialog = false): string {
+  if (inDialog)
+    return reason === 'budget'
+      ? 'Raise the amplification budget on step 2 of Edit settings, or lower or clear this pin here (or the phase’s other pins in their production lines’ dialogs).'
+      : 'Change or clear the pin here.';
   return reason === 'budget'
     ? 'Raise the amplification budget on step 2 of Edit settings, or lower or clear the pins in the production line’s dialog.'
     : 'Change or clear the pin in the production line’s dialog.';

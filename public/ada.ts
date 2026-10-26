@@ -768,7 +768,7 @@ const RULES: AdaRule[] = [
     tone: 'warn',
     when: facts => (facts.sloopPinsDropped?.count ?? 0) > 0,
     text: facts =>
-      `This plan could not keep the somersloops you pinned on ${facts.sloopPinsDropped!.lines}, so it planned without ${facts.sloopPinsDropped!.count === 1 ? 'that pin' : 'those pins'}. The warnings above the plan say why, and the line's dialog says what to change. Better a loud no than a quiet maybe.`,
+      `This plan could not keep the somersloops you pinned on ${facts.sloopPinsDropped!.lines}, so it planned without ${facts.sloopPinsDropped!.count === 1 ? 'that pin' : 'those pins'}. Profile assumptions, beside the build plan's steps (below them on a phone), says why, and the line's dialog says what to change. Better a loud no than a quiet maybe.`,
   },
   {
     // The ticks show more than the plan's "What you already have" settings count (#1068).
@@ -879,12 +879,14 @@ const RULES: AdaRule[] = [
     on: ['profiles'],
     tone: 'calm',
     when: facts => !!facts.fastest,
-    // Only after when() found the fastest profiles.
+    // Only after when() found the fastest profiles. The comparison ranks the total over every
+    // planned phase, not each phase on its own, so the line says "in all" (#1021).
     text: facts => {
       const { names, count, total, perBuilding } = facts.fastest!;
+      const takes = count === 1 ? 'takes' : 'take';
       if (!perBuilding)
-        return `Of the plans in “${facts.save}”, ${names} ${count === 1 ? 'delivers' : 'deliver'} every phase soonest: ${total}. Delivery time only. How long you take to build it all is between you and your conveyor belts.`;
-      return `Of the plans in “${facts.save}”, ${names} ${count === 1 ? 'finishes' : 'finish'} every phase soonest: ${total}, at ${perBuilding} per building. The delivery time is the plan’s. The building time is your estimate, and I will hold you to it.`;
+        return `Of the plans in “${facts.save}”, ${names} ${takes} the least time to deliver all ${count === 1 ? 'its' : 'their'} phases: ${total} in all. Delivery time only. How long you take to build it all is between you and your conveyor belts.`;
+      return `Of the plans in “${facts.save}”, ${names} ${takes} the least time to finish all ${count === 1 ? 'its' : 'their'} phases: ${total} in all, at ${perBuilding} per building. The delivery time is the plan’s. The building time is your estimate, and I will hold you to it.`;
     },
   },
   {
