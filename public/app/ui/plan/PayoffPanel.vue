@@ -31,8 +31,8 @@ import {
 } from '../../payoff.ts';
 import { huntingSettings } from '../../recipe-states.ts';
 import { beginnerMode } from '../../beginner.ts';
-import { browserMode } from '../../../browser-api.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
+import { RANK_BUDGET_MS } from '../../../state.ts';
 import {
   calcStage,
   calculated,
@@ -57,6 +57,10 @@ const running = ref('');
 const THRESHOLDS = [0, 1, 5, 10, 20];
 const threshold = ref(0);
 const ADD_LABEL = 'Add as hunting';
+// The ranking's time limit in words, the same in both editions (#1257). A ranking started while
+// others run may wait for one to finish first (two at once on the server, server/ranking.ts),
+// and its limit only starts when it runs.
+const RANK_LIMIT = `${RANK_BUDGET_MS / 60000} minutes`;
 
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 const view = computed(() =>
@@ -175,7 +179,7 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
     <p v-if="transcribed" class="notice warn" data-resolve-warning>{{ RESOLVE_WARNING }}</p>
     <p v-if="running" class="small" data-payoff-progress role="status">
       {{ running }}
-      <template v-if="!browserMode">This can take up to 20 seconds.</template>
+      This can take up to {{ RANK_LIMIT }}, or longer while other rankings are running.
     </p>
     <template v-if="!view.ranking">
       <p class="small muted">

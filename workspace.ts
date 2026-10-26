@@ -8,6 +8,7 @@ import { accountRoutes } from './server/account-routes.ts';
 import { saveRoutes } from './server/save-routes.ts';
 import { profileRoutes } from './server/profile-routes.ts';
 import { reviewedPlans } from './public/reviewed-plans.ts';
+import { RANK_BUDGET_MS } from './public/state.ts';
 import type {
   Body,
   Handler,
@@ -52,14 +53,15 @@ export async function openWorkspace({
   dataDir,
   validateState,
   mutate,
-  rankBudgetMs = 20000,
+  rankBudgetMs = RANK_BUDGET_MS,
   estimateBudgetMs = 20000,
 }: {
   dataDir: string;
   validateState: (state: unknown) => ProgressState;
   mutate: (state: ProgressState, update: UpdateOp) => ProgressState;
   // A ranking recalculates the plan once per candidate recipe on the request, on a worker thread
-  // (#1156, server/ranking.ts); it stops after this long and reports `stopped`.
+  // (#1156, server/ranking.ts); it stops after this long and reports `stopped`. Both editions
+  // allow RANK_BUDGET_MS (public/state/summary.ts, #1257); tests pass a smaller one.
   rankBudgetMs?: number | undefined;
   // Solving time one address's live estimates may use a minute (#413).
   estimateBudgetMs?: number | undefined;

@@ -185,6 +185,11 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   assert.equal($('[data-rank-alternates]')!.getAttribute('aria-disabled'), 'true');
   assert.equal($<HTMLButtonElement>('[data-rank-alternates]')!.disabled, false);
   assert.match($('[data-payoff-progress]')!.textContent!, /Checking alternates/);
+  // The same 2-minute limit in both editions (#1257), and honest about waiting for other rankings.
+  assert.match(
+    $('[data-payoff-progress]')!.textContent!.replace(/\s+/g, ' '),
+    /This can take up to 2 minutes, or longer while other rankings are running\./,
+  );
   await settle();
   // The phase on screen and the ones after it, with the hunting recipes (#1075).
   assert.deepEqual(calls, [

@@ -13,7 +13,7 @@ docker compose up -d
 
 Open **http://localhost:8080**. To update later, run both commands again.
 
-Optionally copy [.env.example](../.env.example) to `.env`. For LAN access, set `BIND_ADDRESS=0.0.0.0`, then visit `http://HOST-IP:8080`. For public internet access use an HTTPS reverse proxy and set `COOKIE_SECURE=true`.
+Optionally copy [.env.example](../.env.example) to `.env`. For LAN access, set `BIND_ADDRESS=0.0.0.0`, then visit `http://HOST-IP:8080`. For public internet access use an HTTPS reverse proxy and set `COOKIE_SECURE=true`. A ranking of the plan's **Best next hard drive** answers after up to 2 minutes, so let the proxy wait at least that long for a reply (nginx's `proxy_read_timeout` is 60 seconds by default).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

@@ -165,6 +165,12 @@ export const currentPayoff = (
   profile: Pick<StoredProfile, 'plan' | 'payoff'>,
 ): StoredPayoff | null =>
   profile.plan && profile.payoff?.planCreatedAt === profile.plan.createdAt ? profile.payoff : null;
+// How long one hard-drive payoff ranking may run before it stops and reports `stopped`, in both
+// editions (#1257): the browser edition ranks on its calculator worker, the server on a worker
+// thread of its own (server/ranking.ts, #1156), so neither holds anything else up meanwhile. An
+// "All recipes" ranking of a late phase needs about 50 seconds. The plan page's ranking panel
+// names this limit (ui/plan/PayoffPanel.vue).
+export const RANK_BUDGET_MS = 120000;
 // The ranking options a POST /api/rank-alternates body asks for (#1075, rankAlternates in
 // planner.ts): over the remaining phases, and with the hunting alternates. Only `true` counts, so
 // a request without them, from any earlier tab, ranks as before. Both editions read it.
