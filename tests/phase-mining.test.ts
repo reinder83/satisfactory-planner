@@ -5,6 +5,7 @@
 // power model counts. The build plan asks for each belt, pipe, miner and extractor milestone the
 // phase uses. A plan stored before #1065 has no phaseMining: it keeps its budgets, numbers and
 // steps until the user recalculates, in both editions.
+import './helpers/en-us-numbers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -38,6 +39,7 @@ import {
   stageBudget,
   stageMiningAdvice,
 } from '../public/mining.ts';
+import { draftAdvice } from '../public/app/draft-advice.ts';
 import { initialState, validateState } from '../public/state.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
 import { loadWorkspace } from '../server/persistence.ts';
@@ -354,6 +356,57 @@ test('the issue’s F8: a maximum plan no longer draws Mk.3-at-250% budgets in P
     Object.values(before.stages[key].raw || {}).reduce((sum, rate) => sum + rate, 0);
   const now = Object.values(stage.raw || {}).reduce((sum, rate) => sum + rate, 0);
   assert.ok(drawn('2') > now, `${drawn('2')} before against ${now}`);
+});
+
+test('#1185: a resource budget of none names the shortfall, as without mining per phase', () => {
+  const input = { phase: '2', limits: { 'Iron Ore': 0 } };
+  const plan = calculate({ ...input, phaseMining: true });
+  const flat = calculate(input);
+  for (const key of ['1', '2'] as const) {
+    const stage = plan.stages[key] as StoredStage;
+    assert.equal(stage.feasible, false);
+    assert.equal(stage.mining!.budgets['Iron Ore'], 0);
+    assert.deepEqual(
+      stage.shortfalls?.map(shortfall => [shortfall.name, shortfall.budget]),
+      [['Iron Ore', 0]],
+    );
+    assert.match(
+      String(stage.reason),
+      /^This phase needs more Iron Ore than the entered budgets provide\./,
+    );
+    assert.equal(stage.reason, flat.stages[key].reason);
+    // The draft draws Iron Ore it has no node for, and says so.
+    const iron = stageMiningAdvice(stage).find(entry => entry.resource === 'Iron Ore')!;
+    assert.equal(iron.advice.nodes, 0);
+    assert.match(iron.words, /^No nodes to tap\. That is [\d,.]+\/min more than/);
+  }
+  // The budget lever names the entered budget that gives the phase what it needs: Phase 2 gets
+  // 32.1% of any Iron Ore budget with Miner Mk.2 on Mk.3 belts, so 666/min, not the 214 it draws.
+  const lever = draftAdvice(plan.stages['2'] as StoredStage, plan.settings, {
+    phase: 2,
+  }).levers.find(each => each.id === 'budget');
+  assert.equal(
+    lever?.text,
+    'Raise the short budget (Resources): Iron Ore to about 666/min (entered: 0/min; this phase would get 32.1% of it with Miner Mk.2 at 250%).',
+  );
+  const raised = (limit: number) =>
+    calculate({ ...input, phaseMining: true, limits: { 'Iron Ore': limit } }).stages['2'];
+  assert.equal(raised(666).feasible, true);
+  assert.equal(raised(646).feasible, false);
+  // Only a diagnostic or a draft's measurement keeps the node kinds of a budget of none; a plan
+  // has no source for it, as before, so plans with a budget of none are planned as they were.
+  const config = settings({ ...input, phaseMining: true });
+  assert.deepEqual(phaseMining(config, 2).sources['Iron Ore'], []);
+  assert.deepEqual(
+    phaseMining(config, 2, true).sources['Iron Ore']!.map(kind => [kind.kind, kind.nodes]),
+    [
+      ['pure', 0],
+      ['normal', 0],
+      ['impure', 0],
+    ],
+  );
+  // A resource with a budget keeps the same kinds either way.
+  assert.deepEqual(phaseMining(config, 2, true).sources.Coal, phaseMining(config, 2).sources.Coal);
 });
 
 test('the build plan has a mining step per phase, after the milestones and before the lines', () => {

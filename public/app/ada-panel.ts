@@ -449,7 +449,9 @@ function fastestFact(): AdaFacts['fastest'] {
 
 // The first short resource of draft `snapshot` the map cannot give (#1222), as ADA words it.
 function mapShortFacts(snapshot: StoredStage): AdaFacts['mapShort'] {
-  const need = draftNeeds(snapshot, calculated?.settings).find(entry => entry.overMap);
+  const need = draftNeeds(snapshot, calculated?.settings, Number(stage())).find(
+    entry => entry.overMap,
+  );
   if (!need || need.map === null) return undefined;
   const rate = (value: number) => num(value) + (FLUIDS.has(need.name) ? ' m³/min' : '/min');
   return { name: need.name, needed: rate(need.needed), map: rate(Math.floor(need.map)) };

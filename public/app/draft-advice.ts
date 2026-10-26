@@ -20,7 +20,14 @@ import { recipeIdOf } from '../progression.ts';
 import { sloopPayoffOf, sloopUpstream, takesSloops } from './sloop-payoff.ts';
 import { listNames } from '../wording.ts';
 import { minerWords } from '../mining.ts';
-import { beltCapMark, driveCapWords, mapSupply, phaseBelt, rawResources } from '../preferences.ts';
+import {
+  beltCapMark,
+  driveCapWords,
+  mapSupply,
+  phaseBelt,
+  phaseShare,
+  rawResources,
+} from '../preferences.ts';
 import { AMPLIFIER_PHASE, AMPLIFIER_RESEARCH } from '../somersloops.ts';
 import type {
   CalcRow,
@@ -92,13 +99,34 @@ const DRAFT_NOTICEABLE = 0.05;
 // How many alternates the alternates lever names.
 const DRAFT_ALTERNATES = 3;
 
-// The entered budget a phase's need takes: with mining per phase (#1065) the phase gets a share
-// of the entered budget, so the entered budget that share needs; else the need itself.
-function draftEnteredNeed(shortfall: Shortfall, snapshot: StoredStage, settings: DraftSettings) {
-  const entered = settings?.limits?.[shortfall.name];
-  if (!snapshot.mining || entered === undefined || !(shortfall.budget > 0) || !(entered > 0))
-    return shortfall.needed;
-  return Math.ceil(shortfall.needed / (shortfall.budget / entered));
+// The share of a short resource's entered budget the phase gets with mining per phase (#1065):
+// its budget over the entered one, or, for an entered budget of none (#1185), the share its
+// equipment would give any budget (phaseShare), when the phase is known. 0 without mining per
+// phase or where the phase gets none of it.
+function draftShare(
+  shortfall: Shortfall,
+  snapshot: StoredStage,
+  settings: DraftSettings,
+  phase?: number,
+): number {
+  const limits = settings?.limits;
+  const entered = limits?.[shortfall.name];
+  if (!snapshot.mining || !limits || entered === undefined) return 0;
+  if (shortfall.budget > 0 && entered > 0) return shortfall.budget / entered;
+  return entered === 0 && phase !== undefined && phase >= 1 && phase <= 5
+    ? phaseShare({ ...settings, limits }, phase, shortfall.name)
+    : 0;
+}
+// The entered budget a phase's need takes: with mining per phase the entered budget the phase's
+// share needs (draftShare); else the need itself.
+function draftEnteredNeed(
+  shortfall: Shortfall,
+  snapshot: StoredStage,
+  settings: DraftSettings,
+  phase?: number,
+) {
+  const share = draftShare(shortfall, snapshot, settings, phase);
+  return share > 0 ? Math.ceil(shortfall.needed / share) : shortfall.needed;
 }
 
 // Per raw resource, what the draft's generators burn of it per minute, upstream included: each
@@ -118,7 +146,11 @@ function draftPowerDraw(snapshot: StoredStage, settings: DraftSettings): Map<str
 }
 
 // The short resources of a draft as DraftNeed (see the header); none for a draft without them.
-export function draftNeeds(snapshot: StoredStage, settings: DraftSettings): DraftNeed[] {
+export function draftNeeds(
+  snapshot: StoredStage,
+  settings: DraftSettings,
+  phase?: number,
+): DraftNeed[] {
   const shortfalls = snapshot.shortfalls || [];
   if (!shortfalls.length) return [];
   const powerDraw = draftPowerDraw(snapshot, settings);
@@ -127,7 +159,9 @@ export function draftNeeds(snapshot: StoredStage, settings: DraftSettings): Draf
     const supply = settings ? mapSupply(settings, name) : null;
     const atLeast = !!shortfall.atLeast;
     const overMap =
-      !!supply && supply.wells && draftEnteredNeed(shortfall, snapshot, settings) > supply.total;
+      !!supply &&
+      supply.wells &&
+      draftEnteredNeed(shortfall, snapshot, settings, phase) > supply.total;
     const power = Math.min(shortfall.needed, powerDraw.get(name) ?? 0);
     const parts = [
       `${name}: needs ${atLeast ? 'at least' : 'about'} ${draftRate(name, shortfall.needed)}`,
@@ -167,14 +201,22 @@ function draftShortfallWords(
   shortfall: Shortfall,
   snapshot: StoredStage,
   settings: DraftSettings,
+  phase?: number,
 ): string {
   const entered = settings?.limits?.[shortfall.name];
   const mining = snapshot.mining;
   // A whole-machine draft amount the real fit did not confirm is a floor (#1091).
   const about = shortfall.atLeast ? 'at least' : 'about';
-  if (!mining || entered === undefined || !(shortfall.budget > 0))
+  const share = draftShare(shortfall, snapshot, settings, phase);
+  if (!mining || entered === undefined || !(share > 0))
     return `${shortfall.name} to ${about} ${draftRate(shortfall.name, shortfall.needed)} (entered: ${draftRate(shortfall.name, shortfall.budget)})`;
-  return `${shortfall.name} to ${about} ${draftRate(shortfall.name, draftEnteredNeed(shortfall, snapshot, settings))} (entered: ${draftRate(shortfall.name, entered)}; this phase gets ${draftRate(shortfall.name, shortfall.budget)} of it with ${minerWords(mining.miner)})`;
+  const need = draftRate(shortfall.name, draftEnteredNeed(shortfall, snapshot, settings, phase));
+  // An entered budget of none (#1185): the share of it the phase would get.
+  const gets =
+    shortfall.budget > 0
+      ? `this phase gets ${draftRate(shortfall.name, shortfall.budget)} of it`
+      : `this phase would get ${num(Math.round(share * 1000) / 10)}% of it`;
+  return `${shortfall.name} to ${about} ${need} (entered: ${draftRate(shortfall.name, entered)}; ${gets} with ${minerWords(mining.miner)})`;
 }
 
 // Whether the plan's recipe setting already allows a hard-drive alternate (recipePool in
@@ -294,7 +336,7 @@ export function draftAdvice(
   settings: DraftSettings,
   { phase, alternates = [] }: DraftAdviceContext = {},
 ): DraftAdvice {
-  const needs = draftNeeds(snapshot, settings);
+  const needs = draftNeeds(snapshot, settings, phase);
   const levers: DraftLever[] = [];
   const shortfalls = snapshot.shortfalls || [];
   // A budget only helps where the map has more to give.
@@ -304,7 +346,7 @@ export function draftAdvice(
   if (raisable.length)
     levers.push({
       id: 'budget',
-      text: `Raise the short budget${raisable.length > 1 ? 's' : ''} (Resources): ${raisable.map(shortfall => draftShortfallWords(shortfall, snapshot, settings)).join('; ')}.`,
+      text: `Raise the short budget${raisable.length > 1 ? 's' : ''} (Resources): ${raisable.map(shortfall => draftShortfallWords(shortfall, snapshot, settings, phase)).join('; ')}.`,
       step: 4,
       label: 'Change budgets in Edit settings →',
     });

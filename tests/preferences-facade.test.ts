@@ -118,6 +118,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'phaseMiner',
     'phaseMining',
     'phaseParts',
+    'phaseShare',
     'powerOptions',
     'presetCounts',
     'presetPurities',
