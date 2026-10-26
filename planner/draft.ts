@@ -6,6 +6,7 @@ import {
   PHASE_CAP_KEYS,
   phaseCapAmount,
   phaseMining,
+  phaseShare,
 } from '../public/preferences.ts';
 import { amplifiesIn } from '../public/somersloops.ts';
 import type {
@@ -171,7 +172,7 @@ function checkedShortfalls(shortfalls: Shortfall[], draft: DraftContext): Shortf
   if (!shortfalls.length || !draft.replan) return shortfalls;
   let current = shortfalls;
   for (let round = 0; round < CHECK_ROUNDS; round++) {
-    const settings = raisedSettings(draft.config, current);
+    const settings = raisedSettings(draft.config, draft.phase, current);
     const plan = draft.replan(settings);
     if (plan.feasible) return current;
     if (stoppedSearch(plan)) break;
@@ -193,17 +194,22 @@ function checkedShortfalls(shortfalls: Shortfall[], draft: DraftContext): Shortf
   }
   return current.map(shortfall => ({ ...shortfall, atLeast: true }));
 }
-// `config` with each short budget raised as the draft's fix words it (shortfallWords in
-// public/app/views/calculated.ts): to the amount needed, or with mining per phase, where the
-// phase gets a share of the entered budget, to the entered budget that share needs.
-function raisedSettings(config: CurrentSettings, shortfalls: Shortfall[]): CurrentSettings {
+// `config` with each short budget raised as the draft's fix words it (draftShortfallWords in
+// public/app/draft-advice.ts): to the amount needed, or with mining per phase, where the phase
+// gets a share of the entered budget, to the entered budget that share needs; for an entered
+// budget of none (#1185), the share the phase's equipment gives any budget (phaseShare).
+function raisedSettings(
+  config: CurrentSettings,
+  phase: number,
+  shortfalls: Shortfall[],
+): CurrentSettings {
   const limits = { ...config.limits };
   for (const { name, needed, budget } of shortfalls) {
     const entered = config.limits[name];
-    limits[name] =
-      config.phaseMining && entered !== undefined && budget > 0
-        ? Math.ceil(needed / (budget / entered))
-        : needed;
+    let share = 0;
+    if (config.phaseMining && entered !== undefined)
+      share = budget > 0 ? budget / entered : entered === 0 ? phaseShare(config, phase, name) : 0;
+    limits[name] = share > 0 ? Math.ceil(needed / share) : needed;
   }
   return { ...config, limits };
 }

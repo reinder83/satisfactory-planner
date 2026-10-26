@@ -160,6 +160,7 @@ export {
   phaseForTier,
   phaseMiner,
   phaseMining,
+  phaseShare,
   sourceClock,
   sourceMWPerUnit,
   sourceYield,
