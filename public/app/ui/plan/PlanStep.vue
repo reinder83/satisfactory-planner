@@ -172,13 +172,14 @@ async function edit(event: Event) {
   await refocus();
 }
 
-// Where focus goes once a step is removed (ui/refocus.ts, #286): `control` on the next step,
-// else the previous one, else the personal task field under the list.
-const stepList = (control: string) => ({
+// Where focus goes once a step is removed (ui/refocus.ts, #286): the next step's summary, else
+// the previous one's, else the personal task field under the list. Never the next step's Remove
+// or Delete, so a second Enter does not remove a second step (#1255).
+const stepList = {
   row: '#main .checklist .task',
-  control,
+  control: 'summary',
   fallback: ['#add-task [name=title]'],
-});
+};
 
 // "Remove", after a confirmation. A personal task (id custom-…) is deleted; a plan step is
 // only hidden (taskRemove) and keeps its checkmark, so it can be put back from "Removed
@@ -187,7 +188,7 @@ const stepList = (control: string) => ({
 async function remove(event: Event) {
   const id = props.step.id;
   if (id.startsWith('custom-')) return deletePersonal(event);
-  const refocus = refocusAfterRemoval(event.currentTarget, stepList('[data-remove-step]'));
+  const refocus = refocusAfterRemoval(event.currentTarget, stepList);
   if (
     !(await confirmAction({
       title: 'Remove this step?',
@@ -205,13 +206,9 @@ async function remove(event: Event) {
 }
 
 // "Delete personal task" (inside a personal task's details outside edit mode, or Remove on
-// one while editing), after a confirmation. Outside edit mode the next step's Delete is inside
-// its closed details, so focus goes to that step's summary instead.
+// one while editing), after a confirmation; focus then goes as after Remove.
 async function deletePersonal(event: Event) {
-  const refocus = refocusAfterRemoval(
-    event.currentTarget,
-    stepList(props.editing ? '[data-remove-step]' : 'summary'),
-  );
+  const refocus = refocusAfterRemoval(event.currentTarget, stepList);
   if (
     !(await confirmAction({
       title: 'Delete this personal task?',
