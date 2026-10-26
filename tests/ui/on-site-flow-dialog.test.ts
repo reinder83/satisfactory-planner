@@ -267,6 +267,17 @@ const preSplit = (outputs: FlowOutput[]) => {
     ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
     : '';
 };
+// They also predate #1173, which words the machine card's clock as the machines run ("at 20.9%",
+// "9 at 100% + 1 at 45.2%", "all at 100%", the rate per machine then "at 100%") rather than
+// "@ 100% + 1 adjustable" or "@ 100%": the clock is compared as it was then worded (before1173).
+const before1173 = (clock: string) =>
+  clock.endsWith(' at 100%') || clock === 'at 100%' ? '@ 100%' : '@ 100% + 1 adjustable';
+const before1173Sub = (sub: string) => {
+  const [name, clock, ...rest] = sub.split(' · ');
+  return [name, before1173(clock!), ...rest]
+    .join(' · ')
+    .replace(' out per machine at 100%', ' out per machine');
+};
 const before1067 = (model: FlowModel): FlowModel => {
   const outputs = model.outputs.map(
     ({ machines: _machines, lineMach: _lineMach, ...output }): FlowOutput => output,
@@ -274,7 +285,8 @@ const before1067 = (model: FlowModel): FlowModel => {
   const bar = model.bar && {
     ...model.bar,
     sub:
-      model.bar.sub.replace(/ · split ≈ .* across the deliveries below$/, '') + preSplit(outputs),
+      before1173Sub(model.bar.sub.replace(/ · split ≈ .* across the deliveries below$/, '')) +
+      preSplit(outputs),
   };
   return { ...model, outputs, bar };
 };
@@ -474,6 +486,7 @@ test('rows of plans whose groups were not edited after the recalculation keep ex
       };
       for (const row of entry.stage.rows!) {
         const outputs = flowOutputs(row, context);
+        const notes = flowNotes(row, outputs, context);
         assert.deepEqual(
           JSON.parse(
             JSON.stringify({
@@ -489,7 +502,11 @@ test('rows of plans whose groups were not edited after the recalculation keep ex
                 i.rate,
                 i.link?.calcFactory ?? null,
               ]),
-              notes: { ...flowNotes(row, outputs, context), split: preSplit(outputs) },
+              notes: {
+                ...notes,
+                clock: before1173(notes.clock),
+                split: preSplit(outputs),
+              },
             }),
           ),
           renamed(entry.dialog[row.id]!, entry.stage, entry.groups),

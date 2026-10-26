@@ -199,7 +199,17 @@ const flow = computed(() => {
           >
         </div>
       </div>
-      <p v-if="flow.model.bankNote?.ownLine && flow.model.bankNote.offers" class="small muted">
+      <p v-if="flow.model.bankNote?.storageOnly" class="small muted" data-storage-only-note>
+        This storage-only line’s own rates: it makes only what protected storage still needs after
+        the plan’s surplus, directly or through the other storage-only lines{{
+          flow.model.bankNote.powers ? ', and fuel for the generators that power them' : ''
+        }}{{
+          flow.model.bankNote.shared
+            ? '. The plan’s other lines making it feed every other consumer of it'
+            : ''
+        }}.
+      </p>
+      <p v-else-if="flow.model.bankNote?.ownLine && flow.model.bankNote.offers" class="small muted">
         Made on site for {{ flow.model.bankNote.ownLine }}'s lines{{
           flow.model.bankNote.shared ? ', together with the factory’s other lines making it' : ''
         }}, which use less than it makes: the AWESOME Sink takes what the plan sinks, and the rest

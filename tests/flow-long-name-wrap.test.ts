@@ -159,10 +159,11 @@ test('the templates still draw the elements those rules name', () => {
     /<td :class="\{ 'gf-cell-name': hasLongWord\(entry\.line\.name\) \}">\s*\{\{ entry\.line\.name \}\}\s*<\/td>/,
   );
   assert.equal(table.match(/'gf-cell-name'/g)?.length, 4);
-  // The notes naming a group follow the "Delivers" rows as their siblings.
+  // The notes naming a group follow the "Delivers" rows as their siblings (after the storage-only
+  // line's note, #1173).
   assert.match(
     diagram,
-    /<div class="rail-rows">[\s\S]*?<\/div>\s*<p v-if="[^"]*ownLine[^"]*" class="small muted">\s*Made on site for \{\{ flow\.model\.bankNote\.ownLine \}\}/,
+    /<div class="rail-rows">[\s\S]*?<\/div>\s*<p v-if="flow\.model\.bankNote\?\.storageOnly"[^>]*>[\s\S]*?<\/p>\s*<p v-else-if="[^"]*ownLine[^"]*" class="small muted">\s*Made on site for \{\{ flow\.model\.bankNote\.ownLine \}\}/,
   );
   assert.match(
     diagram,
