@@ -420,7 +420,15 @@ const budgetOf = (value: number) => Math.floor(value * 100 + 1e-6) / 100;
 
 // A phase's mining (#1065): its miner and clock, best belt and pipe, and per raw resource the
 // budget and the node kinds behind it (see the header). `settings` is a plan's settings.
-export function phaseMining(settings: MiningSettings, phase: number): StageMining {
+// `measuring` is for a diagnostic or a draft's measurement, which drop the per-kind caps: a
+// resource whose budget is none keeps its node kinds then, with none of their nodes (#1185), so
+// the measurement still finds the resource and the draft names the shortfall. A plan leaves them
+// out, as it could draw nothing from them, so every plan is planned exactly as before.
+export function phaseMining(
+  settings: MiningSettings,
+  phase: number,
+  measuring = false,
+): StageMining {
   const survey = settings.extraction ?? null;
   const miner = phaseMiner(phase, survey, settings.ownedMiner, settings.overclock);
   const belt = phaseBelt(phase, settings.ownedBelt, settings.beltCap),
@@ -459,7 +467,7 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
     const scale = pool > 0 ? limit / pool : 0;
     const kinds = nodeKinds(resource, mix, miner.mark, phase, { belt: belt.cap, pipe: pipe.cap })
       .map(({ count, ...kind }) => ({ ...kind, nodes: none ? 0 : count * scale }))
-      .filter(kind => none || kind.nodes > 0);
+      .filter(kind => none || measuring || kind.nodes > 0);
     sources[resource] = kinds;
     budgets[resource] = budgetOf(
       kinds.reduce((sum, kind) => sum + kind.nodes * sourceYield(kind, miner.clock), 0),
@@ -473,6 +481,17 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
     budgets,
     sources,
   };
+}
+
+// The entered budget a resource's draft names when its budget is none (#1185).
+const SHARE_REFERENCE = 1000000;
+// The share of a resource's entered budget that phase `phase` gets with mining per phase: the same
+// for any entered budget, as phaseMining scales the nodes by it, so it is read at a reference
+// budget, for a draft whose entered budget is none (#1185) and whose phase budget gives no share.
+// 0 where the phase taps none of the resource's nodes (all left out, or none it can build yet).
+export function phaseShare(settings: MiningSettings, phase: number, resource: string): number {
+  const limits = { ...settings.limits, [resource]: SHARE_REFERENCE };
+  return (phaseMining({ ...settings, limits }, phase).budgets[resource] ?? 0) / SHARE_REFERENCE;
 }
 
 // MW per m³/min of Water at the phase's clock: Water Extractors, which need no node.

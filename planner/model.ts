@@ -320,7 +320,9 @@ export const phaseContext = (
   relaxCaps,
   buildCost,
   power: phasePower(config, phase),
-  mining: config.phaseMining ? phaseMining(config, phase) : null,
+  // A diagnostic or a draft's measurement keeps the node kinds of a resource whose budget is
+  // none, so it can draw that resource and the draft names the shortfall (#1185).
+  mining: config.phaseMining ? phaseMining(config, phase, ignoreLimits || overBudget) : null,
 });
 // The phase's budget for a raw resource: its mining's (#1065), else the settings', held to the
 // nodes the node survey does not leave out of the plan (budgetLimit, #1183; the entered budget
