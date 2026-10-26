@@ -86,6 +86,30 @@ test('#1075: a hunting recipe is ranked by what finding it saves, over the remai
   );
 });
 
+test('#1156: the hunting recipes are ranked first, so a ranking that stops still has them', t => {
+  const IRON_WIRE = 'Recipe_Alternate_Wire_1_C';
+  const hunting = { ...settings, alternateRecipes: [CAST_SCREWS, IRON_WIRE] };
+  const options = { phase: '1' as const, remaining: true, hunting: true };
+  // Unstopped: both hunting recipes before every alternate not allowed yet.
+  const full = rankAlternates(hunting, options);
+  const flags = full.candidates.map(c => c.hunting === true);
+  assert.deepEqual(flags.slice(0, 2), [true, true]);
+  assert.ok(flags.slice(2).length > 0 && !flags.slice(2).some(Boolean), flags.join());
+  // A clock that passes the time limit once two trials are done: the ranking stops there, and
+  // has both hunting recipes.
+  let now = 0;
+  t.mock.method(Date, 'now', () => now);
+  const stopped = rankAlternates(hunting, {
+    ...options,
+    budgetMs: 1000,
+    onProgress: done => (now = done >= 2 ? 5000 : 0),
+  });
+  assert.equal(stopped.stopped, true);
+  assert.equal(stopped.total, full.total);
+  assert.deepEqual(stopped.candidates.map(c => c.id).sort(), [CAST_SCREWS, IRON_WIRE].sort());
+  assert.ok(stopped.candidates.every(c => c.hunting));
+});
+
 test('#1075: only true options count, in both editions and on the worker', async () => {
   assert.deepEqual(rankScope({ remaining: true, hunting: true }), {
     remaining: true,
