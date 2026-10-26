@@ -45,6 +45,7 @@ import {
   wizard,
   workspace,
 } from '../session.ts';
+import { exactClocksSettings, wantedExactClocks } from '../exact-clocks.ts';
 import { foundWords, ownedFromTicks, ticksPhase, withOwnedFound } from '../owned-ticks.ts';
 import { sloopPinsSettings, wantedPins } from '../sloop-pins.ts';
 import type { FoundWords } from '../owned-ticks.ts';
@@ -207,11 +208,15 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
       alternates,
     );
   // The built lines the plan counted are worked out again before each calculation
-  // (withDraftBuiltLines, #1176), from the profile as it is then. The somersloop pins are the ones
-  // asked for in the lines' dialogs (#1235), so Edit settings plans them and Review names them.
-  const settings = sloopPinsSettings(
-    withBuiltLines(structuredClone(context.plan.settings), undefined),
-    wantedPins(context.plan, context.state ?? {}),
+  // (withDraftBuiltLines, #1176), from the profile as it is then. The somersloop pins (#1235) and
+  // the lines at exact clocks (#1237) are the ones asked for in the lines' dialogs, so Edit
+  // settings plans them and Review names them.
+  const settings = exactClocksSettings(
+    sloopPinsSettings(
+      withBuiltLines(structuredClone(context.plan.settings), undefined),
+      wantedPins(context.plan, context.state ?? {}),
+    ),
+    wantedExactClocks(context.plan, context.state ?? {}),
   );
   const wizardDraft = newDraft(
     saveId,

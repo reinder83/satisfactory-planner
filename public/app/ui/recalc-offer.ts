@@ -18,6 +18,7 @@
 import { allowSwitch, toast, writeQueue } from '../api.ts';
 import { builtCount, openBuiltLines, withBuiltLines } from '../built-capacity.ts';
 import { isBusy, whileBusy } from '../busy.ts';
+import { exactClocksSettings, wantedExactClocks } from '../exact-clocks.ts';
 import { plural } from '../format.ts';
 import { keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
 import {
@@ -87,11 +88,14 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     kept = keptName(saveId, name),
     // The lines that stand now (#1176): every carry pick is on, so they count as built.
     builtLines = openBuiltLines(),
-    // The somersloop pins asked for in the lines' dialogs (#1235) go with every recalculation the
-    // user starts, so another offer does not drop them. Every offer sends the plan's settings with
-    // its change.
+    // The somersloop pins (#1235) and the lines at exact clocks (#1237) asked for in the lines'
+    // dialogs go with every recalculation the user starts, so another offer does not drop them.
+    // Every offer sends the plan's settings with its change.
     settings = withBuiltLines(
-      sloopPinsSettings(offer.settings as StoredSettings, wantedPins(calculated, state)),
+      exactClocksSettings(
+        sloopPinsSettings(offer.settings as StoredSettings, wantedPins(calculated, state)),
+        wantedExactClocks(calculated, state),
+      ),
       builtLines,
     );
   const confirmed = await confirmAction({

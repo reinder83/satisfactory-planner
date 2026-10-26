@@ -21,7 +21,7 @@ import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
 import { leftOutNote, leftOutWords } from '../mining.ts';
 import type { MiningSettings } from '../preferences/mining.ts';
-import type { NodeExclusions, SloopPins } from '../types/index.ts';
+import type { ExactClocks, NodeExclusions, SloopPins } from '../types/index.ts';
 import { power } from './wizard/fields.ts';
 import type {
   Choice,
@@ -251,6 +251,25 @@ const pinsReviewWords = (settings: NameSettings): string => {
     : 'None';
 };
 
+// The production lines at exact clocks (#1066, #1237) in words, absent as none: a plan made
+// before the choice had none, so asking for one is named. "2 lines".
+const exactClocksReviewWords = (settings: NameSettings): string => {
+  const lines = Object.values((settings.exactClocks ?? {}) as ExactClocks).reduce(
+    (sum, ids) => sum + (ids?.length ?? 0),
+    0,
+  );
+  return lines ? plural(lines, 'line') : 'None';
+};
+// The lines at exact clocks as one comparable value: each phase's ids sorted, no empty phase.
+const exactClocksKey = (settings: NameSettings): string =>
+  stable(
+    Object.fromEntries(
+      Object.entries((settings.exactClocks ?? {}) as ExactClocks)
+        .filter(([, ids]) => ids?.length)
+        .map(([phase, ids]) => [phase, [...ids!].sort()]),
+    ),
+  );
+
 // The settings Review names when an edit changes them, with the words for their values.
 const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => string][] = [
   ['phase', 'Start phase', value => `Phase ${value}`],
@@ -404,6 +423,15 @@ export function settingsChanges(
           },
         ]
       : []),
+    ...(exactClocksKey(before) !== exactClocksKey(after)
+      ? [
+          {
+            label: 'Exact clocks',
+            before: exactClocksReviewWords(before),
+            after: exactClocksReviewWords(after),
+          },
+        ]
+      : []),
     // Absent means what the plan did before the box (#1058), so a plan without it is compared too.
     ...(mamWords(before) !== mamWords(after)
       ? [{ label: 'MAM recipes', before: mamWords(before), after: mamWords(after) }]
@@ -416,6 +444,7 @@ export function settingsChanges(
     'objective',
     'phaseCaps',
     'sloopPins',
+    'exactClocks',
     // The lines that stand (#1176) are no setting the user changed: Review says they are kept.
     'builtLines',
     ...SETTING_LABELS.map(([key]) => key),
