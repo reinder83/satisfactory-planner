@@ -35,22 +35,28 @@ const oneDecimal = (value: number | null | undefined) => localeNumber(value, 1);
 // How many raw resources a line names.
 const RAW_NAMED = 3;
 
+// A count and what it counts kept on one line at 390 px (#1020): the first space becomes a
+// non-breaking one, "−1 Constructor", "−340 Iron Ore/min", "+30 MW".
+const together = (words: string) => words.replace(' ', '\u00a0');
 // "1 somersloop", "4 somersloops": what one amplified machine of the line takes.
 const sloopsWords = (entry: SloopPayoff) =>
-  `${num(entry.sloops)} somersloop${entry.sloops === 1 ? '' : 's'}`;
+  together(`${num(entry.sloops)} somersloop${entry.sloops === 1 ? '' : 's'}`);
 // "−1 Manufacturer, −340 Iron Ore/min, −120 Limestone/min and 1 more, +30 MW".
 function effectWords(entry: SloopPayoff): string {
   const named = entry.raw
     .slice(0, RAW_NAMED)
-    .map(([item, rate]) => '−' + rateOfItem(item, rate, oneDecimal));
+    .map(([item, rate]) => '−' + together(rateOfItem(item, rate, oneDecimal)));
   const more = entry.raw.length - RAW_NAMED;
   const net = entry.netMW;
   return [
     entry.machinesSaved > 0
-      ? `−${num(entry.machinesSaved)} ${buildingName(entry.machine, entry.machinesSaved)}`
+      ? '−' +
+        together(`${num(entry.machinesSaved)} ${buildingName(entry.machine, entry.machinesSaved)}`)
       : '',
     more > 0 ? `${named.join(', ')} and ${more} more` : named.join(', '),
-    Math.abs(net) < 0.005 ? 'no change in power' : (net > 0 ? '+' : '−') + power(Math.abs(net)),
+    Math.abs(net) < 0.005
+      ? 'no change in power'
+      : (net > 0 ? '+' : '−') + together(power(Math.abs(net))),
   ]
     .filter(Boolean)
     .join(', ');

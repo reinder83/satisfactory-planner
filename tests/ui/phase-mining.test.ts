@@ -278,7 +278,11 @@ test('the budgets step offers the belts you already have, and the table follows 
     ],
   );
   const phaseTwo = () => plain($$('[data-phase-budgets] tbody tr')[0]!.textContent);
-  assert.match(phaseTwo(), /^2 Miner Mk\.3 at 250% · Mk\.3 belts \(270\/min\)/);
+  // A Mk.3 belt carries less than an impure node gives at 250% (#1020): the clock it allows.
+  assert.match(
+    phaseTwo(),
+    /^2 Miner Mk\.3 at up to 225% \(what a Mk\.3 belt carries\) · Mk\.3 belts \(270\/min\)/,
+  );
   const share = phaseTwo().split(' ').at(-1);
   select.value = '4';
   select.dispatchEvent(new Event('change', { bubbles: true }));

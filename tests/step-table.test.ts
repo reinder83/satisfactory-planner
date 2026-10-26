@@ -61,3 +61,19 @@ test('a stage stored at 100% before #1169: the table says None and the hint foll
   assert.match(tableText(step.table), /Machines Shards Power/);
   assert.equal(tableText(undefined), '');
 });
+
+test('a well fluid lists its other clock in the table, as the text does (#1141, #1020)', () => {
+  const settings = { limits, overclock: true };
+  const well = {
+    mining: phaseMining(settings, 4),
+    raw: { 'Nitrogen Gas': 600 },
+  } as Pick<StoredStage, 'mining' | 'raw'>;
+  const step = miningStep(well, '4', settings)!;
+  const [nitrogen] = step.table.rows;
+  assert.equal(nitrogen![2], '2 well satellites (2 pure)');
+  assert.match(
+    nitrogen![3]!,
+    /^about 1 Resource Well Pressurizer at 250%\. At 100%: 5 well satellites on about 1 Resource Well Pressurizer at 100% \(.* MW\)$/,
+  );
+  assert.match(step.body, /at 100%: tap 5 well satellites/);
+});

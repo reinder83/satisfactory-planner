@@ -25,6 +25,7 @@ import {
   driveCapWords,
   mapSupply,
   phaseBelt,
+  phaseCapAmount,
   phaseShare,
   rawResources,
 } from '../preferences.ts';
@@ -64,7 +65,8 @@ export type DraftLeverId =
   | 'nuclear'
   | 'buildCost'
   | 'beltCap'
-  | 'driveCap';
+  | 'driveCap'
+  | 'phaseCap';
 export interface DraftLever {
   id: DraftLeverId;
   text: string;
@@ -328,6 +330,25 @@ function beltCapLever(
   };
 }
 
+// The caps per phase's lever (#1221, #1020): for a draft whose plan needs more than a cap
+// (`capShortfalls`), what the plan needs without it against each cap, on step 3 where they are.
+// Null without one.
+function phaseCapLever(snapshot: StoredStage): DraftLever | null {
+  const over = snapshot.capShortfalls || [];
+  if (!over.length) return null;
+  const caps = over.length > 1 ? 'caps' : 'cap';
+  const needs = over.map(
+    ({ name, needed, cap }) =>
+      `${phaseCapAmount(name, needed)} (the cap is ${phaseCapAmount(name, cap)})`,
+  );
+  return {
+    id: 'phaseCap',
+    text: `Raise the ${caps} per phase (Goals): without ${over.length > 1 ? 'them' : 'it'}, this phase's plan needs ${listNames(needs)}.`,
+    step: 3,
+    label: 'Change the caps in Edit settings →',
+  };
+}
+
 // The advice for infeasible phase `snapshot` under `settings` (see the header). Every lever needs
 // the draft to have measured something: an older snapshot, a stopped search or recipes that cannot
 // make the goal at all get none, and their reason says why.
@@ -350,6 +371,12 @@ export function draftAdvice(
       step: 4,
       label: 'Change budgets in Edit settings →',
     });
+  // A cap per phase (#1221) the plan needs more than: raise it (#1020).
+  const overCap = phaseCapLever(snapshot);
+  if (overCap) levers.push(overCap);
+  // A draft about the caps alone words its other levers by them, not by budgets.
+  const capOnly = !!overCap && !shortfalls.length;
+  const capWord = (snapshot.capShortfalls?.length ?? 0) > 1 ? 'caps' : 'cap';
   // A belt cap (#1232) that holds this phase's nodes to a worse belt than its milestones (or a belt
   // the player has) give, while a mined resource that rides belts is short: a better belt lets
   // each node give more. Read from the stored stage, so it names the belt the plan used.
@@ -367,17 +394,23 @@ export function draftAdvice(
   if (snapshot.wholeMachinesOnly)
     levers.push({
       id: 'whole',
-      text: 'Keep these budgets instead: untick “Whole machines” (Goals). Exact clocks fit, with one adjustable machine per production line.',
+      text: capOnly
+        ? `Keep the ${capWord} instead: untick “Whole machines” (Goals). Exact clocks keep within ${capWord === 'caps' ? 'them' : 'it'}, with one adjustable machine per production line.`
+        : 'Keep these budgets instead: untick “Whole machines” (Goals). Exact clocks fit, with one adjustable machine per production line.',
       step: 3,
       label: 'Change whole machines in Edit settings →',
     });
   if (snapshot.minHours) {
     const timed = settings?.goal === 'timed';
+    // The planner measures a cap draft's hours in the model's terms, so "may" (capReason).
+    const fits = capOnly
+      ? `this phase may fit within the ${capWord} from there`
+      : 'this phase fits the current budgets from there';
     levers.push({
       id: 'time',
       text: timed
-        ? `More time: raise “Hours per phase” (Goals) to at least ${num(snapshot.minHours)} h; this phase fits the current budgets from there.`
-        : `More time: switch the goal (Goals) to “Target completion time” with at least ${num(snapshot.minHours)} hours per phase; this phase fits the current budgets from there.`,
+        ? `More time: raise “Hours per phase” (Goals) to at least ${num(snapshot.minHours)} h; ${fits}.`
+        : `More time: switch the goal (Goals) to “Target completion time” with at least ${num(snapshot.minHours)} hours per phase; ${fits}.`,
       step: 3,
       label: 'Change the goal in Edit settings →',
       // Hours per phase apply to every phase only when the target time is not the final phase's.

@@ -158,3 +158,32 @@ test('a milestone-only phase without notices has no tab list', async () => {
   assert.equal($('#plan-panel-build')!.getAttribute('role'), null);
   assert.equal($('#plan-panel-build')!.hidden, false);
 });
+
+// An infeasible phase's steps are the draft's: Build sequence repeats the draft's heading over
+// them, with a button to Overview, where the reason and the options are (#1020).
+test('Build sequence repeats a draft phase’s heading and opens Overview for the rest', async () => {
+  const plan = generated();
+  plan.stages['3'] = {
+    feasible: false,
+    reason: 'This phase needs more Coal than the entered budgets provide.',
+    shortfalls: [{ name: 'Coal', needed: 10, budget: 5 }],
+  } as (typeof plan.stages)['3'];
+  await show(plan, '3');
+  assert.equal(selected(), 'build');
+  const notice = $('[data-plan-panel="build"] [data-draft-steps]')!;
+  assert.ok(notice, 'the draft shows in Build sequence');
+  assert.equal(words(notice.querySelector('b')), 'Planning draft — budget exceeded.');
+  assert.match(words(notice), /These steps are the draft’s: this phase does not fit as set\./);
+  // The reason and the options stay in Overview.
+  assert.ok($('[data-plan-panel="overview"] [data-draft]'));
+  assert.equal($('[data-plan-panel="build"] [data-draft]'), null);
+  $<HTMLButtonElement>('[data-draft-overview]')!.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(selected(), 'overview');
+  assert.deepEqual(shownPanels(), ['overview']);
+  assert.equal(document.activeElement, $('[data-plan-tab="overview"]'));
+  // A phase that fits shows none.
+  await show(generated(), '3');
+  assert.equal($('[data-draft-steps]'), null);
+});

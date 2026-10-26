@@ -372,6 +372,36 @@ function capReason(
   }
   return `${needs}${why} Raise the ${raise} (Goals)${time}`;
 }
+// The caps per phase (#1221) that a build-cost draft's own plan (`own`: the phase as planned
+// without its buildings' parts, #1229) is over, in capReason's words, as the end of that draft's
+// reason: sets `capShortfalls` and returns "Its plan is over the cap per phase too. Without the
+// cap, this phase's plan needs 48,387.9 MW; the cap is 1,000 MW. Raise the cap (Goals) as well:
+// the time above fits the budgets, not the cap." '' when the plan keeps within them. Only what
+// the plan needs, nothing solved: the time sentence before it measures the budgets alone, so this
+// says so rather than send the player to a time that only meets the cap's draft (#1020).
+export function buildCostCapWords(stage: CurrentStage, caps: PhaseCaps, own: Solved): string {
+  const over = capExcess(caps, own);
+  if (!over) return '';
+  const figures = capFigures(own);
+  const shortfalls = PHASE_CAP_KEYS.flatMap((name): CapShortfall[] => {
+    const cap = caps[name];
+    return cap === undefined || over[name] === undefined
+      ? []
+      : [{ name, needed: plannedFigure(figures[name], cap), cap }];
+  });
+  stage.capShortfalls = shortfalls;
+  const set = PHASE_CAP_KEYS.filter(name => caps[name] !== undefined).length;
+  const within = set > 1 ? 'caps' : 'cap',
+    raise = shortfalls.length > 1 ? 'caps' : 'cap';
+  const needs = shortfalls
+    .map(
+      ({ name, needed, cap }) =>
+        `Without the ${within}, this phase's plan needs ${phaseCapAmount(name, needed)}; the cap is ${phaseCapAmount(name, cap)}.`,
+    )
+    .join(' ');
+  const time = stage.minHours ? `: the time above fits the budgets, not the ${raise}` : '';
+  return `Its plan is over the ${raise} per phase too. ${needs} Raise the ${raise} (Goals) as well${time}.`;
+}
 // A cap's figure of a plan as a draft gives it, never more than the plan's own: whole buildings,
 // and MW rounded down to a tenth, or to a thousandth when a tenth would not show it over the cap.
 function plannedFigure(figure: number, cap: number): number {

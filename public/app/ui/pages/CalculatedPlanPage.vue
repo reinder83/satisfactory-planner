@@ -18,10 +18,11 @@
 
   Tabs under the phase title sort them (#1243, ui/plan/plan-tabs.ts): Build sequence, which the
   page opens on, holds the notices about which phase the steps are for (OpenedEarlierNotice,
-  MilestoneOnlyNotice), the checklist and the side column; Overview the warnings, the
-  recalculation offers, the summary line, the next phase or finish card, the handover and the
-  former lines; Hard drives the payoff table; Somersloops the somersloop ranking. A tab whose
-  panel draws nothing is left out, the tab list too when Build sequence is all that is left, and a
+  MilestoneOnlyNotice, and for an infeasible phase the draft's heading with a button to Overview,
+  where its reason and options are, #1020), the checklist and the side column; Overview the
+  warnings, the recalculation offers, the summary line, the next phase or finish card, the
+  handover and the former lines; Hard drives the payoff table; Somersloops the somersloop ranking.
+  A tab whose panel draws nothing is left out, the tab list too when Build sequence is all that is left, and a
   tab counts the notices in it that ask for something. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
@@ -48,7 +49,7 @@ import {
   state,
 } from '../../session.ts';
 import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
-import { currentCarry } from '../../views/calculated.ts';
+import { currentCarry, draftHeading } from '../../views/calculated.ts';
 import { storageBays } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -191,6 +192,22 @@ const page = computed(() =>
 
 // The open tab (#1243): Build sequence until another is picked, never stored.
 const active = ref<PlanTab>('build');
+// An infeasible phase's draft heading, which Build sequence repeats over its steps (#1020): the
+// steps are the draft's, and the reason with what runs out and the options is in Overview. ''
+// for a phase that fits and for a milestone-only phase, which has no stage.
+const draftNotice = computed(() =>
+  legacy(() => {
+    const stagePlan = calcStage();
+    return stagePlan && !stagePlan.feasible ? draftHeading(stagePlan) : '';
+  }),
+);
+// Opens Overview from the draft notice and moves the focus to its tab, as the arrow keys do.
+function showOverview() {
+  active.value = 'overview';
+  void nextTick(() =>
+    document.querySelector<HTMLButtonElement>('[data-plan-tab="overview"]')?.focus(),
+  );
+}
 const overviewPanel = ref<HTMLElement | null>(null);
 const hardDrivesPanel = ref<HTMLElement | null>(null);
 const sloopsPanel = ref<HTMLElement | null>(null);
@@ -282,6 +299,15 @@ function tabKey(event: KeyboardEvent) {
       </button>
     </div>
     <div v-bind="panelAttrs('build')" data-plan-panel="build">
+      <div v-if="draftNotice" class="notice warn" data-draft-steps>
+        <b>{{ draftNotice }}</b> These steps are the draft’s: this phase does not fit as set.
+        <template v-if="tabbed"
+          >Overview says why, what runs out and what to change.
+          <button type="button" class="btn quiet" data-draft-overview @click="showOverview">
+            Open Overview
+          </button></template
+        >
+      </div>
       <OpenedEarlierNotice />
       <MilestoneOnlyNotice />
       <div :class="page.milestones ? undefined : 'split'">

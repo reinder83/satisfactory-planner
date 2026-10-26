@@ -13,7 +13,7 @@ import { ENGINE } from './data.ts';
 import { fail, settings } from './settings.ts';
 import { capExcess, cappedRun, withoutCaps } from './model.ts';
 import { draftStage } from './draft.ts';
-import { buildCostDraft } from './build-cost-draft.ts';
+import { buildCostDraft, capBuildCostDraft } from './build-cost-draft.ts';
 import { holdToDriveCap } from './drive-cap.ts';
 import {
   pullFinalPhaseForward,
@@ -147,6 +147,7 @@ const CAP_SEARCH_MS = 15000;
 // already (one that fails it is a draft, which this leaves as it is), and its new plan keeps within
 // the caps. The check does not count the caps: its LP counts power in each line's linear share,
 // more than an underclocked machine draws, so a cap the plan keeps within would draft it again.
+// A build-cost draft whose own plan is over a cap says so too (capBuildCostDraft, #1020).
 function holdToCaps(
   config: CurrentSettings,
   caps: PhaseCaps,
@@ -156,6 +157,8 @@ function holdToCaps(
   const warnings: string[] = [];
   for (let phase = 1; phase <= 5; phase++) {
     const free = stages[phase]!;
+    // A build-cost draft is not planned again; its reason names a cap its plan is over (#1020).
+    if (!free.feasible) capBuildCostDraft(free, caps);
     if (!free.feasible || !capExcess(caps, free as Solved)) continue;
     onPhase?.(phase);
     setSearchDeadline(Date.now() + CAP_SEARCH_MS);
@@ -193,7 +196,7 @@ function solvePhases(
     // A plan that counts what its buildings cost to build (#1229) checks the phase once more, and
     // a phase that cannot make them in time is a draft that says so (buildCostDraft).
     stages[phase] = result.feasible
-      ? (buildCostDraft(config, phase) ?? withExactPlan(config, phase, result))
+      ? (buildCostDraft(config, phase, result) ?? withExactPlan(config, phase, result))
       : draftStage(config, phase, result, settings => planPhase(settings, phase));
   }
   return stages;
