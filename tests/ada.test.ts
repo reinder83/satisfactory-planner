@@ -1032,7 +1032,7 @@ test('ADA says the ticks show more than the plan counts, while the build plan of
   );
   assert.match(
     line.text,
-    /Nothing recalculates by itself: Recalculate in place with what you have, on the build plan,/,
+    /Nothing recalculates by itself: Recalculate in place with what you have, in the build plan.s Overview tab,/,
   );
   assert.match(line.text, /keeps this version as a backup/);
   assert.ok(!ids(facts({ view: 'plan' })).includes('owned-ticks'), 'absent means none');

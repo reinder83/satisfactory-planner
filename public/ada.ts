@@ -542,7 +542,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => !!facts.sloopBest,
     text: facts =>
-      `A somersloop pays off most on ${facts.sloopBest!.name} in this phase: ${facts.sloopBest!.perSloop} raw resources a minute saved per somersloop, at this plan's rates. The ranking is above the build sequence. They do not grow back, so choose well.`,
+      `A somersloop pays off most on ${facts.sloopBest!.name} in this phase: ${facts.sloopBest!.perSloop} raw resources a minute saved per somersloop, at this plan's rates. The ranking is in the build plan's Somersloops tab. They do not grow back, so choose well.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {
@@ -596,7 +596,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.payoff,
     text: facts =>
-      `Allowing ${facts.payoff!.name} would mean ${facts.payoff!.gain} in ${facts.payoff!.where ?? facts.phaseLabel}. Best next hard drive on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
+      `Allowing ${facts.payoff!.name} would mean ${facts.payoff!.gain} in ${facts.payoff!.where ?? facts.phaseLabel}. Best next hard drive, in the build plan's Hard drives tab, ranks the rest; spend your hard drives there, not on hunches.`,
   },
   {
     id: 'storage-search-miss',
@@ -776,7 +776,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => !!facts.ownedTicks,
     text: facts =>
-      `Your ticks say you have ${facts.ownedTicks}, and this plan was calculated without them. Nothing recalculates by itself: Recalculate in place with what you have, on the build plan, plans with them and keeps this version as a backup. Progress noted; plan pending.`,
+      `Your ticks say you have ${facts.ownedTicks}, and this plan was calculated without them. Nothing recalculates by itself: Recalculate in place with what you have, in the build plan's Overview tab, plans with them and keeps this version as a backup. Progress noted; plan pending.`,
   },
   {
     // What whole machines cost in the open phase (#1066), from the calculation's own record.

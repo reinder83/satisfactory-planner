@@ -1,6 +1,6 @@
 <!--
-  "Best next hard drive" on a calculated profile's plan page (#204, part 3 of #67; #1075), right
-  after the phase's notices and above the build sequence: what each alternate recipe would change
+  "Best next hard drive" on a calculated profile's plan page (#204, part 3 of #67; #1075), in its
+  Hard drives tab (#1243): what each alternate recipe would change
   in the plan. "Rank alternates" runs POST /api/rank-alternates (#203) for the phase on screen and
   every later one the plan builds, with the recipes the plan counts on but the player does not own
   (`remaining` and `hunting`, #1075), and stores the result with the profile; a stored ranking for
@@ -8,13 +8,13 @@
   or recalculated until the user presses the button.
 
   The table sorts by Δ buildings first, whatever the goal (#1075); a threshold hides the rows that
-  save fewer buildings, and only the first rows show until "Show all". A recipe not allowed yet
+  save fewer buildings; the tab has room for every row (#1243). A recipe not allowed yet
   has "Add as hunting": it recalculates this profile in place with that recipe allowed as one to
   hunt (huntingSettings in app/recipe-states.ts: exactly the plan the ranking tried), after the
   confirmation every recalculation offer asks (recalculateOffer in ui/recalc-offer.ts: progress
   carried, the current version kept as a backup). A hunting row says so: its figures are what
   finding it saves. Rows open the alternate's recipe dialog. The sorting and formatting live in
-  app/payoff.ts.
+  app/payoff.ts. It draws nothing in "New to Satisfactory" mode (#1076), so the tab goes too.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -30,6 +30,7 @@ import {
   type PayoffColumn,
 } from '../../payoff.ts';
 import { huntingSettings } from '../../recipe-states.ts';
+import { beginnerMode } from '../../beginner.ts';
 import { browserMode } from '../../../browser-api.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import {
@@ -55,15 +56,12 @@ const running = ref('');
 // The payoff threshold (#1075): only rows saving at least this many buildings; 0 shows all.
 const THRESHOLDS = [0, 1, 5, 10, 20];
 const threshold = ref(0);
-// How many rows show until "Show all".
-const FIRST_ROWS = 8;
-const showAll = ref(false);
 const ADD_LABEL = 'Add as hunting';
 
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 const view = computed(() =>
   legacy(() => {
-    if (!calculated || !calcStage()?.feasible) return null;
+    if (beginnerMode() || !calculated || !calcStage()?.feasible) return null;
     const plan = calculated;
     const column = sortBy.value ?? 'buildings';
     const stored = payoff;
@@ -103,8 +101,7 @@ const view = computed(() =>
       // A ranking kept from another phase, named so the button's meaning is clear.
       otherPhase: stored && !ranking ? phaseLabel(stored.ranking.phase) : '',
       when: stored?.rankedAt ? new Date(stored.rankedAt).toLocaleString() : '',
-      rows: showAll.value ? rows : rows.slice(0, FIRST_ROWS),
-      more: rows.length - FIRST_ROWS,
+      rows,
       hidden: (table?.rows.length || 0) - rows.length,
       columns,
       unchanged: PAYOFF_COLUMNS.filter(([key]) => !columns.some(([shown]) => shown === key)).map(
@@ -252,15 +249,6 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
           </tbody>
         </table>
       </div>
-      <button
-        v-if="view.more > 0"
-        type="button"
-        class="btn quiet"
-        data-payoff-more
-        @click="showAll = !showAll"
-      >
-        {{ showAll ? 'Show fewer' : `Show all ${view.more + FIRST_ROWS}` }}
-      </button>
       <p v-if="view.hidden" class="small muted" data-payoff-hidden>
         {{ view.hidden }} more {{ view.hidden === 1 ? 'alternate saves' : 'alternates save' }}
         fewer buildings than that.

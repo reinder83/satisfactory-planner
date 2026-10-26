@@ -26,10 +26,11 @@
   (thin, grey, behind the others, no label or arrowhead); pointing at one lights it up with its
   label. "Show storage and sink as tags", stored with the layout (`tags`, state version 23),
   draws them as tags on their lines instead and leaves out the two boxes. Pointing at a box or
-  focusing it lights up its arrows (and tags) and fades the rest: a line's quiet arrows light up
-  without labels, every arrow into storage or the sink with its label, and the lit labels are
-  spread so none overlap (spreadLabels, graph-labels.ts); one with no room is left out, its value
-  in its arrow's hover title and the table. Every box and tag takes focus and is named.
+  focusing it lights up its arrows (and tags) and fades the rest, every lit arrow with its label,
+  the quiet ones too (a line's arrows to storage and the sink since #1242, and every arrow into
+  storage or the sink), and the lit labels are spread so none overlap (spreadLabels,
+  graph-labels.ts); one with no room is left out, its value in its arrow's hover title and the
+  table. Every box and tag takes focus and is named.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -132,8 +133,8 @@ const leaveEdge = (id: string) => {
   if (hoveredEdge.value === id) hoveredEdge.value = null;
 };
 // What the active box lights up: its arrows and tags, and where the lit labels go, spread so none
-// overlap (null: no room, left out). A production line's quiet arrows light up without a label;
-// on storage or the sink every arrow in has one.
+// overlap (null: no room, left out). Every lit arrow has its label: a production line's quiet
+// arrows to storage and the sink too (#1242), and on storage or the sink every arrow in.
 const lit = computed(() => {
   const graph = placed.value,
     id = activeNode.value;
@@ -141,9 +142,7 @@ const lit = computed(() => {
   const edges = new Set(
     drawn.value.filter(edge => edge.from === id || edge.to === id).map(edge => edge.id),
   );
-  const labelled = drawn.value.filter(
-    edge => edges.has(edge.id) && edge.label && edge.curve && (!edge.quiet || edge.to === id),
-  );
+  const labelled = drawn.value.filter(edge => edges.has(edge.id) && edge.label && edge.curve);
   const labels: Map<string, PlacedLabel | null> = spreadLabels(
     labelled.map(edge => ({ id: edge.id, width: edge.label!.width, curves: [edge.curve!] })),
     GRAPH.labelHeight,
