@@ -2,9 +2,12 @@
 // (#286), and after an action without a confirmation whose button goes with its row or makes way
 // for another control (#290: Restore, a container's ✕, Mute). Focus would fall to <body>, where
 // nothing shows a focus ring and a screen reader loses its place. One rule for every list: focus
-// the same control in the row that takes the removed row's place, else in the nearest row before
-// it, else the first fallback on the page (the list's "Add…" control or its tabs, or the control
-// that took the trigger's place), else <main>.
+// `control` in the row that takes the removed row's place, else in the nearest row before it,
+// else the first fallback on the page (the list's "Add…" control or its tabs, or the control
+// that took the trigger's place), else <main>. After a removal `control` is the row's name or a
+// control that removes nothing (a step's summary, a bay's name field), never the row's own Remove
+// or ✕, so a second Enter cannot remove a second row (#1255); an action that removes nothing
+// (Restore, Mute) names the trigger's counterpart.
 //
 // Call refocusAfterRemoval() before asking or saving, while the trigger is still in its row, and
 // call the function it returns only once the change is saved and redrawn (after render(),
@@ -19,8 +22,9 @@ import { flowGroupOf } from '../session.ts';
 export interface RefocusOptions {
   // The list's rows, as a selector for the whole page ('.task', '.profile-card'), or for `scope`.
   row?: string;
-  // The control to focus inside a row: the trigger's counterpart in its neighbour. Without one
-  // the row itself is focused (rows that are buttons, such as a factory's ✕ per group).
+  // The control to focus inside a row: after a removal one that removes nothing, else the
+  // trigger's counterpart in its neighbour. Without one the row itself is focused (rows that are
+  // controls themselves).
   control?: string;
   // Tried in order when no row is left, or for a change with no rows (a floor, a toggle).
   fallback?: string[];

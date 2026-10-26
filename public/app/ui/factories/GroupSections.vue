@@ -131,12 +131,12 @@ function setOwner(event: Event, id: string) {
 }
 
 // "Remove group", after a confirmation: only the group goes; its factories and their
-// progress stay. Focus then goes to the next group's Remove, else the previous one's, else the
-// new group field (ui/refocus.ts, #286).
+// progress stay. Focus then goes to the next group's name field, else the previous one's, else
+// the new group field (ui/refocus.ts, #286); never to a Remove factory (#1255).
 async function remove(event: Event, id: string) {
   const refocus = refocusAfterRemoval(event.currentTarget, {
     row: '#main .user-group',
-    control: '[data-remove-group]',
+    control: '[data-section-heading]',
     fallback: ['#new-group-name'],
   });
   if (

@@ -1,7 +1,10 @@
 <!-- The header and body of the shared #detail dialog. `icon` is an item name for the header
      icon. The × closes it (closeDetail in ui/actions.ts). The `actions` slot puts controls in
      the sticky header, between the title and the × (a factory's Running box, #239), so they stay
-     in view while the body scrolls and come between them in the tab order. The h2 names the
+     in view while the body scrolls and come between them in the tab order. The × is where focus
+     starts (autofocus, which showModal() and replaceDetail() in ui/detail.ts honour, #1255): a
+     stray Space or Enter only closes the dialog, where on the Running box it changed progress
+     (#319 used to focus the first control). The h2 names the
      dialog: #detail in index.html has aria-labelledby="detail-title" (#321), and every #detail
      dialog renders this frame, so the name follows whichever dialog is shown. `summary` is a
      line under the title, as PageHeader has under a page's: a factory's output and storage rate
@@ -33,7 +36,9 @@ withDefaults(
     </div>
     <div class="dialog-head-actions">
       <slot name="actions" />
-      <button class="close" aria-label="Close details" data-close @click="closeDetail">×</button>
+      <button class="close" aria-label="Close details" data-close autofocus @click="closeDetail">
+        ×
+      </button>
     </div>
   </header>
   <div class="dialog-body"><slot /></div>

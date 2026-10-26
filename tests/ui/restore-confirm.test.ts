@@ -13,12 +13,13 @@ beforeEach(() => {
   open({ calculated: true, profileId: 'p', state: { checks: { 'unlock-hub-1': true } } });
 });
 
-// Chooses `backup` as the file to restore and waits for the page to settle.
+// Chooses `backup` as the file to restore and waits for the page to settle. A string is the
+// file's text as it is (a file that is not JSON).
 async function choose(backup: unknown) {
   go('backup');
   render();
   const input = $<HTMLInputElement>('#import-file')!;
-  const file = new File([JSON.stringify(backup)], 'b.json');
+  const file = new File([typeof backup === 'string' ? backup : JSON.stringify(backup)], 'b.json');
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
   input.dispatchEvent(new Event('change', { bubbles: true }));
   await new Promise(resolve => setTimeout(resolve, 40));
@@ -67,6 +68,8 @@ test('a backup /api/import would refuse is refused with its message, and nothing
     [backupOf(state, { profileId: 'someone-else' }), /^This backup belongs to another profile\./],
     [backupOf(state, { format: 'satisfactory-planner-ticks' }), /^Wrong backup format\.$/],
     [backupOf({ ...state, version: 99 }), /newer planner/],
+    // Not JSON at all: the server's words for a file that is not a backup, not the parser's.
+    ['{"format": not json', /^Wrong backup format\.$/],
   ];
   for (const [file, message] of refusals) {
     await choose(file);

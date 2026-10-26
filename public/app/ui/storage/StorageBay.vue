@@ -164,14 +164,15 @@ function rename(event: Event) {
   });
 }
 
-// ✕: clear a container. Its ✕ goes with it, so focus goes to the next container's ✕ in this bay,
-// else the previous one's, else the bay's add field or name (ui/refocus.ts, #290).
+// ✕: clear a container, with no question. Its ✕ goes with it, so focus goes to the next
+// container's details button in this bay, else the previous one's, else the bay's add field or
+// name (ui/refocus.ts, #290); never to the next ✕, which a second Enter would press (#1255).
 function clearSlot(event: Event, id: string) {
   const button = event.currentTarget as HTMLButtonElement;
   const refocus = refocusAfterRemoval(button, {
     scope: button.closest('.bay'),
     row: '.bay-items > [data-drop]',
-    control: '[data-clear-slot]',
+    control: '[data-slot]',
     fallback: ['.add-container [name=name]', '.bay-rename'],
   });
   return saving(button, { type: 'storageSlotClear', key: id }, () => {
@@ -180,11 +181,12 @@ function clearSlot(event: Event, id: string) {
   });
 }
 
-// Where focus goes once a bay is hidden or removed (ui/refocus.ts, #286): the next bay's Remove
-// or Hide, else the previous bay's, else the new bay's letter field.
+// Where focus goes once a bay is hidden or removed (ui/refocus.ts, #286): the next bay's name
+// field, else the previous bay's, else the new bay's letter field; never its Remove or Hide
+// (#1255).
 const bayList = {
   row: '#main .floor-grid .bay',
-  control: '[data-remove-bay], [data-hide-bay]',
+  control: '[data-bay-rename]',
   fallback: ['#new-bay-letter'],
 };
 
