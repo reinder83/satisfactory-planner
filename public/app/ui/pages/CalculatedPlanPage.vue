@@ -19,10 +19,10 @@
   Tabs under the phase title sort them (#1243, ui/plan/plan-tabs.ts): Build sequence, which the
   page opens on, holds the notices about which phase the steps are for (OpenedEarlierNotice,
   MilestoneOnlyNotice, and for an infeasible phase the draft's heading with a button to Overview,
-  where its reason and options are, #1020), the checklist and the side column; Overview the warnings, the
-  recalculation offers, the summary line, the next phase or finish card, the handover and the
-  former lines; Hard drives the payoff table; Somersloops the somersloop ranking. A tab whose
-  panel draws nothing is left out, the tab list too when Build sequence is all that is left, and a
+  where its reason and options are, #1020), the checklist and the side column; Overview the
+  warnings, the recalculation offers, the summary line, the next phase or finish card, the
+  handover and the former lines; Hard drives the payoff table; Somersloops the somersloop ranking.
+  A tab whose panel draws nothing is left out, the tab list too when Build sequence is all that is left, and a
   tab counts the notices in it that ask for something. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase

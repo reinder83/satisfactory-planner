@@ -138,7 +138,9 @@ export function buildCostWords(
   const otherCount = `${enUs(others)} other building${others === 1 ? '' : 's'}`;
   if (within)
     return `${opening}: to also make its buildings' parts within its ${enUs(hours)} h, this phase would need ${named} (${listNames(parts)} to build ${top.count === 1 ? 'it' : 'them'})${others ? ` and ${otherCount}` : ''}, and its budgets can't make all their parts in time along with its deliveries.`;
-  const rest = others ? `, and its ${otherCount} need parts too, which it can't` : `, which it can't`;
+  const rest = others
+    ? `, and its ${otherCount} need parts too, which it can't`
+    : `, which it can't`;
   return `${opening}: its ${named} need${top.count === 1 ? 's' : ''} ${listNames(parts)} to build${rest} make in time along with its deliveries.`;
 }
 // The time sentence when no budget makes the parts in time: the hours the phase would fit its

@@ -50,7 +50,8 @@ function effectWords(entry: SloopPayoff): string {
   const net = entry.netMW;
   return [
     entry.machinesSaved > 0
-      ? '−' + together(`${num(entry.machinesSaved)} ${buildingName(entry.machine, entry.machinesSaved)}`)
+      ? '−' +
+        together(`${num(entry.machinesSaved)} ${buildingName(entry.machine, entry.machinesSaved)}`)
       : '',
     more > 0 ? `${named.join(', ')} and ${more} more` : named.join(', '),
     Math.abs(net) < 0.005

@@ -39,9 +39,7 @@ const overBudget = new Set(['short', 'power', 'hours', 'whole']);
 // The bold heading of each warning notice on the page; Build sequence's repeat of the draft's
 // heading (#1020, data-draft-steps) is left out, as tests/ui/plan-tabs.test.ts covers it.
 const headings = () =>
-  $$('.notice.warn:not([data-draft-steps]) > b:first-child').map(b =>
-    (b.textContent || '').trim(),
-  );
+  $$('.notice.warn:not([data-draft-steps]) > b:first-child').map(b => (b.textContent || '').trim());
 
 // The wizard opens over an open save, as boot() leaves one, and the frame around it reads it;
 // each test opens its own rather than relying on one an earlier test opened (#864).
