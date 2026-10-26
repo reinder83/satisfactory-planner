@@ -58,7 +58,12 @@ import {
   stubFetch,
 } from './setup.ts';
 import { openAltRecipe } from '../../public/app/wizard/recipes.ts';
-import { NAME_HINT, noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
+import {
+  NAME_HINT,
+  noteWizardEdit,
+  PLAN_CALCULATED,
+  startWizard,
+} from '../../public/app/wizard/wizard.ts';
 import { nameDate, settingsChanges } from '../../public/app/profile-edit.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
@@ -309,6 +314,36 @@ test('moving between steps reads the step being left, and Review calculates', as
   await click('[data-wizard-step="3"]');
   await submit();
   assert.equal(wizard!.step, 4, 'Enter or Continue moves on');
+});
+
+test('Calculate plan is busy while it runs, and says so when the plan is ready (#1255)', async () => {
+  wizardAt(4);
+  const calls = stubFetch({ '/api/preview': generated() });
+  const reply = globalThis.fetch;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => (release = resolve));
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    await held;
+    return reply(...args);
+  };
+  const button = $<HTMLButtonElement>('#wizard-form button[type=submit]')!;
+  assert.equal(button.textContent!.trim(), 'Calculate plan');
+  button.focus();
+  await submit();
+  // Busy, not disabled, so it keeps focus (#299), and Enter again sends nothing more.
+  assert.equal(button.getAttribute('aria-disabled'), 'true');
+  assert.equal(button.disabled, false);
+  assert.equal(document.activeElement === button, true, 'the pressed button keeps focus');
+  await submit();
+  release();
+  await settle();
+  const previews = calls.filter(([path]) => path === '/api/preview');
+  assert.equal(previews.length, 1, 'one calculation for two presses');
+  assert.equal(wizard!.step, 5);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const live = $('#announce')!;
+  assert.equal(live.getAttribute('role'), 'status');
+  assert.equal(live.textContent, PLAN_CALCULATED);
 });
 
 test('a failed calculation says why in the form and gives the button back', async () => {

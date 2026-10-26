@@ -8,6 +8,7 @@ import {
   payoffDefaultSort,
   payoffDelta,
   payoffTable,
+  rankedMessage,
 } from '../../public/app/payoff.ts';
 import { payoff as sessionPayoff, setPayoff } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
@@ -190,6 +191,8 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
     $('[data-payoff-progress]')!.textContent!.replace(/\s+/g, ' '),
     /This can take up to 2 minutes, or longer while other rankings are running\./,
   );
+  // A second press meanwhile starts nothing (#1255).
+  $('[data-rank-alternates]')!.click();
   await settle();
   // The phase on screen and the ones after it, with the hunting recipes (#1075).
   assert.deepEqual(calls, [
@@ -198,6 +201,22 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   assert.equal(names().length, 6);
   assert.ok(!$('[data-payoff-progress]'));
   assert.equal($('[data-rank-alternates]')!.getAttribute('aria-disabled'), null);
+  // Done, a polite live region says so (#1255): the button kept focus, so nothing else does.
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const live = $('#announce')!;
+  assert.equal(live.getAttribute('aria-live'), 'polite');
+  assert.equal(live.textContent, 'Ranking done: 7 of 7 alternates checked for Phase 3.');
+});
+
+test('the ranking’s announcement says when it stopped, or that nothing was left to rank (#1255)', () => {
+  assert.equal(
+    rankedMessage(ranking({ stopped: true, total: 9, phases: ['3', '4', '5'] })),
+    'Ranking stopped at its time limit: 7 of 9 alternates checked for Phases 3–5.',
+  );
+  assert.equal(
+    rankedMessage(ranking({ candidates: [], total: 0 })),
+    'Ranking done: every alternate available is already allowed.',
+  );
 });
 
 test('the panel is left out of a phase without a plan', () => {

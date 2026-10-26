@@ -113,3 +113,13 @@ export function payoffFigures(ranking: AlternateRanking): Map<string, PayoffFigu
 export const payoffSaving = (figure: PayoffFigure, where = true): string =>
   `−${num(Math.abs(figure.buildings))} ${Math.abs(figure.buildings) === 1 ? 'building' : 'buildings'}` +
   (where ? ' in ' + figure.where : '');
+
+// What "Rank alternates" announces once its ranking is shown (#1255, app/announce.ts): the
+// button kept focus while it ran, so a screen reader hears that it is done and what it found.
+export function rankedMessage(ranking: AlternateRanking): string {
+  if (!ranking.total) return 'Ranking done: every alternate available is already allowed.';
+  const checked = `${ranking.candidates.length} of ${ranking.total} alternates checked for ${rankedPhases(ranking)}.`;
+  return ranking.stopped
+    ? `Ranking stopped at its time limit: ${checked}`
+    : `Ranking done: ${checked}`;
+}

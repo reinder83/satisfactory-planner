@@ -57,15 +57,15 @@ async function pick(index: number, input: HTMLInputElement) {
   rowEl(index)?.querySelector<HTMLInputElement>('input[name=supplyRate]')?.focus();
 }
 
-// "Remove": the row goes, so focus goes to the next row's Remove, else the previous one's, else the
-// blank row's item field (ui/refocus.ts, #290). A blank row's Remove is hidden and out of the tab
-// order, so it never takes focus.
+// "Remove": the row goes, with no question, so focus goes to the item field of the row that took
+// its place (the blank row's after the last filled one), else the previous row's (ui/refocus.ts,
+// #290); never to the next Remove, which a second Enter would press (#1255).
 function remove(index: number, event: Event) {
   const button = event.currentTarget as HTMLButtonElement;
   const refocus = refocusAfterRemoval(button, {
     scope: root.value,
     row: '.supply-row',
-    control: '.supply-remove:not(.is-blank)',
+    control: '[name=supplyItem]',
     fallback: ['.supply-row:last-child [name=supplyItem]'],
   });
   removeSupplyRow(button.form, index);

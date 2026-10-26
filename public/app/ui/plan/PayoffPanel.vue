@@ -26,9 +26,11 @@ import {
   PAYOFF_WORDS,
   payoffDelta,
   payoffTable,
+  rankedMessage,
   rankedPhases,
   type PayoffColumn,
 } from '../../payoff.ts';
+import { announce } from '../../announce.ts';
 import { huntingSettings } from '../../recipe-states.ts';
 import { beginnerMode } from '../../beginner.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
@@ -126,7 +128,8 @@ const ariaSort = (column: PayoffColumn) =>
 
 // Runs the ranking for the phase on screen and the ones after it, and shows it, unless another
 // profile was opened meanwhile (the result is stored with the profile it was run for either way).
-// The button is busy while it runs (bound aria-disabled, app/busy.ts: it keeps focus, #299).
+// The button is busy while it runs (bound aria-disabled, app/busy.ts: it keeps focus, #299), and
+// once the ranking shows a polite announcement says so (app/announce.ts, #1255).
 async function rank() {
   if (running.value) return;
   const profileId = currentProfile.id;
@@ -144,6 +147,7 @@ async function rank() {
     if (currentProfile.id !== profileId) return;
     setPayoff(result);
     render();
+    announce(rankedMessage(result.ranking));
   } catch (error) {
     toast((error as Error).message, true);
   } finally {

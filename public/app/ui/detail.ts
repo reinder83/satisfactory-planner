@@ -65,14 +65,15 @@ function replaceDetail(dialog: HTMLDialogElement, target: DetailTarget) {
   // The <dialog> is the scroll container and keeps its offset while closed and while its
   // content is replaced, so each opening would start where the last dialog was left (#316).
   // Reset it after showModal(): a closed dialog has no box to scroll. showModal() focuses the
-  // first control, which sits in the sticky header, so the reset never hides the focus.
+  // ×, which sits in the sticky header, so the reset never hides the focus.
   dialog.scrollTop = 0;
 }
 
-// What showModal() focuses: an [autofocus] element, else the first control that takes focus,
-// which in every #detail dialog sits in the sticky header (a Running box, else the ×). Hidden
-// and disabled controls refuse focus(), so the first one that accepts it wins. The dialog is
-// scrolled to its top right after, so focus() does not scroll it.
+// What showModal() focuses: an [autofocus] element, else the first control that takes focus.
+// Every #detail dialog has its × in the sticky header marked autofocus (ui/detail/DialogFrame.vue,
+// #1255), so it opens there and not on a factory's Running box, where a stray Space changed
+// progress. Hidden and disabled controls refuse focus(), so the first one that accepts it wins.
+// The dialog is scrolled to its top right after, so focus() does not scroll it.
 const FOCUSABLE =
   'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [contenteditable]';
 function focusFirstControl(dialog: HTMLDialogElement) {

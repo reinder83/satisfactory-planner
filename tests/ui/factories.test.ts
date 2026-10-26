@@ -678,10 +678,10 @@ test('every dialog opens at the top, not where the last one was left (#316)', as
 // Focus when a link inside a dialog puts another one in its place (#319): the focused link
 // goes with the old dialog, and showModal() does not run again. happy-dom's showModal() and
 // close() move no focus, so a fresh open leaves focus on the opener here; in a browser it
-// focuses the same first control.
+// focuses the same control, the × (autofocus, #1255; browser-check.ts checks a fresh open).
 const focused = (selector: string) => document.activeElement?.matches(selector) ?? false;
 // Focuses `link` and presses it, as a keyboard user does, and checks that focus lands on the
-// new dialog's first control, the Running box `key` in its sticky header.
+// new dialog's ×, not on the Running box `key` before it in its sticky header (#1255).
 const follow = (link: HTMLElement, key: string) => {
   const dialog = $<HTMLDialogElement>('#detail')!;
   const from = $('#detail h2')!.textContent;
@@ -692,13 +692,29 @@ const follow = (link: HTMLElement, key: string) => {
   assert.ok(dialog.open);
   assert.equal(link.isConnected, false, 'the link went with the old dialog');
   assert.equal(focused('body'), false, 'focus is not left on <body>');
+  assert.ok($(`#detail .dialog-head [data-check="${key}"]`), 'its Running box is in the header');
   assert.equal(
-    focused(`#detail .dialog-head [data-check="${key}"]`),
+    focused('#detail .dialog-head [data-close]'),
     true,
-    'focus is on the new dialog’s first control, as on opening',
+    'focus is on the new dialog’s ×, as on opening, not on its Running box',
   );
   assert.equal(dialog.scrollTop, 0, 'and the dialog starts at its top');
 };
+
+// showModal() focuses a dialog's [autofocus] element (happy-dom does not, so the attribute is
+// checked here and browser-check.ts checks the focus itself): the ×, never the Running box,
+// where a stray Space changed progress (#1255).
+test('a factory dialog opens on its ×, not on its Running box (#1255)', () => {
+  render();
+  $<HTMLButtonElement>(
+    `#main .factory-card button.name[data-calc-factory="${row('wire')}"]`,
+  )!.click();
+  assert.equal($('#detail h2')!.textContent, 'Wire');
+  assert.ok($('#detail .dialog-head [data-check]'), 'its Running box is in the header');
+  const autofocus = $$('#detail [autofocus]');
+  assert.equal(autofocus.length, 1);
+  assert.equal(autofocus[0]!.matches('.dialog-head [data-close]'), true, 'the × has autofocus');
+});
 
 test('a link inside a migrated factory dialog moves focus into the new one, and closing returns it to the opener (#319)', async () => {
   render();
@@ -747,7 +763,7 @@ test('focus moves into the new dialog after the unsaved-note question too (#319)
   await settle();
   assert.equal(asked.length, 1, 'the note was asked about');
   assert.equal($('#detail h2')!.textContent, 'Cable');
-  assert.equal(focused(`#detail .dialog-head [data-check="calc-3-${row('cable')}"]`), true);
+  assert.equal(focused('#detail .dialog-head [data-close]'), true);
   void closeDetail();
   await settle();
   assert.equal(document.activeElement === opener, true);
