@@ -7,6 +7,7 @@ import { setWizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { carryOptions } from '../../public/state.ts';
 import { draftAdvice } from '../../public/app/draft-advice.ts';
+import { draftHeading } from '../../public/app/views/calculated.ts';
 import { $$, generated, go, open, page } from './setup.ts';
 import type { StoredStage } from '../../public/types/index.ts';
 
@@ -195,4 +196,45 @@ test('a cap draft without minHours is headed by its cap and offers to raise it',
   go('wizard');
   render();
   assert.ok(headings().includes('Phase 5 — cap exceeded:'), headings().join(' | '));
+});
+
+// A build-cost draft over a cap, with no budget shortfall (#1019): the build cost within the
+// phase's time is the cause, so the heading names it before the cap. A cap draft alone keeps "cap
+// exceeded", a build-cost draft with a shortfall keeps "budget exceeded".
+test('a build-cost draft over a cap is headed by its build cost first', () => {
+  const capShortfalls = [{ name: 'mw' as const, needed: 48387.9, cap: 1000 }];
+  const draft = (extra: Partial<StoredStage>): StoredStage => ({
+    feasible: false,
+    reason: 'Counting what its buildings cost to build, this phase does not fit in its 1 h.',
+    ...extra,
+  });
+  const cost = { hours: 1, buildings: { Miner: 4 }, parts: { 'Iron Plate': 40 } };
+  assert.equal(
+    draftHeading(draft({ buildCost: cost, capShortfalls, minHours: 3 })),
+    'Planning draft — build cost and cap exceeded.',
+  );
+  assert.equal(
+    draftHeading(draft({ buildCost: cost, capShortfalls }), '5'),
+    'Phase 5 — build cost and cap exceeded:',
+  );
+  assert.equal(
+    draftHeading(draft({ capShortfalls })),
+    'Planning draft — cap exceeded.',
+    'a cap draft is the cap',
+  );
+  assert.equal(
+    draftHeading(
+      draft({
+        buildCost: cost,
+        capShortfalls,
+        shortfalls: [{ name: 'Coal', needed: 10, budget: 5 }],
+      }),
+    ),
+    'Planning draft — budget exceeded.',
+  );
+  assert.equal(
+    draftHeading(draft({ buildCost: cost, minHours: 3 })),
+    'Planning draft — budget exceeded.',
+    'without a cap it reads as before',
+  );
 });

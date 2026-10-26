@@ -474,8 +474,11 @@ export function budgetMeasured(snapshot: StoredStage): boolean {
 // stopped search, recipes that cannot make the goal and an older snapshot carry none of those, so
 // the heading stays neutral and the reason says why (#626).
 export function draftHeading(snapshot: StoredStage, phase?: string): string {
-  // A cap per phase (#1221) that no budget shortfall comes with is named as the cap it is.
-  const what = snapshot.capShortfalls?.length && !snapshot.shortfalls?.length ? 'cap' : 'budget';
+  // A cap per phase (#1221) that no budget shortfall comes with is named as the cap it is, but for
+  // a build-cost draft (#1229) the build cost within the phase's time comes first: its own plan
+  // fits the budgets, so the cap is the second thing wrong, not the first (#1019).
+  const capOnly = snapshot.capShortfalls?.length && !snapshot.shortfalls?.length;
+  const what = capOnly ? (snapshot.buildCost ? 'build cost and cap' : 'cap') : 'budget';
   const overBudget = budgetMeasured(snapshot);
   if (phase) return `Phase ${phase}${overBudget ? ` — ${what} exceeded` : ''}:`;
   return overBudget ? `Planning draft — ${what} exceeded.` : 'Planning draft.';
