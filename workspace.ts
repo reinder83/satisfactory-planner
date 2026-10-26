@@ -58,8 +58,8 @@ export async function openWorkspace({
   dataDir: string;
   validateState: (state: unknown) => ProgressState;
   mutate: (state: ProgressState, update: UpdateOp) => ProgressState;
-  // A ranking recalculates the plan once per candidate recipe on the request, holding up every
-  // other request meanwhile, so it stops after this long and reports `stopped`.
+  // A ranking recalculates the plan once per candidate recipe on the request, on a worker thread
+  // (#1156, server/ranking.ts); it stops after this long and reports `stopped`.
   rankBudgetMs?: number | undefined;
   // Solving time one address's live estimates may use a minute (#413).
   estimateBudgetMs?: number | undefined;
