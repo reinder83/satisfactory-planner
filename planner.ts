@@ -28,6 +28,7 @@
 //   stock.ts        protected storage fed from surplus first, and storage-only lines (#1061)
 //   calculate.ts    calculate(): every phase, then the adjustments and the warnings
 //   draft.ts        the draft of a phase that does not fit
+//   drive-cap.ts    the cap on hard drives over the whole plan (#1233)
 //   adjustments.ts  phaseTime 'final' and the augmenter fuel verdict
 //   warnings.ts     the plan's warnings
 //   catalog.ts      catalog(), the static data the interface needs

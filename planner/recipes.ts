@@ -67,6 +67,8 @@ export function standardAlternateIn(config: CurrentSettings, id: string): boolea
 // 5. Nuclear fuel and waste-processing recipes only with a nuclear strategy, except that from
 //    Phase 4 uranium drone fuel admits the Uranium Fuel Rod and Encased Uranium Cell recipes.
 // 6. Preferred recipes (custom only) push out the competitors for their primary product.
+// Under a cap on hard drives that binds (`driveSet`, #1233), the hard-drive alternates not owned
+// are only the ones in the set the cap picked.
 // Alternates the player already owns (`ownedAlternates`, #1068) count as selected in 1 and 2
 // whatever the recipe setting, from the phase each becomes available in; without them the pool is
 // the one every earlier release planned with.
@@ -115,6 +117,13 @@ function basePool(config: CurrentSettings, phase: number, conversion: boolean): 
           (config.recipes === 'custom' && config.alternateRecipes.includes(recipe.id)) ||
           owned.includes(recipe.id) ||
           (config.pureIngots && pureNames.includes(recipe.name))),
+    )
+    .filter(
+      recipe =>
+        !config.driveSet ||
+        !recipe.alternate ||
+        owned.includes(recipe.id) ||
+        config.driveSet.includes(recipe.id),
     )
     .filter(
       recipe =>

@@ -41,6 +41,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../browser-api.ts';
 import {
   beltCapWords,
+  driveCapWords,
   objectiveWords,
   phaseCapWords,
   purities,
@@ -249,9 +250,11 @@ function profileFooter() {
     const settings = calculated.settings;
     const date = new Date(calculated.createdAt);
     const purity = purities.find(([id]) => id === settings.purity)?.[1] || settings.purity;
-    const capWords = [phaseCapWords(settings.phaseCaps), beltCapWords(settings.beltCap)].filter(
-      Boolean,
-    );
+    const capWords = [
+      phaseCapWords(settings.phaseCaps),
+      beltCapWords(settings.beltCap),
+      driveCapWords(settings.driveCap),
+    ].filter(Boolean);
     return [
       currentProfile.name,
       `${purity} purity · ${num(settings.multiplier)}× elevator parts`,
@@ -266,8 +269,9 @@ function profileFooter() {
       ...(settings.objective === undefined
         ? []
         : ['Objective: ' + objectiveWords(settings.objective, true)]),
-      // The caps it was calculated with (#1221, #1232), named only when it has one: "Caps: at
-      // most 120 buildings per phase; belts up to Mk.4 (480/min)".
+      // The caps it was calculated with (#1221, #1232, #1233), named only when it has one: "Caps:
+      // at most 120 buildings per phase; belts up to Mk.4 (480/min); at most 3 hard-drive
+      // alternates".
       ...(capWords.length ? ['Caps: ' + capWords.join('; ')] : []),
       ...(Number.isNaN(date.getTime())
         ? []

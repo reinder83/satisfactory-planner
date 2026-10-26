@@ -8,15 +8,24 @@
   The belt cap (#1232, settings.beltCap): the best belt the plan may use, a select ("beltCap",
   data-belt-cap) of "No cap" and Mk.2 to Mk.5 belts with what one carries. It lowers every phase's
   belt to it (phaseBelt in preferences/mining.ts), an owned belt's too.
+
+  The cap on hard drives (#1233, settings.driveCap): at most this many hard-drive alternates over
+  the whole plan, beyond the ones the player owns, a number box ("driveCap", data-drive-cap, blank
+  for no cap, 0 for none) that readPhaseCaps reads.
 -->
 <script setup lang="ts">
-import { BELT_CAP_MARKS, PHASE_CAP_LIMITS, beltCapMark } from '../../../preferences.ts';
+import {
+  BELT_CAP_MARKS,
+  DRIVE_CAP_MAX,
+  PHASE_CAP_LIMITS,
+  beltCapMark,
+} from '../../../preferences.ts';
 import type { PhaseCaps } from '../../../types/index.ts';
 import { num } from '../../format.ts';
 import HelpTip from '../form/HelpTip.vue';
 import InputField from '../form/InputField.vue';
 
-defineProps<{ caps: PhaseCaps | undefined; beltCap?: number }>();
+defineProps<{ caps: PhaseCaps | undefined; beltCap?: number; driveCap?: number }>();
 
 // "No cap", then each mark a cap may name with what one belt carries: "Mk.4 belts (480/min)".
 const BELT_CAPS = [
@@ -65,6 +74,16 @@ const BELT_CAPS = [
           </option>
         </select></label
       >
+      <InputField
+        label="At most this many hard-drive alternates in the whole plan"
+        name="driveCap"
+        data-drive-cap
+        :value="driveCap ?? ''"
+        min="0"
+        :max="DRIVE_CAP_MAX"
+        step="1"
+        placeholder="No cap"
+      />
     </div>
   </fieldset>
 </template>

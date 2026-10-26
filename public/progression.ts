@@ -14,6 +14,7 @@ import {
   BELT_MARKS,
   BURNER_FUELS,
   BURNER_MW,
+  driveCapWords,
   MINER_MARKS,
   miningLinearMW,
   OVERCLOCK_RESEARCH,
@@ -1012,8 +1013,10 @@ const CHECKMARKS = 'Production checkmarks do not confirm inventory or spare capa
 // a new profile carried for a group's own line, 'recipe-unlock-<recipe>:<group>' (#1041), are
 // merged into it by validateState (mergeOldUnlockKeys in state/validate.ts).
 export function hardDriveTasks(context: GuideContext): GuideTask[] {
-  const { checks, data, stage, rows } = context;
+  const { checks, data, stage, rows, plan } = context;
   const earlier = earlierAlternates(context);
+  // The plan's cap on hard drives (#1233), which picked the alternates its lines use.
+  const capped = driveCapWords(plan.settings?.driveCap);
   const alternates = [
     ...new Map(
       rows
@@ -1027,7 +1030,7 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
     {
       id: 'hard-drives-' + stage,
       title: 'Collect and scan hard drives for the selected alternates',
-      body: `${missing.length} selected recipe unlocks remain unconfirmed. Complete Field Research and build the MAM. Take materials and portable power for crash sites, collect hard drives, and run 10-minute scans while building. Choices are random: this is not a guaranteed drive count. Finish each recipe’s prerequisite milestones/research first.`,
+      body: `${missing.length} selected recipe unlocks remain unconfirmed. Complete Field Research and build the MAM. Take materials and portable power for crash sites, collect hard drives, and run 10-minute scans while building. Choices are random: this is not a guaranteed drive count. Finish each recipe’s prerequisite milestones/research first.${capped ? ` Your cap on hard drives holds the whole plan to ${capped} beyond the ones you own, and these steps stay within it.` : ''}`,
       // With every recipe it lists unlocked, the hunt is over: shown done without a tick (#1070).
       ...(missing.length ? {} : { satisfied: 'Done: every recipe it lists is unlocked.' }),
     },

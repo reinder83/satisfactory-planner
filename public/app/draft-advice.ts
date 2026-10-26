@@ -20,7 +20,7 @@ import { recipeIdOf } from '../progression.ts';
 import { sloopPayoffOf, sloopUpstream, takesSloops } from './sloop-payoff.ts';
 import { listNames } from '../wording.ts';
 import { minerWords } from '../mining.ts';
-import { beltCapMark, mapSupply, phaseBelt, rawResources } from '../preferences.ts';
+import { beltCapMark, driveCapWords, mapSupply, phaseBelt, rawResources } from '../preferences.ts';
 import { AMPLIFIER_PHASE, AMPLIFIER_RESEARCH } from '../somersloops.ts';
 import type {
   CalcRow,
@@ -56,7 +56,8 @@ export type DraftLeverId =
   | 'sam'
   | 'nuclear'
   | 'buildCost'
-  | 'beltCap';
+  | 'beltCap'
+  | 'driveCap';
 export interface DraftLever {
   id: DraftLeverId;
   text: string;
@@ -312,6 +313,15 @@ export function draftAdvice(
   // each node give more. Read from the stored stage, so it names the belt the plan used.
   const capped = beltCapLever(snapshot, settings, phase, shortfalls);
   if (capped) levers.push(capped);
+  // A cap on hard drives (#1233) that leaves this phase without alternates it fits with: the
+  // planner records it on the draft of a phase that fits without the cap.
+  if (snapshot.driveCap)
+    levers.push({
+      id: 'driveCap',
+      text: `Raise or clear the cap on hard drives (Goals): the plan may count on ${driveCapWords(snapshot.driveCap.cap)} over all its phases, and without the cap this phase fits.`,
+      step: 3,
+      label: 'Change the cap on hard drives in Edit settings →',
+    });
   if (snapshot.wholeMachinesOnly)
     levers.push({
       id: 'whole',
@@ -361,12 +371,13 @@ export function draftAdvice(
   if (!shortfalls.length) return { needs, levers };
   const mined = needs.filter(need => need.name !== 'Water');
   // Named alternates where the draft's lines show some, else the general advice under Standard
-  // recipes; none under 'all', which allows every one.
+  // recipes; none under 'all', which allows every one, nor where the cap on hard drives left this
+  // phase without the alternates it fits with (#1233: its own lever says so).
   const found =
-    phase !== undefined && settings?.recipes !== 'all'
+    phase !== undefined && settings?.recipes !== 'all' && !snapshot.driveCap
       ? draftAlternates(snapshot, settings, phase, alternates, mined)
       : [];
-  if (found.length || settings?.recipes === 'standard')
+  if (found.length || (settings?.recipes === 'standard' && !snapshot.driveCap))
     levers.push({
       id: 'alternates',
       text: found.length

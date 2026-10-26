@@ -216,6 +216,16 @@ export interface CurrentSettings {
   // than the capped belt carries, and the belt advice (bestLane in public/app/flow.ts) never
   // counts a better one. Absent unless chosen, and from every plan made before it.
   beltCap?: 2 | 3 | 4 | 5;
+  // The cap on hard drives (#1233, slice of #1079, the caps on All settings step 3): the plan
+  // counts on at most this many hard-drive alternates over all its phases, beyond the ones the
+  // player owns (ownedAlternates) and the ones a MAM node or a milestone unlocks; a whole number
+  // from 0 to DRIVE_CAP_MAX (public/preferences/objective.ts). Absent unless chosen, and from
+  // every plan made before it.
+  driveCap?: number;
+  // Only inside the planner, never stored (settings() leaves it out): the hard-drive alternates a
+  // plan the cap on hard drives binds may use (holdToDriveCap in planner/drive-cap.ts), which
+  // recipePool keeps of the pool's hard-drive alternates beside the owned ones.
+  driveSet?: string[];
   // The player can overclock (#1137: the MAM's Power Shards research, or "I can overclock" in
   // "What you already have"): with mining per phase every phase's miners and extractors run up to
   // 250%, capped by a node's belt or pipe (phaseClock in public/preferences/mining.ts). Absent
@@ -640,7 +650,16 @@ export interface StageResult {
   // The draft of a phase that fits its budgets until what its buildings cost to build is counted
   // (#1229, settings.buildCost): what they cost. Absent otherwise and from older plans.
   buildCost?: StageBuildCost;
+  // The draft of a phase that fits without the cap on hard drives but not with the set of
+  // alternates the cap leaves (#1233, settings.driveCap): the cap, and `stopped` when the search
+  // for the set stopped at its limit. Absent otherwise and from older plans.
+  driveCap?: StageDriveCap;
   solverStatus?: string;
+}
+// See StageResult.driveCap.
+export interface StageDriveCap {
+  cap: number;
+  stopped?: true;
 }
 
 // A phase whose draft could not be solved either is only { feasible: false, reason }.

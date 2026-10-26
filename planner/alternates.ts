@@ -58,7 +58,9 @@ export function rankAlternates(
   },
 ): AlternateRanking {
   const started = Date.now();
-  const config = settings(input);
+  // A cap on hard drives (#1233) is left out: the payoff of an alternate is what allowing it
+  // changes, and under a cap that binds each trial would pick another set (a search per trial).
+  const { driveCap: _cap, ...config } = settings(input);
   // The alternates the game unlocks without a hard drive count as allowed where the pool holds
   // them (standardAlternateIn: the MAM recipes by their own setting, #1058), so a trial under
   // 'custom' plans with exactly the base plan's pool and the candidate.

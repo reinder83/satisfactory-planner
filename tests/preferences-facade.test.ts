@@ -17,7 +17,8 @@ const modules = fs
 // recipeCostChoices, recipeCostOf, #1161), and what a plan keeps lowest (OBJECTIVES and its
 // helpers, #1180), the caps per phase beside it (PHASE_CAP_LIMITS and its helpers, #1221), and
 // what each building costs to build, which the planner counts (BUILD_COSTS, #1229), and the belt
-// cap (BELT_CAP_MARKS, beltCapMark, beltCapWords, #1232).
+// cap (BELT_CAP_MARKS, beltCapMark, beltCapWords, #1232), and the cap on hard drives
+// (DRIVE_CAP_MAX, driveCapOf, driveCapWords, #1233).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_CAP_MARKS',
@@ -26,6 +27,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'BURNER_FUELS',
     'BURNER_MW',
     'DEFAULT_EXTRACTION',
+    'DRIVE_CAP_MAX',
     'EXTRACTOR_CLOCK_DECIMALS',
     'EXTRACTOR_MIN_RATE',
     'EXTRACTOR_OPTIONS',
@@ -65,6 +67,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'clockChoices',
     'constructionItems',
     'distributions',
+    'driveCapOf',
+    'driveCapWords',
     'droneFuels',
     'droneSupply',
     'elevatorParts',

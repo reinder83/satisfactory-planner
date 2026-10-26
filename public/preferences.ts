@@ -17,7 +17,7 @@
 //   mining.ts      mining and belts per phase (#1065): each phase's miner, clock, belts and
 //                  pipes, the budgets they give and the nodes a phase's draw taps
 //   objective.ts   what a plan keeps lowest (#1180): buildings, power, raw resources or a mix,
-//                  and the caps per phase (#1221)
+//                  the caps per phase (#1221) and the cap on hard drives (#1233)
 //   build-costs.ts what each building costs to build (#1073), which the planner counts (#1229)
 // build.ts ships each module to both editions as preferences/<name>.js; the Dockerfile copies
 // their sources for the server, which reaches this file through the planner.
@@ -53,12 +53,15 @@ export {
 } from './preferences/fuels.ts';
 export { helpText } from './preferences/help.ts';
 export {
+  DRIVE_CAP_MAX,
   OBJECTIVE_EXCHANGE,
   OBJECTIVE_WEIGHT_MAX,
   OBJECTIVE_WEIGHTS,
   OBJECTIVES,
   PHASE_CAP_KEYS,
   PHASE_CAP_LIMITS,
+  driveCapOf,
+  driveCapWords,
   objectiveKind,
   objectiveWeights,
   objectiveWords,

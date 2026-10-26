@@ -10,6 +10,7 @@
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
 import {
   distributions,
+  driveCapWords,
   objectiveWords,
   phaseCapWords,
   purities,
@@ -277,6 +278,15 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
   ['ownedBelt', 'Belts you already have', value => (value ? `Mk.${value} belts` : 'None')],
   // The belt cap (#1232), absent as no cap.
   ['beltCap', 'Best belt the plan may use', value => (value ? `Mk.${value} belts` : 'No cap')],
+  // The cap on hard drives (#1233), absent as no cap; 0 is a cap ("No hard-drive alternates").
+  [
+    'driveCap',
+    'Cap on hard drives',
+    value => {
+      const words = driveCapWords(value);
+      return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'No cap';
+    },
+  ],
   ['overclock', 'I can overclock', onOff],
   // Which Water Extractor option the plan suggests (#1142); both are always shown.
   ['waterOverclock', 'Suggested Water Extractors', value => (value ? 'Overclocked' : 'At 100%')],
@@ -295,6 +305,7 @@ const ABSENT_IS_NONE = new Set([
   'ownedMiner',
   'ownedBelt',
   'beltCap',
+  'driveCap',
   'overclock',
   'waterOverclock',
   'ownedAlternates',

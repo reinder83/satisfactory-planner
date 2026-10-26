@@ -61,6 +61,9 @@ export interface AdaFacts {
   // The objective the open plan was calculated with in words (#1180, "least power"); absent for
   // the fewest buildings.
   objective?: string;
+  // The cap on hard drives the open plan was calculated with in words (#1233, "at most 3
+  // hard-drive alternates"); absent without one.
+  driveCap?: string;
   // Where one somersloop pays off most in the open phase (#1215, app/sloop-payoff.ts): the best
   // line's name and the raw resources a minute it saves per somersloop, in words ("85"); absent
   // before Phase 3, without such a line and in New to Satisfactory mode.
@@ -521,6 +524,16 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.objective,
     text: facts =>
       `This plan's objective is ${facts.objective}, not the fewest buildings: it may build more machines to keep that low, and every number here already counts it. Efficiency has many definitions; you picked one.`,
+  },
+  {
+    // The cap on hard drives (#1233): the plan's lines and hard-drive steps already follow it, and
+    // only Edit settings changes it, so nothing here waits for a recalculation.
+    id: 'drive-cap',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => !!facts.driveCap,
+    text: facts =>
+      `This plan counts on ${facts.driveCap} beyond the ones you own, over all its phases: its hard-drive steps list only those, and every number here already counts the cap. Fewer crash sites, same deadline.`,
   },
   {
     // Where one somersloop pays off most (#1215): the build plan's ranking, its first line.

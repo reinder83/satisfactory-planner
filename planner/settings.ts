@@ -6,6 +6,8 @@ import {
   vehicleFuels,
   storageOptions,
   beltCapMark,
+  DRIVE_CAP_MAX,
+  driveCapOf,
   distributions,
   purities,
   ownedGeneratorCounts,
@@ -453,6 +455,17 @@ const beltCapSetting = (value: unknown): Pick<CurrentSettings, 'beltCap'> => {
   if (!beltCapMark(value)) fail(BELT_CAP_REFUSAL);
   return { beltCap: value as 2 | 3 | 4 | 5 };
 };
+// The cap on hard drives (#1233): `{ driveCap }`, a whole number from 0 to DRIVE_CAP_MAX, nothing
+// when absent or null, so a plan without a cap, and every plan stored before it, has no field and
+// calculates exactly as before. Any other value is refused, never corrected, as the other caps are.
+// A top-level setting like beltCap, not part of phaseCaps, which a release with #1221 refuses
+// unknown keys in: an older release drops it and plans without the cap.
+const DRIVE_CAP_REFUSAL = `Give the cap on hard drives as a whole number from 0 to ${DRIVE_CAP_MAX}, or leave it blank for no cap.`;
+const driveCapSetting = (value: unknown): Pick<CurrentSettings, 'driveCap'> => {
+  if (value === undefined || value === null) return {};
+  const cap = driveCapOf(value);
+  return cap === undefined ? fail(DRIVE_CAP_REFUSAL) : { driveCap: cap };
+};
 // The alternate recipes the player already owns (#1068): known alternate ids, deduplicated and
 // sorted, so equal choices give equal settings; the field is absent unless one is left.
 const ownedAlternatesSetting = (value: unknown): { ownedAlternates?: string[] } => {
@@ -633,6 +646,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The belt cap (#1232): absent without one, so settings without it, and every plan stored
     // before it, plan each phase's belt as before.
     ...beltCapSetting(input.beltCap),
+    // The cap on hard drives (#1233): absent without one, so settings without it, and every plan
+    // stored before it, plan the same recipe pool.
+    ...driveCapSetting(input.driveCap),
     phaseTime: choice(input.phaseTime, ['every', 'final'], 'every'),
     hours: number(input.hours, 0.25, 2000, 8),
     roundRates: input.roundRates !== false,
