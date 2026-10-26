@@ -8,7 +8,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
-import { labelImport, transferFileSize, transferImportLimit } from '../../../transfer.ts';
+import {
+  labelImport,
+  NOT_A_SAVE_EXPORT,
+  transferFileSize,
+  transferImportLimit,
+} from '../../../transfer.ts';
 import { confirmAction } from '../confirm.ts';
 import {
   downloadJson,
@@ -33,7 +38,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { backupAge, restoreMessage } from '../../views/backup.ts';
-import { backupQuestion, savesImportQuestion } from '../../import-summary.ts';
+import { backupQuestion, savesImportQuestion, WRONG_BACKUP_FORMAT } from '../../import-summary.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import ProgressMerge from '../backup/ProgressMerge.vue';
 import BrowserNotice from '../BrowserNotice.vue';
@@ -111,6 +116,18 @@ async function exportSaves(selection?: string[]) {
   }
 }
 
+// The chosen file as JSON. A file that is not JSON at all is refused as any other file that is
+// not the export asked for, in the import's own words (validateTransfer, /api/import) rather
+// than the parser's "Unexpected token …" (#1255).
+async function parsedFile(file: File, refusal: string): Promise<unknown> {
+  const text = await file.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw Error(refusal);
+  }
+}
+
 // "Import saves": import every save in the file as new copies with new ids, after a
 // confirmation that says what the file holds and that it adds copies (savesImportQuestion,
 // #1217), so existing saves are never replaced. The file is checked as the import checks it
@@ -128,7 +145,7 @@ async function importSaves(event: Event) {
   try {
     // Checked before reading, so a huge file is never parsed.
     if (file.size > transferImportLimit) throw Error('Choose a save export smaller than 50 MB.');
-    const data = JSON.parse(await file.text());
+    const data = await parsedFile(file, NOT_A_SAVE_EXPORT);
     const question = savesImportQuestion(data, workspace, {
       fileName: file.name,
       progression: progressionData,
@@ -183,7 +200,7 @@ async function restoreProgress(event: Event) {
   if (!file) return;
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
-    const data = JSON.parse(await file.text());
+    const data = await parsedFile(file, WRONG_BACKUP_FORMAT);
     const question = backupQuestion(
       data,
       { id: currentProfile.id, name: currentProfile.name, plan: calculated, state },

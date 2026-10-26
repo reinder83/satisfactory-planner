@@ -122,11 +122,12 @@ function server() {
     return new Response(JSON.stringify({ error: 'unexpected ' + route }), { status: 500 });
   };
 }
+// `data` is written as JSON; a string is the file's text as it is (a file that is not JSON).
 async function importFile(data: unknown, name: string) {
   go('backup');
   render();
   const input = $<HTMLInputElement>('#import-saves')!;
-  const file = new File([JSON.stringify(data)], name);
+  const file = new File([typeof data === 'string' ? data : JSON.stringify(data)], name);
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
   input.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
@@ -259,6 +260,9 @@ test('a damaged or newer file is refused with the import’s own message, and no
   newer.saves[0]!.profiles[0]!.state.version = 99;
   await importFile(newer, 'anna.json');
   assert.match($('#toast')!.textContent!, /newer planner/);
+  // A file that is not JSON at all is refused in the import's words, not the parser's (#1255).
+  await importFile('{"saves": [ not json', 'broken.json');
+  assert.equal($('#toast')!.textContent, 'Choose a full planner save export.');
   assert.deepEqual(asked, [], 'no question was asked');
   assert.deepEqual(sent, [], 'nothing was sent');
 });

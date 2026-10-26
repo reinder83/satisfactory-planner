@@ -62,6 +62,9 @@ export const transferFormat = 'satisfactory-planner-saves';
 // The largest full-save file an import accepts (validateTransfer, the Backup page and the
 // server's body limit in server.ts all use 50 MB).
 export const transferImportLimit = 50 * 1024 * 1024;
+// The refusal of a file that is not a full-save export at all: another planner file, or one that
+// is not JSON (the Backup page says the same for that, #1255).
+export const NOT_A_SAVE_EXPORT = 'Choose a full planner save export.';
 // The size in bytes of an export as downloadJson (app/api.ts) writes it.
 export const transferFileSize = (data: unknown) => new Blob([JSON.stringify(data, null, 2)]).size;
 // A refused export. The status makes the server answer 400 with this message, like state.ts's
@@ -218,7 +221,7 @@ export function validateTransfer(data: unknown): Omit<ImportableSaveExport, 'exp
     !Array.isArray(input.saves) ||
     input.saves.length > 50
   )
-    invalid('Choose a full planner save export.');
+    invalid(NOT_A_SAVE_EXPORT);
   // Only accept data objects; executable links never belong in a portable handbook.
   const text = JSON.stringify(data);
   if (text.length > transferImportLimit || /"(?:__proto__|constructor|prototype)"\s*:/.test(text))

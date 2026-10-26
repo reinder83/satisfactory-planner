@@ -1,6 +1,9 @@
 // Where focus goes after a confirmed removal (#286, public/app/ui/refocus.ts), and after an
-// action without a confirmation whose button goes (#290): the removed row's control goes with it, so focus moves to the same control in the next row, else the
-// previous one, else the list's "Add…" field or tab, never to <body>. Each list is mounted the
+// action without a confirmation whose button goes (#290): the removed row's control goes with it,
+// so focus moves to the next row, else the previous one, else the list's "Add…" field or tab,
+// never to <body>. After a removal it lands on the row's name or a control that removes nothing,
+// never on the next Remove or ✕, so a second Enter cannot remove a second row (#1255); Restore
+// and Mute land on the same control in the next row. Each list is mounted the
 // way the app mounts it; a control is focused before it is pressed, as the keyboard does.
 // The focused element is compared by what identifies it (never two elements with assert.equal,
 // which crashes the Vitest worker on a mismatch: #287).
@@ -70,23 +73,25 @@ beforeEach(() => {
 });
 
 // The build plan's steps on a profile migrated from the handbook (#387).
-test('removing a step moves focus to the next step’s Remove, else the previous one', async () => {
+test('removing a step moves focus to the next step’s summary, else the previous one’s, never a Remove (#1255)', async () => {
   stubFetch({ '/api/update': applyUpdate });
   openMigrated();
   go('plan');
   setPlanEditing(true);
   render();
   const ids = () => $$('#main .checklist [data-remove-step]').map(b => b.dataset.removeStep);
+  const summary = (id?: string) => `[data-task="${id}"] > summary`;
   const [first, second] = ids();
   press(`[data-remove-step="${first}"]`);
   await settle();
   assert.ok(!$(`[data-remove-step="${first}"]`), 'the step is removed');
-  assert.ok(focusedOn(`[data-remove-step="${second}"]`), describeFocus());
+  assert.ok(focusedOn(summary(second)), describeFocus());
+  assert.equal(focused()?.closest('button'), null, 'not on a button a second Enter would press');
   // The last step: no next one, so the one before it.
   const all = ids();
   press(`[data-remove-step="${all.at(-1)}"]`);
   await settle();
-  assert.ok(focusedOn(`[data-remove-step="${all.at(-2)}"]`), describeFocus());
+  assert.ok(focusedOn(summary(all.at(-2))), describeFocus());
 });
 
 test('removing the only step shown moves focus to the personal task field', async () => {
@@ -104,7 +109,7 @@ test('removing the only step shown moves focus to the personal task field', asyn
   assert.ok(focusedOn('#add-task [name=title]'), describeFocus());
 });
 
-test('deleting a personal task moves focus to the next step’s summary, or its Remove while editing', async () => {
+test('deleting a personal task moves focus to the next step’s summary, also while editing (#1255)', async () => {
   stubFetch({ '/api/update': applyUpdate });
   const customTasks = ['one', 'two', 'three'].map(name => ({
     id: 'custom-' + name,
@@ -124,10 +129,10 @@ test('deleting a personal task moves focus to the next step’s summary, or its 
   await nextTick();
   press('[data-remove-step="custom-three"]');
   await settle();
-  assert.ok(focusedOn('[data-remove-step="custom-one"]'), describeFocus());
+  assert.ok(focusedOn('[data-task="custom-one"] > summary'), describeFocus());
 });
 
-test('removing a factory group moves focus to the next group, else the new group field', async () => {
+test('removing a factory group moves focus to the next group’s name, else the new group field', async () => {
   stubFetch({ '/api/update': applyUpdate });
   openMigrated({
     state: {
@@ -146,13 +151,13 @@ test('removing a factory group moves focus to the next group, else the new group
   press('[data-remove-group="fg-cable01"]');
   await settle();
   assert.ok(!$('[data-remove-group="fg-cable01"]'));
-  assert.ok(focusedOn('[data-remove-group="fg-plates1"]'), describeFocus());
+  assert.ok(focusedOn('[data-group-rename="fg-plates1"]'), describeFocus());
   press('[data-remove-group="fg-plates1"]');
   await settle();
   assert.ok(focusedOn('#new-group-name'), describeFocus());
 });
 
-test('removing or hiding a bay moves focus to the next bay’s Remove or Hide', async () => {
+test('removing or hiding a bay moves focus to the next bay’s name field, never its Remove or Hide', async () => {
   stubFetch({ '/api/update': applyUpdate });
   const storageEdits = {
     bays: [
@@ -164,7 +169,7 @@ test('removing or hiding a bay moves focus to the next bay’s Remove or Hide', 
   go('storage');
   setLayoutEditing(true);
   render();
-  const control = '[data-remove-bay], [data-hide-bay]';
+  const control = '[data-bay-rename]';
   const bays = () => $$('#main .floor-grid .bay');
   const expectAfter = (letter: string) => {
     const list = bays(),
@@ -298,7 +303,7 @@ test('Restore on a removed step moves focus to the next Restore, else the previo
   assert.ok(focusedOn(`#main .checklist [data-remove-step="${first}"]`), describeFocus());
 });
 
-test('clearing a container moves focus to the next ✕ in its bay, else the previous one, else the add field', async () => {
+test('clearing a container moves focus to the next container in its bay, else the previous one, else the add field; never a ✕ (#1255)', async () => {
   stubFetch({ '/api/update': applyUpdate });
   const storageEdits = {
     bays: [{ id: 'S', name: 'Overflow', floor: 'ground' }],
@@ -311,11 +316,11 @@ test('clearing a container moves focus to the next ✕ in its bay, else the prev
   press('[data-clear-slot="S02"]');
   await settle();
   assert.ok(!$('[data-clear-slot="S02"]'), 'the container is cleared');
-  assert.ok(focusedOn('[data-clear-slot="S03"]'), describeFocus());
+  assert.ok(focusedOn('[data-slot="S03"]'), describeFocus());
   // The last container of the bay: the previous one, not the next bay's.
   press('[data-clear-slot="S03"]');
   await settle();
-  assert.ok(focusedOn('[data-clear-slot="S01"]'), describeFocus());
+  assert.ok(focusedOn('[data-slot="S01"]'), describeFocus());
   press('[data-clear-slot="S01"]');
   await settle();
   assert.ok(focusedOn('#bay-draft-S'), describeFocus());
@@ -376,7 +381,7 @@ test('the last hidden bay or floor restored moves focus to its floor tab', async
   assert.ok(focusedOn('#main .tabs [data-floor="workshop"]'), describeFocus());
 });
 
-test('removing a factory from a group moves focus to its next ✕, else its Add to group', async () => {
+test('removing a factory from a group moves focus to its rate in the next group, else its Add to group; never a ✕ (#1255)', async () => {
   stubFetch({ '/api/update': applyUpdate });
   const wire = migratedRow('wire');
   openMigrated({
@@ -406,14 +411,14 @@ test('removing a factory from a group moves focus to its next ✕, else its Add 
   await settle();
   assert.ok(!$(inCables), 'wire left the group');
   assert.equal(card.isConnected, false, 'that card went with it');
-  assert.ok(focusedOn(inPlates), describeFocus());
+  assert.ok(focusedOn(`[data-assign-rate="${wire}"][data-group="fg-plates1"]`), describeFocus());
   press(inPlates);
   await settle();
   assert.ok(!$(`[data-unassign="${wire}"]`), 'wire is in no group');
   assert.ok(focusedOn(`[data-assign-add="${wire}"]`), describeFocus());
 });
 
-test('removing a supply row moves focus to the next Remove, else the previous one, else the blank row', async () => {
+test('removing a supply row moves focus to the item field of the row in its place, never a Remove (#1255)', async () => {
   open({ workspace: { catalog: catalog() } });
   setWizard({
     step: 1,
@@ -440,12 +445,12 @@ test('removing a supply row moves focus to the next Remove, else the previous on
   press('[data-supply-remove="1"]');
   await settle();
   assert.deepEqual(items(), ['Modular Frame', 'Wire', ''], 'Computer is removed');
-  assert.ok(focusedOn('[data-supply-remove="1"]'), describeFocus());
-  // The last filled row: the blank row takes its place, so the row before it.
+  assert.ok(focusedOn('[data-supply-row="1"] input[name=supplyItem]'), describeFocus());
+  // The last filled row: the blank row takes its place.
   press('[data-supply-remove="1"]');
   await settle();
   assert.deepEqual(items(), ['Modular Frame', '']);
-  assert.ok(focusedOn('[data-supply-remove="0"]'), describeFocus());
+  assert.ok(focusedOn('[data-supply-row="1"] input[name=supplyItem]'), describeFocus());
   press('[data-supply-remove="0"]');
   await settle();
   assert.deepEqual(items(), ['']);

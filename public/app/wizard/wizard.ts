@@ -22,6 +22,7 @@ import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { beginnerMode, beginnerStock } from '../beginner.ts';
 import { expertMode } from '../expert.ts';
 import { sourceBuiltLines, withBuiltLines } from '../built-capacity.ts';
+import { announce } from '../announce.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { defaultProfileName } from '../profile-edit.ts';
@@ -916,13 +917,17 @@ async function withDraftBuiltLines(wizardDraft: WizardDraft) {
   wizardDraft.settings = withBuiltLines(wizardDraft.settings, lines);
 }
 
+// What the calculation announces once Review shows its plan (#1255).
+export const PLAN_CALCULATED = 'Plan calculated. Review shows it below.';
+
 // Shared by both modes: the guided questions and the five-step wizard reach the
 // same Review with the same settings, so they calculate through one path.
 // Posts the settings to /api/preview (server, or the browser worker in the
 // Pages edition), stores the result as wizard.preview and shows Review. All
 // step and submit buttons are busy meanwhile (busy.ts): not disabled, so the
 // pressed one keeps focus (#299), and a click on one does nothing. On failure
-// the draft stays where it was and the error is shown in the form.
+// the draft stays where it was and the error is shown in the form. Done, a polite
+// announcement says so (app/announce.ts, #1255), since the pressed button kept focus.
 export async function calculateWizard(form: HTMLFormElement | null) {
   const wizardDraft = draft();
   wizardBusy = true;
@@ -943,6 +948,7 @@ export async function calculateWizard(form: HTMLFormElement | null) {
     wizardDraft.step = 5;
     wizardDraft.guidedStep = guidedFlow().length + 1;
     render();
+    announce(PLAN_CALCULATED);
   } catch (error) {
     wizardError(form, error as Error);
     if (submit) submit.textContent = label;

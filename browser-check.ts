@@ -808,18 +808,21 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   // By keyboard, a factory link inside the dialog moves focus into the dialog that takes its
-  // place, to its first control as on opening (#319), and Escape returns it to the card.
+  // place, to its × as on opening (#319), and Escape returns it to the card. A dialog opens on
+  // its × (autofocus), not on the Running box before it, where a stray Space changed progress
+  // (#1255).
   const opener = page.locator('.factory-card [data-calc-factory]').first();
   const openerId = await opener.getAttribute('data-calc-factory');
   await opener.focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
+  assert.ok(await page.locator('#detail .dialog-head [data-check]').count(), 'a Running box');
   const firstControl = () =>
     page.evaluate(() => {
       const focused = document.activeElement;
-      return focused?.matches('#detail .dialog-head [data-check]') ? 'running' : focused?.tagName;
+      return focused?.matches('#detail .dialog-head [data-close]') ? 'close' : focused?.tagName;
     });
-  assert.equal(await firstControl(), 'running', 'opening focuses the Running box');
+  assert.equal(await firstControl(), 'close', 'opening focuses the ×');
   const shown = await page.locator('#detail h2').textContent();
   await page.locator('#detail [data-calc-factory]').last().focus();
   await page.keyboard.press('Enter');
@@ -827,7 +830,7 @@ try {
     previous => document.querySelector('#detail h2')?.textContent !== previous,
     shown,
   );
-  assert.equal(await firstControl(), 'running', 'the dialog put in its place takes focus');
+  assert.equal(await firstControl(), 'close', 'the dialog put in its place takes focus');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   assert.equal(

@@ -173,15 +173,17 @@ const savedRate = (group: string) => {
 };
 
 // ✕: leave that group, keeping the other groups' rates. The row goes, and the whole card when it
-// was drawn in that group's section, so focus goes to this factory's next ✕, else its previous
-// one, else its "+ Add to group…" (ui/refocus.ts, #290): on this card while it is still there,
-// else on the factory's card elsewhere on the page.
+// was drawn in that group's section, so focus goes to this factory's rate field in the next
+// group's row, else the previous one's, else its "+ Add to group…" (ui/refocus.ts, #290): on
+// this card while it is still there, else on the factory's card elsewhere on the page. Never to
+// the next ✕, which leaves with no question, so a second Enter would leave a second group (#1255).
 async function unassign(event: Event, group: string) {
   const button = event.currentTarget as HTMLButtonElement,
     key = CSS.escape(props.factoryKey);
   const refocus = refocusAfterRemoval(button, {
     scope: button.closest('.assign-editor'),
-    row: `[data-unassign="${key}"]`,
+    row: '.assign-row',
+    control: `[data-assign-rate="${key}"]`,
     fallback: [`[data-assign-add="${key}"]`, `[data-assign-rate="${key}"]`],
   });
   if (await assign(button, memberships => memberships.filter(m => m.group !== group)))
