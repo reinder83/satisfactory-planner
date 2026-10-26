@@ -5079,6 +5079,9 @@ button.rail-tile:hover {
   align-items: center;
   gap: 8px;
 }
+.compare-pickers input[type='number'] {
+  width: 6em;
+}
 .compare-table {
   max-width: 100%;
   overflow-x: auto;

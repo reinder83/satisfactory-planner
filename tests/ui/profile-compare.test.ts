@@ -9,6 +9,8 @@ import { test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
 import { planFigures } from '../../public/state.ts';
 import { $, $$, evil, generatedWith, go, open, page } from './setup.ts';
+import { buildMinutes, setBuildMinutes } from '../../public/app/session.ts';
+import { durationOfHours } from '../../public/wording.ts';
 import type { ProfileSummary } from '../../public/types/index.ts';
 
 const balanced = planFigures(generatedWith({ phase: '3', goal: 'balanced' }))!,
@@ -57,7 +59,7 @@ test('Saves & profiles compares the profiles of a save against the open one', as
   assert.match(buildings.textContent!, /^−/);
   assert.ok(buildings.classList.contains('lower'));
   // A slower plan's delivery time is later: a plus sign.
-  const time = $('[data-compare-row="m"] [data-compare-cell="5"] [data-compare-delta]')!;
+  const time = $('[data-compare-row="m"] [data-compare-cell="7"] [data-compare-delta]')!;
   assert.match(time.textContent!, /^\+/);
   assert.ok(time.classList.contains('higher'));
   // The fastest total is marked, in words.
@@ -96,9 +98,55 @@ test('a figure a plan does not hold reads "—"', () => {
   sparse.totalHours = null;
   draw([card('p', 'Balanced'), card('o', 'Old plan', sparse)]);
   const cells = cellTexts('o');
-  assert.equal(cells[2], '—');
-  assert.equal(cells[3], '—');
+  assert.equal(cells[4], '—');
   assert.equal(cells[5], '—');
+  assert.equal(cells[7], '—');
   assert.doesNotMatch($('[data-profile-compare]')!.textContent!, /NaN|undefined/);
   assert.equal($('[data-compare-time="o"] [data-compare-total] .compare-value')!.textContent, '—');
+});
+
+// The time to finish (#1074): the plan's delivery time plus the buildings to add times the minutes
+// per building set on the page, an estimate remembered in this browser (never stored with a
+// profile); 0 compares delivery time only, and an out-of-range value puts the field back.
+test('the minutes per building set the estimated building time of the time to finish', async () => {
+  setBuildMinutes(3);
+  draw([card('p', 'Balanced'), card('m', 'Minimal', minimal)]);
+  await choose('[data-compare-baseline]', 'm');
+  const field = $<HTMLInputElement>('[data-compare-build-minutes]')!;
+  assert.equal(field.value, '3');
+  const four = balanced.phases[1]!;
+  const parts = $$(
+    '[data-compare-time="p"] [data-compare-time-cell="1"] [data-compare-time-parts]',
+  ).map(part => part.textContent);
+  assert.equal(parts.length, 2);
+  assert.match(parts[0]!, /delivery$/);
+  assert.match(parts[1]!, /^\+ est\. .* building$/);
+  assert.ok($('[data-compare-time="p"] [data-compare-total-building]'));
+  assert.match($('[data-compare-time-note]')!.textContent!, /estimate/);
+  // The buildings to add and their parts, measured from the plan.
+  assert.equal(
+    cellTexts('p')[1]!.split(' ')[0],
+    four.newBuildings!.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+  );
+  assert.match(cellTexts('p')[2]!, /parts/);
+
+  field.value = '0';
+  field.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(buildMinutes, 0);
+  assert.equal(localStorage.getItem('planner-build-minutes'), '0');
+  assert.equal($('[data-compare-time-parts]'), null, 'delivery time only');
+  assert.equal($('[data-compare-total-building]'), null);
+  assert.equal(
+    $('[data-compare-time="p"] [data-compare-time-cell="1"] .compare-value')!.textContent,
+    durationOfHours(four.hours!),
+  );
+  assert.equal($<HTMLSelectElement>('[data-compare-baseline]')!.value, 'm', 'the baseline stays');
+
+  field.value = '500';
+  field.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(buildMinutes, 0, 'out of range is not taken');
+  assert.equal(field.value, '0');
+  setBuildMinutes(3);
 });

@@ -209,6 +209,37 @@ function storedSessionSize(): number {
     return 4;
   }
 }
+// The minutes one building takes to place, which "Compare profiles" assumes for its time to
+// finish (#1074): an estimate the user sets, 0 to 60 in half minutes, 3 unless chosen. A view
+// preference remembered in this browser like the session size, never in a saved profile: it
+// changes what one table estimates, not the plan or its progress, so it needs no state version.
+const BUILD_MINUTES_KEY = 'planner-build-minutes';
+export const BUILD_MINUTES_DEFAULT = 3;
+export const BUILD_MINUTES_MAX = 60;
+// `value` as a usable number of minutes (half minutes, 0 to the maximum), or null.
+export function buildMinutesOf(value: unknown): number | null {
+  if (value === null || value === '' || typeof value === 'boolean') return null;
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes > BUILD_MINUTES_MAX) return null;
+  return Math.round(minutes * 2) / 2;
+}
+export let buildMinutes = storedBuildMinutes();
+export function setBuildMinutes(value: unknown) {
+  const minutes = buildMinutesOf(value);
+  if (minutes === null) return;
+  buildMinutes = minutes;
+  try {
+    localStorage.setItem(BUILD_MINUTES_KEY, String(minutes));
+  } catch {}
+}
+// The stored minutes, or the default when nothing usable is stored or storage is refused.
+function storedBuildMinutes(): number {
+  try {
+    return buildMinutesOf(localStorage.getItem(BUILD_MINUTES_KEY)) ?? BUILD_MINUTES_DEFAULT;
+  } catch {
+    return BUILD_MINUTES_DEFAULT;
+  }
+}
 export function setRequiredOnly(value: boolean) {
   requiredOnly = value;
   try {

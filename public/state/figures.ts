@@ -5,7 +5,7 @@
 // A figure an older plan does not hold is null, so the page shows "—" for it rather than a
 // number made up from nothing: a bare draft without rows has no buildings, power or alternates,
 // a stage without `raw` no ore or oil, a stage without `hours` no delivery time.
-import { minedResources } from '../preferences.ts';
+import { buildParts, minedResources } from '../preferences.ts';
 import { powerView } from '../power.ts';
 import { recipeIdOf } from '../progression.ts';
 import type {
@@ -25,6 +25,27 @@ const finite = (value: number | null | undefined): number | null =>
 // The buildings of a stage: its lines' machines, as the build plan's summary and Review add them.
 const buildingsOf = (stage: StoredStage): number | null =>
   stage.rows ? finite(stage.rows.reduce((sum, row) => sum + row.machines, 0)) : null;
+
+// The machines a stage adds over `before`, the planned phase before it (none for the first): a
+// line `before` also has, by row id and machine, adds only the machines beyond the ones it ran
+// there, as the build plan's handover counts a line kept from the phase before (carriedLine in
+// app/handover.ts); any other line all of its machines. And the parts they cost to build together
+// (buildParts), null when one of them has no cost in the table, so no part count is a guess.
+function buildWorkload(
+  stage: StoredStage,
+  before: StoredStage | undefined,
+): { newBuildings: number | null; buildParts: number | null } {
+  if (!stage.rows) return { newBuildings: null, buildParts: null };
+  const added: [string, number][] = stage.rows.map(row => {
+    const kept = before?.rows?.find(old => old.id === row.id && old.machine === row.machine);
+    return [row.machine, Math.max(0, row.machines - (kept?.machines ?? 0))];
+  });
+  const { parts, unknown } = buildParts(added.filter(([, count]) => count > 0));
+  return {
+    newBuildings: finite(added.reduce((sum, [, count]) => sum + count, 0)),
+    buildParts: unknown.length ? null : finite([...parts.values()].reduce((a, b) => a + b, 0)),
+  };
+}
 
 // The power the phase needs, as every page gives it (powerView in public/power.ts).
 const powerOf = (stage: StoredStage, plan: StoredCalculatedPlan): number | null =>
@@ -51,8 +72,9 @@ function hoursOf(stage: StoredStage): { hours: number | null; never?: true } {
 // first, which its hard-drive step asks for (hardDriveTasks in progression.ts: an alternate an
 // earlier planned phase already uses is not counted again, and an amplified twin or a factory's
 // own line shares its recipe's count); a plan with a guide (a migrated handbook) has no such step,
-// so none. The total is the delivery hours of every planned phase together, only while each of
-// them fits and has a delivery time.
+// so none. `newBuildings` and `buildParts` are what the phase adds to build (buildWorkload; a plan
+// guide hands no line over, so each phase counts all its machines). The total is the delivery
+// hours of every planned phase together, only while each of them fits and has a delivery time.
 export function planFigures(
   plan: StoredCalculatedPlan | null | undefined,
 ): PlanFigures | undefined {
@@ -60,6 +82,7 @@ export function planFigures(
   const from = Number(plan.settings?.phase || 1);
   const seen = new Set<string>();
   const phases: ComparedPhase[] = [];
+  let before: StoredStage | undefined;
   for (const phase of PHASES) {
     const stage = plan.stages[phase];
     if (!stage || Number(phase) < from) continue;
@@ -74,12 +97,14 @@ export function planFigures(
       phase,
       feasible: !!stage.feasible,
       buildings: buildingsOf(stage),
+      ...buildWorkload(stage, plan.guide ? undefined : before),
       powerMW: powerOf(stage, plan),
       ore: oreOf(stage),
       oil: oilOf(stage),
       alternates: plan.guide || !stage.rows ? null : firstUsed.size,
       ...hoursOf(stage),
     });
+    before = stage;
   }
   const complete = phases.length > 0 && phases.every(p => p.feasible && p.hours !== null);
   return {

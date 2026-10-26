@@ -207,10 +207,11 @@ export interface AdaFacts {
   // and the groups, as name lists. null or absent otherwise.
   onSiteOverflow?: { items: string; groups: string } | null;
   profiles: number;
-  // "Compare profiles" on Saves & profiles (#1074): the open save's profiles whose plans deliver
-  // every phase soonest, against the open profile, as a name list, and that delivery time. Absent
-  // when fewer than two can be compared.
-  fastest?: { names: string; total: string; count: number } | null;
+  // "Compare profiles" on Saves & profiles (#1074): the open save's profiles that finish every
+  // phase soonest, against the open profile, as a name list, and that time to finish, with the
+  // minutes per building its estimated building time assumes in words ("3 minutes"; '' at 0
+  // minutes: delivery time only). Absent when fewer than two can be compared.
+  fastest?: { names: string; total: string; count: number; perBuilding: string } | null;
   // Days since the browser edition's last full export, or null.
   backupDays: number | null;
   post: boolean;
@@ -879,8 +880,12 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => !!facts.fastest,
     // Only after when() found the fastest profiles.
-    text: facts =>
-      `Of the plans in “${facts.save}”, ${facts.fastest!.names} ${facts.fastest!.count === 1 ? 'delivers' : 'deliver'} every phase soonest: ${facts.fastest!.total}. Delivery time only. How long you take to build it all is between you and your conveyor belts.`,
+    text: facts => {
+      const { names, count, total, perBuilding } = facts.fastest!;
+      if (!perBuilding)
+        return `Of the plans in “${facts.save}”, ${names} ${count === 1 ? 'delivers' : 'deliver'} every phase soonest: ${total}. Delivery time only. How long you take to build it all is between you and your conveyor belts.`;
+      return `Of the plans in “${facts.save}”, ${names} ${count === 1 ? 'finishes' : 'finish'} every phase soonest: ${total}, at ${perBuilding} per building. The delivery time is the plan’s. The building time is your estimate, and I will hold you to it.`;
+    },
   },
   {
     id: 'one-profile',

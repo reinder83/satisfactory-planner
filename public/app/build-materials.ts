@@ -1,9 +1,9 @@
 // What a build-plan step takes to build (#1073): its buildings ("2 Refineries + 1 Water
-// Extractor"), the parts those buildings cost (BUILD_COSTS in preferences/build-costs.ts) and the belt and pipe
-// marks its line is fed by. Belts and pipes are named by their mark only: their cost follows a
-// length no plan holds. It reads only its arguments (no session), so the build plan's steps
-// (views/step-materials.ts) and the session view add up the same way.
-import { BUILD_COSTS } from '../preferences.ts';
+// Extractor"), the parts those buildings cost (buildParts in preferences/build-costs.ts) and the
+// belt and pipe marks its line is fed by. Belts and pipes are named by their mark only: their cost
+// follows a length no plan holds. It reads only its arguments (no session), so the build plan's
+// steps (views/step-materials.ts) and the session view add up the same way.
+import { buildParts } from '../preferences.ts';
 import { num } from './format.ts';
 import { buildingName } from '../wording.ts';
 
@@ -32,15 +32,7 @@ export function buildMaterials(
   const counts = new Map<string, number>();
   for (const { building, count } of buildings)
     if (count > 0) counts.set(building, (counts.get(building) ?? 0) + count);
-  const parts = new Map<string, number>(),
-    unknown: string[] = [];
-  for (const [building, count] of counts) {
-    const cost = BUILD_COSTS[building]?.cost;
-    if (!cost) unknown.push(building);
-    else
-      for (const [item, amount] of Object.entries(cost))
-        parts.set(item, (parts.get(item) ?? 0) + amount * count);
-  }
+  const { parts, unknown } = buildParts(counts);
   return {
     buildings: [...counts].map(([building, count]) => ({ building, count })),
     parts: [...parts].sort(([a, first], [b, second]) => second - first || a.localeCompare(b)),
