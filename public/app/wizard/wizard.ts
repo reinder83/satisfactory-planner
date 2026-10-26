@@ -60,6 +60,7 @@ import type {
   CurrentSettings,
   FirstReleaseSettings,
   ItemRates,
+  ObjectiveWeights,
   PhaseCaps,
   SaveSummary,
   StoredCalculatedPlan,
@@ -478,7 +479,13 @@ function readRecipeCost(settings: WizardSettings, value: FormDataEntryValue) {
 function readObjective(data: FormData, settings: WizardSettings) {
   if (!data.has('objective')) return;
   const [kind] = data.getAll('objective');
-  const weight = (name: string) => Number(data.getAll('objectiveWeight:' + name)[0]);
+  // A mix picked a moment ago has no weight boxes on screen yet when the live estimate reads the
+  // step (#1180): each weight then stays as the draft had it, else 1, as the boxes will start.
+  const previous = typeof settings.objective === 'object' ? settings.objective : null;
+  const weight = (name: keyof ObjectiveWeights) =>
+    data.has('objectiveWeight:' + name)
+      ? Number(data.getAll('objectiveWeight:' + name)[0])
+      : (previous?.[name] ?? 1);
   if (kind === 'power' || kind === 'raw') settings.objective = kind;
   else if (kind === 'weighted')
     settings.objective = {
@@ -562,10 +569,15 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
 }
 
 // The MAM recipes box (#1058, ui/wizard/MamRecipes.vue), when it is on screen: ticked is
-// settings.mamRecipes true, unticked false. Every plan the wizard calculates with it on screen
-// therefore has the field; a plan made before it has none (mamRecipesOn in planner/recipes.ts).
+// settings.mamRecipes true, unticked false. A draft from a plan made before the box (no field,
+// mamRecipesOn in planner/recipes.ts) keeps having none while the box shows what that plan did
+// (mamRecipesShown): false would also bring Distilled Silica into a custom pool, and Review would
+// list a change nobody made. Every new draft starts with the field (startingSettings).
 function readMamRecipes(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
-  if (form.querySelector('[data-mam-recipes]')) settings.mamRecipes = data.has('mamRecipes');
+  if (!form.querySelector('[data-mam-recipes]')) return;
+  const ticked = data.has('mamRecipes');
+  if (settings.mamRecipes === undefined && ticked === mamRecipesShown(settings)) return;
+  settings.mamRecipes = ticked;
 }
 
 // "Alternates you already own" on All settings step 2 (#1068, ui/wizard/OwnedAlternates.vue),

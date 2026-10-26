@@ -4,11 +4,14 @@ import {
   usableHandbook,
   type MigrationData,
 } from './handbook-migration.ts';
+import { amplifySlots } from './somersloops.ts';
 import type {
   Handbook,
   ImportableSaveExport,
   PlanGuide,
+  Recipe,
   SavedState,
+  SloopPins,
   StoredCalculatedPlan,
   StoredProfileKind,
 } from './types/index.ts';
@@ -335,8 +338,11 @@ export async function importableTransfer(
 ): Promise<Omit<ImportableSaveExport, 'exportedAt'>> {
   const transfer = validateTransfer(data);
   const original = transfer.saves.some(save => save.profiles.some(p => p.kind === 'original'));
-  if (!load || !original) return transfer;
+  const pinned = transfer.saves.some(save => save.profiles.some(hasPins));
+  if (!load || (!original && !pinned)) return transfer;
   const { recipes, pureLimits } = await load();
+  if (pinned) dropUnknownPins(transfer, recipes);
+  if (!original) return transfer;
   for (const save of transfer.saves)
     save.profiles = save.profiles.map(profile => {
       if (profile.kind !== 'original') return profile;
@@ -352,6 +358,42 @@ export async function importableTransfer(
       }
     });
   return transfer;
+}
+
+// Somersloop pins (#1235) the planner refuses whatever else the user changes: on a recipe the
+// game data does not have, or one whose machine production amplification cannot amplify
+// (sloopPinsSetting in planner/settings.ts). The interface never makes one (a pin is set from a
+// line's dialog), but a hand-edited file can, and then every recalculation of the profile failed
+// until the pin was cleared, which no line offers. An import drops them, from the progress and
+// from the plan's settings alike; a phase left without pins goes, and so does the plan's field,
+// while the progress keeps an empty map, which asks for no pins.
+type PinnedProfile = Pick<ImportableSaveExport['saves'][number]['profiles'][number], 'state'> & {
+  plan?: StoredCalculatedPlan | null;
+};
+const pinMaps = (profile: PinnedProfile): (SloopPins | undefined)[] => [
+  profile.state.sloopPins,
+  profile.plan?.settings.sloopPins,
+];
+const hasPins = (profile: PinnedProfile) => pinMaps(profile).some(pins => pins !== undefined);
+function dropUnknownPins(transfer: Omit<ImportableSaveExport, 'exportedAt'>, recipes: Recipe[]) {
+  const pinnable = new Set(recipes.filter(recipe => amplifySlots(recipe) > 0).map(r => r.id));
+  const known = (pins: SloopPins): SloopPins =>
+    Object.fromEntries(
+      Object.entries(pins)
+        .map(([phase, lines]) => [
+          phase,
+          Object.fromEntries(Object.entries(lines ?? {}).filter(([id]) => pinnable.has(id))),
+        ])
+        .filter(([, lines]) => Object.keys(lines as object).length),
+    );
+  for (const profile of transfer.saves.flatMap(save => save.profiles) as PinnedProfile[]) {
+    if (profile.state.sloopPins) profile.state.sloopPins = known(profile.state.sloopPins);
+    const settings = profile.plan?.settings;
+    if (!settings?.sloopPins) continue;
+    const kept = known(settings.sloopPins);
+    if (Object.keys(kept).length) settings.sloopPins = kept;
+    else delete settings.sloopPins;
+  }
 }
 
 // What GET /api/export-saves reads from its query, in both editions: the saves listed in

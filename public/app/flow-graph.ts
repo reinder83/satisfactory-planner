@@ -27,6 +27,7 @@ import {
   type GraphBox,
   type GraphCurve,
   type LabelToPlace,
+  type PlacedLabel,
 } from './graph-labels.ts';
 import { flowConnections, flowNames, isSelfLink, lineNumber } from './views/group-flow-page.ts';
 
@@ -98,9 +99,10 @@ export interface GraphEdge {
   asTag: boolean;
   // The drawn path, where its label sits (its middle) and the curve of the path it sits on, which
   // the label slides along when lit labels are spread; null for an edge that is not drawn (a self
-  // link, a tag).
+  // link, a tag). A label with no free spot at rest is `crowded` (#1019): the dialog leaves it
+  // out until its arrow is pointed at or its box lit.
   path: string | null;
-  label: { x: number; y: number; width: number } | null;
+  label: { x: number; y: number; width: number; crowded?: true } | null;
   curve: GraphCurve | null;
 }
 
@@ -619,9 +621,10 @@ export const labelWidth = (edge: GraphEdge) =>
 
 // Each drawn edge's label at rest (#1231), on one of `curves` (by edge, in the order it tries
 // them): at the middle of its curve, slid along it where it would cover one of `obstacles` (the
-// boxes and tags) or a label placed before it, and at the middle of its first curve where nothing
-// is free (spreadLabels, top to bottom). The quiet edges' labels, hidden until lit, come after the
-// others and make room for them, not for each other. Sets each edge's `label` and `curve`.
+// boxes and tags) or a label placed before it, and at the middle of its first curve, `crowded`,
+// where nothing is free (spreadLabels, top to bottom). The quiet edges' labels, hidden until lit,
+// come after the others and make room for them, not for each other, nor for a crowded one. Sets
+// each edge's `label` and `curve`.
 export function placeEdgeLabels(
   edges: readonly GraphEdge[],
   curves: ReadonlyMap<GraphEdge, readonly GraphCurve[]>,
@@ -633,11 +636,16 @@ export function placeEdgeLabels(
     curves: curves.get(edge) ?? [],
   });
   const byId = new Map(edges.map(edge => [edge.id, edge]));
-  const set = (spots: Map<string, { x: number; y: number; curve: GraphCurve } | null>) => {
+  const set = (spots: Map<string, PlacedLabel | null>) => {
     for (const [id, spot] of spots) {
       // spreadLabels answers for the edges it was given, and keepAll places each.
       const edge = byId.get(id)!;
-      edge.label = { x: spot!.x, y: spot!.y, width: labelWidth(edge) };
+      edge.label = {
+        x: spot!.x,
+        y: spot!.y,
+        width: labelWidth(edge),
+        ...(spot!.crowded ? { crowded: true as const } : {}),
+      };
       edge.curve = spot!.curve;
     }
   };
@@ -646,7 +654,8 @@ export function placeEdgeLabels(
   set(spots);
   const taken: GraphBox[] = [...obstacles];
   for (const edge of edges)
-    if (spots.has(edge.id) && edge.label) taken.push({ ...edge.label, height: GRAPH.labelHeight });
+    if (spots.has(edge.id) && edge.label && !edge.label.crowded)
+      taken.push({ ...edge.label, height: GRAPH.labelHeight });
   for (const edge of edges)
     if (curves.has(edge) && edge.quiet)
       set(spreadLabels([toPlace(edge)], GRAPH.labelHeight, taken, true));

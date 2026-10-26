@@ -27,8 +27,9 @@ const slug = (name: string) =>
 export const primaryOutput = (recipe: Pick<Recipe, 'outputs'>): string | undefined =>
   Object.keys(recipe.outputs)[0];
 // Whether the MAM recipes (MAM_RECIPES in data.ts) are on (#1058): the plan's own `mamRecipes`
-// box, which the wizard sets for every plan it calculates. A plan made before it has none: then
-// 'standard' and 'all' planned with them and 'custom' only with the ones picked, which this keeps.
+// box, which every new draft sets. A plan made before it has none (nor its Edit settings until the
+// box is changed): then 'standard' and 'all' planned with them and 'custom' only with the ones
+// picked, which this keeps.
 export const mamRecipesOn = (config: Pick<CurrentSettings, 'mamRecipes' | 'recipes'>): boolean =>
   config.mamRecipes ?? config.recipes !== 'custom';
 // Whether the pool holds an alternate the game unlocks without a hard drive (STANDARD_ALTERNATES

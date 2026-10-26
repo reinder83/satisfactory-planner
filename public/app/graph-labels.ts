@@ -1,11 +1,12 @@
 // Where the flow graph's edge labels go (#1231, part of #1201). Each label starts at the middle of
 // its curve; where it would cover a box, a tag or a label placed before it, it slides along its
 // own curve to the first free spot (t = 0.5 ± 0.04, ± 0.08, … within 0.05–0.95). The labels are
-// placed top to bottom. flowGraph and placedGraph place every label of the graph at rest this way
-// and never leave one out (one with no free spot stays at its curve's middle); the dialog spreads
-// the labels a hovered or focused box lights up the same way, and there a label with no free spot
-// is left out: its value stays in its line's hover title and in "The graph as a table". Plain
-// arithmetic, no session.
+// placed top to bottom. flowGraph and placedGraph place every label of the graph at rest this way;
+// one with no free spot is put at its curve's middle but marked `crowded` and takes no room
+// there, and the dialog leaves it out at rest (#1019: it could still cover another label) until
+// its arrow is pointed at. The dialog spreads the labels a hovered or focused box lights up the
+// same way, and there a label with no free spot is left out. Either way its value stays in its
+// arrow's hover title and in "The graph as a table". Plain arithmetic, no session.
 import type { GraphPoint } from './graph-view.ts';
 
 // One curve of an arrow, as SVG draws a cubic Bézier: from, two control points, to.
@@ -69,11 +70,13 @@ export interface LabelToPlace {
   width: number;
   curves: readonly GraphCurve[];
 }
-// Where a label went: its middle, and the curve it sits on.
+// Where a label went: its middle, and the curve it sits on; `crowded` where nothing was free
+// (keepAll), so it sits at the middle of its first curve over whatever is there.
 export interface PlacedLabel {
   x: number;
   y: number;
   curve: GraphCurve;
+  crowded?: true;
 }
 
 const tenth = (value: number) => Math.round(value * 10) / 10;
@@ -81,7 +84,8 @@ const tenth = (value: number) => Math.round(value * 10) / 10;
 // `labels`, each `height` tall, placed top to bottom (by the middle of their first curve; ties in
 // the order given) where they cover none of `obstacles` and no label placed before; each kept
 // inside the drawing's top and left edges. A label with no free spot on any of its curves is
-// null, or with `keepAll` at the middle of its first curve.
+// null, or with `keepAll` at the middle of its first curve, `crowded`, taking no room from the
+// labels placed after it.
 export function spreadLabels(
   labels: readonly LabelToPlace[],
   height: number,
@@ -104,7 +108,7 @@ export function spreadLabels(
     .map((label, i) => ({ label, i, y: curveAt(label.curves[0]!, 0.5).y }))
     .sort((a, b) => a.y - b.y || a.i - b.i);
   for (const { label } of order) {
-    let spot: { box: GraphBox; curve: GraphCurve } | null = null;
+    let spot: { box: GraphBox; curve: GraphCurve; crowded?: true } | null = null;
     for (const curve of label.curves) {
       for (const t of SLIDE_TS) {
         const box = boxAt(curve, t, label.width);
@@ -117,9 +121,18 @@ export function spreadLabels(
     }
     // The filter above keeps labels with a curve.
     const first = label.curves[0]!;
-    if (!spot && keepAll) spot = { box: boxAt(first, 0.5, label.width), curve: first };
-    if (spot) placed.push(spot.box);
-    result.set(label.id, spot && { x: tenth(spot.box.x), y: tenth(spot.box.y), curve: spot.curve });
+    if (!spot && keepAll)
+      spot = { box: boxAt(first, 0.5, label.width), curve: first, crowded: true };
+    else if (spot) placed.push(spot.box);
+    result.set(
+      label.id,
+      spot && {
+        x: tenth(spot.box.x),
+        y: tenth(spot.box.y),
+        curve: spot.curve,
+        ...(spot.crowded ? { crowded: true as const } : {}),
+      },
+    );
   }
   return result;
 }

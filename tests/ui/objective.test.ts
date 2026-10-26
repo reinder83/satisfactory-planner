@@ -11,6 +11,7 @@ import { setView, setWizard, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import { carryOptions } from '../../public/state.ts';
+import { readWizard } from '../../public/app/wizard/wizard.ts';
 import { $, catalog, generated, go, open, page } from './setup.ts';
 import type { CurrentCalculatedPlan } from '../../public/types/index.ts';
 
@@ -168,4 +169,29 @@ test('the sidebar names the objective a plan was calculated with, only when not 
       shown ? 4 : 3,
     );
   }
+});
+
+// Picking the mix reads the step before the weight boxes are drawn (the live estimate does, on
+// the change): the weights then stay as the draft had them, else 1 each, never NaN, which the
+// estimate's /api/preview refused (400). Once drawn, the first box sends an input, so the
+// estimate reads the weights the boxes show.
+test('a weighted mix read before its boxes are drawn keeps the draft weights, else 1 each', async () => {
+  goalStep(generated().settings);
+  card('weighted').checked = true;
+  assert.equal(weight('power'), null, 'not drawn yet');
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.deepEqual(wizard!.settings.objective, { buildings: 1, power: 1, raw: 1 });
+
+  goalStep({ ...generated().settings, objective: { buildings: 0, power: 4, raw: 1 } });
+  $('[data-objective-weights]')!.remove();
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.deepEqual(wizard!.settings.objective, { buildings: 0, power: 4, raw: 1 });
+
+  goalStep(generated().settings);
+  const inputs: string[] = [];
+  $('#wizard-form')!.addEventListener('input', event =>
+    inputs.push((event.target as HTMLInputElement).name),
+  );
+  await choose('weighted');
+  assert.deepEqual(inputs, ['objectiveWeight:buildings']);
 });

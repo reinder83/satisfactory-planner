@@ -1952,6 +1952,40 @@ test('a migrated profile’s completion modules measure a fluid input in m³/min
   assert.ok(fabric.textContent!.includes('Water 10 m³/min'));
 });
 
+// Under "Not running" a tick takes the card off the page, under "Running" an untick does: focus
+// went to <body> with it (#1019). It goes to the Running box of the card in its place, else to the
+// chosen chip.
+test('a Running box whose card the filter takes away hands focus to the next card', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  setFactoryFilter('todo');
+  render();
+  await nextTick();
+  const boxes = () => $$<HTMLInputElement>('#main .factory-card input[data-check]');
+  const [, second, third] = boxes().map(box => box.dataset.check!);
+  assert.ok(third, 'three cards at least');
+  const box = boxes()[1]!;
+  box.focus();
+  box.click();
+  await settle();
+  assert.equal(state.checks[second!], true);
+  assert.ok(!boxes().some(other => other.dataset.check === second), 'the card left');
+  assert.equal(document.activeElement, boxes()[1], 'the box of the card in its place');
+  assert.equal((document.activeElement as HTMLInputElement).dataset.check, third);
+  // The last running line unticked under "Running": no card is left, so the chosen chip.
+  setFactoryFilter('done');
+  render();
+  await nextTick();
+  assert.deepEqual(
+    boxes().map(other => other.dataset.check),
+    [second],
+  );
+  boxes()[0]!.focus();
+  boxes()[0]!.click();
+  await settle();
+  assert.equal(boxes().length, 0);
+  assert.equal(document.activeElement, statusChip('done'));
+});
+
 test('a calculated card ticked Running is marked done', () => {
   const plan = generated();
   const row = plan.stages['3'].rows![0]!;
