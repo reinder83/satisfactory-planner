@@ -129,6 +129,8 @@ export interface RecipeView {
   machine: string;
   ins: RecipeCellData[];
   outs: RecipeCellData[];
+  // The clock the rates are at, an overclocked line's (#1239); absent at 100%.
+  clock?: number;
 }
 
 // What a bank note says of the lines a row shares its plan-wide destinations with (supplyNote).
@@ -1073,6 +1075,7 @@ function flowRecipe(row: CalcRow, inputs: FlowInput[]): RecipeView {
   return {
     name: row.name,
     machine: row.machine,
+    ...(row.clock && row.clock > 100 ? { clock: row.clock } : {}),
     ins: inputs.map(i => [i.name, i.rate / equivalent, i.link]),
     outs: [
       ...(row.generationMW > 0 || !outName
@@ -1095,7 +1098,9 @@ function flowBar(row: CalcRow, notes: FlowNotes, stageKey: string): NonNullable<
     multi = Object.keys(row.outputs || {}).length > 1,
     generator = row.generationMW > 0,
     outName = Object.keys(row.outputs || {})[0],
-    atFull = notes.clock.endsWith('at 100%') ? '' : ' at 100%';
+    // The rate per machine is at the line's clock (an overclocked line's, #1239, else 100%).
+    full = `at ${num(row.clock ?? 100)}%`,
+    atFull = notes.clock.endsWith(full) ? '' : ' ' + full;
   return {
     sub: `${row.name} · ${notes.clock}${outName && !multi ? ` · ${generator ? num3(row.generationMW / equivalent) + ' MW + ' : ''}${rateOfItem(outName, row.outputs[outName]! / equivalent, num3)} out per machine${atFull}` : ''}${notes.split}`,
     out:

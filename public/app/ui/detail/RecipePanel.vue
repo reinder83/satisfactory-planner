@@ -1,8 +1,9 @@
-<!-- The "Recipe · …" panel: what one machine makes at 100%, per minute. `recipe` is { name,
-     machine, ins, outs } with ins and outs as RecipeCell tuples; `machines` is how many such
-     machines the line runs. -->
+<!-- The "Recipe · …" panel: what one machine makes per minute, at 100% or at an overclocked line's
+     clock (#1239, `recipe.clock`). `recipe` is { name, machine, ins, outs } with ins and outs as
+     RecipeCell tuples; `machines` is how many such machines the line runs. -->
 <script setup lang="ts">
 import { machinesLabel } from '../../flow.ts';
+import { num } from '../../format.ts';
 import RecipeCell from './RecipeCell.vue';
 import type { RecipeView } from '../../flow.ts';
 
@@ -13,7 +14,10 @@ withDefaults(defineProps<{ recipe: RecipeView; machines?: number }>(), { machine
   <div class="rail-recipe">
     <div class="rail-recipe-head">
       <span>Recipe · {{ recipe.name }}</span
-      ><span>what {{ machinesLabel(machines, recipe.machine) }} makes @ 100% · per minute</span>
+      ><span
+        >what {{ machinesLabel(machines, recipe.machine) }} makes @ {{ num(recipe.clock ?? 100) }}%
+        · per minute</span
+      >
     </div>
     <div class="rail-recipe-body">
       <div class="rail-recipe-ins">

@@ -47,7 +47,10 @@ export function carriedLine(
 }
 
 const SAME = 1e-6;
-const clockOf = (row: CalcRow): number => (row.lastClock > 0 ? row.lastClock : 100);
+// The clock a line's machines run at: 100%, or an overclocked line's (#1239, `clock`), and the
+// last machine's, which is lower when the line's equivalent is fractional.
+const fullOf = (row: CalcRow): number => row.clock ?? 100;
+const clockOf = (row: CalcRow): number => (row.lastClock > 0 ? row.lastClock : fullOf(row));
 const machinesWord = (count: number) => `${formatNumber(count)} machine${count === 1 ? '' : 's'}`;
 const percent = (clock: number) => formatNumber(clock) + '%';
 
@@ -56,11 +59,17 @@ const percent = (clock: number) => formatNumber(clock) + '%';
 function lineChange({ before }: CarriedLine, row: CalcRow) {
   const oldClock = clockOf(before),
     newClock = clockOf(row),
+    oldFull = fullOf(before),
+    full = fullOf(row),
     extra = row.machines - before.machines;
-  // With more machines the old adjustable one runs at 100% (the new last one is adjustable).
+  // A line pinned to another clock than it ran at sets every machine anew.
+  const fullChange = Math.abs(full - oldFull) > SAME;
+  // With more machines the old adjustable one runs at the line's clock (the new last one is
+  // adjustable).
   const clockChange =
-    extra > 0 ? oldClock < 100 - SAME : extra === 0 && Math.abs(newClock - oldClock) > SAME;
-  return { oldClock, newClock, extra, clockChange };
+    fullChange ||
+    (extra > 0 ? oldClock < full - SAME : extra === 0 && Math.abs(newClock - oldClock) > SAME);
+  return { oldClock, newClock, oldFull, full, fullChange, extra, clockChange };
 }
 
 // What a carried line's step changes, after what already runs: "Add 6 machines, and raise the last
@@ -69,19 +78,33 @@ function lineChange({ before }: CarriedLine, row: CalcRow) {
 // step says it (carriedText), and so does each factory's handover on the Factories page
 // (ui/factories/FactoryHandover.vue).
 export function carriedChange(carried: CarriedLine, row: CalcRow): string {
-  const { oldClock, newClock, extra, clockChange } = lineChange(carried, row),
+  const { oldClock, newClock, oldFull, full, fullChange, extra, clockChange } = lineChange(
+      carried,
+      row,
+    ),
     machine = row.machine;
+  // A line pinned to another clock than the phase before ran it at (#1239): every machine gets the
+  // new clock, the last one its own.
+  if (fullChange) {
+    const lead =
+      extra > 0
+        ? `Add ${machinesWord(extra)}. `
+        : extra < 0
+          ? `This phase needs ${machinesWord(-extra)} fewer: switch off ${formatNumber(-extra)}. `
+          : '';
+    return `${lead}Set every ${machine} to ${percent(full)}, from ${percent(oldFull)}${newClock < full - SAME ? `, the last one to ${percent(newClock)}` : ''}.`;
+  }
   if (extra > 0)
     return (
       `Add ${machinesWord(extra)}` +
       (clockChange
-        ? `, and raise the last Phase ${carried.from} ${machine} from ${percent(oldClock)} to 100%.`
+        ? `, and raise the last Phase ${carried.from} ${machine} from ${percent(oldClock)} to ${percent(full)}.`
         : '.')
     );
   if (extra < 0)
     return (
       `This phase needs ${machinesWord(-extra)} fewer: switch off ${formatNumber(-extra)}` +
-      (newClock < 100 - SAME ? ` and set the last one to ${percent(newClock)}.` : '.')
+      (newClock < full - SAME ? ` and set the last one to ${percent(newClock)}.` : '.')
     );
   if (clockChange)
     return `Nothing to add: ${newClock > oldClock ? 'raise' : 'lower'} the last ${machine} from ${percent(oldClock)} to ${percent(newClock)}.`;
@@ -94,7 +117,8 @@ export function carriedText(carried: CarriedLine, row: CalcRow): string {
     oldClock = clockOf(before);
   const running =
     `Running since Phase ${from}: ${formatNumber(before.machines)} × ${before.machine}` +
-    (oldClock < 100 - SAME ? `, the last at ${percent(oldClock)}.` : '.');
+    (fullOf(before) > 100 ? ` at ${percent(fullOf(before))}` : '') +
+    (oldClock < fullOf(before) - SAME ? `, the last at ${percent(oldClock)}.` : '.');
   return running + ' ' + carriedChange(carried, row) + ' ';
 }
 
@@ -163,7 +187,7 @@ export function handoverLines(
       status: kept ? 'keep' : 'add',
       change: kept ? '' : carriedChange(carried, row),
       added: Math.max(0, change.extra),
-      clock: change.clockChange || (change.extra < 0 && change.newClock < 100 - SAME),
+      clock: change.clockChange || (change.extra < 0 && change.newClock < change.full - SAME),
     };
   });
   return { from, lines, retired: retiredLines(plan, Number(phase)) };
@@ -235,7 +259,10 @@ export function handoverText({ from, kept, add, clocks, build, retire }: Handove
 // machine-equivalents against this phase's, at most 1 (a line this phase shrinks runs whole). The
 // build status (build-status.ts) runs a carried line at this share until it is ticked here.
 const equivalentOf = (row: CalcRow): number =>
-  row.equivalent > 0 ? row.equivalent : Math.max(0, row.machines - 1) + clockOf(row) / 100;
+  (row.equivalent > 0
+    ? row.equivalent
+    : Math.max(0, row.machines - 1) + clockOf(row) / fullOf(row)) *
+  (fullOf(row) / 100);
 export function carriedShare({ before }: CarriedLine, row: CalcRow): number {
   const needed = equivalentOf(row);
   return needed > 0 ? Math.min(1, equivalentOf(before) / needed) : 1;

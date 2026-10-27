@@ -74,7 +74,7 @@ const props = defineProps<{ id: string }>();
 // A line's machines as the flow page's table writes them: a split line its share first.
 const machines = (line: FlowLine) =>
   (line.share < 1 - 1e-6 ? `≈ ${num(line.machinesHere)} of ` : '') +
-  machineLine(line.machines, line.machine, line.lastClock);
+  machineLine(line.machines, line.machine, line.lastClock, line.clock);
 
 // The scrolling box. The stored layout and the lines' spots while the dialog is open; the view
 // on screen is the zoom and the box's scroll offsets.
