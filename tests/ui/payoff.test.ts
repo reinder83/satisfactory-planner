@@ -208,6 +208,37 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   assert.equal(live.textContent, 'Ranking done: 7 of 7 alternates checked for Phase 3.');
 });
 
+test('a pin the ranking left out is named under its summary, never stored (#1273)', async () => {
+  openPlan();
+  render();
+  const note =
+    'This ranking left out the Power Shard pin on Recipe_Gone_C in Phase 3, because this planner has no such recipe any more.';
+  stubFetch({ '/api/rank-alternates': { ...stored(), leftOut: [note] } });
+  $('[data-rank-alternates]')!.click();
+  await settle();
+  assert.equal(names().length, 6, 'the ranking shows');
+  assert.deepEqual(
+    $$('[data-payoff-left-out]').map(p => p.textContent!.trim()),
+    [note],
+  );
+  assert.ok($('[data-payoff-left-out]')!.classList.contains('warn'));
+  assert.equal('leftOut' in sessionPayoff!, false, 'the session keeps the payoff alone');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.equal(
+    $('#announce')!.textContent,
+    'Ranking done: 7 of 7 alternates checked for Phase 3. ' + note,
+  );
+  // Another ranking without one, or a stored ranking loaded later, names nothing.
+  stubFetch({ '/api/rank-alternates': stored() });
+  $('[data-rank-alternates]')!.click();
+  await settle();
+  assert.equal($$('[data-payoff-left-out]').length, 0);
+  setPayoff(stored());
+  render();
+  await nextTick();
+  assert.equal($$('[data-payoff-left-out]').length, 0);
+});
+
 test('the ranking’s announcement says when it stopped, or that nothing was left to rank (#1255)', () => {
   assert.equal(
     rankedMessage(ranking({ stopped: true, total: 9, phases: ['3', '4', '5'] })),

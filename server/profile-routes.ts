@@ -12,7 +12,9 @@ import {
   rankScope,
   recalculatedProfile,
   restoredVersions,
-  roundUpSettings,
+  roundUpInput,
+  staleRankNote,
+  knownPlanSettings,
   wholeMachineProfile,
 } from '../public/state.ts';
 import { needsFrozenMapping, restoreProgress } from '../public/handbook-migration.ts';
@@ -26,7 +28,13 @@ import { rankOffThread } from './ranking.ts';
 import { response } from './routing.ts';
 import { progressionData, recipeBookData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
-import type { ProgressState, StageKey, StoredPayoff, UpdateOp } from '../public/types/index.ts';
+import type {
+  ProgressState,
+  RankReply,
+  StageKey,
+  StoredPayoff,
+  UpdateOp,
+} from '../public/types/index.ts';
 
 // A strong ETag of a progress state: a hash of the JSON the reply sends, so any change to the
 // state, whatever wrote it, gives another tag.
@@ -59,20 +67,22 @@ export function profileRoutes({
   // save; the original profile is untouched. Its progress is copied, and a ticked
   // 'calc-' row is unticked for review where the rounded plan needs more machines or more
   // of any input (wholeMachineProfile and roundUpState in public/state/carry.ts, shared with
-  // browser-api.ts). The same rule newProfileState uses when carrying factory progress.
+  // browser-api.ts). The same rule newProfileState uses when carrying factory progress. A pin
+  // the game data no longer takes is left out and named in the copy's warnings (#1273).
   async function roundUp({ req, user, save, profile }: ScopedRequest) {
     checkRoundUp(profile);
     // checkRoundUp passes only a calculated profile, which always carries its plan.
     const plan = profile.plan!;
     limits.throttle(req);
-    const rounded = calculate(roundUpSettings(plan.settings)),
+    const input = roundUpInput(plan, recipeBookData()),
+      rounded = calculate(input.settings),
       profileId = randomId();
     let reviewCount = 0;
     await commit(draft => {
       const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id)!;
       if (draftSave.profiles.length >= 30) fail('Profile limit reached.');
       const previous = draftSave.profiles.find(p => p.id === profile.id)!;
-      const copy = wholeMachineProfile(profileId, previous, rounded);
+      const copy = wholeMachineProfile(profileId, previous, rounded, input.stale);
       reviewCount = copy.reviewCount;
       draftSave.profiles.push(copy.profile);
       draftSave.activeProfile = profileId;
@@ -172,7 +182,8 @@ export function profileRoutes({
   // stopped after rankBudgetMs; progress is untouched. It ranks on a worker thread (#1156,
   // rankOffThread in ranking.ts), so the server answers other requests meanwhile; a profile
   // recalculated or restored during the ranking keeps its plan and the ranking is refused (409),
-  // as the browser edition refuses it.
+  // as the browser edition refuses it. A pin the game data no longer takes is left out of the
+  // solve and named in the reply's `leftOut`, which is never stored (#1273, knownPlanSettings).
   async function rankPayoff({ req, user, save, profile, body }: ScopedRequest) {
     const plan = profile.plan;
     if (profile.kind !== 'calculated' || !plan)
@@ -181,11 +192,12 @@ export function profileRoutes({
     const phase = String(input.phase) as StageKey;
     if (!['1', '2', '3', '4', '5'].includes(phase)) fail('Choose a phase from 1 to 5.');
     limits.throttle(req, 5);
+    const known = knownPlanSettings(plan, recipeBookData(), staleRankNote);
     const payoff: StoredPayoff = {
       planCreatedAt: plan.createdAt,
       rankedAt: new Date().toISOString(),
       ranking: await rankOffThread({
-        settings: plan.settings,
+        settings: known.settings,
         options: { phase, budgetMs: rankBudgetMs, ...rankScope(input) },
       }),
     };
@@ -198,7 +210,8 @@ export function profileRoutes({
         fail('The profile changed while ranking. Rank again.', 409);
       draftProfile.payoff = payoff;
     });
-    return response(payoff);
+    const reply: RankReply = known.stale.length ? { ...payoff, leftOut: known.stale } : payoff;
+    return response(reply);
   }
   // Everything the interface needs to open the scoped profile. A stored payoff ranking is
   // only sent while it belongs to the profile's plan. A profile's own handbook is never sent
