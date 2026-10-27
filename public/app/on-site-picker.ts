@@ -5,7 +5,7 @@
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
 // the user starts (OnSiteRecalc.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
-import { onSiteCopyable, onSitePlannable, onSitePlannedItems, onSiteSettings } from './on-site.ts';
+import { onSiteCopyable, onSitePlannable, onSitePlannedItems, onSiteWanted } from './on-site.ts';
 import { milestoneOnlyPhase } from '../progression.ts';
 import { listNames } from '../wording.ts';
 import type {
@@ -214,18 +214,11 @@ function partNote(uses: readonly OfferUse[]): string {
   return `(for ${listNames(parts)} made on site)`;
 }
 
-// The items each group makes on site in `onSite`, as sorted lists by group id.
-const itemsByGroup = (onSite: OnSiteSettings | undefined): Record<string, string[]> =>
-  Object.fromEntries(
-    Object.entries(onSite || {})
-      .map(([group, entry]): [string, string[]] => [group, [...entry.items].sort()])
-      .sort(([a], [b]) => a.localeCompare(b)),
-  );
-
 // The group lines a recalculation would give against the ones the plan has.
 export interface OnSiteChange {
   // settings.onSite for a recalculation with the marks as they are now (onSiteSettings), or
-  // undefined when no group would get a line.
+  // undefined when no group would get a line. It can also hold a group's items whose consumer the
+  // plan's own solve dropped (#1013, onSiteWanted), which neither side counts as a line.
   want: OnSiteSettings | undefined;
   // Each side in words, the items of the group lines a recalculation would give (`now`) and the
   // ones the plan has (`had`): "Motors makes Screws and Wire on site; Cables makes Wire on site",
@@ -239,18 +232,19 @@ export interface OnSiteChange {
   uses: string[];
 }
 
-// Whether the group lines a recalculation would give now (onSiteSettings, decided per item) differ
-// from the ones `plan` has (onSitePlannedItems), and so whether the plan needs a recalculation;
-// null when they are the same (#938, #970, #985). Only the items are compared, not the shares: a
-// recalculation sizes a group's line to its consumers in the plan being recalculated, so the
+// Whether the group lines a recalculation would give now (onSiteWanted's `lines`, decided per
+// item) differ from the ones `plan` has (onSitePlannedItems), and so whether the plan needs a
+// recalculation; null when they are the same (#938, #970, #985). A consumer the plan's solve
+// dropped keeps its group's items in the request but counts as no line, so the notice never
+// asks for lines the next recalculation drops again (#1013). Only the items are compared, not
+// the shares: a recalculation sizes a group's line to its consumers in the plan being recalculated, so the
 // shares worked out from the new plan differ a little from the ones it was made with, and
 // comparing them would ask for a recalculation forever. A mark no row of the group uses gets no
 // line on either side, so it asks for nothing, however the plan stored it.
 export function onSiteChange(plan: PickerPlan, groups: PickerGroups): OnSiteChange | null {
-  const want = onSiteSettings(plan, groups),
+  const { settings: want, lines: wanted } = onSiteWanted(plan, groups),
     had = plan.settings.onSite;
-  const wanted = itemsByGroup(want),
-    planned = onSitePlannedItems(plan);
+  const planned = onSitePlannedItems(plan);
   if (JSON.stringify(wanted) === JSON.stringify(planned)) return null;
   const nameOf = (group: string) =>
     groups?.groups?.find(known => known.id === group)?.name ?? had?.[group]?.name ?? group;
@@ -376,7 +370,7 @@ export function onSiteSummaries(
   groups: PickerGroups,
   stage: StoredStage | undefined,
 ): Record<string, OnSiteSummary> {
-  const want = onSiteSettings(plan, groups),
+  const { lines: want } = onSiteWanted(plan, groups),
     had = plan.settings.onSite,
     planned = onSitePlannedItems(plan);
   const out: Record<string, OnSiteSummary> = {};
@@ -385,7 +379,7 @@ export function onSiteSummaries(
     const uses = offerUses(plan, groups, id, groups?.local?.[id] || []);
     const marks: GroupMarks = {
       used: [...uses.keys()],
-      wanted: want?.[id]?.items || [],
+      wanted: want[id] || [],
       planned: planned[id] || [],
       dropped: stage?.onSiteDropped?.[id] || [],
       byproducts: byproductUses(stage, groups, id),
