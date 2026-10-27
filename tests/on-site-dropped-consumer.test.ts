@@ -20,8 +20,9 @@ const ALPHA = 'fg-alpha1',
   GAMMA = 'fg-gamma1';
 const PURE = 'Recipe_PureAluminumIngot_C';
 
-// The issue's groups, with Alpha (the Cable line, marking Wire) once it is added.
-function groups(withAlpha: boolean): FactoryGroups {
+// The issue's groups, with Alpha (the Cable line, marking Wire) once it is added, and Gamma holding
+// the Pure Aluminum Ingot row whole (`rate` null) or at a fixed rate per minute.
+function groups(withAlpha: boolean, rate: number | null = null): FactoryGroups {
   return {
     groups: [
       { id: BETA, name: 'Beta' },
@@ -31,7 +32,7 @@ function groups(withAlpha: boolean): FactoryGroups {
     assignments: {
       Recipe_AluminumSheet_C: [{ group: BETA, rate: null }],
       Recipe_AluminumCasing_C: [{ group: BETA, rate: null }],
-      [PURE]: [{ group: GAMMA, rate: null }],
+      [PURE]: [{ group: GAMMA, rate }],
       ...(withAlpha ? { Recipe_Cable_C: [{ group: ALPHA, rate: null }] } : {}),
     },
     local: {
@@ -99,4 +100,32 @@ test('#1013: right after the recalculation the notice does not ask again, and th
   const next = recalculated(firstPlan(), groups(true));
   assert.equal(onSiteChange(next, groups(true)), null, 'no notice right after it');
   assert.deepEqual(ownLines(recalculated(next, groups(true))), ownLines(next));
+});
+
+// The same with Gamma holding the Pure Aluminum Ingot row only at a fixed rate (100/min, more than
+// the row makes once it comes back). Where the plan lacks the row, that part has no share, only
+// `ifBuilt` (#1038). The planner dropped such an entry (no shares), so the next solve brought the
+// row back without Gamma's lines and the notice asked at once. Now the planner keeps it and sizes
+// Gamma's line by the part where its solve builds the row, and the notice counts that line.
+let fixedFirst: StoredCalculatedPlan | undefined;
+const fixedPlan = () =>
+  (fixedFirst ??= recalculated(calculate({ ...STANDARD_BEFORE_1040 }), groups(false, 100)));
+
+test('#1013: a consumer held only at a fixed rate keeps its ifBuilt part, and nothing asks after', () => {
+  const plan = fixedPlan();
+  assert.ok(!rows(plan).some(row => row.id === PURE), 'no Pure Aluminum Ingot row in any phase');
+  const change = onSiteChange(plan, groups(true, 100));
+  assert.ok(change, 'adding Alpha asks');
+  assert.equal(change.now, 'Alpha makes Wire on site; Beta makes Aluminum Ingot on site');
+  const gamma = change.want?.[GAMMA];
+  assert.deepEqual(gamma?.shares, {});
+  assert.ok(Object.values(gamma?.ifBuilt || {}).every(phase => phase[PURE]?.rate === 100));
+  const next = recalculated(plan, groups(true, 100));
+  assert.deepEqual(next.settings.onSite?.[GAMMA]?.items, ['Alumina Solution', 'Aluminum Scrap']);
+  assert.ok(
+    ownLines(next).some(line => line.endsWith(':' + GAMMA)),
+    'Gamma has its lines again',
+  );
+  assert.equal(onSiteChange(next, groups(true, 100)), null, 'no notice right after it');
+  assert.deepEqual(ownLines(recalculated(next, groups(true, 100))), ownLines(next));
 });

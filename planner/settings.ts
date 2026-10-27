@@ -113,8 +113,11 @@ const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> 
 // Group ids are factory-group ids, items known items that are not raw resources, row ids check
 // key parts and shares fractions of a row from 0 to 1; rates (#984) and ifBuilt (#1038) are
 // checked by onSiteRates.
-// Zero shares, phases without a share and groups without an item or a share are dropped, and
-// undefined is returned when nothing is left, so settings without it stay as they were.
+// Zero shares, phases without a share and groups without an item, or without both a share and an
+// ifBuilt part, are dropped, and undefined is returned when nothing is left, so settings without it
+// stay as they were. A group with ifBuilt alone holds a consumer the plan being recalculated
+// lacked only at a fixed rate (#1013, onSiteWanted): it has no share, and the planner sizes its
+// line by the part only where its solve builds that row (withinRates in planner/on-site.ts).
 const GROUP_ID = /^fg-[a-z0-9]{4,32}$/;
 const ROW_ID = /^[a-zA-Z0-9:_-]{1,160}$/;
 const onSiteGroups = (raw: unknown): OnSiteSettings | undefined => {
@@ -132,7 +135,7 @@ const onSiteGroups = (raw: unknown): OnSiteSettings | undefined => {
     const shares = onSiteShares(entry.shares);
     const rates = onSiteRates(entry.rates);
     const ifBuilt = withoutRates(onSiteRates(entry.ifBuilt), rates);
-    if (!items.length || !Object.keys(shares).length) continue;
+    if (!items.length || !(Object.keys(shares).length || Object.keys(ifBuilt).length)) continue;
     out[group] = {
       ...(typeof entry.name === 'string' && entry.name.trim() ? { name: entry.name.trim() } : {}),
       items: (items as string[]).sort(),
