@@ -28,6 +28,7 @@ import type {
   ExactClocks,
   ExtractionRecord,
   ItemRates,
+  LineClocks,
   MainPower,
   NodeCounts,
   Purity,
@@ -270,6 +271,50 @@ const sloopPinsSetting = (raw: unknown): { sloopPins?: SloopPins } => {
     if (ids.length) out[phase as StageKey] = clean;
   }
   return Object.keys(out).length ? { sloopPins: out } : {};
+};
+// Overclocked production lines (#1239, slice 1 of 2): `{ lineClocks: { phase: { recipe: clock } } }`,
+// an explicit solver input (nothing in the interface sets it yet) frozen with the plan. A recipe is
+// one the game data has, and a clock a number in % above 100 and at most 250 (three Power Shards),
+// to four decimals as the game takes it; anything else is refused, never corrected. Whether a
+// phase can keep a clock is the solve's question (checkClocks in planner/clocks.ts). Keys are
+// sorted, empty phases dropped, and with nothing left the field is absent, so settings without it
+// stay as they were. `lineShardBudget`, the Power Shards each phase's clocked lines may hold, is a
+// whole number from 0 to LINE_SHARD_MAX, absent unless given.
+const CLOCK_REFUSAL = 'Invalid line clocks.';
+const LINE_CLOCK_MAX = 250;
+const LINE_SHARD_MAX = 100000;
+const lineClocksSetting = (raw: unknown): { lineClocks?: LineClocks } => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) fail(CLOCK_REFUSAL);
+  const out: LineClocks = {};
+  for (const phase of Object.keys(raw).sort()) {
+    const lines = raw[phase];
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(lines)) fail(CLOCK_REFUSAL);
+    const ids = Object.keys(lines).sort();
+    if (ids.length > 1000) fail(CLOCK_REFUSAL);
+    const clean: Record<string, number> = {};
+    for (const id of ids) {
+      const clock = lines[id];
+      if (
+        !DATA.recipes.some(recipe => recipe.id === id) ||
+        typeof clock !== 'number' ||
+        !Number.isFinite(clock) ||
+        clock <= 100 ||
+        clock > LINE_CLOCK_MAX ||
+        Math.abs(clock * 1e4 - Math.round(clock * 1e4)) > 1e-6
+      )
+        fail(CLOCK_REFUSAL);
+      clean[id] = clock;
+    }
+    if (ids.length) out[phase as StageKey] = clean;
+  }
+  return Object.keys(out).length ? { lineClocks: out } : {};
+};
+const lineShardBudgetSetting = (raw: unknown): { lineShardBudget?: number } => {
+  if (raw === undefined) return {};
+  if (!Number.isInteger(raw) || (raw as number) < 0 || (raw as number) > LINE_SHARD_MAX)
+    fail('Invalid Power Shard budget.');
+  return { lineShardBudget: raw as number };
 };
 // The production lines that already stand (#1176): `{ builtLines: { phase: { rowId: machines } } }`
 // with row ids as a plan names them and whole counts from 1 to 100,000 (the limits of the
@@ -601,6 +646,10 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The somersloops pinned on production lines (#1235): absent unless a recalculation asks for
     // pins, so settings without them, and every plan stored before them, stay as they were.
     ...sloopPinsSetting(input.sloopPins),
+    // Overclocked production lines and their Power Shard budget (#1239): absent unless asked for,
+    // so settings without them, and every plan stored before them, stay as they were.
+    ...lineClocksSetting(input.lineClocks),
+    ...lineShardBudgetSetting(input.lineShardBudget),
     // The production lines that already stand (#1176): absent unless a recalculation carries
     // them, so settings without them, and every plan stored before them, stay as they were.
     ...builtLinesSetting(input.builtLines),

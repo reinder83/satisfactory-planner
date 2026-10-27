@@ -50,15 +50,18 @@ const POWER_DUST = 0.01;
 
 type LoadRow = Pick<CalcRow, 'power' | 'machine' | 'machines' | 'lastClock'> & {
   minPower?: number;
+  clock?: number;
 };
 
 // A production line's draw in MW at 100% consumption: every machine at full power but the last,
 // which runs at `lastClock` and draws clock^1.321929 of it. `peak` takes a variable-power
 // machine at the top of its range, `average` at the middle; any other machine's are the same.
-// A generator draws nothing.
+// A generator draws nothing. An overclocked line (#1239) has its `power` at its `clock`, which
+// is then the full speed its last machine's clock is a share of.
 export function lineLoad(row: LoadRow): { peak: number; average: number } {
   if (!(row.power > 0) || !(row.machines > 0)) return { peak: 0, average: 0 };
-  const last = Math.min(1, Math.max(0, (row.lastClock ?? 100) / 100));
+  const full = row.clock ?? 100;
+  const last = Math.min(1, Math.max(0, (row.lastClock ?? full) / full));
   const running = row.machines - 1 + last ** CLOCK_EXPONENT;
   const peak = row.power * running;
   if (!VARIABLE_POWER.includes(row.machine)) return { peak, average: peak };

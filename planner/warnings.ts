@@ -382,7 +382,9 @@ function roundedWarnings({ config, stages }: FinishedPlan): string[] {
         longer = stage.hours! > target * 1.01;
       // Lines roundedRun left fractional because it rounded them up more than ROUNDING_RAISES times.
       const rounds = roundingLines(config, phase);
-      const left = (stage.rows || []).filter(row => rounds(row) && row.lastClock < 100 - 1e-6);
+      const left = (stage.rows || []).filter(
+        row => rounds(row) && row.lastClock < (row.clock ?? 100) - 1e-6,
+      );
       const kept = raisedLines(stage, left, 'whole-machine', 'a fractional clock', rounds);
       return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes ${warningDuration(stage.hours!)} instead of ${warningDuration(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
     });
@@ -419,7 +421,8 @@ function offGridLines(
 ): string {
   if (clocks === 'precise') return '';
   const easy = (row: CalcRow) => {
-    const last = row.lastClock / 100;
+    // A share of the line's clock (#1239: an overclocked line's machines run at its `clock`).
+    const last = row.lastClock / (row.clock ?? 100);
     if (Math.abs(last * 4 - Math.round(last * 4)) < 1e-4) return true;
     const perMachine = row.equivalent > 0 ? productRate(row) / row.equivalent : 0;
     return clocks === 'rate' && Math.abs(perMachine * last - Math.round(perMachine * last)) < 1e-4;

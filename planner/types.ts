@@ -5,9 +5,11 @@ import type { OnSiteLine, Recipe, StageResult, StockLine } from '../public/types
 // A recipe as run() plans with it: from recipes.json, a generator, or an amplified twin, which
 // carries its somersloop `slots` per machine. Generators have no `alternate` flag.
 // A per-group line made on site (#875) also carries `onSite`, its group and the recipe it copies.
+// An overclocked line (#1239) carries its `clock` in %, with its rates and power at that clock.
 export type PoolRecipe = Omit<Recipe, 'alternate'> & {
   alternate?: boolean;
   slots?: number;
+  clock?: number;
   onSite?: OnSiteLine;
   stock?: StockLine;
 };

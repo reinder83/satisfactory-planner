@@ -188,6 +188,14 @@ export interface CurrentSettings {
   // Absent unless a recalculation the user started asked for pins (the progress state's
   // `sloopPins`, saved from a line's dialog), so a plan without it calculates exactly as before.
   sloopPins?: SloopPins;
+  // Overclocked production lines (#1239, slice 1 of 2): per phase, by recipe id, the clock in %
+  // (above 100, at most 250) every machine of that line runs at, with Power Shards
+  // (planner/clocks.ts). Only an explicit solver input so far: nothing in the interface or the
+  // progress state sets it, so a plan without it calculates exactly as before.
+  lineClocks?: LineClocks;
+  // The Power Shards the clocked lines (lineClocks) of each phase may hold together, a whole
+  // number; absent, they take what they need. The miners' and extractors' shards are not in it.
+  lineShardBudget?: number;
   // Production lines that already stand (#1176, slice 3 of #1172): per phase, the machines built
   // on each row id, from the lines ticked as built (or partly built, `builtMachines`) in the
   // profile a recalculation carries progress from (builtLinesOf in public/app/built-capacity.ts).
@@ -309,6 +317,21 @@ export interface SloopPinDrop {
   reason: SloopPinReason;
 }
 
+// Per phase, the clock in % (100 < clock <= 250) of overclocked production lines (#1239), by recipe
+// id: the plain row's, whose amplified twin and factories' own lines of it run at it too.
+export type LineClocks = Partial<Record<StageKey, Record<string, number>>>;
+// Why a phase could not keep a line's clock (#1239): 'research' before the MAM's Power Shards
+// research (Phase 1, unless the player can overclock), 'unavailable' when the recipe is not in the
+// phase's recipe pool, 'budget' when its plan at those clocks takes more Power Shards than
+// lineShardBudget, 'fit' when no plan of the phase fits with them.
+export type LineClockReason = 'research' | 'unavailable' | 'budget' | 'fit';
+// A clock a phase could not keep: its recipe id, the clock asked for and why.
+export interface LineClockDrop {
+  recipe: string;
+  clock: number;
+  reason: LineClockReason;
+}
+
 // One factory group's part of settings.onSite (#875), keyed by group id: the items it makes on
 // site, its name when the plan was calculated (for the warnings), and per phase the share of each
 // plan row (by row id) its consumers take, worked out from its memberships when the user starts a
@@ -391,14 +414,19 @@ export interface CalcRow {
   // The phase the recipe unlocks in.
   phase: number;
   machine: string;
-  // MW per machine at 100%; negative for a generator. A variable-power machine's peak, and its
-  // `minPower` (#1064; absent from plans made before it).
+  // MW per machine at 100% (at `clock` on an overclocked line); negative for a generator. A
+  // variable-power machine's peak, and its `minPower` (#1064; absent from plans made before it).
   power: number;
   minPower?: number;
+  // An overclocked line (#1239, settings.lineClocks): every machine's clock in %, and the Power
+  // Shards its machines hold, the last one's too. Absent from every line at 100%.
+  clock?: number;
+  shards?: number;
   // The line's totals per minute.
   inputs: ItemRates;
   outputs: ItemRates;
-  // Machine-equivalents at 100%, whole buildings, and the last one's clock in %.
+  // Machine-equivalents at 100% (machines at `clock` on an overclocked line), whole buildings,
+  // and the last one's clock in %.
   equivalent: number;
   machines: number;
   lastClock: number;
@@ -611,6 +639,9 @@ export interface StageResult {
   // the phase is planned without them, never with a pin silently changed. Absent when it kept
   // them all, and from every plan without pins.
   sloopPinsDropped?: SloopPinDrop[];
+  // The line clocks of settings.lineClocks this phase could not keep (#1239), each with why: the
+  // phase is planned without them. Absent when it kept them all, and from every plan without them.
+  lineClocksDropped?: LineClockDrop[];
   // Whole machines (#370): the recycle chain's period when the uranium plants came in multiples
   // of it, and whether whole nuclear plants did not fit and the phase kept them fractional.
   nuclearPeriod?: number;

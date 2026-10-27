@@ -26,6 +26,7 @@ import { stoppedSearch } from './rounding.ts';
 import { plannedSites, centralSettings, withinRates, withOverflow } from './on-site.ts';
 import { carryGenerators } from '../public/power.ts';
 import { withStock } from './stock.ts';
+import { fitClocks, stageClocks } from './clocks.ts';
 
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
 // interface hides earlier phases; post-game reuses Phase 5). `input` is raw settings, validated by
@@ -231,7 +232,8 @@ function planPhase(
 // beside include what withStock adds for storage, so both sides carry storage.
 function withExactPlan(config: CurrentSettings, phase: number, stage: Solved): Solved {
   if (!config.wholeMachines) return stage;
-  const exact = planPhase({ ...config, wholeMachines: false }, phase);
+  // Without the line clocks the phase could not keep (#1239), as the stage was planned.
+  const exact = planPhase(stageClocks({ ...config, wholeMachines: false }, phase, stage), phase);
   if (!exact.feasible) return stage;
   return {
     ...stage,
@@ -260,8 +262,12 @@ function withExactPlan(config: CurrentSettings, phase: number, stage: Solved): S
 // A group's part of a row with a fixed-rate membership follows the row's total (#984), which
 // holds while the row makes at least its fixed rates: when a row makes less, the phase is
 // planned again as withinRates says.
+// A phase with overclocked lines (#1239, settings.lineClocks) that does not fit with them is
+// planned without them, and says so (fitClocks).
 function solvePhase(config: CurrentSettings, phase: number): RunResult {
-  return withinRates(config, phase, settings => solveSites(settings, phase));
+  return fitClocks(config, phase, clocked =>
+    withinRates(clocked, phase, settings => solveSites(settings, phase)),
+  );
 }
 // solvePhase's solve with the groups' own lines, or with every item made centrally.
 function solveSites(config: CurrentSettings, phase: number): RunResult {
