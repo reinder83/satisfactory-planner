@@ -21,7 +21,7 @@ import { num, plural } from './format.ts';
 import { listNames } from '../wording.ts';
 import { leftOutNote, leftOutWords } from '../mining.ts';
 import type { MiningSettings } from '../preferences/mining.ts';
-import type { ExactClocks, NodeExclusions, SloopPins } from '../types/index.ts';
+import type { ExactClocks, LineClocks, NodeExclusions, SloopPins } from '../types/index.ts';
 import { power } from './wizard/fields.ts';
 import type {
   Choice,
@@ -251,6 +251,19 @@ const pinsReviewWords = (settings: NameSettings): string => {
     : 'None';
 };
 
+// The Power Shard pins (#1239) in words, absent as none: a plan made before them had none, so
+// pinning a line is named. The lines and their clocks, since the shards they take need the plan:
+// "1 line at 250%", "2 lines at 150–250%".
+const clockPinsReviewWords = (settings: NameSettings): string => {
+  const clocks = Object.values((settings.lineClocks ?? {}) as LineClocks).flatMap(lines =>
+    Object.values(lines ?? {}),
+  );
+  if (!clocks.length) return 'None';
+  const low = Math.min(...clocks),
+    high = Math.max(...clocks);
+  return `${plural(clocks.length, 'line')} at ${low === high ? num(low) : `${num(low)}–${num(high)}`}%`;
+};
+
 // The production lines at exact clocks (#1066, #1237) in words, absent as none: a plan made
 // before the choice had none, so asking for one is named. "2 lines".
 const exactClocksReviewWords = (settings: NameSettings): string => {
@@ -423,6 +436,15 @@ export function settingsChanges(
           },
         ]
       : []),
+    ...(stable(before.lineClocks ?? {}) !== stable(after.lineClocks ?? {})
+      ? [
+          {
+            label: 'Power Shard pins',
+            before: clockPinsReviewWords(before),
+            after: clockPinsReviewWords(after),
+          },
+        ]
+      : []),
     ...(exactClocksKey(before) !== exactClocksKey(after)
       ? [
           {
@@ -444,6 +466,7 @@ export function settingsChanges(
     'objective',
     'phaseCaps',
     'sloopPins',
+    'lineClocks',
     'exactClocks',
     // The lines that stand (#1176) are no setting the user changed: Review says they are kept.
     'builtLines',

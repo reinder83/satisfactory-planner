@@ -19,6 +19,7 @@ import type {
   GroupLayout,
   HandbookMapping,
   HandbookOrigin,
+  LineClocks,
   LinkMode,
   OnSiteReview,
   LinkTransport,
@@ -691,6 +692,45 @@ export function validateSloopPins(raw: unknown): SloopPins | undefined {
   }
   return out;
 }
+// The highest clock a production line may be pinned to (#1239): 250%, three Power Shards per
+// machine, the game's limit (LINE_CLOCK_MAX in planner/settings.ts).
+export const LINE_CLOCK_MAX = 250;
+// Whether `clock` is a line clock the planner takes: a number in % above 100 and at most 250, to
+// four decimals as the game takes it (lineClocksSetting in planner/settings.ts).
+export const validLineClock = (clock: unknown): clock is number =>
+  typeof clock === 'number' &&
+  Number.isFinite(clock) &&
+  clock > 100 &&
+  clock <= LINE_CLOCK_MAX &&
+  Math.abs(clock * 1e4 - Math.round(clock * 1e4)) <= 1e-6;
+// Returns a clean copy of lineClocks (#1239), or undefined when absent: the production lines the
+// user pinned to a clock with Power Shards, { phase: { recipe id: clock in % } }. Recipe ids are
+// record-key safe and name a recipe, never an amplified twin ('amp:') or a factory's own line
+// ('<recipe>:<group>'), which run at their recipe's clock; clocks follow validLineClock, at most
+// 1000 per phase. Keys are sorted and an empty phase is dropped. An empty map stays: it asks for
+// no clocks, which differs from a plan calculated with some. Whether the recipe exists is the
+// planner's check (settings()), which knows the game data; an import drops unknown ones
+// (dropUnknownPins in transfer.ts).
+export function validateLineClocks(raw: unknown): LineClocks | undefined {
+  if (raw === undefined) return undefined;
+  const bad = () => fail('Invalid line clocks.');
+  if (!plain(raw) || Object.keys(raw).length > 5) bad();
+  const out: LineClocks = {};
+  for (const phase of Object.keys(raw as Raw).sort()) {
+    const lines = (raw as Raw)[phase];
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !plain(lines)) bad();
+    const ids = Object.keys(lines as Raw).sort();
+    if (ids.length > 1000) bad();
+    const clean: Record<string, number> = {};
+    for (const id of ids) {
+      const clock = (lines as Raw)[id];
+      if (!safeKey(id) || id.includes(':') || !validLineClock(clock)) bad();
+      clean[id] = clock as number;
+    }
+    if (ids.length) out[phase as StageKey] = clean;
+  }
+  return out;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -910,7 +950,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–23 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–26 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -922,12 +962,12 @@ export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
     ![
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
     ].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "26" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 25
+      // Compared as the old code did, so a version given as "27" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 26
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -992,6 +1032,8 @@ export function validateState(state: unknown): ProgressState {
   if (tickedBy) clean.tickedBy = tickedBy;
   const pins = validateSloopPins(state.sloopPins);
   if (pins) clean.sloopPins = pins;
+  const clocks = validateLineClocks(state.lineClocks);
+  if (clocks) clean.lineClocks = clocks;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -1030,57 +1072,61 @@ export function validateState(state: unknown): ProgressState {
   // (sloopPins, #1235) are 24: an older release would drop the pins, and the next recalculation
   // would place those somersloops itself. A layout with a moved input or output
   // (groups[].layout.places, #1240) is 25: a release before it would drop those spots and draw the
-  // boxes at their automatic places again.
-  clean.version = hasPlaceLayouts(clean.factoryGroups)
-    ? 25
-    : clean.sloopPins
-      ? 24
-      : hasTagLayouts(clean.factoryGroups)
-        ? 23
-        : hasLayouts(clean.factoryGroups)
-          ? 22
-          : clean.tickedBy
-            ? 21
-            : hasOwners(clean.factoryGroups)
-              ? 20
-              : clean.builtMachines
-                ? 19
-                : linksNeedV18(clean.factoryGroups)
-                  ? 18
-                  : linksNeedV17(clean.factoryGroups)
-                    ? 17
-                    : clean.exactClocks
-                      ? 16
-                      : clean.onSiteReview
-                        ? 15
-                        : clean.factoryGroups.local
-                          ? 14
-                          : clean.handbookOrigin?.mapping
-                            ? 13
-                            : clean.handbookOrigin
-                              ? 12
-                              : linksNeedV11(clean.factoryGroups)
-                                ? 11
-                                : clean.storageEdits.bayOrder
-                                  ? 10
-                                  : linksNeedV9(clean.factoryGroups)
-                                    ? 9
-                                    : clean.storageEdits.bayFloors
-                                      ? 8
-                                      : clean.factoryGroups.links
-                                        ? 7
-                                        : clean.storageEdits.hiddenFloors.length
-                                          ? 6
-                                          : clean.storageEdits.hiddenBays.length
-                                            ? 5
-                                            : hasAddedSlots(clean.storageEdits)
-                                              ? 4
-                                              : hasTaskEdits(clean.taskEdits) ||
-                                                  hasGroups(clean.factoryGroups)
-                                                ? 3
-                                                : hasEdits(clean.storageEdits)
-                                                  ? 2
-                                                  : 1;
+  // boxes at their automatic places again. The production lines pinned to a clock with Power
+  // Shards (lineClocks, #1239) are 26: an older release would drop the pins, and the next
+  // recalculation would run those lines at 100% again.
+  clean.version = clean.lineClocks
+    ? 26
+    : hasPlaceLayouts(clean.factoryGroups)
+      ? 25
+      : clean.sloopPins
+        ? 24
+        : hasTagLayouts(clean.factoryGroups)
+          ? 23
+          : hasLayouts(clean.factoryGroups)
+            ? 22
+            : clean.tickedBy
+              ? 21
+              : hasOwners(clean.factoryGroups)
+                ? 20
+                : clean.builtMachines
+                  ? 19
+                  : linksNeedV18(clean.factoryGroups)
+                    ? 18
+                    : linksNeedV17(clean.factoryGroups)
+                      ? 17
+                      : clean.exactClocks
+                        ? 16
+                        : clean.onSiteReview
+                          ? 15
+                          : clean.factoryGroups.local
+                            ? 14
+                            : clean.handbookOrigin?.mapping
+                              ? 13
+                              : clean.handbookOrigin
+                                ? 12
+                                : linksNeedV11(clean.factoryGroups)
+                                  ? 11
+                                  : clean.storageEdits.bayOrder
+                                    ? 10
+                                    : linksNeedV9(clean.factoryGroups)
+                                      ? 9
+                                      : clean.storageEdits.bayFloors
+                                        ? 8
+                                        : clean.factoryGroups.links
+                                          ? 7
+                                          : clean.storageEdits.hiddenFloors.length
+                                            ? 6
+                                            : clean.storageEdits.hiddenBays.length
+                                              ? 5
+                                              : hasAddedSlots(clean.storageEdits)
+                                                ? 4
+                                                : hasTaskEdits(clean.taskEdits) ||
+                                                    hasGroups(clean.factoryGroups)
+                                                  ? 3
+                                                  : hasEdits(clean.storageEdits)
+                                                    ? 2
+                                                    : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

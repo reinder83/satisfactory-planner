@@ -1,7 +1,8 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, the notice that the lines asked to run
   at exact clocks need a recalculation (ui/plan/ExactClocksRecalc.vue, #1066), the same for the
-  somersloop pins asked for (ui/plan/SloopPinsRecalc.vue, #1235), the offer to plan with
+  somersloop pins asked for (ui/plan/SloopPinsRecalc.vue, #1235) and the Power Shard pins asked for
+  (ui/plan/ShardPinsRecalc.vue, #1239), the offer to plan with
   what the ticks show you already have (ui/plan/OwnedTicksNotice.vue, #1068), a summary line (factories,
   storage and power, each linking to its page, and the delivery time, what is left of it once a
   delivery count is saved, #1062; SP-43), the next phase once the delivery is complete
@@ -62,6 +63,7 @@ import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
 import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
 import SloopPinsRecalc from '../plan/SloopPinsRecalc.vue';
+import ShardPinsRecalc from '../plan/ShardPinsRecalc.vue';
 import FormerLines from '../plan/FormerLines.vue';
 import HandoverSummary from '../plan/HandoverSummary.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
@@ -362,6 +364,7 @@ function tabKey(event: KeyboardEvent) {
       <CalcWarnings />
       <ExactClocksRecalc />
       <SloopPinsRecalc />
+      <ShardPinsRecalc />
       <OwnedTicksNotice />
       <PlanSummary v-if="!page.milestones" :items="page.summary" />
       <NextPhase />

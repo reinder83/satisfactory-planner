@@ -67,6 +67,7 @@ import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
 import { AMPLIFIER_WORDS } from '../../somersloops.ts';
+import { SHARD_RESEARCH, shardsPerMachine, shardWords } from '../../shards.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 import type { StepList, StepTable } from '../../step-table.ts';
@@ -321,7 +322,7 @@ function carriedStepText(row: CalcRow, shownPhase: Phase): string {
 const rowLineText = (row: CalcRow): string =>
   siteLineText(row) +
   stockLineText(row) +
-  `${setupText(machineSetup(row))} ${sloopText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
+  `${setupText(machineSetup(row))} ${sloopText(row)}${shardText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
 
 // A step's machines (machineSetup): the summary, then the adjustable machine's clock and output
 // with the pointer to an easier rounded option, or what each machine makes.
@@ -334,6 +335,14 @@ const setupText = (setup: ReturnType<typeof machineSetup>): string =>
 const sloopText = (row: CalcRow): string =>
   row.amplified
     ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ${AMPLIFIER_WORDS} `
+    : '';
+
+// The Power Shards an overclocked line takes (#1239), as a sentence with a space after it; '' for
+// any other. Machines take them only after the MAM's Overclock Production research, which the
+// build plan lists (requiredMilestones and shardResearchTask in progression.ts).
+const shardText = (row: CalcRow): string =>
+  row.clock && row.shards
+    ? `Insert ${shardWords(shardsPerMachine(row.clock))} in each machine — ${num(row.shards)} in total — to run it at ${num(row.clock)}%, as you pinned it, once the MAM research ${SHARD_RESEARCH} is done. `
     : '';
 
 // How the advice names a line (as its build-plan step is titled: "Wire for Alpha") and words a rate.
@@ -488,7 +497,8 @@ export function draftHeading(snapshot: StoredStage, phase?: string): string {
 // underclocked, with per-machine output text. `easy` is an optional rounded-up clock for
 // that last machine and the extra inputs/outputs it causes; it is never offered for nuclear
 // or waste lines, whose balance must stay exact. Used by calcTasks and
-// ui/detail/CalcFactoryDialog.vue.
+// ui/detail/CalcFactoryDialog.vue. An overclocked line (#1239, `clock`) runs its machines at
+// that clock instead of 100% (`full`), with the last one adjustable up to it.
 // A rounded-up clock for the last machine, and what it adds.
 export interface EasySetup {
   clock: number;
@@ -498,7 +508,8 @@ export interface EasySetup {
 }
 export function machineSetup(row: CalcRow) {
   if (wholeGenerators(row)) return generatorSetup(row);
-  const equivalent = row.equivalent || row.machines - 1 + row.lastClock / 100,
+  const full = row.clock ?? 100;
+  const equivalent = row.equivalent || row.machines - 1 + row.lastClock / full,
     whole = Math.floor(equivalent + 1e-7),
     fraction = Math.max(0, equivalent - whole),
     partial = fraction > 1e-7;
@@ -514,27 +525,28 @@ export function machineSetup(row: CalcRow) {
     ].join(' · ') || `${num((row.generationMW / equivalent) * share)} MW`;
   const fullOutput = perMachine(1);
   const lastOutput = perMachine(fraction);
-  const summary = `${row.machines} ${row.machine} total: ${partial ? (whole ? whole + ' at 100% + ' : '') + '1 adjustable machine' : whole + ' at 100% (no underclock needed)'}.`;
+  const at = `${num(full)}%`;
+  const summary = `${row.machines} ${row.machine} total: ${partial ? (whole ? `${whole} at ${at} + ` : '') + '1 adjustable machine' : `${whole} at ${at} (no underclock needed)`}.`;
   const sensitive = /uranium|plutonium|ficsonium|waste|non-fissile/i.test(
     [row.name, ...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})].join(' '),
   );
   let easy: EasySetup | null = null;
   if (partial && !sensitive) {
     // Round the final clock upward to a whole percent, never silently underproduce.
-    let clock = Math.ceil(fraction * 100 - 1e-7);
+    let clock = Math.ceil(fraction * full - 1e-7);
     const primary = Object.entries(rates)[0];
     if (primary) {
       const target = Math.ceil(primary[1] * fraction - 1e-7),
-        candidate = (target / primary[1]) * 100;
-      if (candidate <= 100 && Math.abs(candidate - Math.round(candidate)) < 1e-7)
+        candidate = (target / primary[1]) * full;
+      if (candidate <= full && Math.abs(candidate - Math.round(candidate)) < 1e-7)
         clock = Math.max(clock, Math.round(candidate));
     }
-    const extra = clock / 100 - fraction;
+    const extra = clock / full - fraction;
     if (extra > 1e-7)
       easy = {
         clock,
         output: Object.fromEntries(
-          Object.entries(rates).map(([item, rate]) => [item, (rate * clock) / 100]),
+          Object.entries(rates).map(([item, rate]) => [item, (rate * clock) / full]),
         ),
         inputs: Object.fromEntries(
           Object.entries(row.inputs || {}).map(([item, rate]) => [
@@ -547,7 +559,7 @@ export function machineSetup(row: CalcRow) {
         ),
       };
   }
-  return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
+  return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * full, full, easy };
 }
 
 // A generator line of a plan made since #1064 (wholeGenerators in flow.ts): whole generators at
@@ -569,6 +581,7 @@ function generatorSetup(row: CalcRow) {
     fullOutput,
     lastOutput: fullOutput,
     clock: 0,
+    full: 100,
     easy: null as EasySetup | null,
   };
 }

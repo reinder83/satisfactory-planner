@@ -518,7 +518,16 @@ function upgradeTask(
 // Shards (shardNeeds), once. Its key is `power-shards-<stage>`. It shows as done while Overclock
 // Production is ticked, the player can overclock (settings.overclock, "I can overclock"), or the
 // phase worked on is later; ticking it by hand also works. A plan without mining per phase, and a
-// phase whose stage was stored at 100% before #1169, have no such step.
+// phase whose stage was stored at 100% before #1169, have no such step, unless the phase runs
+// production lines overclocked with Power Shards (#1239, settings.lineClocks: rows with `shards`),
+// which need the same research: the step then comes before the first such phase too, and says
+// what those lines hold. Nothing changes for a plan without them.
+const lineShardNeeds = (stage: Pick<StoredStage, 'rows'> | undefined) => {
+  const rows = (stage?.rows ?? []).filter(row => (row.shards ?? 0) > 0);
+  return rows.length
+    ? { lines: rows.length, shards: rows.reduce((sum, row) => sum + row.shards!, 0) }
+    : null;
+};
 function shardResearchTask(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   state: GuideState,
@@ -530,17 +539,27 @@ function shardResearchTask(
   const start = Number(plan.settings.phase || 1);
   if (!research || !recipe || !(milestonePhase(research, data) < start)) return [];
   const first = (['2', '3', '4', '5'] as const).find(
-    key => Number(key) >= start && shardNeeds(plan.stages[key], key, plan.settings),
+    key =>
+      Number(key) >= start &&
+      (shardNeeds(plan.stages[key], key, plan.settings) || lineShardNeeds(plan.stages[key])),
   );
   if (first !== stage) return [];
-  const needs = shardNeeds(plan.stages[stage], stage, plan.settings)!;
-  const shards = `${formatNumber(needs.shards)} Power Shard${needs.shards === 1 ? '' : 's'}`;
+  const needs = shardNeeds(plan.stages[stage], stage, plan.settings);
+  const lines = lineShardNeeds(plan.stages[stage]);
+  const shardCount = (count: number) =>
+    `${formatNumber(count)} Power Shard${count === 1 ? '' : 's'}`;
   const saving =
-    needs.at100 === null
+    needs?.at100 === null
       ? ', more than its nodes could give at 100%'
-      : needs.at100 > needs.machines
+      : needs && needs.at100 > needs.machines
         ? `, where 100% would take ${formatNumber(needs.at100)} machines`
         : '';
+  const nodes = needs
+    ? `Phase ${stage} taps its nodes overclocked, each up to what its belt or pipe carries, so fewer nodes give the same ore: its miners and extractors take ${formatNumber(needs.machines)} machines and ${shardCount(needs.shards)}${saving}.`
+    : '';
+  const overclocked = lines
+    ? `${needs ? 'It also runs' : `Phase ${stage} runs`} ${lines.lines === 1 ? 'a production line' : `${formatNumber(lines.lines)} production lines`} overclocked at the clock you pinned, whose machines hold ${shardCount(lines.shards)}.`
+    : '';
   const cost = Object.entries(research.cost)
     .map(([item, amount]) => `${formatNumber(amount)} ${item}`)
     .join(', ');
@@ -556,8 +575,10 @@ function shardResearchTask(
   return [
     {
       id: 'power-shards-' + stage,
-      title: 'Research Power Shards before tapping the nodes',
-      body: `Phase ${stage} taps its nodes overclocked, each up to what its belt or pipe carries, so fewer nodes give the same ore: its miners and extractors take ${formatNumber(needs.machines)} machines and ${shards}${saving}. Research Power Shards in the MAM first: find a Blue Power Slug and research ${recipe.name}, which unlocks the Power Shard recipe; make a Power Shard from the slug in a Constructor; then research ${research.name} (${cost}), which lets machines take them. A Blue Power Slug makes 1 Power Shard, a Yellow one 2 and a Purple one 5, each after its own research. Both research steps are also listed under Phase ${listed}; ticking ${research.name} there, or “I can overclock” in Edit settings, marks this step done.`,
+      title: needs
+        ? 'Research Power Shards before tapping the nodes'
+        : 'Research Power Shards before building the overclocked lines',
+      body: `${[nodes, overclocked].filter(Boolean).join(' ')} Research Power Shards in the MAM first: find a Blue Power Slug and research ${recipe.name}, which unlocks the Power Shard recipe; make a Power Shard from the slug in a Constructor; then research ${research.name} (${cost}), which lets machines take them. A Blue Power Slug makes 1 Power Shard, a Yellow one 2 and a Purple one 5, each after its own research. Both research steps are also listed under Phase ${listed}; ticking ${research.name} there, or “I can overclock” in Edit settings, marks this step done.`,
       ...(done ? { satisfied: done } : {}),
     },
   ];

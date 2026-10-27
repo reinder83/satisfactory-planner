@@ -95,7 +95,12 @@ const card = computed(() =>
         generator || !main
           ? powerParts(row.generationMW)
           : { value: num(total), unit: rateUnit(main) },
-      machines: machineLine(row.machines, row.machine, setup.partial ? setup.clock : 100),
+      machines: machineLine(
+        row.machines,
+        row.machine,
+        setup.partial ? setup.clock : setup.full,
+        setup.full,
+      ),
       // The outputs by name, unless the headline already says all of it: one output that
       // gives the row its name. A generator's headline is its power, so its waste is listed.
       outputs:

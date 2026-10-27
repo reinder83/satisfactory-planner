@@ -29,6 +29,7 @@ import {
   setWorkspace,
   state,
 } from '../session.ts';
+import { lineClocksSettings, wantedClocks } from '../shard-pins.ts';
 import { sloopPinsSettings, wantedPins } from '../sloop-pins.ts';
 import type { StoredSettings } from '../../types/index.ts';
 import { render } from '../shell.ts';
@@ -88,12 +89,15 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     kept = keptName(saveId, name),
     // The lines that stand now (#1176): every carry pick is on, so they count as built.
     builtLines = openBuiltLines(),
-    // The somersloop pins (#1235) and the lines at exact clocks (#1237) asked for in the lines'
-    // dialogs go with every recalculation the user starts, so another offer does not drop them.
-    // Every offer sends the plan's settings with its change.
+    // The somersloop pins (#1235), the Power Shard pins (#1239) and the lines at exact clocks
+    // (#1237) asked for in the lines' dialogs go with every recalculation the user starts, so
+    // another offer does not drop them. Every offer sends the plan's settings with its change.
     settings = withBuiltLines(
       exactClocksSettings(
-        sloopPinsSettings(offer.settings as StoredSettings, wantedPins(calculated, state)),
+        lineClocksSettings(
+          sloopPinsSettings(offer.settings as StoredSettings, wantedPins(calculated, state)),
+          wantedClocks(calculated, state),
+        ),
         wantedExactClocks(calculated, state),
       ),
       builtLines,

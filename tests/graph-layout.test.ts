@@ -161,7 +161,7 @@ test('every released state loads unchanged; version 22 is set only while a layou
   // message, so a release before this one refuses a version-22 state the same way.
   assert.equal(validateState({ ...json(version22), version: 3 }).version, 22);
   assert.throws(
-    () => validateState({ ...json(version22), version: 26 }),
+    () => validateState({ ...json(version22), version: 27 }),
     /newer planner version\. Update the app to import it\./,
   );
 });

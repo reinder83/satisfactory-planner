@@ -51,8 +51,8 @@ import { ITEM_NAMES } from './items.ts';
 // on top of a newer state (another tab or device wrote in between), they would silently undo
 // that write, so both editions refuse them unless the tab saw the current revision (#165).
 // Small operations (a tick, a count, one assignment) merge safely and are never refused.
-// exactClocks (#1066) and sloopPins (#1235) send their whole map, so a tab that has not seen
-// another's change would undo it.
+// exactClocks (#1066), sloopPins (#1235) and lineClocks (#1239) send their whole map, so a tab
+// that has not seen another's change would undo it.
 const baseSensitive = [
   'taskOrder',
   'note',
@@ -61,6 +61,7 @@ const baseSensitive = [
   'storageSlotMove',
   'exactClocks',
   'sloopPins',
+  'lineClocks',
 ];
 export const staleWrite =
   'This profile was changed in another tab or on another device, so your last change was not ' +
@@ -198,9 +199,16 @@ function setSloopPins(state: SavedState, update: Raw) {
   if (update.value === null) delete state.sloopPins;
   else state.sloopPins = update.value as SavedState['sloopPins'];
 }
+// The production lines pinned to a clock with Power Shards (#1239), sent whole; null forgets the
+// pins, so the plan's own clocks apply again. validateState checks the map.
+function setLineClocks(state: SavedState, update: Raw) {
+  if (update.value === null) delete state.lineClocks;
+  else state.lineClocks = update.value as SavedState['lineClocks'];
+}
 const recordEdits: Record<string, StateEdit> = {
   exactClocks: setExactClocks,
   sloopPins: setSloopPins,
+  lineClocks: setLineClocks,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,

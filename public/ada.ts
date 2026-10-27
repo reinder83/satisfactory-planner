@@ -129,6 +129,12 @@ export interface AdaFacts {
   // The pins the plan could not keep (sloopPinsDropped, #1235): how many, and the lines as a name
   // list, "Heavy Modular Frame in Phase 4 and Iron Rod in Phase 3"; absent when it kept them all.
   sloopPinsDropped?: { count: number; lines: string };
+  // The Power Shard pins asked for are not the clocks the plan was calculated with
+  // (lineClocksChange in app/shard-pins.ts, #1239): how many lines a recalculation would change.
+  shardPinsPending?: number;
+  // The clocks the plan could not keep (lineClocksDropped, #1239): how many, and the lines as a
+  // name list, "Iron Rod in Phase 1"; absent when it kept them all.
+  shardPinsDropped?: { count: number; lines: string };
   // What the ticks show the player already has beyond the plan's settings (#1068, ownedFromTicks in
   // app/owned-ticks.ts), as the build plan's notice lists it ("Miner Mk.3 and Mk.5 belts"); absent
   // when nothing, or when the notice was dismissed.
@@ -769,6 +775,24 @@ const RULES: AdaRule[] = [
     when: facts => (facts.sloopPinsDropped?.count ?? 0) > 0,
     text: facts =>
       `This plan could not keep the somersloops you pinned on ${facts.sloopPinsDropped!.lines}, so it planned without ${facts.sloopPinsDropped!.count === 1 ? 'that pin' : 'those pins'}. Profile assumptions, beside the build plan's steps (below them on a phone), says why, and the line's dialog says what to change. Better a loud no than a quiet maybe.`,
+  },
+  {
+    // The Power Shard pins asked for differ from the plan's clocks (#1239).
+    id: 'shard-pins-pending',
+    on: ['factories', 'plan'],
+    tone: 'calm',
+    when: facts => (facts.shardPinsPending ?? 0) > 0,
+    text: facts =>
+      `You pinned the Power Shards of ${plural(facts.shardPinsPending!, 'production line')} differently, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with Power Shard pins plans ${facts.shardPinsPending === 1 ? 'it' : 'them'} and keeps this version as a backup. Faster machines, fewer of them. Same hunger for ore.`,
+  },
+  {
+    // Clocks the plan could not keep and planned without (#1239), never silently.
+    id: 'shard-pins-dropped',
+    on: ['factories', 'plan'],
+    tone: 'warn',
+    when: facts => (facts.shardPinsDropped?.count ?? 0) > 0,
+    text: facts =>
+      `This plan could not keep the Power Shards you pinned on ${facts.shardPinsDropped!.lines}, so it runs ${facts.shardPinsDropped!.count === 1 ? 'that line' : 'those lines'} at 100%. Profile assumptions, beside the build plan's steps (below them on a phone), says why, and the line's dialog says what to change. The shards stay in your pocket until then.`,
   },
   {
     // The ticks show more than the plan's "What you already have" settings count (#1068).

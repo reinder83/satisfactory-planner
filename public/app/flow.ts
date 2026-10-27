@@ -1021,16 +1021,20 @@ function bankNoteOf(row: CalcRow, context: CalcFlowContext): BankNote {
 // show (machineCounts: one decimal, never rounded up to 100%); Machine setup also gives it exact.
 // A whole-generator line (#1064) burns fuel for a fractional equivalent but underclocks no
 // generator, as Machine setup says (#1087 review).
+// An overclocked line (#1239) runs its machines at its `clock` rather than 100%.
 export function machineClockWords(row: CalcRow): string {
   const equivalent = rowEquivalent(row),
-    fraction = equivalent - Math.floor(equivalent + 1e-7);
+    fraction = equivalent - Math.floor(equivalent + 1e-7),
+    full = row.clock ?? 100;
   const counts = machineCounts(
     row.machines,
-    fraction > 1e-7 && !wholeGenerators(row) ? fraction * 100 : 100,
+    fraction > 1e-7 && !wholeGenerators(row) ? fraction * full : full,
+    full,
   );
-  if (!counts.clock) return row.machines > 1 ? 'all at 100%' : 'at 100%';
+  const at = `${counts.fullClock ?? '100'}%`;
+  if (!counts.clock) return row.machines > 1 ? `all at ${at}` : `at ${at}`;
   return counts.full
-    ? `${num(counts.full)} at 100% + 1 at ${counts.clock}%`
+    ? `${num(counts.full)} at ${at} + 1 at ${counts.clock}%`
     : `at ${counts.clock}%`;
 }
 

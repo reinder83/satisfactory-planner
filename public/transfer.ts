@@ -11,6 +11,7 @@ import type {
   PlanGuide,
   Recipe,
   SavedState,
+  LineClocks,
   SloopPins,
   StoredCalculatedPlan,
   StoredProfileKind,
@@ -369,33 +370,45 @@ export async function importableTransfer(
 // line's dialog), but a hand-edited file can, and then every recalculation of the profile failed
 // until the pin was cleared, which no line offers. An import drops them, from the progress and
 // from the plan's settings alike; a phase left without pins goes, and so does the plan's field,
-// while the progress keeps an empty map, which asks for no pins.
+// while the progress keeps an empty map, which asks for no pins. The same holds for the lines
+// pinned to a clock with Power Shards (`lineClocks`, #1239) on a recipe the game data does not
+// have (lineClocksSetting): an import drops those too.
 type PinnedProfile = Pick<ImportableSaveExport['saves'][number]['profiles'][number], 'state'> & {
   plan?: StoredCalculatedPlan | null;
 };
-const pinMaps = (profile: PinnedProfile): (SloopPins | undefined)[] => [
+const pinMaps = (profile: PinnedProfile): (SloopPins | LineClocks | undefined)[] => [
   profile.state.sloopPins,
   profile.plan?.settings.sloopPins,
+  profile.state.lineClocks,
+  profile.plan?.settings.lineClocks,
 ];
 const hasPins = (profile: PinnedProfile) => pinMaps(profile).some(pins => pins !== undefined);
 function dropUnknownPins(transfer: Omit<ImportableSaveExport, 'exportedAt'>, recipes: Recipe[]) {
   const pinnable = new Set(recipes.filter(recipe => amplifySlots(recipe) > 0).map(r => r.id));
-  const known = (pins: SloopPins): SloopPins =>
+  const clockable = new Set(recipes.map(recipe => recipe.id));
+  const known = (pins: SloopPins, allowed: Set<string>): SloopPins =>
     Object.fromEntries(
       Object.entries(pins)
         .map(([phase, lines]) => [
           phase,
-          Object.fromEntries(Object.entries(lines ?? {}).filter(([id]) => pinnable.has(id))),
+          Object.fromEntries(Object.entries(lines ?? {}).filter(([id]) => allowed.has(id))),
         ])
         .filter(([, lines]) => Object.keys(lines as object).length),
     );
   for (const profile of transfer.saves.flatMap(save => save.profiles) as PinnedProfile[]) {
-    if (profile.state.sloopPins) profile.state.sloopPins = known(profile.state.sloopPins);
-    const settings = profile.plan?.settings;
-    if (!settings?.sloopPins) continue;
-    const kept = known(settings.sloopPins);
-    if (Object.keys(kept).length) settings.sloopPins = kept;
-    else delete settings.sloopPins;
+    for (const [field, allowed] of [
+      ['sloopPins', pinnable],
+      ['lineClocks', clockable],
+    ] as const) {
+      const asked = profile.state[field];
+      if (asked) profile.state[field] = known(asked, allowed);
+      const settings = profile.plan?.settings;
+      const planned = settings?.[field];
+      if (!settings || !planned) continue;
+      const kept = known(planned, allowed);
+      if (Object.keys(kept).length) settings[field] = kept;
+      else delete settings[field];
+    }
   }
 }
 
