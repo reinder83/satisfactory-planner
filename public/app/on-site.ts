@@ -99,7 +99,9 @@ export const onSiteSettings = (
 // dropped again. So a row of the group's entry in the plan's settings.onSite (its shares, rates or
 // ifBuilt) that no phase of the plan has, which the group still holds, keeps its share
 // (onSiteShare: an even split of its null-rate memberships, a fixed-rate part as ifBuilt), and
-// the items of that entry the group still marks stay in the request. Neither side of the notice
+// the items of that entry the group still marks stay in the request, also for a group that holds
+// such a row only at a fixed rate and so is sent with ifBuilt alone (planner/settings.ts keeps it,
+// and onSitePlannedItems counts the line the planner then gives it). Neither side of the notice
 // counts them as a line: the planner gives the group a line only where its solve builds that row
 // again, and then the plan's rows count it as usual.
 export function onSiteWanted(
@@ -275,19 +277,53 @@ function onSiteLineItems(
 // copy of a recipe that makes a marked item only as a byproduct: by this rule the copy is no line
 // of that item on either side, so the plan loads and asks nothing for it, and the next
 // recalculation drops the copy.
+// A fixed-rate part of a row the plan being recalculated lacked (`ifBuilt`, #1038) has no share,
+// so the planner sizes a line by it only where its solve builds that row again. Where `plan` builds
+// it and the group has its own line of the item there, it counts as such a share too (builtParts),
+// so a group held only at a fixed rate whose consumer the solve dropped (#1013) is counted as the
+// plan has it and the notice does not ask right after the recalculation that brought it back.
 export function onSitePlannedItems(
   plan: OnSitePlan & Pick<StoredCalculatedPlan, 'settings'>,
 ): Record<string, string[]> {
   return Object.fromEntries(
     Object.entries(plan.settings.onSite || {})
-      .map(([group, entry]): [string, string[]] => [
-        group,
-        onSiteLineItems(plan, entry.shares || {}, (entry.items || []).filter(onSitePlannable)),
-      ])
+      .map(([group, entry]): [string, string[]] => {
+        const marks = (entry.items || []).filter(onSitePlannable);
+        const items = onSiteLineItems(plan, entry.shares || {}, marks);
+        const built = entry.ifBuilt && builtParts(plan, entry.ifBuilt);
+        if (!built) return [group, items];
+        const own = ownLineItems(plan, group);
+        const extra = onSiteLineItems(plan, built, marks).filter(item => own.has(item));
+        return [group, [...new Set([...items, ...extra])].sort()];
+      })
       .filter(([, items]) => items.length)
       .sort(([a], [b]) => a.localeCompare(b)),
   );
 }
+
+// The rows of `parts` (a group's ifBuilt) that `plan` builds in that phase with a total past the
+// fixed rates the part comes after, as shares of 1 (onSitePlannedItems), or undefined when none.
+function builtParts(plan: OnSitePlan, parts: OnSiteRates): OnSiteShares | undefined {
+  const out: OnSiteShares = {};
+  for (const [phase, rows] of Object.entries(parts) as [StageKey, Record<string, OnSiteRate>][]) {
+    const stage = plan.stages[phase]?.rows || [];
+    const kept = Object.entries(rows).filter(([rowId, part]) => {
+      const row = stage.find(candidate => candidate.id === rowId && !candidate.onSite);
+      return !!row && rowTotal(row) > part.after + LINK_DUST;
+    });
+    if (kept.length) out[phase] = Object.fromEntries(kept.map(([rowId]) => [rowId, 1]));
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+// The items `group`'s own lines (`onSite` rows) make as their primary product in any phase.
+const ownLineItems = (plan: OnSitePlan, group: string): Set<string> =>
+  new Set(
+    (Object.values(plan.stages) as { rows?: CalcRow[] }[])
+      .flatMap(stage => stage?.rows || [])
+      .filter(row => row.onSite?.group === group)
+      .flatMap(row => Object.keys(row.outputs || {}).slice(0, 1)),
+  );
 
 // `shares` with only the rows `uses` keeps: the ones that use one of the group's items somewhere
 // in the plan, and the consumers its solve dropped (onSiteWanted).

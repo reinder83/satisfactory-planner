@@ -427,10 +427,11 @@ export function siteFloors(
 // before. A phase without parts is planned once, as before #984.
 // A part of a row the plan being recalculated lacked in the phase (`ifBuilt`, #1038) counts only
 // where a plan builds the row. The solver never reads it, so the first plan sizes the group's
-// line by the row's share, as before, and a plan that leaves the row out stands as it did, with
-// no extra solve. When the first plan builds such a row and every part of `rates` holds there,
-// the parts are settled at the first plan's totals as above, and the first plan stands when no
-// settled plan was measured at its own totals.
+// line by the row's share, as before (a group with only such parts and no share, #1013, gets no
+// line there), and a plan that leaves the row out stands as it did, with no extra solve. When the
+// first plan builds such a row and every part of `rates` holds there, the parts are settled at
+// the first plan's totals as above, and the first plan stands when no settled plan was measured
+// at its own totals.
 const RATE_ROUNDS = 4;
 export function withinRates(
   config: CurrentSettings,
