@@ -375,7 +375,8 @@ test('every step carries an icon for its kind of work, or the part it makes', as
   assert.equal(kindOf('Retire the temporary power plants'), 'retire');
   assert.equal(kindOf('Deliver Phase 3'), 'delivery');
   assert.equal(kindOf('Concrete, copper'), 'build');
-  const linked = $('[data-check="phase-3-steel"]')!.nextElementSibling as HTMLElement;
+  const linked = $('[data-check="phase-3-steel"]')!.closest('.task-check')!
+    .nextElementSibling as HTMLElement;
   assert.equal(linked.dataset.kind, 'item', 'a step linked to a factory shows its part');
   assert.equal(linked.querySelector('img')!.getAttribute('src'), './icons/wire.png');
   for (const glyph of $$('#main .task-icon svg'))
