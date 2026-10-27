@@ -2,7 +2,8 @@
 // pushes and a local `npm test`, and every case with PLANNER_FULL_PROPERTIES=1: the nightly
 // workflow (.github/workflows/nightly.yml), on demand through its workflow_dispatch, or locally
 // with `PLANNER_FULL_PROPERTIES=1 node --test tests/*.test.ts` (#1274). No case is dropped: the
-// sample is a subset of the full set, and it always holds the regression cases a test names.
+// sample is a subset of the full set, and it holds the regression cases a test lists in `keep`
+// (for a test with many named seeds that can be one per kind of case; the rest run nightly).
 export const FULL_PROPERTIES = process.env.PLANNER_FULL_PROPERTIES === '1';
 
 type Sample<T> = {
