@@ -1,4 +1,4 @@
-// The CI workflow (.github/workflows/docker.yml). The containers its `test` job starts keep their
+// The CI workflow (.github/workflows/docker.yml). The containers its `docker-smoke` job starts keep their
 // data in named volumes rather than bind-mounted runner paths, which the Docker daemon of a
 // self-hosted runner resolves on its host instead of in the job, and a volume the job uses is
 // removed at its end.
@@ -27,7 +27,7 @@ test('every named volume the job uses is removed when it ends (#399)', () => {
     assert.ok(cleanup.includes(`docker volume rm ${volume}`), volume + ' is removed');
 });
 
-// The `test` job's vitest run may be on the NAS runner, whose CPU is several times slower than a
+// The `ui-tests` job's vitest run may be on the NAS runner, whose CPU is several times slower than a
 // desktop's: a test that renders many pages crossed vitest's default 5 s there (#400).
 test('vitest gives each test at least 20 s, for the NAS runner (#400)', () => {
   const config = fs.readFileSync('vite.config.ts', 'utf8');
