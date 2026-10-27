@@ -16,7 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  # The test suites run as parallel jobs (#1274); `test` below gathers them into the one check
+  # that the repository ruleset requires and that the publish jobs wait for. `npm test` still
+  # runs the Node and the Vitest suites one after the other for a local run.
+  check:
+    name: Format and types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -27,12 +31,55 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run typecheck
-      - run: npm test
+
+  node-tests:
+    name: Node tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/*.test.ts
+
+  ui-tests:
+    name: Vitest UI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run
+
+  browser-edition:
+    name: Browser edition and save transfers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
       - name: Test browser edition and save transfers
         run: |
           npm run build
           npx playwright install --with-deps chromium
           node browser-check.ts
+
+  docker-smoke:
+    name: Docker smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
       - name: Build and smoke-test the Docker container
         run: |
           docker build -t planner-smoke .
@@ -97,6 +144,24 @@ jobs:
           docker volume rm planner-smoke-data || true
           docker volume rm planner-nas-data || true
           docker rmi planner-smoke || true
+
+  # The one check the repository ruleset requires (named `test`) and the publish jobs wait for.
+  # `always()` runs it when a job above failed or was cancelled; a skipped required check would
+  # count as passed, so it fails itself unless every job succeeded.
+  test:
+    name: test
+    if: always()
+    needs: [check, node-tests, ui-tests, browser-edition, docker-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every test job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            test "$result" = success || exit 1
+          done
 
   publish-pages:
     needs: test
