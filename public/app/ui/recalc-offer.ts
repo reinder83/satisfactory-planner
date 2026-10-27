@@ -16,7 +16,12 @@
 // another tab or on another device is refused (409, the plan the offer was made on is named):
 // nothing changes, and the tab opens the plan the profile has now.
 import { allowSwitch, toast, writeQueue } from '../api.ts';
-import { builtCount, openBuiltLines, withBuiltLines } from '../built-capacity.ts';
+import {
+  builtCount,
+  catalogRecipeBook,
+  openBuiltLines,
+  withBuiltLines,
+} from '../built-capacity.ts';
 import { isBusy, whileBusy } from '../busy.ts';
 import { exactClocksSettings, wantedExactClocks } from '../exact-clocks.ts';
 import { plural } from '../format.ts';
@@ -95,8 +100,13 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     settings = withBuiltLines(
       exactClocksSettings(
         lineClocksSettings(
-          sloopPinsSettings(offer.settings as StoredSettings, wantedPins(calculated, state)),
+          sloopPinsSettings(
+            offer.settings as StoredSettings,
+            wantedPins(calculated, state),
+            catalogRecipeBook(),
+          ),
           wantedClocks(calculated, state),
+          catalogRecipeBook(),
         ),
         wantedExactClocks(calculated, state),
       ),

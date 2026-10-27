@@ -17,6 +17,7 @@ import {
   powerShardWords,
 } from '../shards.ts';
 import { localeNumber } from '../wording.ts';
+import { knownPins, staleNames, staleNotice, type RecipeBook } from '../state.ts';
 import type {
   CalcRow,
   LineClockDrop,
@@ -113,13 +114,21 @@ function clockLineName(
   return named(phase) ?? CLOCK_PHASES.map(named).find(Boolean) ?? recipe;
 }
 // What a recalculation would change: every line whose clock asked for differs from the one the
-// plan was calculated with, in phase order. null when nothing would change.
+// plan was calculated with, in phase order. null when nothing would change. With `book` (the
+// catalog's, #1271), a pin on a recipe the game data no longer has is no change: every
+// recalculation leaves it out (lineClocksSettings), so `wanted` is without it and `stale` says
+// so ("A recalculation drops the Power Shard pin on …"), or is '' without such pins.
 export function lineClocksChange(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   progress: Pick<ProgressState, 'lineClocks'>,
-): { wanted: LineClocks; lines: ClockChange[] } | null {
+  book?: RecipeBook,
+): { wanted: LineClocks; lines: ClockChange[]; stale: string } | null {
   if (!progress.lineClocks) return null;
-  const wanted = progress.lineClocks,
+  const known = book
+      ? knownPins(progress.lineClocks, book, 'lineClocks')
+      : { kept: progress.lineClocks, stale: [] },
+    wanted = known.kept,
+    gone = new Set(known.stale.map(([phase, recipe]) => phase + '/' + recipe)),
     planned = plannedClocks(plan);
   const lines: ClockChange[] = [];
   for (const phase of CLOCK_PHASES) {
@@ -128,19 +137,29 @@ export function lineClocksChange(
       ...Object.keys(wanted[phase] ?? {}),
     ]);
     for (const recipe of [...recipes].sort()) {
+      if (gone.has(phase + '/' + recipe)) continue;
       const before = pinnedClockOf(planned, phase, recipe),
         after = pinnedClockOf(wanted, phase, recipe);
       if (before !== after)
         lines.push({ phase, recipe, name: clockLineName(plan, phase, recipe), before, after });
     }
   }
-  return lines.length ? { wanted, lines } : null;
+  const stale = known.stale.length
+    ? staleNotice('lineClocks', staleNames(known.stale, book!, plan))
+    : '';
+  return lines.length ? { wanted, lines, stale } : null;
 }
 // The settings a recalculation with the clocks asked for starts from: the plan's, with `lineClocks`
-// set to them, or without the field when none is asked for.
-export function lineClocksSettings(settings: StoredSettings, wanted: LineClocks): StoredSettings {
+// set to them, or without the field when none is asked for. With `book` (the catalog's, which every
+// page passes, #1271), the pins on a recipe the game data no longer has are left out, since the
+// planner refuses them; the notice and the new plan's warning name them (stale-pins.ts).
+export function lineClocksSettings(
+  settings: StoredSettings,
+  wanted: LineClocks,
+  book?: RecipeBook,
+): StoredSettings {
   const out: StoredSettings = { ...settings };
-  const clean = normalClocks(wanted);
+  const clean = normalClocks(book ? knownPins(wanted, book, 'lineClocks').kept : wanted);
   if (Object.keys(clean).length) out.lineClocks = clean;
   else delete out.lineClocks;
   return out;

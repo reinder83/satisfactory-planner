@@ -47,6 +47,7 @@ import { FLUIDS } from './flow.ts';
 import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { droppedPinNames, sloopPinsChange } from './sloop-pins.ts';
 import { droppedClockNames, lineClocksChange } from './shard-pins.ts';
+import { catalogRecipeBook } from './built-capacity.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort, rankedPhases } from './payoff.ts';
 import { fastestProfiles } from './profile-compare.ts';
@@ -347,7 +348,7 @@ function ownedTicksFacts(): Pick<AdaFacts, 'ownedTicks'> {
 // (sloopPinsChange), and the lines whose pins the plan could not keep (droppedPinNames).
 function sloopPinFacts(): Pick<AdaFacts, 'sloopPinsPending' | 'sloopPinsDropped'> {
   if (!calculated) return {};
-  const change = sloopPinsChange(calculated, state);
+  const change = sloopPinsChange(calculated, state, catalogRecipeBook());
   const dropped = droppedPinNames(calculated);
   return {
     ...(change ? { sloopPinsPending: change.lines.length } : {}),
@@ -360,7 +361,7 @@ function sloopPinFacts(): Pick<AdaFacts, 'sloopPinsPending' | 'sloopPinsDropped'
 // change (lineClocksChange), and the lines whose clocks the plan could not keep (droppedClockNames).
 function shardPinFacts(): Pick<AdaFacts, 'shardPinsPending' | 'shardPinsDropped'> {
   if (!calculated) return {};
-  const change = lineClocksChange(calculated, state);
+  const change = lineClocksChange(calculated, state, catalogRecipeBook());
   const dropped = droppedClockNames(calculated);
   return {
     ...(change ? { shardPinsPending: change.lines.length } : {}),

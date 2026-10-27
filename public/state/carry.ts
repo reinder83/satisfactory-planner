@@ -14,6 +14,7 @@ import type {
   StoredProfileKind,
   ProgressState,
   SavedState,
+  SloopPins,
   StageKey,
   StoredCalculatedPlan,
   StoredProfile,
@@ -29,6 +30,7 @@ import {
 } from './built-match.ts';
 import { defaultFactoryGroups } from './factory-groups.ts';
 import { renameOfferFields, withoutRenameOffer } from './rename-offer.ts';
+import { knownPins, stalePinWarnings } from './stale-pins.ts';
 import {
   type RowsPlan,
   fail,
@@ -796,16 +798,27 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
     started.profile.plan,
   );
   if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
-  keepAsked(state, previous.state, started.profile.plan);
+  keepAsked(state, previous.state, started.profile.plan, book);
   // The steps kept above keep who ticked them too (#1206), and the version follows.
   carryTickers(state, previous.state);
   state.revision = (previous.state.revision ?? 0) + 1;
+  // The pins the recalculation left out because the game data no longer takes them (#1271) are
+  // never dropped silently: the new plan says so until a recalculation replaces it. A copy, so a
+  // plan Review showed (reviewedReplacement) is not changed.
+  const stale = stalePinWarnings(previous, book);
+  const warned = stale.length
+    ? {
+        ...started.profile.plan,
+        warnings: [...((started.profile.plan as { warnings?: string[] }).warnings ?? []), ...stale],
+      }
+    : started.profile.plan;
   return {
     // A profile that is itself a kept version keeps its link (restore.ts): it stays the version
     // kept for that profile, now recalculated. A dismissed "Rename to …" offer stays dismissed
     // (rename-offer.ts); the backup, which gets a name of its own, leaves it behind.
     profile: {
       ...started.profile,
+      plan: warned,
       state: validateState(state),
       ...(previous.backupOf === undefined ? {} : { backupOf: previous.backupOf }),
       ...renameOfferFields(previous),
@@ -832,6 +845,9 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
 // or "... with somersloop pins" or "... with Power Shard pins" again rather than dropping it. An empty choice stays too: it asks
 // for none, which differs from a plan calculated with some. Compared as the planner stores them:
 // each phase's ids (exact clocks) or ids and values (pins, line clocks) sorted, no empty phase.
+// With `book` (both editions pass the catalog's), a pin on a recipe the game data no longer takes
+// is left out first (knownPins, #1271): every recalculation leaves it out of the plan's settings,
+// so it is not asked for any more, and a state left asking for just the plan's pins needs none.
 const ASKED_PHASES = ['1', '2', '3', '4', '5'] as StageKey[];
 const askedKey = (
   asked: Partial<Record<StageKey, string[] | Record<string, number>>> | undefined,
@@ -846,9 +862,12 @@ function keepAsked(
   state: ProgressState,
   source: Pick<SavedState, 'exactClocks' | 'sloopPins' | 'lineClocks'>,
   plan: Pick<StoredCalculatedPlan, 'settings'>,
+  book: RecipeBook | undefined,
 ): void {
   for (const field of ['exactClocks', 'sloopPins', 'lineClocks'] as const) {
-    const asked = source[field];
+    const raw = source[field];
+    const asked =
+      book && raw && field !== 'exactClocks' ? knownPins(raw as SloopPins, book, field).kept : raw;
     if (asked && askedKey(asked) !== askedKey(plan.settings?.[field]))
       (state as Pick<SavedState, typeof field>)[field] = structuredClone(asked) as never;
   }

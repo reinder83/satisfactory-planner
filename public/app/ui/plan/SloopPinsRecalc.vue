@@ -4,7 +4,7 @@
   open plan was calculated with (sloopPinsChange in app/sloop-pins.ts, #1235). The plan is never
   recalculated by itself (AGENTS.md): the notice names the lines that would change, and the phases
   whose pins add up to more than the amplification budget, which a recalculation would plan
-  without them. "Recalculate in place with somersloop pins" recalculates this profile in place with
+  without them, and the pins the planner no longer takes, which a recalculation drops (#1271). "Recalculate in place with somersloop pins" recalculates this profile in place with
   settings.sloopPins set to the pins asked for, after a confirmation that names the backup kept of
   the current version (recalculateOffer in ui/recalc-offer.ts, #1071), as ExactClocksRecalc.vue.
 -->
@@ -17,6 +17,7 @@ import {
   sloopPinsSettings,
 } from '../../sloop-pins.ts';
 import { calculated, state } from '../../session.ts';
+import { catalogRecipeBook } from '../../built-capacity.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { listNames, localeNumber } from '../../../wording.ts';
 import { legacy } from '../bridge.ts';
@@ -26,13 +27,14 @@ const LABEL = 'Recalculate in place with somersloop pins';
 
 const change = computed(() =>
   legacy(() => {
-    const found = calculated ? sloopPinsChange(calculated, state) : null;
+    const found = calculated ? sloopPinsChange(calculated, state, catalogRecipeBook()) : null;
     if (!calculated || !found) return null;
     const over = pinsOverBudget(calculated, found.wanted);
     const budget = calculated.settings.amplifySloops ?? 0;
     return {
       wanted: found.wanted,
       lines: pinChangeWords(found.lines),
+      stale: found.stale,
       over: over.length
         ? `The pins of ${over.length > 1 ? 'Phases' : 'Phase'} ${listNames(over.map(([phase, total]) => `${phase} (${localeNumber(total)})`))} add up to more than the ${localeNumber(budget)} somersloop${budget === 1 ? '' : 's'} production amplification may place in a phase, so a recalculation would plan ${over.length > 1 ? 'those phases' : 'that phase'} without them: raise the amplification budget on step 2 of Edit settings, or lower the pins.`
         : '',
@@ -46,7 +48,7 @@ function recalculate(event: Event) {
   const wanted = change.value?.wanted;
   if (!calculated || !wanted) return;
   void recalculateOffer(event.currentTarget as HTMLButtonElement, {
-    settings: sloopPinsSettings(calculated.settings, wanted),
+    settings: sloopPinsSettings(calculated.settings, wanted, catalogRecipeBook()),
     change: 'with the somersloop pins you chose',
     label: LABEL,
   });
@@ -61,6 +63,7 @@ function recalculate(event: Event) {
       Nothing changes until you start it.
     </p>
     <p v-if="change.over" data-sloop-pins-over>{{ change.over }}</p>
+    <p v-if="change.stale" data-sloop-pins-stale>{{ change.stale }}</p>
     <p>
       <button class="btn primary" data-recalc-sloop-pins @click="recalculate">{{ LABEL }}</button>
       {{ IN_PLACE_NOTE
