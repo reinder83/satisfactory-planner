@@ -105,7 +105,7 @@ function vueHits(code: string): string[] {
     for (const child of node.children ?? [])
       if (typeof child === 'object') visit(child as TemplateNode);
   };
-  if (descriptor.template) visit(descriptor.template.ast as unknown as TemplateNode);
+  if (descriptor.template?.ast) visit(descriptor.template.ast);
   return hits;
 }
 
