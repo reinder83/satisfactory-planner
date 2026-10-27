@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { calculate } from '../planner.ts';
 import { driveless, huntedAlternates } from './helpers/drive-cap.ts';
+import { propertyCases } from './helpers/properties.ts';
 import type { StoredCalculatedPlan } from '../public/types/index.ts';
 
 const amplified = (
@@ -63,19 +64,24 @@ const SETTINGS: [string, object][] = [
   ['amplified (fixture), every alternate', { ...amplified, recipes: 'all' }],
 ];
 
+// Every setting, each with five caps with PLANNER_FULL_PROPERTIES=1 (nightly, #1274), otherwise
+// three (propertyCases in tests/helpers/properties.ts): the count the plan counts on, the edge of
+// the first property, and 0 and 2, both picked by the cap's search. The full set adds that count
+// plus 3 and half of it, the slowest search (some 7 of a setting's 15 seconds).
 for (const [label, base] of SETTINGS)
   test(`the cap on hard drives keeps the plan true: ${label}`, () => {
     const free = calculate(base);
     const hunted = huntedAlternates(free).size;
     assert.ok(hunted > 0, 'the plan counts on some hard-drive alternates');
     // At or above what the plan counts on: the plan without the cap, byte for byte.
-    for (const driveCap of [hunted, hunted + 3]) {
+    for (const driveCap of propertyCases([hunted, hunted + 3], { keep: [hunted] })) {
       const plan = calculate({ ...base, driveCap });
       assert.equal(plan.settings.driveCap, driveCap);
       assert.equal(driveless(plan), driveless(free), `cap ${driveCap}`);
     }
     // Below it: at most the cap, over the whole plan, and the set stays inside the planner.
-    for (const driveCap of [0, 2, Math.floor(hunted / 2)].filter(cap => cap < hunted)) {
+    const below = propertyCases([0, 2, Math.floor(hunted / 2)], { keep: [0, 2] });
+    for (const driveCap of below.filter(cap => cap < hunted)) {
       const plan = calculate({ ...base, driveCap });
       const used = huntedAlternates(plan);
       assert.ok(used.size <= driveCap, `cap ${driveCap}: ${[...used].join(', ')}`);

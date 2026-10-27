@@ -30,6 +30,7 @@ import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
+import { propertyCount } from './helpers/properties.ts';
 import { states, version22, version23, version24 } from './types/fixtures.ts';
 import type {
   ProgressState,
@@ -200,12 +201,16 @@ test('a pin the phase cannot keep is reported with why, and the phase planned wi
 // Property check: pinning lines to what the planner itself chose (a feasible pin by construction)
 // keeps them exactly, over phases, budgets, recipe access and whole or precise machines, and a pin
 // of 0 on another line takes its somersloops off. Random pins that the phase keeps hold exactly.
+// 12 rounds with PLANNER_FULL_PROPERTIES=1 (nightly, #1274), otherwise the first 6 (propertyCount
+// in tests/helpers/properties.ts), which draw from the sequence as they always did (every round
+// keeps its random pins today).
 test('a feasible pin is always kept exactly (property check over many settings)', () => {
   let seed = 1235;
   const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   const pick = <T>(list: T[]) => list[Math.floor(random() * list.length)]!;
   let kept = 0;
-  for (let round = 0; round < 12; round++) {
+  const rounds = propertyCount(12, 6);
+  for (let round = 0; round < rounds; round++) {
     const config = {
       ...BASE,
       recipes: pick(['standard', 'all'] as const),
@@ -250,7 +255,7 @@ test('a feasible pin is always kept exactly (property check over many settings)'
         assert.equal(drop.reason, 'fit');
       }
   }
-  assert.ok(kept >= 6, `most random pins are kept (${kept} of 12)`);
+  assert.ok(kept >= propertyCount(6, 3), `most random pins are kept (${kept} of ${rounds})`);
 });
 
 test('a pin counts built amplified machines; a pin of 0 counts them as plain capacity', () => {

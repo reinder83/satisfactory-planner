@@ -39,11 +39,18 @@ docker compose -f compose.yaml -f compose.local.yaml up -d --build
 
 Tests cover migration, durable progress, concurrent updates, backup restore, corrupted saves, save/profile isolation, account ownership, authentication, calculator constraints and interface rendering.
 
+The heavy property and sweep tests check a deterministic sample of their cases on pull requests, pushes and a local `npm test`, always including the regression cases each test names, and every case with `PLANNER_FULL_PROPERTIES=1` (#1274; the switch and its rules are in `tests/helpers/properties.ts` and AGENTS.md). To run the full set locally:
+
+```sh
+PLANNER_FULL_PROPERTIES=1 node --test tests/*.test.ts
+PLANNER_FULL_PROPERTIES=1 node --test tests/on-site-twins.test.ts   # one file
+```
+
 `node browser-check.ts` exercises the browser calculator, persistence, profile isolation, concurrent tabs and Docker transfers; run `npx playwright install chromium` once first (`npm ci` installs Playwright itself).
 
 ## CI and publishing
 
-The workflow in [.github/workflows/docker.yml](../.github/workflows/docker.yml) runs its checks as parallel jobs (format and types, the Node tests, the Vitest UI tests, the browser edition and save transfers, and the Docker smoke tests) on pushes to `main`, `v*` tags and pull requests; a final job named `test` gathers them, and it is the check the repository requires and the publish jobs wait for. A new test job must be added to its `needs:`. GitHub Actions additionally builds and restarts a real Docker container before publishing. Source-side pull requests run checks without deploying.
+The workflow in [.github/workflows/docker.yml](../.github/workflows/docker.yml) runs its checks as parallel jobs (format and types, the Node tests in two shards, the Vitest UI tests, the browser edition and save transfers, and the Docker smoke tests) on pushes to `main`, `v*` tags and pull requests; a final job named `test` gathers them, and it is the check the repository requires and the publish jobs wait for. A new test job must be added to its `needs:`; `tests/ci.test.ts` checks that. The scheduled workflow [.github/workflows/nightly.yml](../.github/workflows/nightly.yml) runs the whole Node suite with `PLANNER_FULL_PROPERTIES=1` at 03:23 UTC each night, and on demand from the Actions tab (Nightly full property checks, Run workflow). It is not a required check and publishes nothing. GitHub Actions additionally builds and restarts a real Docker container before publishing. Source-side pull requests run checks without deploying.
 
 - **Docker image.** Pushes to `main` publish `latest` and a commit tag to `ghcr.io/reinder83/satisfactory-planner`, for AMD64 and ARM64; `v*` tags publish version tags. No additional registry secrets are required.
 - **GitHub Pages.** Pushes to `main` push only the built website to the public `reinder83.github.io` deployment repository. Its Pages workflow publishes the site. `PAGES_DEPLOY_KEY` is a write deploy key limited to that public repository. Saved user data is never included in the static build.

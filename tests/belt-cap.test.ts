@@ -33,6 +33,7 @@ import { openBrowserStore } from '../public/browser-store.ts';
 import { settingsChanges } from '../public/app/profile-edit.ts';
 import { draftAdvice } from '../public/app/draft-advice.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
+import { propertyCases } from './helpers/properties.ts';
 import { browserProfile, dockerProfile, newSaveRequest } from './helpers/editions.ts';
 import type {
   CurrentCalculatedPlan,
@@ -179,11 +180,14 @@ const SETTINGS: object[] = [
 ];
 const budgetsOf = (stage: StoredStage) => stage.mining?.budgets ?? {};
 
+// Every setting, each with all four caps with PLANNER_FULL_PROPERTIES=1 (nightly, #1274),
+// otherwise two (propertyCases in tests/helpers/properties.ts): Mk.2 and Mk.4 belts on the first,
+// third, ... setting, Mk.3 and Mk.5 on the others, so the sample still tries every cap.
 test('property: no phase plans above the cap, and what the cap does not lower stays as it was', () => {
-  for (const base of SETTINGS) {
+  for (const [index, base] of SETTINGS.entries()) {
     const plain = calculate(base);
     const config = settings(base);
-    for (const beltCap of BELT_CAP_MARKS) {
+    for (const beltCap of propertyCases(BELT_CAP_MARKS, { every: 2, offset: index % 2 })) {
       const label = JSON.stringify({ ...base, beltCap });
       const plan = calculate({ ...base, beltCap });
       const most = beltCapMark(beltCap)!;
