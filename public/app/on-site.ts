@@ -78,26 +78,55 @@ type OnSiteGroupsInput =
 // are left out: they belong wholly to their group. A marked item the planner cannot make on site
 // (a raw resource such as Water, onSitePlannable) is left out, so the request is always one the
 // planner accepts. Returns undefined when no group has an item, so the setting stays absent.
-export function onSiteSettings(
+// A consumer the plan's own solve dropped keeps its group's request (#1013, onSiteWanted).
+export const onSiteSettings = (
   plan: OnSitePlan,
   groups: OnSiteGroupsInput,
-): OnSiteSettings | undefined {
+): OnSiteSettings | undefined => onSiteWanted(plan, groups).settings;
+
+// What a recalculation with the factory groups as they are now asks for: `settings`, the request
+// (onSiteSettings), and `lines`, the items of the group lines it gives, as sorted lists by group
+// id (onSiteLineItems), which the notice compares with the lines the plan has
+// (onSitePlannedItems) and words as "Now: …".
+//
+// The two differ only where the plan's own solve dropped a consumer (#1013). A group's lines made
+// on site can make the solve leave out the very row they were for (Gamma holds the Pure Aluminum
+// Ingot line and marks Aluminum Scrap and Alumina Solution; while another group makes Aluminum
+// Ingot on site, the solve with Gamma's lines builds no Pure Aluminum Ingot row). Then no row of
+// the plan uses the item for the group, and the plan's rows no longer even list that row's
+// inputs. Worked out from those rows alone, the request left the group's items out, the next
+// solve brought the row back, and the notice asked at once for lines the recalculation after it
+// dropped again. So a row of the group's entry in the plan's settings.onSite (its shares, rates or
+// ifBuilt) that no phase of the plan has, which the group still holds, keeps its share
+// (onSiteShare: an even split of its null-rate memberships, a fixed-rate part as ifBuilt), and
+// the items of that entry the group still marks stay in the request. Neither side of the notice
+// counts them as a line: the planner gives the group a line only where its solve builds that row
+// again, and then the plan's rows count it as usual.
+export function onSiteWanted(
+  plan: OnSitePlan,
+  groups: OnSiteGroupsInput,
+): { settings: OnSiteSettings | undefined; lines: Record<string, string[]> } {
   const names = new Map((groups?.groups || []).map(group => [group.id, group.name]));
   const marking = Object.entries(groups?.local || {})
     .map(([group, items]): [string, string[]] => [group, items.filter(onSitePlannable)])
     .filter(([group, items]) => names.has(group) && items.length);
-  if (!marking.length) return undefined;
+  if (!marking.length) return { settings: undefined, lines: {} };
   const stages = Object.entries(plan.stages) as OnSiteStages;
   const inputsOf = onSiteRowInputs(stages);
-  const out: OnSiteSettings = {};
+  const out: OnSiteSettings = {},
+    lines: [string, string[]][] = [];
   for (const [group, marks] of marking) {
-    const consumers = onSiteGroupShares(stages, groups, names, group, marks, inputsOf);
-    const items = onSiteLineItems(plan, consumers.shares, marks);
-    const shares = sharesUsing(consumers.shares, items, inputsOf);
-    const rates = partsUsing(consumers.rates, items, inputsOf),
-      ifBuilt = partsUsing(consumers.ifBuilt, items, inputsOf);
+    const dropped = droppedConsumers(plan, groups, group, marks, inputsOf);
+    const consumers = onSiteGroupShares(stages, groups, names, group, marks, inputsOf, dropped);
+    const lined = onSiteLineItems(plan, consumers.shares, marks);
+    const items = dropped.items.length ? [...new Set([...lined, ...dropped.items])].sort() : lined;
+    const uses = (rowId: string) =>
+      dropped.rows.has(rowId) || items.some(item => inputsOf.get(rowId)?.has(item));
+    const shares = sharesUsing(consumers.shares, uses);
+    const rates = partsUsing(consumers.rates, uses),
+      ifBuilt = partsUsing(consumers.ifBuilt, uses);
     // names holds every marking group (the filter above).
-    if (items.length && Object.keys(shares).length)
+    if (items.length && (Object.keys(shares).length || (dropped.rows.size && ifBuilt))) {
       out[group] = {
         name: names.get(group)!,
         items,
@@ -105,12 +134,44 @@ export function onSiteSettings(
         ...(rates ? { rates } : {}),
         ...(ifBuilt ? { ifBuilt } : {}),
       };
+      if (lined.length) lines.push([group, lined]);
+    }
   }
-  return Object.keys(out).length ? out : undefined;
+  return {
+    settings: Object.keys(out).length ? out : undefined,
+    lines: Object.fromEntries(lines.sort(([a], [b]) => a.localeCompare(b))),
+  };
+}
+
+// The consumers the plan's own solve dropped for `group` (#1013, onSiteWanted): `rows`, the rows
+// of its entry in the plan's settings.onSite (shares, rates or ifBuilt, in any phase) that no
+// phase of the plan has and the group still holds, and `items`, the items of that entry among
+// `marks` (the ones it marks now that the planner can make on site); none of either when there
+// is no such row or item. onSiteSettings lists only rows that the plan it worked from had in some
+// phase, so the recalculation that made this plan left such a row out.
+function droppedConsumers(
+  plan: OnSitePlan,
+  groups: OnSiteGroupsInput,
+  group: string,
+  marks: readonly string[],
+  inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
+): { rows: Set<string>; items: string[] } {
+  const entry = plan.settings?.onSite?.[group];
+  const items = (entry?.items || []).filter(item => marks.includes(item));
+  const held = (rowId: string) =>
+    (groups?.assignments?.[rowId] || []).some(membership => membership.group === group);
+  const rows = new Set(
+    [entry?.shares, entry?.rates, entry?.ifBuilt]
+      .flatMap(parts => Object.values(parts || {}))
+      .flatMap(phase => Object.keys(phase || {}))
+      .filter(rowId => !inputsOf.has(rowId) && held(rowId)),
+  );
+  return rows.size && items.length ? { rows, items } : { rows: new Set(), items: [] };
 }
 
 // Per phase, `group`'s share of each row of its memberships that uses one of `marks` somewhere in
-// the plan, other than its own lines made on site (onSiteShare), and of each such row with a
+// the plan, or that the plan's solve dropped (`dropped`, #1013), other than its own lines made on
+// site (onSiteShare), and of each such row with a
 // fixed-rate membership, the group's part as it follows the row's total (rowParts): in `rates`
 // where `plan` has the row in that phase (#984), in `ifBuilt` where it lacks it (#1038).
 function onSiteGroupShares(
@@ -120,6 +181,7 @@ function onSiteGroupShares(
   group: string,
   marks: readonly string[],
   inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
+  dropped: { rows: ReadonlySet<string> },
 ): { shares: OnSiteShares; rates: OnSiteRates; ifBuilt: OnSiteRates } {
   const shares: OnSiteShares = {},
     rates: OnSiteRates = {},
@@ -132,7 +194,7 @@ function onSiteGroupShares(
     for (const [rowId, list] of Object.entries(groups?.assignments || {})) {
       const memberships = list.filter(membership => names.has(membership.group));
       if (!memberships.some(membership => membership.group === group)) continue;
-      if (!marks.some(item => inputsOf.get(rowId)?.has(item))) continue;
+      if (!dropped.rows.has(rowId) && !marks.some(item => inputsOf.get(rowId)?.has(item))) continue;
       const row = stage.rows?.find(candidate => candidate.id === rowId);
       if (row?.onSite) continue;
       const share = onSiteShare(group, memberships, row);
@@ -151,20 +213,14 @@ function onSiteGroupShares(
   return { shares, rates, ifBuilt };
 }
 
-// The parts in `parts` (`rates` or `ifBuilt`) of the rows that use one of `items` somewhere in
-// the plan (as sharesUsing keeps them), or undefined when none is left, so a group without a
+// The parts in `parts` (`rates` or `ifBuilt`) of the rows `uses` keeps (as sharesUsing keeps
+// them), or undefined when none is left, so a group without a
 // fixed-rate membership stores what it stored before #984, and one without such a membership of a
 // row `plan` lacks in a phase what it stored before #1038.
-function partsUsing(
-  parts: OnSiteRates,
-  items: readonly string[],
-  inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
-): OnSiteRates | undefined {
+function partsUsing(parts: OnSiteRates, uses: (rowId: string) => boolean): OnSiteRates | undefined {
   const out: OnSiteRates = {};
   for (const [phase, rows] of Object.entries(parts) as [StageKey, Record<string, OnSiteRate>][]) {
-    const kept = Object.entries(rows).filter(([rowId]) =>
-      items.some(item => inputsOf.get(rowId)?.has(item)),
-    );
+    const kept = Object.entries(rows).filter(([rowId]) => uses(rowId));
     if (kept.length) out[phase] = Object.fromEntries(kept);
   }
   return Object.keys(out).length ? out : undefined;
@@ -233,17 +289,12 @@ export function onSitePlannedItems(
   );
 }
 
-// `shares` with only the rows that use one of `items` somewhere in the plan.
-function sharesUsing(
-  shares: OnSiteShares,
-  items: readonly string[],
-  inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
-): OnSiteShares {
+// `shares` with only the rows `uses` keeps: the ones that use one of the group's items somewhere
+// in the plan, and the consumers its solve dropped (onSiteWanted).
+function sharesUsing(shares: OnSiteShares, uses: (rowId: string) => boolean): OnSiteShares {
   const out: OnSiteShares = {};
   for (const [phase, rows] of Object.entries(shares) as [StageKey, Record<string, number>][]) {
-    const kept = Object.entries(rows).filter(([rowId]) =>
-      items.some(item => inputsOf.get(rowId)?.has(item)),
-    );
+    const kept = Object.entries(rows).filter(([rowId]) => uses(rowId));
     if (kept.length) out[phase] = Object.fromEntries(kept);
   }
   return out;
