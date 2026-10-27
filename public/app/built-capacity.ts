@@ -13,10 +13,11 @@ import { calculated, currentProfile, currentSave, state, workspace } from './ses
 import { listNames } from '../wording.ts';
 import type { BuiltLines, ContextReply, ProgressState } from '../types/index.ts';
 
-// The catalog's recipes, which name the lines a source plan no longer has (built-match.ts);
-// worked out again only when the workspace brings another catalog.
+// The catalog's recipes, which name the lines a source plan no longer has (built-match.ts) and tell
+// the pins on a recipe the game data no longer has (stale-pins.ts, #1271); worked out again only
+// when the workspace brings another catalog.
 let builtBookOf: { catalog: unknown; book: RecipeBook } | undefined;
-function builtLinesBook(): RecipeBook {
+export function catalogRecipeBook(): RecipeBook {
   const catalog = workspace?.catalog;
   if (builtBookOf?.catalog !== catalog) builtBookOf = { catalog, book: recipeBook(catalog) };
   return builtBookOf.book;
@@ -30,7 +31,7 @@ export function withBuiltLines<T extends object>(settings: T, lines: BuiltLines 
 
 // The lines that stand in the open profile (its plan and progress), for the plan's offers.
 export const openBuiltLines = (): BuiltLines | undefined =>
-  calculated ? builtLinesOf(state || { checks: {} }, calculated, builtLinesBook()) : undefined;
+  calculated ? builtLinesOf(state || { checks: {} }, calculated, catalogRecipeBook()) : undefined;
 
 // The lines that stand in profile `profileId` of save `saveId`, when a recalculation carries its
 // progress on production lines (`carry.factories`, on unless unticked): none without a source,
@@ -49,7 +50,7 @@ export async function sourceBuiltLines(
   });
   if (!context.plan) return undefined;
   const progress: Pick<ProgressState, 'checks' | 'builtMachines'> = context.state || { checks: {} };
-  return builtLinesOf(progress, context.plan, builtLinesBook());
+  return builtLinesOf(progress, context.plan, catalogRecipeBook());
 }
 
 // How many lines stand, and in which phases.

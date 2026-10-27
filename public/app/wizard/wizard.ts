@@ -21,7 +21,7 @@ import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { beginnerMode, beginnerStock } from '../beginner.ts';
 import { expertMode } from '../expert.ts';
-import { sourceBuiltLines, withBuiltLines } from '../built-capacity.ts';
+import { catalogRecipeBook, sourceBuiltLines, withBuiltLines } from '../built-capacity.ts';
 import { announce } from '../announce.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
@@ -218,8 +218,10 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
       sloopPinsSettings(
         withBuiltLines(structuredClone(context.plan.settings), undefined),
         wantedPins(context.plan, context.state ?? {}),
+        catalogRecipeBook(),
       ),
       wantedClocks(context.plan, context.state ?? {}),
+      catalogRecipeBook(),
     ),
     wantedExactClocks(context.plan, context.state ?? {}),
   );

@@ -16,6 +16,7 @@ import {
   SLOOP_PIN_MAX,
 } from '../somersloops.ts';
 import { localeNumber } from '../wording.ts';
+import { knownPins, staleNames, staleNotice, type RecipeBook } from '../state.ts';
 import type {
   CalcRow,
   ProgressState,
@@ -118,13 +119,21 @@ function pinLineName(
   return named(phase) ?? PIN_PHASES.map(named).find(Boolean) ?? recipe;
 }
 // What a recalculation would change (#1235): every line whose pin asked for differs from the one
-// the plan was calculated with, in phase order. null when nothing would change.
+// the plan was calculated with, in phase order. null when nothing would change. With `book` (the
+// catalog's, #1271), a pin on a recipe the game data no longer has, or whose machine can no longer
+// take somersloops, is no change: every recalculation leaves it out (sloopPinsSettings), so
+// `wanted` is without it and `stale` says so, or is '' without such pins.
 export function sloopPinsChange(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   progress: Pick<ProgressState, 'sloopPins'>,
-): { wanted: SloopPins; lines: PinChange[] } | null {
+  book?: RecipeBook,
+): { wanted: SloopPins; lines: PinChange[]; stale: string } | null {
   if (!progress.sloopPins) return null;
-  const wanted = progress.sloopPins,
+  const known = book
+      ? knownPins(progress.sloopPins, book, 'sloopPins')
+      : { kept: progress.sloopPins, stale: [] },
+    wanted = known.kept,
+    gone = new Set(known.stale.map(([phase, recipe]) => phase + '/' + recipe)),
     planned = plannedPins(plan);
   const lines: PinChange[] = [];
   for (const phase of PIN_PHASES) {
@@ -133,19 +142,29 @@ export function sloopPinsChange(
       ...Object.keys(wanted[phase] ?? {}),
     ]);
     for (const recipe of [...recipes].sort()) {
+      if (gone.has(phase + '/' + recipe)) continue;
       const before = pinOf(planned, phase, recipe),
         after = pinOf(wanted, phase, recipe);
       if (before !== after)
         lines.push({ phase, recipe, name: pinLineName(plan, phase, recipe), before, after });
     }
   }
-  return lines.length ? { wanted, lines } : null;
+  const stale = known.stale.length
+    ? staleNotice('sloopPins', staleNames(known.stale, book!, plan))
+    : '';
+  return lines.length ? { wanted, lines, stale } : null;
 }
 // The settings a recalculation with the pins asked for starts from: the plan's, with `sloopPins`
-// set to them, or without the field when none is asked for.
-export function sloopPinsSettings(settings: StoredSettings, wanted: SloopPins): StoredSettings {
+// set to them, or without the field when none is asked for. With `book` (the catalog's, which every
+// page passes, #1271), the pins the planner no longer takes are left out; the notice and the new
+// plan's warning name them (stale-pins.ts).
+export function sloopPinsSettings(
+  settings: StoredSettings,
+  wanted: SloopPins,
+  book?: RecipeBook,
+): StoredSettings {
   const out: StoredSettings = { ...settings };
-  const clean = normalPins(wanted);
+  const clean = normalPins(book ? knownPins(wanted, book, 'sloopPins').kept : wanted);
   if (Object.keys(clean).length) out.sloopPins = clean;
   else delete out.sloopPins;
   return out;

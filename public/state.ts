@@ -153,3 +153,12 @@ export {
   type LineFacts,
   type RecipeBook,
 } from './state/built-match.ts';
+export {
+  knownPins,
+  pinnable,
+  staleNames,
+  staleNotice,
+  stalePinWarnings,
+  staleWarning,
+  type PinField,
+} from './state/stale-pins.ts';

@@ -67,6 +67,7 @@ const SHARED = [
   'state/mutate.ts',
   'state/rename-offer.ts',
   'state/restore.ts',
+  'state/stale-pins.ts',
   'state/summary.ts',
   'state/validate.ts',
 ];
