@@ -238,3 +238,76 @@ test('a Dockerfile without the public/state/ COPY line fails the import check (#
   // A root module left off the list of names is still caught (#524).
   assert.deepEqual(serverImports(docker.replace(' planner.ts ', ' ')).missing, ['planner.ts']);
 });
+
+// The jobs of a workflow by id, each with the lines of its block (the keys two spaces in under
+// `jobs:`, which is the last top-level key of docker.yml and nightly.yml).
+function jobsOf(yaml: string): Map<string, string[]> {
+  const lines = yaml.split(/\r?\n/);
+  const jobs = new Map<string, string[]>();
+  let current: string[] | undefined;
+  for (const line of lines.slice(lines.indexOf('jobs:') + 1)) {
+    const id = /^ {2}([\w-]+):\s*$/.exec(line)?.[1];
+    if (id) jobs.set(id, (current = []));
+    else current?.push(line);
+  }
+  return jobs;
+}
+const needsOf = (block: string[]) => {
+  const line = block.find(entry => /^ {4}needs:/.test(entry));
+  return (line?.replace(/^ {4}needs:\s*/, '').replace(/[[\]]/g, '') ?? '')
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean);
+};
+
+// The repository ruleset requires the check `test` only, the gate job that `needs:` the test jobs
+// (#1274). A job left out of its `needs:` could fail and the pull request still merge: every job
+// is either one the gate needs or one that runs after it (the publish jobs). The jobs that are
+// neither, and the gate's needs that are no job.
+function ungated(yaml: string): string[] {
+  const jobs = jobsOf(yaml);
+  const gated = needsOf(jobs.get('test') ?? []);
+  return [
+    ...[...jobs]
+      .filter(
+        ([id, block]) => id !== 'test' && !gated.includes(id) && !needsOf(block).includes('test'),
+      )
+      .map(([id]) => id),
+    ...gated.filter(id => !jobs.has(id)),
+  ];
+}
+
+test('the `test` gate needs every other job, or the job runs after it (#1274)', () => {
+  const jobs = jobsOf(workflow);
+  assert.ok(jobs.size >= 7, `found the jobs: ${[...jobs.keys()].join(', ')}`);
+  const gate = jobs.get('test');
+  assert.ok(gate, 'the gate job `test`');
+  assert.ok(gate.includes('    name: test'), 'the gate keeps the check name `test`');
+  assert.ok(gate.includes('    if: always()'), 'the gate runs when a job failed or was cancelled');
+  assert.deepEqual(ungated(workflow), [], "each job is in the gate's needs: or needs: test");
+  // A job left out of the gate's needs: is caught, and so is a need of a job that is gone.
+  assert.deepEqual(ungated(workflow.replace('needs: [check, ', 'needs: [')), ['check']);
+  assert.deepEqual(ungated(workflow.replace('needs: [check, ', 'needs: [lint, check, ')), ['lint']);
+  for (const id of ['publish', 'publish-pages'])
+    assert.deepEqual(needsOf(jobs.get(id)!), ['test'], `${id} waits for the gate`);
+});
+
+// The heavy property tests check every case each night and on demand (tests/helpers/
+// properties.ts, #1274): nightly.yml runs the Node suite with PLANNER_FULL_PROPERTIES=1.
+test('the nightly workflow runs the Node suite with every property case (#1274)', () => {
+  const nightly = fs.readFileSync('.github/workflows/nightly.yml', 'utf8');
+  assert.match(nightly, /^ {2}schedule:\r?\n {4}- cron: '[^']+'/m, 'a schedule');
+  assert.match(nightly, /^ {2}workflow_dispatch:/m, 'on demand');
+  assert.match(nightly, /PLANNER_FULL_PROPERTIES: '1'/);
+  assert.match(nightly, /- run: node --test tests\/\*\.test\.ts\r?$/m);
+  assert.doesNotMatch(
+    nightly,
+    /--test-shard|docker push|deploy-pages/,
+    'the whole suite, no publish',
+  );
+  // On pull requests the switch stays off, so they check the sample.
+  assert.doesNotMatch(
+    workflow,
+    /^\s+PLANNER_FULL_PROPERTIES:|^\s+- run: .*PLANNER_FULL_PROPERTIES/m,
+  );
+});

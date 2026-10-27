@@ -15,6 +15,7 @@ import { amplified } from '../planner/recipes.ts';
 import { onSiteSettings } from '../public/app/on-site.ts';
 import { itemBooks } from '../public/app/group-links.ts';
 import { lineProblems, random, rowsOf } from './helpers/on-site-books.ts';
+import { propertyCases, propertyCount } from './helpers/properties.ts';
 import { STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
 import type {
   CurrentCalculatedPlan,
@@ -313,7 +314,22 @@ const SETTLE_SEEDS = [118, 135, 223, 311, 345, 397, 420, 455, 476, 489, 531, 571
 const IF_BUILT_SEEDS = [
   44, 115, 152, 247, 346, 421, 504, 530, 596, 65, 84, 199, 316, 325, 513, 553, 163, 292, 202, 101,
 ];
-const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS, ...IF_BUILT_SEEDS];
+const ALL_SEEDS = [
+  ...Array.from({ length: 40 }, (_, i) => i + 1),
+  ...SETTLE_SEEDS,
+  ...IF_BUILT_SEEDS,
+];
+// All 73 seeds with PLANNER_FULL_PROPERTIES=1 (nightly, #1274), otherwise 17 (propertyCases in
+// tests/helpers/properties.ts): every 15th seed and at least one case of each kind named above,
+// seeds 10, 16 and 36; the settle loop's 223 (settled at the totals of the central plan), 118
+// (did not fit), 420 and 489 (the rounds ran out); #1038's 44 (made more than the books give),
+// 346 (offered the rest) and 247 (made less); and 65, 325 and 163, added for #1064, #1086 and
+// #1056. On the sample the counts below are 62 phases, 141 lines, 378 pairs of twins, 498 lines
+// held apart, 112 turned and 13 parts built.
+const SEEDS = propertyCases(ALL_SEEDS, {
+  keep: [10, 16, 36, 223, 118, 420, 489, 44, 346, 247, 65, 325, 163],
+  every: 15,
+});
 
 test('right after a recalculation with amplification on, each own line matches the books (#904)', () => {
   const problems: string[] = [];
@@ -351,12 +367,19 @@ test('right after a recalculation with amplification on, each own line matches t
     }
   }
   assert.deepEqual(problems.slice(0, 20), [], `${problems.length} problems`);
-  assert.ok(phases >= 120, `${phases} phases with own lines checked`);
-  assert.ok(lines >= 250, `${lines} own lines checked`);
-  assert.ok(twins >= 600, `${twins} pairs of twins in a phase`);
-  assert.ok(split >= 800, `${split} amplified lines held apart from their twin`);
-  assert.ok(turned >= 150, `${turned} lines turned amplified or back`);
-  assert.ok(built >= 30, `${built} parts of rows the plan being recalculated lacked, built`);
+  // The least the seeds cover: all of them, or the sample.
+  assert.ok(phases >= propertyCount(120, 50), `${phases} phases with own lines checked`);
+  assert.ok(lines >= propertyCount(250, 110), `${lines} own lines checked`);
+  assert.ok(twins >= propertyCount(600, 300), `${twins} pairs of twins in a phase`);
+  assert.ok(
+    split >= propertyCount(800, 400),
+    `${split} amplified lines held apart from their twin`,
+  );
+  assert.ok(turned >= propertyCount(150, 90), `${turned} lines turned amplified or back`);
+  assert.ok(
+    built >= propertyCount(30, 10),
+    `${built} parts of rows the plan being recalculated lacked, built`,
+  );
   assert.ok(left.count * 5 <= lines, `${left.count} items left out`);
   // Lines whose excess feeds the central demand (#1063) stay few, so the check above still
   // covers almost every line.

@@ -11,6 +11,7 @@ import { withinRates } from '../planner/on-site.ts';
 import { onSiteSettings } from '../public/app/on-site.ts';
 import { itemBooks } from '../public/app/group-links.ts';
 import { lineProblems, random, rowsOf } from './helpers/on-site-books.ts';
+import { propertyCases, propertyCount } from './helpers/properties.ts';
 import { STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
 import type {
   CurrentCalculatedPlan,
@@ -241,6 +242,15 @@ function configuration(seed: number) {
   };
 }
 
+// Seeds 1 to 40 with PLANNER_FULL_PROPERTIES=1 (nightly, #1274), otherwise 17 (propertyCases in
+// tests/helpers/properties.ts): every third seed from seed 1, and seeds 11, 30 and 35, the most
+// rows with a fixed rate whose total the recalculation changed. On the sample the counts below
+// are 63 phases, 154 lines, 720 fixed-rate memberships, 56 totals changed and 38 rows short.
+const SEEDS = propertyCases(
+  Array.from({ length: 40 }, (_, i) => i + 1),
+  { keep: [11, 30, 35], every: 3 },
+);
+
 test('right after a recalculation with fixed and open memberships, each own line matches the books (#984)', () => {
   const problems: string[] = [];
   let phases = 0,
@@ -250,7 +260,7 @@ test('right after a recalculation with fixed and open memberships, each own line
     short = 0;
   const left = { count: 0 },
     routed = { count: 0 };
-  for (let seed = 1; seed <= 40; seed++) {
+  for (const seed of SEEDS) {
     const { before, plan, groups, fixed: rates } = configuration(seed);
     fixed += rates.length;
     for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
@@ -275,11 +285,15 @@ test('right after a recalculation with fixed and open memberships, each own line
     }
   }
   assert.deepEqual(problems.slice(0, 20), [], `${problems.length} problems`);
-  assert.ok(phases >= 120, `${phases} phases with own lines checked`);
-  assert.ok(lines >= 250, `${lines} own lines checked`);
-  assert.ok(fixed >= 1000, `${fixed} fixed-rate memberships`);
-  assert.ok(changed >= 30, `${changed} rows with a fixed rate changed their total`);
-  assert.ok(short >= 40, `${short} rows make less than their fixed rates`);
+  // The least the seeds cover: all of them, or the sample.
+  assert.ok(phases >= propertyCount(120, 50), `${phases} phases with own lines checked`);
+  assert.ok(lines >= propertyCount(250, 110), `${lines} own lines checked`);
+  assert.ok(fixed >= propertyCount(1000, 500), `${fixed} fixed-rate memberships`);
+  assert.ok(
+    changed >= propertyCount(30, 25),
+    `${changed} rows with a fixed rate changed their total`,
+  );
+  assert.ok(short >= propertyCount(40, 25), `${short} rows make less than their fixed rates`);
   assert.ok(left.count * 10 <= lines, `${left.count} fluids left out`);
   // Lines whose excess feeds the central demand (#1063) stay few, so the check above still
   // covers almost every line.

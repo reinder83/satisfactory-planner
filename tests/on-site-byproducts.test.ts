@@ -18,6 +18,7 @@ import { onSitePlannable, onSiteSettings } from '../public/app/on-site.ts';
 import { BYPRODUCT_NOTE, onSiteChange, onSiteSummaries } from '../public/app/on-site-picker.ts';
 import { newProfileState, validateState } from '../public/state.ts';
 import { validateTransfer } from '../public/transfer.ts';
+import { propertyCount } from './helpers/properties.ts';
 import type {
   CalcRow,
   CurrentCalculatedPlan,
@@ -264,6 +265,9 @@ function sequence(seed: number) {
   return () => (value = (value * 1103515245 + 12345) % 2147483648) / 2147483648;
 }
 
+// 24 rounds with PLANNER_FULL_PROPERTIES=1 (nightly, #1274), otherwise the first 12 (propertyCount
+// in tests/helpers/properties.ts), which draw from the sequence as they always did (20 and 8 of
+// them cases with lines made on site).
 test('#1012 property: no copy of a byproduct maker, and a second recalculation keeps the lines', () => {
   // Whole machines, the wizard's default; random groups holding rows of the plan and marking
   // their ingredients and the ingredients' ingredients.
@@ -275,7 +279,8 @@ test('#1012 property: no copy of a byproduct maker, and a second recalculation k
   const inputsOf = (id: string) =>
     rows.filter(row => row.id === id).flatMap(row => Object.keys(row.inputs));
   let checked = 0;
-  for (let round = 0; round < 24; round++) {
+  const rounds = propertyCount(24, 12);
+  for (let round = 0; round < rounds; round++) {
     const groups: FactoryGroups = { groups: [], assignments: {}, local: {} };
     for (const group of [ALPHA, BETA]) {
       groups.groups.push({ id: group, name: group });
@@ -305,7 +310,7 @@ test('#1012 property: no copy of a byproduct maker, and a second recalculation k
     assert.equal(onSiteChange(first, groups), null, label);
     assert.deepEqual(ownLines(recalculated(first, groups)), ownLines(first), label);
   }
-  assert.ok(checked >= 10, `${checked} cases with lines made on site`);
+  assert.ok(checked >= propertyCount(10, 5), `${checked} cases with lines made on site`);
 });
 
 // The decision's case on a plan: Gamma marks Dark Matter Residue and holds all of the Dark Matter

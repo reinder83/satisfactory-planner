@@ -5,9 +5,9 @@
 // any string literal, template text or attribute value that says "handbook".
 //
 // Not read: comments, import and export paths, identifiers, and the literals in `allowed` below,
-// which are data keys, not text a user sees. A new use of the word in text a user could see fails
-// here and gets another word (the profile's "original plan"); a new internal key goes in `allowed`
-// with its reason.
+// which are data keys, not text a user sees, each in the files named with it only. A new use of
+// the word in text a user could see fails here and gets another word (the profile's "original
+// plan"); a new internal key goes in `allowed` with its reason and its files.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -24,16 +24,37 @@ const SHOWN = /^(?:public\/|planner\/|server\/|[^/]+\.ts$)/;
 // The scripts that never ship: the build, the browser check and the config.
 const NOT_SHIPPED = new Set(['browser-check.ts', 'build.ts', 'vite.config.ts']);
 
-// Literals that hold the word and are never drawn. Everything else fails.
-const allowed: Record<string, string> = {
-  'handbook-':
-    "the migrated plan's engine id prefix ('handbook-…', #486, #487), matched with startsWith",
-  'pre-handbook': 'the stored record kept as it was before the handbook migration (#497), a key',
-  '.pre-handbook': 'the same record as a file beside the profile store on the server',
-  '../migrations/handbook-2026-09-13.json':
-    'the frozen migration data the server reads (never sent to a user)',
-  handbook: 'the legacy profile kind in handbook-migration.ts, a type literal and a comparison',
+// Literals that hold the word and are never drawn, each with the files it may appear in: the same
+// literal in another file fails too. Everything else fails.
+const allowed: Record<string, { reason: string; files: string[] }> = {
+  'handbook-': {
+    reason:
+      "the migrated plan's engine id prefix ('handbook-…', #486, #487), matched with startsWith",
+    files: [
+      'public/handbook-migration.ts',
+      'public/app/views/storage.ts',
+      'public/app/ui/pages/StoragePage.vue',
+    ],
+  },
+  'pre-handbook': {
+    reason: 'the stored record kept as it was before the handbook migration (#497), a key',
+    files: ['public/browser-store.ts'],
+  },
+  '.pre-handbook': {
+    reason: 'the same record as a file beside the profile store on the server',
+    files: ['server/persistence.ts'],
+  },
+  '../migrations/handbook-2026-09-13.json': {
+    reason: 'the frozen migration data the server reads (never sent to a user)',
+    files: ['server/persistence.ts'],
+  },
+  handbook: {
+    reason: 'the legacy profile kind in handbook-migration.ts, a type literal and a comparison',
+    files: ['public/handbook-migration.ts'],
+  },
 };
+const allowedIn = (file: string, text: string) =>
+  Object.hasOwn(allowed, text) && allowed[text]!.files.includes(file);
 
 // The files git tracks, or would track, with the word in them (a cheap filter: parsing every
 // file would take seconds).
@@ -137,11 +158,21 @@ test('no string, template text or attribute in the sources says "handbook" (deci
   const found: string[] = [];
   for (const file of files)
     for (const text of hitsIn(file))
-      if (!(text in allowed)) found.push(`${file}: "${text.replace(/\s+/g, ' ').slice(0, 100)}"`);
+      if (!allowedIn(file, text))
+        found.push(`${file}: "${text.replace(/\s+/g, ' ').slice(0, 100)}"`);
   assert.deepEqual(found, [], 'text a user could read says "handbook"; use "original plan"');
 });
 
-test('every allowed literal is still used', () => {
-  const used = new Set(candidates().flatMap(hitsIn));
-  for (const text of Object.keys(allowed)) assert.ok(used.has(text), `"${text}" is in the sources`);
+test('every allowed literal is still used, in each of its files', () => {
+  const files = candidates();
+  for (const [text, { files: its }] of Object.entries(allowed))
+    for (const file of its)
+      assert.ok(files.includes(file) && hitsIn(file).includes(text), `"${text}" is in ${file}`);
+});
+
+test('an allowed literal in a file not named with it still fails', () => {
+  assert.equal(allowedIn('public/handbook-migration.ts', 'handbook'), true);
+  assert.equal(allowedIn('public/app/ui/pages/HomePage.vue', 'handbook'), false);
+  assert.equal(allowedIn('server/persistence.ts', 'pre-handbook'), false);
+  assert.equal(allowedIn('public/browser-store.ts', 'constructor'), false);
 });

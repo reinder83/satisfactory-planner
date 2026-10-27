@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate } from '../planner.ts';
+import { FULL_PROPERTIES } from './helpers/properties.ts';
 
 // Whole machines plus amplification, Phase 4, nuclear 'sink': one integer search here needs about
 // 2,650 branch-and-bound nodes, some 2.5 seconds on a fast machine. Under the old 3-second clock it
@@ -40,16 +41,18 @@ function onSlowerMachine<T>(factor: number, body: () => T): T {
 }
 
 test('whole machines with amplification give the same plan on every run and machine (#558)', () => {
-  // Three runs of about 3 seconds each: enough to compare, few enough for CI. Every run redoes the
-  // search, since the search is what used to vary. A busy machine rarely made the old clock run
-  // out on CI's fast runners, so the third run fakes a machine three times slower: the old limit
-  // then cut the search off every time, while the node limit reaches the same plan (and the clock's
-  // backstop, 30 seconds, still leaves it ten real seconds).
-  const plans = [planJson(), planJson(), onSlowerMachine(3, planJson)];
+  // Three runs of about 3 seconds each with PLANNER_FULL_PROPERTIES=1 (nightly, #1274), otherwise
+  // two: the second run on the same machine is left out, the run on a slower machine, the case
+  // the issue was about, never is. Every run redoes the search, since the search is what used to
+  // vary. A busy machine rarely made the old clock run out on CI's fast runners, so the last run
+  // fakes a machine three times slower: the old limit then cut the search off every time, while
+  // the node limit reaches the same plan (and the clock's backstop, 30 seconds, still leaves it
+  // ten real seconds).
+  const first = planJson();
+  if (FULL_PROPERTIES) assert.ok(planJson() === first, 'the second run gave another plan');
   // assert.ok, not equal: a failure would otherwise print both plans, some 80 kB each.
-  assert.ok(plans[1] === plans[0], 'the second run gave another plan');
-  assert.ok(plans[2] === plans[0], 'a slower machine gave another plan');
-  const { stages } = JSON.parse(plans[0]!) as ReturnType<typeof calculate>;
+  assert.ok(onSlowerMachine(3, planJson) === first, 'a slower machine gave another plan');
+  const { stages } = JSON.parse(first) as ReturnType<typeof calculate>;
   for (const [phase, stage] of Object.entries(stages)) {
     assert.equal(stage.feasible, true, `phase ${phase} is planned`);
     assert.equal(stage.amplificationDropped, undefined, `phase ${phase} keeps its amplification`);

@@ -1,0 +1,33 @@
+name: Nightly full property checks
+
+# The heavy property and sweep tests check a sample of their cases on pull requests and pushes
+# (docker.yml), and every case here: each night, and on demand from the Actions tab (#1274). The
+# switch is PLANNER_FULL_PROPERTIES=1, read by tests/helpers/properties.ts. Not a required
+# check, and it publishes nothing.
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-tests-full:
+    name: Node tests, every property case
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PLANNER_FULL_PROPERTIES: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/*.test.ts
