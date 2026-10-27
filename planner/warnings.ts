@@ -1,6 +1,6 @@
 // The plan's warnings: plain sentences, one group after another (WARNING_GROUPS).
 // Re-exported by ../planner.ts.
-import { durationOfHours, listNames } from '../public/wording.ts';
+import { durationOfHours, listNames, localeNumber } from '../public/wording.ts';
 import { extractionEquipment } from '../public/power.ts';
 import {
   AMPLIFIER_PHASE,
@@ -9,6 +9,12 @@ import {
   pinRemedyWords,
 } from '../public/somersloops.ts';
 import { ownedBeltsWords, phaseMinersWords } from '../public/mining.ts';
+import {
+  clockReasonWords,
+  clockRemedyWords,
+  gameShards,
+  powerShardWords,
+} from '../public/shards.ts';
 import type {
   CurrentSettings,
   CalcRow,
@@ -87,6 +93,49 @@ function sloopPinWarnings({ config, stages }: FinishedPlan): string[] {
       if (drops.length)
         warnings.push(
           `Phase ${phase} could not keep the somersloops pinned on ${listNames(drops.map(drop => `${name(drop.recipe)} (${drop.sloops})`))}: ${pinReasonWords(reason, config.amplifySloops)}. That phase is planned without ${drops.length > 1 ? 'those pins' : 'that pin'}. ${pinRemedyWords(reason)}`,
+        );
+    }
+  return warnings;
+}
+// Power Shard pins (#1239): the lines the plan runs at the clocks pinned on them, with the Power
+// Shards their machines hold, the pinned lines the plan does not build, and per phase and reason the
+// clocks it could not keep, which it planned without (planner/clocks.ts), never silently.
+function lineClockWarnings({ config, stages }: FinishedPlan): string[] {
+  if (!config.lineClocks) return [];
+  const name = (recipe: string) => DATA.recipes.find(entry => entry.id === recipe)?.name ?? recipe;
+  // A clocked line is its plain row, its amplified twin and the factories' own lines of its recipe.
+  const ofLine = (row: CalcRow, recipe: string) =>
+    row.id === recipe || row.id === 'amp:' + recipe || row.onSite?.recipe === recipe;
+  const warnings: string[] = [];
+  const kept: string[] = [],
+    unbuilt: string[] = [];
+  for (const [phase, stage] of Object.entries(stages)) {
+    if (!stage.feasible) continue;
+    for (const [recipe, clock] of Object.entries(config.lineClocks[phase as StageKey] ?? {})) {
+      if (stage.lineClocksDropped?.some(drop => drop.recipe === recipe)) continue;
+      const rows = (stage.rows ?? []).filter(row => ofLine(row, recipe));
+      const shards = rows.reduce((total, row) => total + gameShards(row), 0);
+      if (rows.length)
+        kept.push(
+          `${name(recipe)} in Phase ${phase} (${localeNumber(clock)}%, ${powerShardWords(shards)})`,
+        );
+      else unbuilt.push(`${name(recipe)} in Phase ${phase}`);
+    }
+  }
+  if (kept.length)
+    warnings.push(
+      `${kept.length === 1 ? 'One production line runs' : `${kept.length} production lines run`} at the clock you pinned with Power Shards: ${listNames(kept)}. Each machine holds the shards for the line's clock, except a last machine underclocked to the remainder, which needs only those for its own clock.`,
+    );
+  if (unbuilt.length)
+    warnings.push(
+      `This plan does not build ${listNames(unbuilt)}, so ${unbuilt.length > 1 ? 'their Power Shard pins change' : 'its Power Shard pin changes'} nothing there.`,
+    );
+  for (const [phase, stage] of Object.entries(stages))
+    for (const reason of ['research', 'budget', 'unavailable', 'fit'] as const) {
+      const drops = (stage.lineClocksDropped ?? []).filter(drop => drop.reason === reason);
+      if (drops.length)
+        warnings.push(
+          `Phase ${phase} could not keep the Power Shards pinned on ${listNames(drops.map(drop => `${name(drop.recipe)} (${localeNumber(drop.clock)}%)`))}: ${clockReasonWords(reason, config.lineShardBudget)}. That phase runs ${drops.length > 1 ? 'those lines' : 'that line'} at 100%. ${clockRemedyWords(reason)}`,
         );
     }
   return warnings;
@@ -485,6 +534,7 @@ const WARNING_GROUPS: WarningGroup[] = [
   somersloopWarnings,
   amplificationWarnings,
   sloopPinWarnings,
+  lineClockWarnings,
   existingSupplyWarnings,
   builtLineWarnings,
   vehicleFuelWarnings,

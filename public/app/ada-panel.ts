@@ -46,6 +46,7 @@ import { carrierTransport, linkCarrier } from './logistics.ts';
 import { FLUIDS } from './flow.ts';
 import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { droppedPinNames, sloopPinsChange } from './sloop-pins.ts';
+import { droppedClockNames, lineClocksChange } from './shard-pins.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort, rankedPhases } from './payoff.ts';
 import { fastestProfiles } from './profile-compare.ts';
@@ -355,6 +356,19 @@ function sloopPinFacts(): Pick<AdaFacts, 'sloopPinsPending' | 'sloopPinsDropped'
       : {}),
   };
 }
+// The Power Shard pins (#1239): how many lines a recalculation with the clocks asked for would
+// change (lineClocksChange), and the lines whose clocks the plan could not keep (droppedClockNames).
+function shardPinFacts(): Pick<AdaFacts, 'shardPinsPending' | 'shardPinsDropped'> {
+  if (!calculated) return {};
+  const change = lineClocksChange(calculated, state);
+  const dropped = droppedClockNames(calculated);
+  return {
+    ...(change ? { shardPinsPending: change.lines.length } : {}),
+    ...(dropped.length
+      ? { shardPinsDropped: { count: dropped.length, lines: listNames(dropped) } }
+      : {}),
+  };
+}
 // The lines a recalculation with the clocks asked for would change (exactClocksChange, #1066), and
 // what whole machines cost in the open phase (roundingCost), in the side column's words: more
 // buildings and power than exact clocks, only where the whole-machine plan takes more.
@@ -568,6 +582,7 @@ function adaFacts(): AdaFacts {
     ...onSitePendingFacts(),
     ...exactClockFacts(),
     ...sloopPinFacts(),
+    ...shardPinFacts(),
     ...ownedTicksFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
     ...waterFacts(),

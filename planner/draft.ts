@@ -17,6 +17,7 @@ import type {
   PhaseCapKey,
   PhaseCaps,
   Shortfall,
+  StageKey,
 } from '../public/types/index.ts';
 import type { Solved, RunResult, RunOptions } from './types.ts';
 import { RAW } from './data.ts';
@@ -79,6 +80,10 @@ export function draftStage(
   } else if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
     stage.reason =
       'The whole-machine search stopped before it could prove the best plan for this combination. Try fewer alternates or precise balancing; no resource shortage has been established.';
+  else if (!diagnostic.feasible && shardBudgetHolds(config, phase, plain, conversion))
+    // Over the Power Shard budget of its overclocked lines (#1239): the budget is named, not the
+    // recipes, and the draft shows the plan the clocks would need.
+    Object.assign(stage, shardBudgetDraft(config, phase, plain, conversion));
   else if (!diagnostic.feasible)
     stage.reason =
       'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
@@ -95,6 +100,42 @@ export function draftStage(
         ' These amounts are before production amplification; amplified machines may need somewhat less.';
   }
   return stage;
+}
+// Whether a phase's draft is refused only by the Power Shard budget of its overclocked lines
+// (#1239, settings.lineShardBudget): the diagnostic fits without the budget.
+const unbudgeted = (plain: CurrentSettings): CurrentSettings => {
+  const { lineShardBudget: _budget, ...rest } = plain;
+  return rest;
+};
+const shardDiagnostic = (plain: CurrentSettings, phase: number, conversion: boolean) =>
+  exactRun(withoutCaps(unbudgeted(plain)), phase, { conversion, ignoreLimits: true });
+function shardBudgetHolds(
+  config: CurrentSettings,
+  phase: number,
+  plain: CurrentSettings,
+  conversion: boolean,
+): boolean {
+  if (config.lineShardBudget === undefined) return false;
+  if (!Object.keys(config.lineClocks?.[String(phase) as StageKey] ?? {}).length) return false;
+  return shardDiagnostic(plain, phase, conversion).feasible;
+}
+function shardBudgetDraft(
+  config: CurrentSettings,
+  phase: number,
+  plain: CurrentSettings,
+  conversion: boolean,
+): CurrentStage {
+  const diagnostic = shardDiagnostic(plain, phase, conversion);
+  const shards = (diagnostic.feasible ? diagnostic.rows : []).reduce(
+    (total, row) => total + (row.shards ?? 0),
+    0,
+  );
+  const budget = config.lineShardBudget ?? 0;
+  return {
+    ...diagnostic,
+    feasible: false,
+    reason: `This phase fits only with more Power Shards on its overclocked production lines than the ${budget} this plan allows them: at the clocks you pinned they would hold ${shards}. Lower or clear the Power Shard pins in the production lines’ dialogs.`,
+  };
 }
 // The budgets a phase is planned with: the settings', or with mining per phase its own (#1065),
 // each held to the nodes the node survey does not leave out (budgetLimits, #1183).

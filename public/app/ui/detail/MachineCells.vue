@@ -1,6 +1,6 @@
 <!--
   The machine instructions of a factory dialog as three compact stat cells (SP-20, #255): Total,
-  At 100% and Adjustable (with its clock), from machineCounts in views/factories.ts so the card
+  At 100% (an overclocked line's clock, #1239) and Adjustable (with its clock), from machineCounts in views/factories.ts so the card
   line and the dialog agree. A description list, so a screen reader hears each number with its
   label. The captions carry what the sentence used to say: the machine and peak load under
   Total, the output per machine and the precise clock under the others.
@@ -30,7 +30,7 @@ withDefaults(
       </dd>
     </div>
     <div class="stat compact">
-      <dt class="eyebrow">At 100%</dt>
+      <dt class="eyebrow">At {{ counts.fullClock ?? '100' }}%</dt>
       <dd>
         <strong>{{ num(counts.full) }}</strong
         ><small>{{ fullCaption }}</small>

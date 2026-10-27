@@ -385,6 +385,17 @@ export const version25 = {
   },
 } satisfies SavedState;
 
+// Version 26: production lines pinned to a clock with Power Shards (#1239), on top of version 25:
+// Phase 3's Iron Rod line at 250% (three shards in every machine) and Phase 4's Screws at 150%.
+export const version26 = {
+  ...version25,
+  version: 26,
+  lineClocks: {
+    '3': { Recipe_IronRod_C: 250 },
+    '4': { Recipe_Screw_C: 150 },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -413,6 +424,7 @@ export const states: [SavedState, number][] = [
   [version23, 23],
   [version24, 24],
   [version25, 25],
+  [version26, 26],
 ];
 
 export const backup = {

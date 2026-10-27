@@ -109,34 +109,46 @@ export function allocationText(
 // A factory card's second line (SP-14): how many machines, and the last one's clock when it runs
 // below 100%, as "30 × Refinery · last at 62%". A single machine is "1 × Refinery · at 62%". The
 // clock is shown to one decimal and never rounded up to 100%; the dialog has the exact figure.
-export function machineLine(machines: number, machine: string, lastClock = 100): string {
-  const text = `${num(machines)} × ${machine}`;
-  const clock = clockText(lastClock);
+// An overclocked line (#1239) runs its machines at `full` %, which the line names:
+// "12 × Constructor at 250% · last at 57.8%".
+export function machineLine(
+  machines: number,
+  machine: string,
+  lastClock = 100,
+  full = 100,
+): string {
+  const text = `${num(machines)} × ${machine}${full > 100 ? ` at ${localeNumber(full)}%` : ''}`;
+  const clock = clockText(lastClock, full);
   if (!clock) return text;
   return text + (machines > 1 ? ` · last at ${clock}%` : ` · at ${clock}%`);
 }
 
 // The last machine's clock as the cards and dialogs show it (SP-14): one decimal, never rounded
-// up to 100%. Undefined when every machine runs at 100%.
-export function clockText(lastClock = 100): string | undefined {
-  if (!(lastClock < 100 - 1e-7)) return undefined;
-  return localeNumber(Math.min(Math.round(lastClock * 10) / 10, 99.9), 1);
+// up to the line's clock (`full`: 100%, or an overclocked line's, #1239). Undefined when every
+// machine runs at that clock.
+export function clockText(lastClock = 100, full = 100): string | undefined {
+  if (!(lastClock < full - 1e-7)) return undefined;
+  return localeNumber(Math.min(Math.round(lastClock * 10) / 10, full - 0.1), 1);
 }
 
 // The factory dialogs' three machine cells (SP-20, #255): the total, how many run at 100% and
 // the adjustable one with its clock, read from the same count and clock as the card's
 // machineLine, so the two agree. A single machine below 100% is 1 · 0 · 1 at N%; when every
 // machine runs at 100% there is no adjustable machine and no clock.
+// `fullClock` is the clock the full machines run at, an overclocked line's (#1239) in place of
+// 100%, which the cell names ("At 250%"); absent at 100%.
 export interface MachineCounts {
   total: number;
   full: number;
   adjustable: number;
   clock?: string;
+  fullClock?: string;
 }
-export function machineCounts(machines: number, lastClock = 100): MachineCounts {
-  const clock = clockText(lastClock);
-  if (!clock) return { total: machines, full: machines, adjustable: 0 };
-  return { total: machines, full: Math.max(0, machines - 1), adjustable: 1, clock };
+export function machineCounts(machines: number, lastClock = 100, full = 100): MachineCounts {
+  const clock = clockText(lastClock, full);
+  const at = full > 100 ? { fullClock: localeNumber(full) } : {};
+  if (!clock) return { total: machines, full: machines, adjustable: 0, ...at };
+  return { total: machines, full: Math.max(0, machines - 1), adjustable: 1, clock, ...at };
 }
 
 // The status filter of the factories page (SP-16, #251): a chip per status, each with how many

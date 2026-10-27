@@ -40,6 +40,7 @@ const SHARED = [
   'preferences.ts',
   'progression.ts',
   'reviewed-plans.ts',
+  'shards.ts',
   'somersloops.ts',
   'state.ts',
   'step-table.ts',

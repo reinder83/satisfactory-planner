@@ -1,13 +1,13 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–25). Later versions only add optional sections, so an older
+//                  version (1–26). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
 // Keys and value limits are enforced by validateState at run time; these types only
 // describe the shape. Checklist and note keys must never be renamed (see state.ts).
 import type { Phase } from './common.ts';
-import type { ExactClocks, SloopPins } from './calculated.ts';
+import type { ExactClocks, LineClocks, SloopPins } from './calculated.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
@@ -25,7 +25,8 @@ import type { ExactClocks, SloopPins } from './calculated.ts';
 // graph layout (groups[].layout, #1224), 23 storage and the sink shown as tags in a factory's
 // flow graph (groups[].layout.tags, #1231), 24 the somersloops pinned on production lines
 // (sloopPins, #1235), 25 inputs and outputs moved in a factory's flow graph
-// (groups[].layout.places, #1240).
+// (groups[].layout.places, #1240), 26 the production lines pinned to a clock with Power Shards
+// (lineClocks, #1239).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -54,7 +55,8 @@ export type StateVersion =
   | 22
   | 23
   | 24
-  | 25;
+  | 25
+  | 26;
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
 // time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
@@ -260,6 +262,10 @@ export interface ProgressState {
   // changed a pin; absent means the plan's own (settings.sloopPins). Applied only by a
   // recalculation the user starts (version 24).
   sloopPins?: SloopPins;
+  // The production lines the user pinned to a clock above 100% with Power Shards (#1239), per
+  // phase by recipe id, once they changed a pin; absent means the plan's own
+  // (settings.lineClocks). Applied only by a recalculation the user starts (version 26).
+  lineClocks?: LineClocks;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -282,6 +288,7 @@ export interface SavedState {
   builtMachines?: BuiltMachines;
   tickedBy?: Record<string, TickRecord>;
   sloopPins?: SloopPins;
+  lineClocks?: LineClocks;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
@@ -326,6 +333,9 @@ export type UpdateOp =
   // The whole map of somersloops pinned on production lines (#1235); null forgets it, so the
   // plan's own pins apply again.
   | { type: 'sloopPins'; value: SloopPins | null }
+  // The whole map of production lines pinned to a clock with Power Shards (#1239); null forgets
+  // it, so the plan's own clocks apply again.
+  | { type: 'lineClocks'; value: LineClocks | null }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';
