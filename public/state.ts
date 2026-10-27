@@ -111,6 +111,7 @@ export {
   recalculateNeedsCalculated,
   retiredProfileType,
   roundUpNeedsCalculated,
+  roundUpInput,
   roundUpSettings,
   roundUpState,
   shareState,
@@ -155,10 +156,13 @@ export {
 } from './state/built-match.ts';
 export {
   knownPins,
+  knownPlanSettings,
   pinnable,
   staleNames,
   staleNotice,
   stalePinWarnings,
+  staleRankNote,
   staleWarning,
+  withWarnings,
   type PinField,
 } from './state/stale-pins.ts';

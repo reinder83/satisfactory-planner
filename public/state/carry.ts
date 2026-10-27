@@ -30,7 +30,13 @@ import {
 } from './built-match.ts';
 import { defaultFactoryGroups } from './factory-groups.ts';
 import { renameOfferFields, withoutRenameOffer } from './rename-offer.ts';
-import { knownPins, stalePinWarnings } from './stale-pins.ts';
+import {
+  knownPins,
+  knownPlanSettings,
+  stalePinWarnings,
+  staleWarning,
+  withWarnings,
+} from './stale-pins.ts';
 import {
   type RowsPlan,
   fail,
@@ -695,14 +701,27 @@ export const roundUpSettings = <T extends object>(settings: T) => ({
   wholeMachines: true,
   storageFromSurplus: true as const,
 });
+// What /api/round-up calculates in both editions (#1273): roundUpSettings of the plan's own
+// settings less the pins the planner no longer takes (knownPlanSettings, #1271), and the plan
+// warnings that name them, for wholeMachineProfile. A plan without such pins rounds up exactly
+// as before.
+export function roundUpInput<T extends object>(
+  plan: Pick<StoredCalculatedPlan, 'stages'> & { settings: T },
+  book: RecipeBook,
+) {
+  const known = knownPlanSettings(plan, book, staleWarning);
+  return { settings: roundUpSettings(known.settings), stale: known.stale };
+}
 // The whole-machine copy /api/round-up adds in both editions: `<name> · whole machines` (at
 // most 80 characters), the rounded plan with the previous plan's guide, and roundUpState's
 // progress. Returns the profile to push and reviewCount; limits, ids and selection stay with
-// the callers.
+// the callers. `stale` are roundUpInput's warnings, added to the rounded plan's own, so a pin
+// round-up left out is never dropped silently.
 export function wholeMachineProfile<P extends RowsPlan, S extends SavedState>(
   id: string,
   previous: Pick<StoredProfile, 'name' | 'plan'> & { state: S },
   roundedPlan: P,
+  stale: string[] = [],
 ) {
   const { state, reviewCount } = roundUpState(previous.state, previous.plan, roundedPlan);
   return {
@@ -710,7 +729,7 @@ export function wholeMachineProfile<P extends RowsPlan, S extends SavedState>(
       id,
       name: (previous.name + ' · whole machines').slice(0, 80),
       kind: 'calculated' as const,
-      plan: carryGuide(roundedPlan, previous.plan),
+      plan: withWarnings(carryGuide(roundedPlan, previous.plan), stale),
       state,
     },
     reviewCount,
@@ -805,13 +824,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   // The pins the recalculation left out because the game data no longer takes them (#1271) are
   // never dropped silently: the new plan says so until a recalculation replaces it. A copy, so a
   // plan Review showed (reviewedReplacement) is not changed.
-  const stale = stalePinWarnings(previous, book);
-  const warned = stale.length
-    ? {
-        ...started.profile.plan,
-        warnings: [...((started.profile.plan as { warnings?: string[] }).warnings ?? []), ...stale],
-      }
-    : started.profile.plan;
+  const warned = withWarnings(started.profile.plan, stalePinWarnings(previous, book));
   return {
     // A profile that is itself a kept version keeps its link (restore.ts): it stays the version
     // kept for that profile, now recalculated. A dismissed "Rename to …" offer stays dismissed

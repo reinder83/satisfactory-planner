@@ -17,7 +17,7 @@
   app/payoff.ts. It draws nothing in "New to Satisfactory" mode (#1076), so the tab goes too.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 import { post, toast } from '../../api.ts';
 import { num } from '../../format.ts';
 import {
@@ -48,7 +48,7 @@ import { render } from '../../shell.ts';
 import { openAltRecipe } from '../../wizard/recipes.ts';
 import { legacy } from '../bridge.ts';
 import { recalculateOffer } from '../recalc-offer.ts';
-import type { StoredPayoff } from '../../../types/index.ts';
+import type { RankReply, StoredPayoff } from '../../../types/index.ts';
 
 // The chosen sort; null is Δ buildings (#1075).
 const sortBy = ref<PayoffColumn | null>(null);
@@ -58,6 +58,10 @@ const running = ref('');
 // The payoff threshold (#1075): only rows saving at least this many buildings; 0 shows all.
 const THRESHOLDS = [0, 1, 5, 10, 20];
 const threshold = ref(0);
+// The pins the last ranking left out because the game data no longer takes them (#1273, the
+// reply's `leftOut`), with the payoff they belong to: shown while that payoff is the one on
+// screen. Never stored, so a reload or another ranking forgets them.
+const leftOut = shallowRef<{ payoff: StoredPayoff; notes: string[] } | null>(null);
 const ADD_LABEL = 'Add as hunting';
 // The ranking's time limit in words, the same in both editions (#1257). A ranking started while
 // others run may wait for one to finish first (two at once on the server, server/ranking.ts),
@@ -107,6 +111,7 @@ const view = computed(() =>
       // A ranking kept from another phase, named so the button's meaning is clear.
       otherPhase: stored && !ranking ? phaseLabel(stored.ranking.phase) : '',
       when: stored?.rankedAt ? new Date(stored.rankedAt).toLocaleString() : '',
+      leftOut: ranking && leftOut.value?.payoff === stored ? leftOut.value.notes : [],
       rows,
       hidden: (table?.rows.length || 0) - rows.length,
       columns,
@@ -135,7 +140,7 @@ async function rank() {
   const profileId = currentProfile.id;
   running.value = 'Checking alternates…';
   try {
-    const result = await post<StoredPayoff>(
+    const { leftOut: notes, ...result } = await post<RankReply>(
       '/api/rank-alternates',
       { phase: stage(), remaining: true, hunting: true },
       true,
@@ -146,8 +151,9 @@ async function rank() {
     );
     if (currentProfile.id !== profileId) return;
     setPayoff(result);
+    leftOut.value = notes?.length ? { payoff: result, notes } : null;
     render();
-    announce(rankedMessage(result.ranking));
+    announce([rankedMessage(result.ranking), ...(notes ?? [])].join(' '));
   } catch (error) {
     toast((error as Error).message, true);
   } finally {
@@ -204,6 +210,10 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
       </p>
       <p v-if="view.ranking.stopped" class="notice error" data-payoff-stopped role="status">
         The ranking stopped at its time limit; Re-rank to try again.
+      </p>
+      <!-- Pins the ranking left out (#1273); any recalculation of the plan drops them. -->
+      <p v-for="note in view.leftOut" :key="note" class="notice warn" data-payoff-left-out>
+        {{ note }}
       </p>
       <p v-if="!view.ranking.total" class="small" data-payoff-none>
         Every alternate available by {{ view.phase }} is already allowed in this profile.

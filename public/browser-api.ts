@@ -41,7 +41,9 @@ import {
   rankScope,
   RANK_BUDGET_MS,
   recipeBook,
-  roundUpSettings,
+  roundUpInput,
+  staleRankNote,
+  knownPlanSettings,
   wholeMachineProfile,
 } from './state.ts';
 import {
@@ -58,6 +60,7 @@ import type {
   Catalog,
   CurrentCalculatedPlan,
   ProgressState,
+  RankReply,
   RankScope,
   Recipe,
   StageKey,
@@ -315,18 +318,22 @@ export function createBrowserApi(
   // then write a new profile. Its checks are copied, and a `calc-` check whose row now needs
   // more machines or more input is unticked for review (counted in reviewCount). The copy is
   // taken from the profile as it is at write time, so ticks made meanwhile in another tab carry.
+  // A pin the game data no longer takes is left out and named in the copy's warnings (#1273).
   async function roundUp({ url, headers, options }: RouteRequest) {
     const before = scope(await store.transaction(), url, headers);
     checkRoundUp(before.profile);
-    const rounded = await calculator(
-        roundUpSettings(before.profile.plan!.settings),
-        options.onProgress,
-      ),
+    const input = roundUpInput(before.profile.plan!, book),
+      rounded = await calculator(input.settings, options.onProgress),
       profileId = randomId();
     return store.transaction(data => {
       const { save, profile } = scope(data, url, headers);
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
-      const { profile: copy, reviewCount } = wholeMachineProfile(profileId, profile, rounded);
+      const { profile: copy, reviewCount } = wholeMachineProfile(
+        profileId,
+        profile,
+        rounded,
+        input.stale,
+      );
       save.profiles.push(copy);
       save.activeProfile = profileId;
       data.activeSave = save.id;
@@ -378,7 +385,9 @@ export function createBrowserApi(
     });
   }
   // Mirrors POST /api/rank-alternates: read the profile, rank on the worker outside any
-  // transaction, then store the result on the profile if its plan is still the one ranked.
+  // transaction, then store the result on the profile if its plan is still the one ranked. A pin
+  // the game data no longer takes is left out of the solve and named in the reply's `leftOut`,
+  // which is never stored (#1273).
   async function rankPayoff({ url, headers, body, options }: RouteRequest) {
     if (!ranker) throw Error(NEEDS_SERVER);
     const { profile: before } = scope(await store.transaction(), url, headers);
@@ -387,8 +396,9 @@ export function createBrowserApi(
       throw Error('Hard-drive payoff needs a calculated profile.');
     const phase = String(body.phase) as StageKey;
     if (!['1', '2', '3', '4', '5'].includes(phase)) throw Error('Choose a phase from 1 to 5.');
-    const ranking = await ranker(plan.settings, phase, options.onRankProgress, rankScope(body));
-    return store.transaction(data => {
+    const known = knownPlanSettings(plan, book, staleRankNote);
+    const ranking = await ranker(known.settings, phase, options.onRankProgress, rankScope(body));
+    return store.transaction((data): RankReply => {
       const { profile } = scope(data, url, headers);
       if (profile.plan?.createdAt !== plan.createdAt)
         throw Error('The profile changed while ranking. Rank again.');
@@ -397,7 +407,7 @@ export function createBrowserApi(
         rankedAt: new Date().toISOString(),
         ranking,
       };
-      return profile.payoff;
+      return known.stale.length ? { ...profile.payoff, leftOut: known.stale } : profile.payoff;
     });
   }
 

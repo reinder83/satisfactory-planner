@@ -8,7 +8,9 @@
 // that offers the recalculation names them, and a recalculation in place drops them from the
 // progress (keepAsked in carry.ts) and adds a plan warning that names them (stalePinWarnings).
 // Never silently, and no state version: an existing field only loses lines. An import drops the
-// same pins with the game data itself (dropUnknownPins in transfer.ts).
+// same pins with the game data itself (dropUnknownPins in transfer.ts). Round-up and the payoff
+// ranking solve the plan's own settings, so they leave those pins out too (knownPlanSettings,
+// #1273): round-up names them in its new plan's warnings, the ranking in its reply.
 //
 // The book is the catalog's (recipeBook, built-match.ts), as both editions have it: the same game
 // data the planner checks against. An empty book (no catalog) knows every recipe, so nothing is
@@ -112,3 +114,35 @@ export function stalePinWarnings(
     return stale.length ? [staleWarning(field, staleNames(stale, book, previous.plan))] : [];
   });
 }
+// What the payoff ranking says it left out (#1273): it only reports, so nothing is dropped.
+export const staleRankNote = (field: PinField, names: string[]): string =>
+  `This ranking left out the ${KIND[field]} pin${names.length === 1 ? '' : 's'} on ${listNames(names)}, because ${REASON[field]}.`;
+
+// The settings round-up and the payoff ranking solve (#1273): the plan's own, frozen with the pins
+// it was calculated with, less the pins the planner no longer takes (knownPins), and one sentence
+// per kind that names them (`say`: staleWarning for round-up's new plan, staleRankNote for the
+// ranking). A kind left without pins goes, as sloopPinsSettings leaves it out. Settings without
+// such pins are the very same object, so those plans solve exactly as before.
+export function knownPlanSettings<S extends Partial<Record<PinField, PinMap>>>(
+  plan: Pick<StoredCalculatedPlan, 'stages'> & { settings: S },
+  book: RecipeBook,
+  say: (field: PinField, names: string[]) => string,
+): { settings: S; stale: string[] } {
+  let settings = plan.settings;
+  const stale: string[] = [];
+  for (const field of ['sloopPins', 'lineClocks'] as const) {
+    const pins = settings[field];
+    const known = pins && knownPins(pins, book, field);
+    if (!known?.stale.length) continue;
+    const { [field]: _stale, ...rest } = settings;
+    settings = (Object.keys(known.kept).length ? { ...rest, [field]: known.kept } : rest) as S;
+    stale.push(say(field, staleNames(known.stale, book, plan)));
+  }
+  return { settings, stale };
+}
+
+// `plan` with `warnings` added to its own; the same plan when there are none.
+export const withWarnings = <P extends object>(plan: P, warnings: string[]): P =>
+  warnings.length
+    ? { ...plan, warnings: [...((plan as { warnings?: string[] }).warnings ?? []), ...warnings] }
+    : plan;
