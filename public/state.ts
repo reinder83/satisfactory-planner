@@ -36,6 +36,9 @@
 //   sloopPins      { phase: { recipe: sloops } } somersloops pinned on production lines
 //                  (validateSloopPins, #1235), version 24; absent means the plan's
 //                  own; the sloopPins update sends the whole map
+//   lineClocks     { phase: { recipe: clock % } } production lines pinned to a clock with Power
+//                  Shards (validateLineClocks, #1239), version 26; absent means the plan's
+//                  own; the lineClocks update sends the whole map
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),

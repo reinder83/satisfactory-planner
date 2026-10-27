@@ -823,14 +823,15 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   };
 }
 // The choices the progress state asks for beyond the plan (the lines asked to run at exact clocks,
-// `exactClocks`, #1066, and the somersloops pinned on lines, `sloopPins`, #1235) after a
+// `exactClocks`, #1066, the somersloops pinned on lines, `sloopPins`, #1235, and the lines pinned
+// to a clock with Power Shards, `lineClocks`, #1239) after a
 // recalculation in place (#1237, #1258): every recalculation the user starts plans the choice,
 // freezing it in the new plan's settings, so the state needs none and follows the plan. A choice
 // the new plan was not calculated with (saved after Edit settings started its draft, or a request
 // from an older page) stays asked for, so the plan offers "Recalculate in place with exact clocks"
-// or "... with somersloop pins" again rather than dropping it. An empty choice stays too: it asks
+// or "... with somersloop pins" or "... with Power Shard pins" again rather than dropping it. An empty choice stays too: it asks
 // for none, which differs from a plan calculated with some. Compared as the planner stores them:
-// each phase's ids (clocks) or ids and counts (pins) sorted, no empty phase.
+// each phase's ids (exact clocks) or ids and values (pins, line clocks) sorted, no empty phase.
 const ASKED_PHASES = ['1', '2', '3', '4', '5'] as StageKey[];
 const askedKey = (
   asked: Partial<Record<StageKey, string[] | Record<string, number>>> | undefined,
@@ -843,10 +844,10 @@ const askedKey = (
   }).join('|');
 function keepAsked(
   state: ProgressState,
-  source: Pick<SavedState, 'exactClocks' | 'sloopPins'>,
+  source: Pick<SavedState, 'exactClocks' | 'sloopPins' | 'lineClocks'>,
   plan: Pick<StoredCalculatedPlan, 'settings'>,
 ): void {
-  for (const field of ['exactClocks', 'sloopPins'] as const) {
+  for (const field of ['exactClocks', 'sloopPins', 'lineClocks'] as const) {
     const asked = source[field];
     if (asked && askedKey(asked) !== askedKey(plan.settings?.[field]))
       (state as Pick<SavedState, typeof field>)[field] = structuredClone(asked) as never;

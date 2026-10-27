@@ -71,6 +71,7 @@ import MineOnly from '../factories/MineOnly.vue';
 import OnSiteRecalc from '../factories/OnSiteRecalc.vue';
 import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
 import SloopPinsRecalc from '../plan/SloopPinsRecalc.vue';
+import ShardPinsRecalc from '../plan/ShardPinsRecalc.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import SiteSection from '../factories/SiteSection.vue';
@@ -228,7 +229,7 @@ async function roundUp(event: Event) {
   <template v-if="page && milestones">
     <PageHeader eyebrow="CALCULATED PRODUCTION" title="Factories" />
     <!-- The recalculation notices are about the whole plan, not this phase (#1014). -->
-    <OnSiteRecalc /><ExactClocksRecalc /><SloopPinsRecalc />
+    <OnSiteRecalc /><ExactClocksRecalc /><SloopPinsRecalc /><ShardPinsRecalc />
     <MilestoneOnlyNotice />
   </template>
   <template v-else-if="page">
@@ -238,7 +239,7 @@ async function roundUp(event: Event) {
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
     <GroupEditBar />
-    <OnSiteRecalc /><ExactClocksRecalc /><SloopPinsRecalc />
+    <OnSiteRecalc /><ExactClocksRecalc /><SloopPinsRecalc /><ShardPinsRecalc />
     <div v-if="!page.whole" class="notice info round-up-offer">
       Prefer extra production over underclocking?
       <button class="btn quiet" data-round-up @click="roundUp">Round up production…</button>

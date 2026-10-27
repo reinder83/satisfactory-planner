@@ -28,6 +28,7 @@ import { exactClocksKeep, sinkCause } from '../../sink-cause.ts';
 import { calcStage, calculated, stage, state, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
+import { num } from '../../format.ts';
 import type { CalcRow } from '../../../types/index.ts';
 
 const props = defineProps<{ row: CalcRow }>();
@@ -65,14 +66,16 @@ const view = computed(() =>
       main && current && spare > 0.005
         ? exactClocksKeep(sinkCause(row, main, spare, current, true, item => FLUIDS.has(item)))
         : undefined;
+    // An overclocked line (#1239) runs its whole machines at its clock rather than 100%.
+    const at = `${num(row.clock ?? 100)}%`;
     const note =
       planned !== wanted
         ? 'Saved. The plan keeps running this line as it was calculated until you recalculate: the build plan offers “Recalculate in place with exact clocks”, which recalculates this profile and keeps the current version as a backup under Profiles.'
         : planned
-          ? 'This plan runs the line at exact clocks: whole machines at 100% and the last one underclocked to the exact remainder.'
+          ? `This plan runs the line at exact clocks: whole machines at ${at} and the last one underclocked to the exact remainder.`
           : spare > 0.005 && main
-            ? `This plan runs the line on whole machines at 100%. This phase makes ${itemRate(main, spare)} more ${main} than it uses, which goes to storage or the sink. ${keep ?? 'Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.'}`
-            : 'This plan runs the line on whole machines at 100%. Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.';
+            ? `This plan runs the line on whole machines at ${at}. This phase makes ${itemRate(main, spare)} more ${main} than it uses, which goes to storage or the sink. ${keep ?? 'Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.'}`
+            : `This plan runs the line on whole machines at ${at}. Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.`;
     return { id: row.id, wanted, note, noteId: 'exact-clock-note-' + row.id };
   }),
 );

@@ -1,7 +1,13 @@
 // The adjustments calculate() makes to the finished stages: the target time on the final phase
 // (phaseTime 'final') and the verdict on fueling the augmenters.
 import { listNames } from '../public/wording.ts';
-import type { CalcRow, CurrentSettings, CurrentStage, StageResult } from '../public/types/index.ts';
+import type {
+  CalcRow,
+  CurrentSettings,
+  CurrentStage,
+  StageKey,
+  StageResult,
+} from '../public/types/index.ts';
 import type { Solved, RunResult } from './types.ts';
 import { RAW } from './data.ts';
 import { run, wholeLine } from './model.ts';
@@ -26,8 +32,8 @@ export function pullFinalPhaseForward(
     !Object.values(stages).every(stage => stage.feasible)
   )
     return [];
-  const { pulled, stopped } = resolveEarlierPhases(config, stages, unrouted);
-  return [finalPhaseWarning(pulled, stopped)];
+  const { pulled, stopped, shardHeld } = resolveEarlierPhases(config, stages, unrouted);
+  return [finalPhaseWarning(pulled, stopped, shardHeld, config.lineShardBudget)];
 }
 // built[phase] = { recipeId: whole machines } as each phase's plan builds it. Phase n's caps
 // are the most machines any phase from n to 5 builds, so running a line harder than its own
@@ -46,14 +52,18 @@ export function pullFinalPhaseForward(
 // the first plan's). The phases are re-solved from Phase 4 down, so the caps of an earlier
 // phase hold the machines of the plan a later phase keeps; each phase's own re-solve reads only its
 // own and later phases' plans. Returns the phases it pulled ahead and those whose search stopped.
+// A phase with overclocked lines (#1239) that only the Power Shard budget keeps from finishing
+// sooner (its re-solve fits without settings.lineShardBudget and finishes sooner) keeps its own
+// plan and is named in `shardHeld`, so the warning says why rather than staying silent.
 function resolveEarlierPhases(
   config: CurrentSettings,
   stages: PhaseStages,
   unrouted: Record<number, Solved>,
-): { pulled: number[]; stopped: number[] } {
+): { pulled: number[]; stopped: number[]; shardHeld: number[] } {
   const built: Record<number, Record<string, number>> = {};
   const pulled: number[] = [],
-    stopped: number[] = [];
+    stopped: number[] = [],
+    shardHeld: number[] = [];
   const machines = (stage: CurrentStage) =>
     Object.fromEntries((stage.rows || []).map(row => [row.id, row.machines]));
   for (let phase = 1; phase <= 5; phase++) built[phase] = machines(stages[phase]!);
@@ -61,13 +71,13 @@ function resolveEarlierPhases(
   // A phase that makes its on-site items centrally (#875), or routes a group's excess to the
   // central balance (#1063), is re-solved that way too, and a row that makes less than its fixed
   // rates as solvePhase plans it (#984).
-  const pullAhead = (phase: number, stage: CurrentStage) => {
+  const pullAhead = (phase: number, stage: CurrentStage, settings = config) => {
     const caps: Record<string, number> = {};
     for (let later = phase; later <= 5; later++)
       for (const [id, count] of Object.entries(built[later] || {}))
         caps[id] = Math.max(caps[id] || 0, count);
-    return withinRates(resolveSettings(config, phase, stage), phase, settings =>
-      run(settings, phase, { maximum: true, caps }),
+    return withinRates(resolveSettings(settings, phase, stage), phase, resolved =>
+      run(resolved, phase, { maximum: true, caps }),
     );
   };
   for (let phase = 4; phase >= 1; phase--) {
@@ -97,8 +107,16 @@ function resolveEarlierPhases(
     }
     if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
       stopped.push(phase);
+    else if (
+      !ahead.feasible &&
+      config.lineShardBudget !== undefined &&
+      Object.keys(config.lineClocks?.[String(phase) as StageKey] ?? {}).length
+    ) {
+      const { lineShardBudget: _budget, ...unbudgeted } = config;
+      if (sooner(pullAhead(phase, stage, unbudgeted))) shardHeld.push(phase);
+    }
   }
-  return { pulled: pulled.reverse(), stopped: stopped.reverse() };
+  return { pulled: pulled.reverse(), stopped: stopped.reverse(), shardHeld: shardHeld.reverse() };
 }
 // What a re-solve of `stage` keeps saying about its items made on site: it makes them centrally
 // (onSiteDropped, #875) or routes a group's excess to the central balance (onSiteOverflow, #1063).
@@ -117,7 +135,12 @@ const resolveSettings = (config: CurrentSettings, phase: number, stage: CurrentS
 // The phaseTime 'final' warning: which earlier phases finish sooner, and which searches stopped.
 // Only the phases resolveEarlierPhases pulled ahead count: a phase that minimal construction
 // already runs at full speed (fullSpeed), Phase 5 included, is not an earlier phase pulled ahead.
-function finalPhaseWarning(pulled: number[], stopped: number[]): string {
+export function finalPhaseWarning(
+  pulled: number[],
+  stopped: number[],
+  shardHeld: number[] = [],
+  budget = 0,
+): string {
   const sentences = ['Your target time applies to Phase 5.'];
   if (pulled.length) {
     const many = pulled.length > 1;
@@ -133,6 +156,12 @@ function finalPhaseWarning(pulled: number[], stopped: number[]): string {
     const names = listNames(stopped.map(String));
     sentences.push(
       `For ${many ? 'Phases' : 'Phase'} ${names}, the search stopped before it could prove the best plan, so ${many ? 'those phases keep their' : 'that phase keeps its'} own target time; whether ${many ? 'they' : 'it'} could finish sooner has not been checked.`,
+    );
+  }
+  if (shardHeld.length) {
+    const many = shardHeld.length > 1;
+    sentences.push(
+      `${many ? 'Phases' : 'Phase'} ${listNames(shardHeld.map(String))} could finish sooner, but only with more Power Shards on ${many ? 'their' : 'its'} overclocked production lines than the ${budget} this plan allows them, so ${many ? 'they keep their' : 'it keeps its'} own target time.`,
     );
   }
   return sentences.join(' ');

@@ -188,10 +188,10 @@ export interface CurrentSettings {
   // Absent unless a recalculation the user started asked for pins (the progress state's
   // `sloopPins`, saved from a line's dialog), so a plan without it calculates exactly as before.
   sloopPins?: SloopPins;
-  // Overclocked production lines (#1239, slice 1 of 2): per phase, by recipe id, the clock in %
-  // (above 100, at most 250) every machine of that line runs at, with Power Shards
-  // (planner/clocks.ts). Only an explicit solver input so far: nothing in the interface or the
-  // progress state sets it, so a plan without it calculates exactly as before.
+  // Overclocked production lines (#1239): per phase, by recipe id, the clock in % (above 100, at
+  // most 250) every machine of that line runs at, with Power Shards (planner/clocks.ts). Absent
+  // unless a recalculation the user started asked for it (the progress state's `lineClocks`, a
+  // line's Power Shard pin saved from its dialog), so a plan without it calculates exactly as before.
   lineClocks?: LineClocks;
   // The Power Shards the clocked lines (lineClocks) of each phase may hold together, a whole
   // number; absent, they take what they need. The miners' and extractors' shards are not in it.
