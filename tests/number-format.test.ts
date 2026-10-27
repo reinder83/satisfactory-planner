@@ -89,6 +89,11 @@ test('phaseSteps text is byte-identical to the per-call toLocaleString version',
         .replace(
           "from './somersloops.ts'",
           `from '${new URL('../public/somersloops.ts', import.meta.url).href}'`,
+        )
+        // and shards.ts (#1239), likewise.
+        .replace(
+          "from './shards.ts'",
+          `from '${new URL('../public/shards.ts', import.meta.url).href}'`,
         ),
     );
     const before = (await import(pathToFileURL(file).href)) as { phaseSteps: typeof phaseSteps };

@@ -17,8 +17,8 @@ import { beginnerMode } from '../../beginner.ts';
 import { whileBusy } from '../../busy.ts';
 import {
   clockable,
-  clockNote,
-  clockOf,
+  shardPinNote,
+  pinnedClockOf,
   clockRecipe,
   plannedClocks,
   sameClocks,
@@ -27,7 +27,12 @@ import {
 } from '../../shard-pins.ts';
 import { calcStage, calculated, stage, state } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { SHARD_PIN_CLOCKS, shardsPerMachine, shardWords } from '../../../shards.ts';
+import {
+  gameShards,
+  SHARD_PIN_CLOCKS,
+  shardsPerMachine,
+  powerShardWords,
+} from '../../../shards.ts';
 import { localeNumber } from '../../../wording.ts';
 import { legacy } from '../bridge.ts';
 import type { CalcRow } from '../../../types/index.ts';
@@ -38,7 +43,7 @@ const props = defineProps<{ row: CalcRow }>();
 const optionText = (clock: number | undefined) =>
   clock === undefined
     ? '100% · no Power Shards'
-    : `${localeNumber(clock)}% · ${shardWords(shardsPerMachine(clock))} in each machine`;
+    : `${localeNumber(clock)}% · ${powerShardWords(shardsPerMachine(clock))} in each machine`;
 
 const view = computed(() =>
   legacy(() => {
@@ -46,8 +51,8 @@ const view = computed(() =>
       phase = stage();
     if (beginnerMode() || !calculated) return null;
     const recipe = clockRecipe(row);
-    const planned = clockOf(plannedClocks(calculated), phase, recipe),
-      wanted = clockOf(wantedClocks(calculated, state), phase, recipe);
+    const planned = pinnedClockOf(plannedClocks(calculated), phase, recipe),
+      wanted = pinnedClockOf(wantedClocks(calculated, state), phase, recipe);
     if (
       !clockable(row, phase, calculated.settings) &&
       planned === undefined &&
@@ -58,7 +63,10 @@ const view = computed(() =>
     const lines = (calcStage()?.rows ?? []).filter(line => clockRecipe(line) === recipe);
     const clock = lines.find(line => line.clock)?.clock;
     const machines = lines.reduce((sum, line) => sum + line.machines, 0),
-      shards = lines.reduce((sum, line) => sum + (line.shards ?? 0), 0);
+      // The game's count (gameShards): a last machine at the remainder takes fewer. A storage-only
+      // line (`<recipe>:stock`) runs at 100% and is not part of it.
+      shards = lines.reduce((sum, line) => sum + gameShards(line), 0),
+      fewer = lines.some(line => (line.shards ?? 0) > gameShards(line));
     const named = `${localeNumber(machines)} ${row.machine}${machines === 1 ? '' : 's'}`;
     // A clock a hand-edited file or a later release asked for stays choosable as it is.
     const clocks: (number | undefined)[] = [undefined, ...SHARD_PIN_CLOCKS];
@@ -71,9 +79,9 @@ const view = computed(() =>
         label: optionText(entry),
       })),
       now: clock
-        ? `This plan runs this line at ${localeNumber(clock)}%: ${named} with ${shardWords(shardsPerMachine(clock))} each, ${shardWords(shards)} in all.`
+        ? `This plan runs this line at ${localeNumber(clock)}%: ${named} with ${powerShardWords(shardsPerMachine(clock))} each${fewer ? ' (the last one fewer, at its lower clock)' : ''}, ${powerShardWords(shards)} in all.`
         : `This plan runs this line at 100%: ${named}, no Power Shards.`,
-      note: clockNote(calculated, state, phase, recipe),
+      note: shardPinNote(calculated, state, phase, recipe),
       selectId: 'shard-pin-' + recipe,
       noteId: 'shard-pin-note-' + recipe,
     };

@@ -10,7 +10,12 @@
 //
 // The same pattern as somersloop pins (app/sloop-pins.ts). Plain functions of the plan and the
 // progress, no session: the pages pass them in.
-import { clockReasonWords, clockRemedyWords, shardsPerMachine, shardWords } from '../shards.ts';
+import {
+  clockReasonWords,
+  clockRemedyWords,
+  shardsPerMachine,
+  powerShardWords,
+} from '../shards.ts';
 import { localeNumber } from '../wording.ts';
 import type {
   CalcRow,
@@ -50,8 +55,11 @@ export const wantedClocks = (
   progress: Pick<ProgressState, 'lineClocks'>,
 ): LineClocks => progress.lineClocks ?? plannedClocks(plan);
 // The clock `clocks` puts on line `recipe` of `phase`, or undefined when it runs at 100%.
-export const clockOf = (clocks: LineClocks, phase: StageKey, recipe: string): number | undefined =>
-  clocks[phase]?.[recipe];
+export const pinnedClockOf = (
+  clocks: LineClocks,
+  phase: StageKey,
+  recipe: string,
+): number | undefined => clocks[phase]?.[recipe];
 // `clocks` with each phase's keys sorted and without an empty phase, as the planner and
 // validateState keep them.
 export function normalClocks(clocks: LineClocks): LineClocks {
@@ -120,8 +128,8 @@ export function lineClocksChange(
       ...Object.keys(wanted[phase] ?? {}),
     ]);
     for (const recipe of [...recipes].sort()) {
-      const before = clockOf(planned, phase, recipe),
-        after = clockOf(wanted, phase, recipe);
+      const before = pinnedClockOf(planned, phase, recipe),
+        after = pinnedClockOf(wanted, phase, recipe);
       if (before !== after)
         lines.push({ phase, recipe, name: clockLineName(plan, phase, recipe), before, after });
     }
@@ -141,7 +149,7 @@ export function lineClocksSettings(settings: StoredSettings, wanted: LineClocks)
 export const clockPinWords = (clock: number | undefined): string =>
   clock === undefined
     ? '100% without Power Shards'
-    : `${localeNumber(clock)}% with ${shardWords(shardsPerMachine(clock))} in each machine`;
+    : `${localeNumber(clock)}% with ${powerShardWords(shardsPerMachine(clock))} in each machine`;
 // "Iron Rod (Phase 3): 250% with 3 Power Shards in each machine; Screws (Phase 3): 100% …".
 export const clockChangeWords = (lines: ClockChange[]): string =>
   lines.map(line => `${line.name} (Phase ${line.phase}): ${clockPinWords(line.after)}`).join('; ');
@@ -164,14 +172,14 @@ export const droppedClockNames = (plan: Pick<StoredCalculatedPlan, 'stages'>): s
 // What the line's dialog says under its pin: the change a recalculation would make when the clock
 // asked for differs from the plan's; otherwise the plan's clock and whether the phase kept it, or
 // that the line runs at 100%.
-export function clockNote(
+export function shardPinNote(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   progress: Pick<ProgressState, 'lineClocks'>,
   phase: StageKey,
   recipe: string,
 ): string {
-  const planned = clockOf(plannedClocks(plan), phase, recipe),
-    wanted = clockOf(wantedClocks(plan, progress), phase, recipe);
+  const planned = pinnedClockOf(plannedClocks(plan), phase, recipe),
+    wanted = pinnedClockOf(wantedClocks(plan, progress), phase, recipe);
   if (planned !== wanted)
     return `Saved: ${clockPinWords(wanted)} after a recalculation. The plan keeps this line as it was calculated until you recalculate: the build plan offers “Recalculate in place with Power Shard pins”, which recalculates this profile and keeps the current version as a backup under Profiles.`;
   if (planned === undefined)

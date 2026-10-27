@@ -17,7 +17,7 @@ import type { AddressInfo } from 'node:net';
 import { calculate, catalog, DATA, settings } from '../planner.ts';
 import {
   clockable,
-  clockNote,
+  shardPinNote,
   droppedClockNames,
   lineClocksChange,
   lineClocksSettings,
@@ -27,6 +27,8 @@ import {
 } from '../public/app/shard-pins.ts';
 import { settingsChanges } from '../public/app/profile-edit.ts';
 import { adaRemarks } from '../public/ada.ts';
+import { gameShards } from '../public/shards.ts';
+import { finalPhaseWarning } from '../planner/adjustments.ts';
 import { phaseSteps } from '../public/progression.ts';
 import { checkBase, mutate, newProfileState, shareState, validateState } from '../public/state.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
@@ -176,7 +178,7 @@ test('a pin the plan cannot keep is reported, never silent', () => {
   );
   assert.deepEqual(droppedClockNames(early), ['Iron Rod in Phase 1']);
   assert.match(
-    clockNote(early, {}, '1', ROD),
+    shardPinNote(early, {}, '1', ROD),
     /^Pinned to 200% with 2 Power Shards in each machine, but Phase 1 could not keep the pin: .*The phase runs the line at 100%\. Tick “I can overclock”/,
   );
   // The planner only offers the pin where it can keep it: from Phase 2, or with overclock.
@@ -235,12 +237,12 @@ test('the pages’ helpers: a change, its settings, the dialog note and Review',
   const recalculated = pinned();
   assert.equal(lineClocksChange(recalculated, { lineClocks: wanted }), null);
   assert.match(
-    clockNote(plan, { lineClocks: wanted }, '3', ROD),
+    shardPinNote(plan, { lineClocks: wanted }, '3', ROD),
     /^Saved: 250% with 3 Power Shards in each machine after a recalculation\./,
   );
-  assert.match(clockNote(plan, {}, '3', ROD), /^The planner runs this line at 100%\./);
+  assert.match(shardPinNote(plan, {}, '3', ROD), /^The planner runs this line at 100%\./);
   assert.equal(
-    clockNote(recalculated, {}, '3', ROD),
+    shardPinNote(recalculated, {}, '3', ROD),
     'Pinned to 250% with 3 Power Shards in each machine: the plan keeps it exactly.',
   );
   assert.deepEqual(wantedClocks(recalculated, {}), wanted, 'without a choice the plan’s clocks');
@@ -495,4 +497,34 @@ test('an import drops Power Shard pins on unknown recipes and keeps the rest', a
   // Pins it knows import as they are.
   const known = (await importableTransfer(json(file({})), recipes)).saves[0]!.profiles[0]!;
   assert.deepEqual(known.state.lineClocks, version26.lineClocks);
+});
+
+// Review of #1266: the pages count the shards the game needs (a last machine at the remainder
+// takes fewer), a draft over the Power Shard budget names the shards, and the final-phase target
+// says when only the budget keeps a phase from finishing sooner.
+test('the game’s shard count, a draft over the shard budget, and the final-phase target', () => {
+  assert.equal(gameShards({ clock: 250, machines: 3, lastClock: 57.75 }), 6);
+  assert.equal(gameShards({ clock: 250, machines: 3, lastClock: 250 }), 9);
+  assert.equal(gameShards({ clock: 150, machines: 1, lastClock: 120 }), 1);
+  assert.equal(gameShards({ machines: 3, lastClock: 100 }), 0);
+  // A phase that fits only with its clocks (a building cap between the two plans) and only over
+  // the shard budget: the draft names the shards instead of the recipes.
+  const clocks = { '3': { [ROD]: 250, Recipe_Screw_C: 250 } };
+  const count = (plan: StoredCalculatedPlan) =>
+    plan.stages['3']!.rows!.reduce((total, row) => total + row.machines, 0);
+  const withClocks = json(calculate({ ...BASE, lineClocks: clocks })) as StoredCalculatedPlan;
+  const cap = Math.floor((count(plain()) + count(withClocks)) / 2);
+  const capped = { ...BASE, phaseCaps: { buildings: cap }, lineClocks: clocks };
+  assert.ok(calculate(capped).stages['3']!.feasible, 'fits with the clocks');
+  const refused = calculate({ ...capped, lineShardBudget: 1 }).stages['3']!;
+  assert.equal(refused.feasible, false);
+  assert.match(
+    refused.reason ?? '',
+    /^This phase fits only with more Power Shards on its overclocked production lines than the 1 this plan allows them: at the clocks you pinned they would hold \d+\. Lower or clear the Power Shard pins/,
+  );
+  assert.match(
+    finalPhaseWarning([], [], [2], 16),
+    /Phase 2 could finish sooner, but only with more Power Shards on its overclocked production lines than the 16 this plan allows them, so it keeps its own target time\.$/,
+  );
+  assert.equal(finalPhaseWarning([], []), finalPhaseWarning([], [], [], 0), 'unchanged without');
 });

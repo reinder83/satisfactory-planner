@@ -385,7 +385,7 @@ const pinMaps = (profile: PinnedProfile): (SloopPins | LineClocks | undefined)[]
 const hasPins = (profile: PinnedProfile) => pinMaps(profile).some(pins => pins !== undefined);
 function dropUnknownPins(transfer: Omit<ImportableSaveExport, 'exportedAt'>, recipes: Recipe[]) {
   const pinnable = new Set(recipes.filter(recipe => amplifySlots(recipe) > 0).map(r => r.id));
-  const clockable = new Set(recipes.map(recipe => recipe.id));
+  const recipeIds = new Set(recipes.map(recipe => recipe.id));
   const known = (pins: SloopPins, allowed: Set<string>): SloopPins =>
     Object.fromEntries(
       Object.entries(pins)
@@ -398,7 +398,7 @@ function dropUnknownPins(transfer: Omit<ImportableSaveExport, 'exportedAt'>, rec
   for (const profile of transfer.saves.flatMap(save => save.profiles) as PinnedProfile[]) {
     for (const [field, allowed] of [
       ['sloopPins', pinnable],
-      ['lineClocks', clockable],
+      ['lineClocks', recipeIds],
     ] as const) {
       const asked = profile.state[field];
       if (asked) profile.state[field] = known(asked, allowed);

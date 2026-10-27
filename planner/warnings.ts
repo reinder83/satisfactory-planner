@@ -9,7 +9,12 @@ import {
   pinRemedyWords,
 } from '../public/somersloops.ts';
 import { ownedBeltsWords, phaseMinersWords } from '../public/mining.ts';
-import { clockReasonWords, clockRemedyWords, shardWords } from '../public/shards.ts';
+import {
+  clockReasonWords,
+  clockRemedyWords,
+  gameShards,
+  powerShardWords,
+} from '../public/shards.ts';
 import type {
   CurrentSettings,
   CalcRow,
@@ -109,17 +114,17 @@ function lineClockWarnings({ config, stages }: FinishedPlan): string[] {
     for (const [recipe, clock] of Object.entries(config.lineClocks[phase as StageKey] ?? {})) {
       if (stage.lineClocksDropped?.some(drop => drop.recipe === recipe)) continue;
       const rows = (stage.rows ?? []).filter(row => ofLine(row, recipe));
-      const shards = rows.reduce((total, row) => total + (row.shards ?? 0), 0);
+      const shards = rows.reduce((total, row) => total + gameShards(row), 0);
       if (rows.length)
         kept.push(
-          `${name(recipe)} in Phase ${phase} (${localeNumber(clock)}%, ${shardWords(shards)})`,
+          `${name(recipe)} in Phase ${phase} (${localeNumber(clock)}%, ${powerShardWords(shards)})`,
         );
       else unbuilt.push(`${name(recipe)} in Phase ${phase}`);
     }
   }
   if (kept.length)
     warnings.push(
-      `${kept.length === 1 ? 'One production line runs' : `${kept.length} production lines run`} at the clock you pinned with Power Shards: ${listNames(kept)}. Every machine of such a line holds the shards for its clock, the last one too.`,
+      `${kept.length === 1 ? 'One production line runs' : `${kept.length} production lines run`} at the clock you pinned with Power Shards: ${listNames(kept)}. Each machine holds the shards for the line's clock, except a last machine underclocked to the remainder, which needs only those for its own clock.`,
     );
   if (unbuilt.length)
     warnings.push(

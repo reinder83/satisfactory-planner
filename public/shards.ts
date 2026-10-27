@@ -3,7 +3,7 @@
 // warning, ADA and the production line dialog share, as somersloops.ts does for somersloop pins.
 import { extractorShards } from './preferences.ts';
 import { localeNumber } from './wording.ts';
-import type { LineClockReason } from './types/index.ts';
+import type { CalcRow, LineClockReason } from './types/index.ts';
 
 // The MAM research that lets machines take Power Shards (OVERCLOCK_RESEARCH in preferences).
 export const SHARD_RESEARCH = 'Overclock Production';
@@ -12,12 +12,18 @@ export const SHARD_RESEARCH = 'Overclock Production';
 export const SHARD_PIN_CLOCKS = [150, 200, 250] as const;
 // The Power Shards one machine at `clock` % holds: 1 up to 150%, 2 up to 200%, 3 up to 250%.
 export const shardsPerMachine = (clock: number): number => extractorShards(clock);
+// The Power Shards an overclocked row's machines need in the game: each the shards for the line's
+// clock, the last one those for its own clock (lastClock), fewer when an exact plan underclocks it
+// to the remainder (a 250% line of 3 machines whose last runs at 57.75% needs 3 + 3 + 0 = 6). The
+// row's `shards` counts the last one at the full clock too, which the planner's shard budget
+// checks (a later re-solve may run it at full clock); the pages show this count. 0 at 100%.
+export const gameShards = (row: Pick<CalcRow, 'clock' | 'machines' | 'lastClock'>): number =>
+  row.clock && row.machines > 0
+    ? (row.machines - 1) * shardsPerMachine(row.clock) + shardsPerMachine(row.lastClock)
+    : 0;
 // "1 Power Shard", "9 Power Shards".
-export const shardWords = (shards: number): string =>
+export const powerShardWords = (shards: number): string =>
   `${localeNumber(shards)} Power Shard${shards === 1 ? '' : 's'}`;
-// "250% (3 Power Shards each)": a line clock with the shards each of its machines holds.
-export const clockWords = (clock: number): string =>
-  `${localeNumber(clock)}% (${shardWords(shardsPerMachine(clock))} each)`;
 
 // Why a phase could not keep a line's clock, as a clause: "machines take Power Shards only once …".
 // `budget` is the plan's settings.lineShardBudget.
@@ -25,7 +31,7 @@ export function clockReasonWords(reason: LineClockReason, budget?: number): stri
   if (reason === 'research')
     return `machines take Power Shards only once the MAM research ${SHARD_RESEARCH} is done, which a Phase 1 plan counts on only when you can overclock`;
   if (reason === 'budget')
-    return `the phase’s overclocked production lines would hold more than the ${shardWords(budget ?? 0)} this plan allows them`;
+    return `the phase’s overclocked production lines would hold more than the ${powerShardWords(budget ?? 0)} this plan allows them`;
   if (reason === 'unavailable') return 'the recipe is not available in this phase of the plan';
   return 'no plan of the phase fits with it, so the planner ran the line at 100%';
 }

@@ -23,6 +23,7 @@ import {
   PIPE_MARKS,
   SHARD_RECIPE_RESEARCH,
 } from './preferences.ts';
+import { gameShards } from './shards.ts';
 import {
   miningBuildings,
   miningStep,
@@ -525,7 +526,7 @@ function upgradeTask(
 const lineShardNeeds = (stage: Pick<StoredStage, 'rows'> | undefined) => {
   const rows = (stage?.rows ?? []).filter(row => (row.shards ?? 0) > 0);
   return rows.length
-    ? { lines: rows.length, shards: rows.reduce((sum, row) => sum + row.shards!, 0) }
+    ? { lines: rows.length, shards: rows.reduce((sum, row) => sum + gameShards(row), 0) }
     : null;
 };
 function shardResearchTask(

@@ -67,7 +67,7 @@ import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
 import { AMPLIFIER_WORDS } from '../../somersloops.ts';
-import { SHARD_RESEARCH, shardsPerMachine, shardWords } from '../../shards.ts';
+import { gameShards, SHARD_RESEARCH, shardsPerMachine, powerShardWords } from '../../shards.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 import type { StepList, StepTable } from '../../step-table.ts';
@@ -340,10 +340,18 @@ const sloopText = (row: CalcRow): string =>
 // The Power Shards an overclocked line takes (#1239), as a sentence with a space after it; '' for
 // any other. Machines take them only after the MAM's Overclock Production research, which the
 // build plan lists (requiredMilestones and shardResearchTask in progression.ts).
-const shardText = (row: CalcRow): string =>
-  row.clock && row.shards
-    ? `Insert ${shardWords(shardsPerMachine(row.clock))} in each machine — ${num(row.shards)} in total — to run it at ${num(row.clock)}%, as you pinned it, once the MAM research ${SHARD_RESEARCH} is done. `
-    : '';
+// The count is the game's (gameShards): a last machine underclocked to the remainder takes only
+// the shards for its own clock, which the sentence says.
+const shardText = (row: CalcRow): string => {
+  if (!row.clock || !row.shards) return '';
+  const each = shardsPerMachine(row.clock),
+    last = shardsPerMachine(row.lastClock);
+  const lastWords =
+    row.machines > 1 && last < each
+      ? ` (the last one, at ${num(row.lastClock)}%, ${last ? `needs ${powerShardWords(last)}` : 'needs none'})`
+      : '';
+  return `Insert ${powerShardWords(each)} in each machine${lastWords} — ${num(gameShards(row))} in total — to run it at ${num(row.clock)}%, as you pinned it, once the MAM research ${SHARD_RESEARCH} is done. `;
+};
 
 // How the advice names a line (as its build-plan step is titled: "Wire for Alpha") and words a rate.
 const recycleWords: AdviceWords = {

@@ -191,6 +191,7 @@ test('a clocked line shows its clock and shards on the card, in the dialog and i
     $$('.machine-cells dt').some(node => node.textContent === 'At 250%'),
     'the full machines’ cell names the clock',
   );
+  assert.match(text('[data-exact-clock-choice]'), /runs the line on whole machines at 250%./);
   go('factories');
   render();
   await settle();
