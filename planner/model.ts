@@ -42,6 +42,7 @@ import {
 } from './recipes.ts';
 import { twoStepFit } from './fit.ts';
 import { keptPins, phasePins, withPinDrops } from './pins.ts';
+import { keptClocks, lineClock, phaseClocks, withClockDrops, withinShardBudget } from './clocks.ts';
 import { addBuildCosts, withBuildCost } from './build-cost.ts';
 import { withinLoad } from './load.ts';
 import { BUILT, readStage } from './stage.ts';
@@ -111,12 +112,13 @@ import {
 // and public/app/ui/wizard/. Only calculate() calls run, through its phase helpers (solvePhase,
 // draftStage, resolveEarlierPhases, solveUnfueled) and the two-step fit (fit.ts).
 export function run(config: CurrentSettings, phase: number, options: RunOptions = {}): RunResult {
-  const result = runBuilt(config, phase, options);
-  // The somersloop pins the phase could not keep (#1235), on the outer call only, which the inner
-  // solves of the two-step fit return through.
-  return options.recipeIds
-    ? result
-    : withPinDrops(result, config, phase, options.conversion ?? false);
+  // No plan whose clocked lines hold more Power Shards than the budget (#1239), on every solve.
+  const result = withinShardBudget(config, runBuilt(config, phase, options));
+  // The somersloop pins (#1235) and line clocks (#1239) the phase could not keep, on the outer
+  // call only, which the inner solves of the two-step fit return through.
+  if (options.recipeIds) return result;
+  const conversion = options.conversion ?? false;
+  return withClockDrops(withPinDrops(result, config, phase, conversion), config, phase, conversion);
 }
 // One phase's solve with the built lines counted as standing, else as if none stood (#1176).
 function runBuilt(config: CurrentSettings, phase: number, options: RunOptions): RunResult {
@@ -296,12 +298,16 @@ export const phaseContext = (
     buildCost = false,
   }: RunOptions,
 ): PhaseContext => ({
-  // Only the somersloop pins the phase can keep (keptPins, #1235); the settings as they are
-  // without pins.
-  config: keptPins(
-    config.amplifySloops > 0 && !amplifiesIn(config, phase)
-      ? { ...config, amplifySloops: 0 }
-      : config,
+  // Only the somersloop pins (keptPins, #1235) and line clocks (keptClocks, #1239) the phase can
+  // keep; the settings as they are without either.
+  config: keptClocks(
+    keptPins(
+      config.amplifySloops > 0 && !amplifiesIn(config, phase)
+        ? { ...config, amplifySloops: 0 }
+        : config,
+      phase,
+      conversion,
+    ),
     phase,
     conversion,
   ),
@@ -351,7 +357,9 @@ export type Solution = ReturnType<typeof solve>;
 // Recipe pool. With `recipeIds` (the inner integer fit) only the chosen network, plus the
 // conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
 // and only for the baseline's candidate lines, a built amplified line and a line pinned to
-// somersloops; a line pinned to none gets no twin (#1235).
+// somersloops; a line pinned to none gets no twin (#1235). A line with a clock (#1239,
+// settings.lineClocks) is its recipe at that clock (lineClock), and so are its twin and the
+// groups' own lines of it.
 export function phasePool({
   config,
   phase,
@@ -359,8 +367,11 @@ export function phasePool({
   recipeIds,
   baseline,
 }: PhaseContext): PoolRecipe[] {
+  const clocks = phaseClocks(config, phase);
   const whole: PoolRecipe[] = [
-    ...recipePool(config, phase, conversion),
+    ...recipePool(config, phase, conversion).map(recipe =>
+      clocks[recipe.id] ? lineClock(recipe, clocks[recipe.id]!) : recipe,
+    ),
     ...generators(config, phase),
   ];
   // The groups' own lines (#875) are copies of whole-pool recipes, so every solve of the phase,

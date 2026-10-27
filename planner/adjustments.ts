@@ -6,6 +6,7 @@ import type { Solved, RunResult } from './types.ts';
 import { RAW } from './data.ts';
 import { run, wholeLine } from './model.ts';
 import { stageSettings, withinRates } from './on-site.ts';
+import { clockMarks, stageClocks } from './clocks.ts';
 import type { PhaseStages } from './calculate.ts';
 
 // With the target time on the final phase, an earlier phase may run its lines as
@@ -65,7 +66,7 @@ function resolveEarlierPhases(
     for (let later = phase; later <= 5; later++)
       for (const [id, count] of Object.entries(built[later] || {}))
         caps[id] = Math.max(caps[id] || 0, count);
-    return withinRates(stageSettings(config, stage), phase, settings =>
+    return withinRates(resolveSettings(config, phase, stage), phase, settings =>
       run(settings, phase, { maximum: true, caps }),
     );
   };
@@ -102,11 +103,17 @@ function resolveEarlierPhases(
 // What a re-solve of `stage` keeps saying about its items made on site: it makes them centrally
 // (onSiteDropped, #875) or routes a group's excess to the central balance (onSiteOverflow, #1063).
 // stageSettings re-solves it that way, so the plan that replaces it keeps the marks, and the
-// plan's warnings and ADA still name its phase (#1099).
+// plan's warnings and ADA still name its phase (#1099). So do the line clocks it could not keep
+// (#1239, clockMarks), which resolveSettings leaves out.
 const siteMarks = (stage: CurrentStage) => ({
   ...(stage.onSiteDropped ? { onSiteDropped: stage.onSiteDropped } : {}),
   ...(stage.onSiteOverflow ? { onSiteOverflow: stage.onSiteOverflow } : {}),
+  ...clockMarks(stage),
 });
+// The settings a re-solve of `stage` uses: stageSettings, without the line clocks the stage could
+// not keep (#1239, stageClocks), so it is re-solved as it was planned.
+const resolveSettings = (config: CurrentSettings, phase: number, stage: CurrentStage | undefined) =>
+  stageClocks(stageSettings(config, stage), phase, stage);
 // The phaseTime 'final' warning: which earlier phases finish sooner, and which searches stopped.
 // Only the phases resolveEarlierPhases pulled ahead count: a phase that minimal construction
 // already runs at full speed (fullSpeed), Phase 5 included, is not an earlier phase pulled ahead.
@@ -136,7 +143,7 @@ function finalPhaseWarning(pulled: number[], stopped: number[]): string {
 // 5's `fuelVerdict`, or returns the warning that no answer was proven.
 export function judgeAugmenterFuel(config: CurrentSettings, stages: PhaseStages): string[] {
   if (!config.fueledAugmenters || !stages[5]?.feasible) return [];
-  const unfueled = solveUnfueled(stageSettings(config, stages[5]));
+  const unfueled = solveUnfueled(resolveSettings(config, 5, stages[5]));
   // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
   // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
   // Only the attempt whose result is used counts: the retry with conversion allows every recipe
@@ -213,7 +220,7 @@ function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResul
 export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved): Solved {
   if (cannotFinishSooner(config, phase, stage)) return stage;
   const caps = Object.fromEntries(stage.rows.map(row => [row.id, row.machines]));
-  const fast = withinRates(stageSettings(config, stage), phase, settings =>
+  const fast = withinRates(resolveSettings(config, phase, stage), phase, settings =>
     run(settings, phase, {
       maximum: true,
       caps,

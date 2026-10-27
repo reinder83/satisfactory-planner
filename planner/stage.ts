@@ -6,6 +6,7 @@ import { DATA, RAW } from './data.ts';
 import { extractionEquipment, stageGrid } from '../public/power.ts';
 import { miningMW } from '../public/preferences.ts';
 import type { PhaseContext, PhaseDemands, Solution } from './model.ts';
+import { lineShards } from './clocks.ts';
 
 // Reads the solution back into a stage (see run for its fields). `model` is the model `solved`
 // solves; deliverAll reads the Space Elevator parts' balances from it.
@@ -119,7 +120,8 @@ function deliverAll(model: LpModel, solved: Solution, delivery: Record<string, S
   }
 }
 // Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
-// one runs underclocked at `lastClock` % (100 for a whole-machine row). A generator line is
+// one runs underclocked at `lastClock` % (100 for a whole-machine row; an overclocked line's
+// equivalent is machines at its `clock`, #1239, which a whole-machine row's last one runs at). A generator line is
 // whole generators at 100% (#1064): generators burn fuel only for the power drawn, so its last
 // one is never underclocked, and its `equivalent` is the fuel it burns. Row inputs and outputs
 // are the line's totals per minute. peakMW counts whole machines at full power without the
@@ -139,7 +141,10 @@ export function stageRows(
         equivalent,
         machines,
         ...(recipe.slots ? { amplified: true, sloops: recipe.slots * machines } : {}),
-        lastClock: recipe.power < 0 ? 100 : Math.max(0, (equivalent - machines + 1) * 100),
+        // An overclocked line (#1239): its machines are at its clock, and so is the last one's.
+        ...(recipe.clock ? { shards: lineShards(recipe.clock, machines) } : {}),
+        lastClock:
+          recipe.power < 0 ? 100 : Math.max(0, (equivalent - machines + 1) * (recipe.clock ?? 100)),
         inputs: Object.fromEntries(
           Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * equivalent]),
         ),
