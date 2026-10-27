@@ -67,6 +67,8 @@ const view = computed(() =>
       // line (`<recipe>:stock`) runs at 100% and is not part of it.
       shards = lines.reduce((sum, line) => sum + gameShards(line), 0),
       fewer = lines.some(line => (line.shards ?? 0) > gameShards(line));
+    // A line of one machine runs it at its own clock, below the line's (the remainder).
+    const only = machines === 1 ? lines.find(line => line.machines === 1 && line.clock) : undefined;
     const named = `${localeNumber(machines)} ${row.machine}${machines === 1 ? '' : 's'}`;
     // A clock a hand-edited file or a later release asked for stays choosable as it is.
     const clocks: (number | undefined)[] = [undefined, ...SHARD_PIN_CLOCKS];
@@ -78,9 +80,13 @@ const view = computed(() =>
         value: entry === undefined ? '' : String(entry),
         label: optionText(entry),
       })),
-      now: clock
-        ? `This plan runs this line at ${localeNumber(clock)}%: ${named} with ${powerShardWords(shardsPerMachine(clock))} each${fewer ? ' (the last one fewer, at its lower clock)' : ''}, ${powerShardWords(shards)} in all.`
-        : `This plan runs this line at 100%: ${named}, no Power Shards.`,
+      now: only
+        ? shards
+          ? `This plan runs this line’s one ${row.machine} at ${localeNumber(only.lastClock)}% with ${powerShardWords(shards)}.`
+          : `This plan pins this line at ${localeNumber(clock ?? 100)}%, but its one ${row.machine} runs at ${localeNumber(only.lastClock)}%, which needs no Power Shards.`
+        : clock
+          ? `This plan runs this line at ${localeNumber(clock)}%: ${named} with ${powerShardWords(shardsPerMachine(clock))} each${fewer ? ' (the last one fewer, at its lower clock)' : ''}, ${powerShardWords(shards)} in all.`
+          : `This plan runs this line at 100%: ${named}, no Power Shards.`,
       note: shardPinNote(calculated, state, phase, recipe),
       selectId: 'shard-pin-' + recipe,
       noteId: 'shard-pin-note-' + recipe,

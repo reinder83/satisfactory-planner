@@ -29,7 +29,7 @@ const props = defineProps<{ flow: GroupFlow; names: FlowNames }>();
 
 const machines = (line: FlowLine) =>
   (line.share < 1 - 1e-6 ? `≈ ${num(line.machinesHere)} of ` : '') +
-  machineLine(line.machines, line.machine, line.lastClock);
+  machineLine(line.machines, line.machine, line.lastClock, line.clock);
 const connections = computed(() =>
   flowConnections(props.flow, props.names).map(connection => ({
     ...connection,

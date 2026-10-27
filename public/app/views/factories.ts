@@ -117,8 +117,10 @@ export function machineLine(
   lastClock = 100,
   full = 100,
 ): string {
-  const text = `${num(machines)} × ${machine}${full > 100 ? ` at ${localeNumber(full)}%` : ''}`;
   const clock = clockText(lastClock, full);
+  // A single machine below the line's clock runs at its own: "1 × Constructor at 40%".
+  if (clock && machines === 1 && full > 100) return `${num(machines)} × ${machine} at ${clock}%`;
+  const text = `${num(machines)} × ${machine}${full > 100 ? ` at ${localeNumber(full)}%` : ''}`;
   if (!clock) return text;
   return text + (machines > 1 ? ` · last at ${clock}%` : ` · at ${clock}%`);
 }

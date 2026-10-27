@@ -117,7 +117,7 @@ function lineClockWarnings({ config, stages }: FinishedPlan): string[] {
       const shards = rows.reduce((total, row) => total + gameShards(row), 0);
       if (rows.length)
         kept.push(
-          `${name(recipe)} in Phase ${phase} (${localeNumber(clock)}%, ${powerShardWords(shards)})`,
+          `${name(recipe)} in Phase ${phase} (${localeNumber(clock)}%, ${shards ? powerShardWords(shards) : 'no Power Shards: its one machine runs below 100%'})`,
         );
       else unbuilt.push(`${name(recipe)} in Phase ${phase}`);
     }

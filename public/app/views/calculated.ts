@@ -341,16 +341,25 @@ const sloopText = (row: CalcRow): string =>
 // any other. Machines take them only after the MAM's Overclock Production research, which the
 // build plan lists (requiredMilestones and shardResearchTask in progression.ts).
 // The count is the game's (gameShards): a last machine underclocked to the remainder takes only
-// the shards for its own clock, which the sentence says.
+// the shards for its own clock, which the sentence says. A line of one machine has only that last
+// machine: it takes the shards for its own clock, and none at 100% or below, where the pin
+// changes nothing, which the sentence says instead of counting zero.
 const shardText = (row: CalcRow): string => {
   if (!row.clock || !row.shards) return '';
+  const research = `once the MAM research ${SHARD_RESEARCH} is done`;
+  if (row.machines === 1) {
+    const own = shardsPerMachine(row.lastClock);
+    return own
+      ? `Insert ${powerShardWords(own)} in the machine, to run it at ${num(row.lastClock)}%, ${research}. `
+      : `Its one machine runs at ${num(row.lastClock)}%, which needs no Power Shards, so the ${num(row.clock)}% you pinned changes nothing here. `;
+  }
   const each = shardsPerMachine(row.clock),
     last = shardsPerMachine(row.lastClock);
   const lastWords =
-    row.machines > 1 && last < each
+    last < each
       ? ` (the last one, at ${num(row.lastClock)}%, ${last ? `needs ${powerShardWords(last)}` : 'needs none'})`
       : '';
-  return `Insert ${powerShardWords(each)} in each machine${lastWords} — ${num(gameShards(row))} in total — to run it at ${num(row.clock)}%, as you pinned it, once the MAM research ${SHARD_RESEARCH} is done. `;
+  return `Insert ${powerShardWords(each)} in each machine${lastWords} — ${num(gameShards(row))} in total — to run it at ${num(row.clock)}%, as you pinned it, ${research}. `;
 };
 
 // How the advice names a line (as its build-plan step is titled: "Wire for Alpha") and words a rate.

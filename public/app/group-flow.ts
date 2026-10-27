@@ -99,6 +99,8 @@ export interface FlowLine {
   // (1 unless the row is split between places) and the machines that share comes to.
   machines: number;
   lastClock: number;
+  // The clock the machines run at, an overclocked line's (#1239); absent at 100%.
+  clock?: number;
   share: number;
   machinesHere: number;
   // A generator's MW here; 0 for any other line.
@@ -478,6 +480,7 @@ function flowLine(
     machine: row.machine,
     machines: row.machines,
     lastClock: row.lastClock,
+    ...(row.clock ? { clock: row.clock } : {}),
     share,
     machinesHere: row.machines * share,
     mw: (row.generationMW || 0) * share,

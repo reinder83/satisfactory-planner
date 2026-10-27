@@ -5,6 +5,7 @@ import {
   type MigrationData,
 } from './handbook-migration.ts';
 import { amplifySlots } from './somersloops.ts';
+import { listNames } from './wording.ts';
 import type {
   Handbook,
   ImportableSaveExport,
@@ -373,6 +374,8 @@ export async function importableTransfer(
 // while the progress keeps an empty map, which asks for no pins. The same holds for the lines
 // pinned to a clock with Power Shards (`lineClocks`, #1239) on a recipe the game data does not
 // have (lineClocksSetting): an import drops those too.
+// Never silently: the imported plan gets a warning per kind of pin, which names the lines it
+// dropped (droppedPinWarning) and which the plan page shows until a recalculation replaces it.
 type PinnedProfile = Pick<ImportableSaveExport['saves'][number]['profiles'][number], 'state'> & {
   plan?: StoredCalculatedPlan | null;
 };
@@ -383,32 +386,54 @@ const pinMaps = (profile: PinnedProfile): (SloopPins | LineClocks | undefined)[]
   profile.plan?.settings.lineClocks,
 ];
 const hasPins = (profile: PinnedProfile) => pinMaps(profile).some(pins => pins !== undefined);
+// The plan warning for the pins of one kind an import dropped. `lines` are "Recipe in Phase N".
+const droppedPinWarning = (kind: string, reason: string, lines: Set<string>): string =>
+  `This file pinned ${kind} on ${listNames([...lines])}, which the import dropped, because ${reason}. Pin the lines again in their production lines’ dialogs if you still want them.`;
 function dropUnknownPins(transfer: Omit<ImportableSaveExport, 'exportedAt'>, recipes: Recipe[]) {
   const pinnable = new Set(recipes.filter(recipe => amplifySlots(recipe) > 0).map(r => r.id));
   const recipeIds = new Set(recipes.map(recipe => recipe.id));
-  const known = (pins: SloopPins, allowed: Set<string>): SloopPins =>
+  const nameOf = (id: string) => recipes.find(recipe => recipe.id === id)?.name ?? id;
+  // The lines of `pins` that `allowed` holds; each other one is added to `lost`.
+  const known = (pins: SloopPins, allowed: Set<string>, lost: Set<string>): SloopPins =>
     Object.fromEntries(
       Object.entries(pins)
         .map(([phase, lines]) => [
           phase,
-          Object.fromEntries(Object.entries(lines ?? {}).filter(([id]) => allowed.has(id))),
+          Object.fromEntries(
+            Object.entries(lines ?? {}).filter(([id]) => {
+              if (allowed.has(id)) return true;
+              lost.add(`${nameOf(id)} in Phase ${phase}`);
+              return false;
+            }),
+          ),
         ])
         .filter(([, lines]) => Object.keys(lines as object).length),
     );
   for (const profile of transfer.saves.flatMap(save => save.profiles) as PinnedProfile[]) {
-    for (const [field, allowed] of [
-      ['sloopPins', pinnable],
-      ['lineClocks', recipeIds],
+    const warnings: string[] = [];
+    for (const [field, allowed, kind, reason] of [
+      [
+        'sloopPins',
+        pinnable,
+        'somersloops',
+        'this planner has no such recipe, or one whose machine cannot take somersloops',
+      ],
+      ['lineClocks', recipeIds, 'Power Shards', 'this planner has no such recipe'],
     ] as const) {
+      const lost = new Set<string>();
       const asked = profile.state[field];
-      if (asked) profile.state[field] = known(asked, allowed);
+      if (asked) profile.state[field] = known(asked, allowed, lost);
       const settings = profile.plan?.settings;
       const planned = settings?.[field];
-      if (!settings || !planned) continue;
-      const kept = known(planned, allowed);
-      if (Object.keys(kept).length) settings[field] = kept;
-      else delete settings[field];
+      if (settings && planned) {
+        const kept = known(planned, allowed, lost);
+        if (Object.keys(kept).length) settings[field] = kept;
+        else delete settings[field];
+      }
+      if (lost.size) warnings.push(droppedPinWarning(kind, reason, lost));
     }
+    // A profile without a plan has nowhere to say so.
+    if (profile.plan && warnings.length) profile.plan.warnings.push(...warnings);
   }
 }
 

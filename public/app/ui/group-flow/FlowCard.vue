@@ -42,7 +42,7 @@ const props = defineProps<{
 
 const machines = computed(() => {
   const line = props.line;
-  const all = machineLine(line.machines, line.machine, line.lastClock);
+  const all = machineLine(line.machines, line.machine, line.lastClock, line.clock);
   // A split row: the group's share of the machines.
   return line.share < 1 - 1e-6 ? `≈ ${num(line.machinesHere)} of ${all}` : all;
 });

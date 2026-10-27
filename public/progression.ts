@@ -525,8 +525,11 @@ function upgradeTask(
 // what those lines hold. Nothing changes for a plan without them.
 const lineShardNeeds = (stage: Pick<StoredStage, 'rows'> | undefined) => {
   const rows = (stage?.rows ?? []).filter(row => (row.shards ?? 0) > 0);
+  // A line is its recipe's plain row, its amplified twin (somersloops) and its factories' own
+  // lines: one, however many rows it takes (recipeIdOf).
+  const lines = new Set(rows.map(recipeIdOf));
   return rows.length
-    ? { lines: rows.length, shards: rows.reduce((sum, row) => sum + gameShards(row), 0) }
+    ? { lines: lines.size, shards: rows.reduce((sum, row) => sum + gameShards(row), 0) }
     : null;
 };
 function shardResearchTask(
