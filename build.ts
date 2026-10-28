@@ -119,8 +119,35 @@ async function plannerJs(file: string) {
     (_, lead: string, quote: string, spec: string) => lead + quote + plannerImport(spec) + quote,
   );
 }
-// The page loads app.ts in development; the editions ship the bundle as app.js.
-const shippedPage = (html: string) => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
+// The page loads app.ts in development; the editions ship the bundle as app.js, with a
+// modulepreload link for every script app.js imports, directly or through another shared
+// script (#1279). Without them the browser finds each level of imports only after the level
+// above has arrived, one round trip per level; with them it asks for them all at once.
+const shippedPage = (html: string, preloads: string[]) =>
+  replaceOnce(
+    html,
+    '<script type="module" src="/app.ts"></script>',
+    preloads.map(name => `<link rel="modulepreload" href="/${name}" />`).join('\n    ') +
+      '\n    <script type="module" src="/app.js"></script>',
+  );
+// The scripts app.js imports statically, directly or through each other, as built in `out`
+// ('state.js', 'state/mutate.js'), in the order they are first imported. Dynamic imports are
+// left out: they load later, when the code asks for them.
+async function staticImports(out: string): Promise<string[]> {
+  const found: string[] = [];
+  const visit = async (name: string) => {
+    const code = await fs.readFile(path.join(out, name), 'utf8');
+    for (const [, spec] of code.matchAll(/(?:\bfrom\s*|\bimport\s*)["'](\.\.?\/[^"']+)["']/g)) {
+      const target = path.posix.join(path.posix.dirname(name), spec!);
+      if (found.includes(target)) continue;
+      found.push(target);
+      await visit(target);
+    }
+  };
+  await visit('app.js');
+  return found;
+}
+const pagePreloads = async (out: string) => ['app.js', ...(await staticImports(out))];
 // The typefaces, from their npm packages, as style.css names them (fonts.ts).
 async function writeFonts(out: string) {
   await fs.mkdir(path.join(out, 'fonts'), { recursive: true });
@@ -201,7 +228,7 @@ async function buildWeb() {
   await writeScripts(out);
   await writeFonts(out);
   const page = path.join(out, 'index.html');
-  await fs.writeFile(page, shippedPage(await fs.readFile(page, 'utf8')));
+  await fs.writeFile(page, shippedPage(await fs.readFile(page, 'utf8'), await pagePreloads(out)));
   console.log('Docker edition built in dist/web');
 }
 
@@ -217,7 +244,10 @@ async function buildPages() {
     await fs.copyFile(path.join(publicDir, file), path.join(out, file));
   await fs.cp(path.join(publicDir, 'icons'), path.join(out, 'icons'), { recursive: true });
   await writeFonts(out);
-  let html = shippedPage(await fs.readFile(path.join(out, 'index.html'), 'utf8'));
+  let html = shippedPage(
+    await fs.readFile(path.join(out, 'index.html'), 'utf8'),
+    await pagePreloads(out),
+  );
   html = replaceOnce(
     html.replaceAll('href="/', 'href="./').replaceAll('src="/', 'src="./'),
     '<script type="module"',
