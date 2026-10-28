@@ -90,6 +90,7 @@ import { minerWords, stageMiningAdvice, waterChoice } from '../mining.ts';
 import { OWNED_GENERATORS, driveCapWords, objectiveWords, phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 import type { Step } from './tasks.ts';
+import { mapLayerShown } from './map-markers.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
 const ADA_KEY = 'planner-ada';
@@ -476,6 +477,14 @@ function mapShortFacts(snapshot: StoredStage): AdaFacts['mapShort'] {
   return { name: need.name, needed: rate(need.needed), map: rate(Math.floor(need.map)) };
 }
 
+// The world map's markers (#1283), only on the map page and with a save open.
+function mapMarkerFacts(view: string): Pick<AdaFacts, 'mapMarkers' | 'mapMarkersHidden'> {
+  if (view !== 'map' || !currentSave.id) return {};
+  return {
+    mapMarkers: state.mapMarkers?.length ?? 0,
+    mapMarkersHidden: !mapLayerShown(state.mapLayers, 'markers'),
+  };
+}
 function adaFacts(): AdaFacts {
   const steps = currentSave.id ? planTasks() : [];
   // The next step leaves out the lines a delivered elevator part leaves without work (#1062), as
@@ -615,6 +624,7 @@ function adaFacts(): AdaFacts {
         )
       : [],
     mapShort: calculated && storedStage.feasible === false ? mapShortFacts(storedStage) : undefined,
+    ...mapMarkerFacts(view),
     // A shortfall is only measured with a calculated profile, so `grid` is there below.
     power:
       headroom > 0.01

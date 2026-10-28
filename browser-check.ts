@@ -336,6 +336,72 @@ async function checkWorldMap(page: Page) {
   }
   await page.setViewportSize({ width: 1280, height: 720 });
 }
+// Markers on the world map (#1283, slice 2) in the browser edition: a click on the map places one
+// through the marker dialog, a drag moves it and saves on the drop, a reload draws it where it was
+// put, the markers switch hides it for the profile across a reload, and Delete removes it again,
+// back to the version the rest of the progress needs. `stored` reads the open profile's progress.
+async function checkMapMarkers(page: Page, stored: () => Promise<ProgressState>) {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(base + '#map');
+  await page.locator('[data-map-image]').waitFor();
+  const before = (await stored()).version;
+  const box = await page.locator('[data-world-map]').boundingBox();
+  assert.ok(box);
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.45);
+  await page.locator('[data-marker-name]').fill('Check marker');
+  await page.locator('[data-marker-type="resource"]').check();
+  await page.locator('[data-marker-save]').click();
+  const marker = page.locator('[data-map-marker]');
+  await marker.waitFor();
+  assert.equal(await marker.evaluate(el => el === document.activeElement), true, 'focused');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  const placed = (await stored()).mapMarkers;
+  assert.equal(placed?.length, 1);
+  assert.equal((await stored()).version, 27);
+  // A drag of 60 px to the right moves it there and saves it once.
+  const pin = await marker.locator('.map-marker-pin').boundingBox();
+  assert.ok(pin);
+  await page.mouse.move(pin.x + pin.width / 2, pin.y + pin.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pin.x + pin.width / 2 + 30, pin.y + pin.height / 2, { steps: 3 });
+  await page.mouse.move(pin.x + pin.width / 2 + 60, pin.y + pin.height / 2, { steps: 3 });
+  await page.mouse.up();
+  await page.waitForFunction(() => !document.querySelector('[data-world-map].moving'));
+  let moved = (await stored()).mapMarkers?.[0];
+  for (let i = 0; i < 20 && moved?.x === placed![0]!.x; i++) {
+    await page.waitForTimeout(100);
+    moved = (await stored()).mapMarkers?.[0];
+  }
+  assert.ok(moved && moved.x > placed![0]!.x, `moved east: ${moved?.x} > ${placed![0]!.x}`);
+  assert.equal(moved.y, placed![0]!.y);
+  assert.equal(await page.locator('#detail[open]').count(), 0, 'the end of a drag opens nothing');
+  const drawnAt = () => marker.evaluate(el => [el.style.left, el.style.top]);
+  const spot = await drawnAt();
+  await page.reload();
+  await marker.waitFor();
+  assert.deepEqual(await drawnAt(), spot, 'after a reload it is where it was put');
+  // Hidden for the profile, also after a reload.
+  await page.locator('[data-map-layer-toggle="markers"]').uncheck();
+  await marker.waitFor({ state: 'detached' });
+  assert.deepEqual((await stored()).mapLayers, { markers: false });
+  await page.reload();
+  await page.locator('[data-map-image]').waitFor();
+  assert.equal(await page.locator('[data-map-layer-toggle="markers"]').isChecked(), false);
+  assert.equal(await marker.count(), 0);
+  await page.locator('[data-map-layer-toggle="markers"]').check();
+  await marker.waitFor();
+  // Delete on the focused marker removes it; focus goes to the map.
+  await marker.focus();
+  await page.keyboard.press('Delete');
+  await marker.waitFor({ state: 'detached' });
+  assert.equal(
+    await page.locator('[data-world-map]').evaluate(el => el === document.activeElement),
+    true,
+  );
+  const after = await stored();
+  assert.equal('mapMarkers' in after || 'mapLayers' in after, false);
+  assert.equal(after.version, before);
+}
 // Rearranging the flow graph (#1224): a drag of a line's box moves it, the layout is stored with
 // the factory once the drag ends, and after a reload the graph opens with the line where it was
 // put. Since #1240 an input and an output are dragged too, and every box lands on the 5 px grid.
@@ -922,6 +988,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 720 });
   await checkGraphPanZoom(page, graphButton);
   await checkGraphLayout(page, graphGroup!, () => api<ProgressState>('/api/state'));
+  await checkMapMarkers(page, () => api<ProgressState>('/api/state'));
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();

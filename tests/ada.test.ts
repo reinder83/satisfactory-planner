@@ -1152,3 +1152,21 @@ test('ADA sets a short resource against what the map gives', () => {
   assert.ok(!ids(facts({ mapShort })).includes('draft-map'), 'not on a plan that fits');
   assert.ok(!ids(facts({ feasible: false })).includes('draft-map'), 'not when the map has enough');
 });
+
+test('on the world map ADA counts the markers, or says they are hidden (#1283)', () => {
+  assert.ok(!ids(facts({ view: 'map' })).includes('map-markers'), 'nothing without the counts');
+  const line = (over: Partial<AdaFacts>) =>
+    adaRemarks(facts({ view: 'map', ...over })).find(r => r.id === 'map-markers')!;
+  assert.equal(line({ mapMarkers: 0 }).tone, 'calm');
+  assert.match(line({ mapMarkers: 0 }).text, /^No markers yet\. Click the map where/);
+  assert.match(line({ mapMarkers: 1 }).text, /^1 marker on the map\./);
+  assert.match(line({ mapMarkers: 4 }).text, /^4 markers on the map\. Drag one to move it/);
+  assert.match(
+    line({ mapMarkers: 0, mapMarkersHidden: true }).text,
+    /^The markers are hidden on this profile\. Tick Markers under “Show on the map”/,
+  );
+  assert.match(
+    line({ mapMarkers: 1, mapMarkersHidden: true }).text,
+    /^The markers are hidden on this profile \(1 marker\)\./,
+  );
+});

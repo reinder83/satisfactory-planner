@@ -294,7 +294,7 @@ test('the pins are state version 24; every released format loads unchanged witho
       () => validateState(json({ ...version22, sloopPins: bad })),
       /Invalid somersloop pins/,
     );
-  assert.throws(() => validateState({ ...json(clean), version: 27 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(clean), version: 28 }), /newer planner version/);
   // From version 23 (#1231): the pins come on top, and the flow graph's tags stay as they were.
   const upgraded = validateState(
     json({ ...version23, sloopPins: { '4': { Recipe_IronRod_C: 2 } } }),

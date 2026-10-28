@@ -4477,6 +4477,7 @@ button.rail-tile:hover {
   outline-offset: 2px;
 }
 .map-layer {
+  position: relative;
   margin: 0 auto;
 }
 .map-image {
@@ -4489,6 +4490,132 @@ button.rail-tile:hover {
 }
 .map-credit {
   margin: 0;
+}
+/* The map's toolbar and, beside it, "Show on the map" (#1283, slice 2): one row that wraps. */
+.map-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.map-layers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.map-layers legend {
+  float: left;
+  margin-right: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.map-layer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  cursor: pointer;
+}
+/* A marker (#1283): a round pin in its colour with its type's icon in dark ink, its pin's middle
+   on its spot, and its name beside it, outlined so it reads on land and sea. The button is the
+   marker: it takes focus, opens on a press and moves with a drag or the arrow keys. */
+.map-marker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 0 6px 0 3px;
+  transform: translate(-17px, -50%);
+  border: 0;
+  border-radius: 17px;
+  background: transparent;
+  color: var(--bright);
+  font: inherit;
+  cursor: pointer;
+  touch-action: none;
+}
+.map-scroll.moving,
+.map-scroll.moving .map-marker {
+  cursor: grabbing;
+}
+.map-marker-pin {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #0a0c0d;
+  border-radius: 50%;
+  background: var(--marker);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+}
+.map-marker-pin svg {
+  width: 16px;
+  height: 16px;
+  fill: #0a0c0d;
+}
+.map-marker-label {
+  max-width: 18ch;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow:
+    0 0 2px #000,
+    0 0 4px #000,
+    0 1px 2px #000;
+}
+.map-marker:hover .map-marker-pin {
+  outline: 2px solid var(--bright);
+}
+.map-marker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The marker dialog's types: each a radio with its icon, a 44px target on a phone. */
+.marker-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.marker-types legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.marker-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  cursor: pointer;
+}
+.marker-type-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+@media (max-width: 720px) {
+  .map-marker {
+    min-height: 44px;
+    transform: translate(-22px, -50%);
+    padding-left: 8px;
+  }
+  .map-layer-toggle,
+  .marker-type {
+    min-height: 44px;
+  }
 }
 .fgraph-node rect {
   fill: var(--panel);

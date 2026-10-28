@@ -39,6 +39,12 @@
 //   lineClocks     { phase: { recipe: clock % } } production lines pinned to a clock with Power
 //                  Shards (validateLineClocks, #1239), version 26; absent means the plan's
 //                  own; the lineClocks update sends the whole map
+//   mapMarkers     [{ id: 'mk-…', name, type, color?, x, y }] markers on the world map, x and y
+//                  in game units (validateMapMarkers, #1283), version 27; absent when there
+//                  are none; the mapMarker update places, replaces or removes one
+//   mapLayers      { layer: false } the world map's layers this profile hides
+//                  (validateMapLayers, #1283), version 27; absent while all are shown; the
+//                  mapLayer update shows or hides one
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -78,6 +84,13 @@ export {
   initialState,
   LAYOUT_LIMITS,
   linkPlaces,
+  MAP_LAYERS,
+  MAP_MARKER_COLORS,
+  MAP_MARKER_MAX,
+  MAP_MARKER_NAME_MAX,
+  MAP_MARKER_TYPES,
+  MAP_WORLD_LIMIT,
+  mapMarkerId,
   mappingFits,
   mergeAmplifiedUnlocks,
   mergeGroupLineUnlocks,

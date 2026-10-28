@@ -182,6 +182,9 @@ export interface AdaFacts {
   // draftNeeds in app/draft-advice.ts): its name, what the phase needs and what the map gives, as
   // rates ("1,023/min"); absent when the map has enough of each, or its count is not known.
   mapShort?: { name: string; needed: string; map: string };
+  // The world map's markers (#1283): how many the open profile has, and whether it hides them.
+  mapMarkers?: number;
+  mapMarkersHidden?: boolean;
   // A stage's power shortfall (powerView in public/power.ts, #1064), as power strings: the draw
   // (its need), the generation its own rows build with the augmenter boost ('' when none), the spare power
   // entered, that spare part with what Phase 5's augmenters add ('' when it adds nothing) and
@@ -451,6 +454,21 @@ const RULES: AdaRule[] = [
     when: facts => (facts.unlockGroups?.total ?? 0) > 0,
     text: facts =>
       `Expert mode: ${facts.unlockGroups!.done} of ${plural(facts.unlockGroups!.total, 'unlock group')} done in this phase. Tick a tier and every unlock in it is ticked; untick it and only those are unticked. No hand-holding, as requested.`,
+  },
+  {
+    // The world map's markers (#1283, slice 2): hidden, none yet, or how many.
+    id: 'map-markers',
+    on: ['map'],
+    tone: 'calm',
+    when: facts => facts.mapMarkers !== undefined,
+    text: facts => {
+      const count = facts.mapMarkers ?? 0;
+      if (facts.mapMarkersHidden)
+        return `The markers are hidden on this profile${count ? ` (${plural(count, 'marker')})` : ''}. Tick Markers under “Show on the map” to see or place them. Hidden is not deleted; I checked.`;
+      if (!count)
+        return 'No markers yet. Click the map where something is worth remembering, a pure node, a landmark, the spot you parked the truck, and give it a name. FICSIT values employees who write things down.';
+      return `${plural(count, 'marker')} on the map. Drag one to move it; on a focused marker the arrow keys nudge it and Delete removes it, with Undo. Spots are kept in game units, so they stay put if the map image ever changes.`;
+    },
   },
   {
     // Research only a later phase needs (#1070): marked optional and listed last.
