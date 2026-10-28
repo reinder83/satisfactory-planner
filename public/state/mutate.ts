@@ -18,8 +18,10 @@ import {
   MAP_MARKER_MAX,
   MINES_PLACE,
   type Raw,
+  cleanFactoryPlace,
   cleanMapMarker,
   mapMarkerId,
+  validateFactoryPlaces,
   validateMapLayers,
   validateMapMarkers,
   addedFloorId,
@@ -243,12 +245,31 @@ function setMapLayer(state: SavedState, update: Raw) {
     [update.layer as MapLayer]: update.value,
   };
 }
+// One factory on the world map (#1283, slice 3): a place puts factory group `id` there, or moves
+// it there when it is on the map already, and null takes it off (a factory not on the map stays
+// off, so a repeated removal changes nothing). Only a factory of the profile can be placed. One
+// factory per write, so two tabs moving different factories never undo each other.
+function setMapFactory(state: SavedState, update: Raw) {
+  if (!groupId(update.id) || (update.value !== null && !plain(update.value)))
+    fail('Invalid factory place.');
+  const groups = validateGroups(state.factoryGroups).groups;
+  const places = { ...validateFactoryPlaces(state.factoryPlaces, groups) };
+  if (update.value === null) delete places[update.id];
+  else {
+    if (!groups.some(group => group.id === update.id)) fail('Unknown factory.');
+    const place = cleanFactoryPlace(update.value);
+    if (!place) fail('Invalid factory place.');
+    places[update.id] = place;
+  }
+  state.factoryPlaces = places;
+}
 const recordEdits: Record<string, StateEdit> = {
   exactClocks: setExactClocks,
   sloopPins: setSloopPins,
   lineClocks: setLineClocks,
   mapMarker: setMapMarker,
   mapLayer: setMapLayer,
+  mapFactory: setMapFactory,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,
@@ -477,6 +498,13 @@ function mutateGroups(state: SavedState, update: Raw) {
   const edit = groupEdits[update.type as string];
   if (!edit) fail('Unknown update.');
   edit(factory, update);
+  // A removed factory leaves the world map too (#1283): its place goes with it.
+  if (state.factoryPlaces && plain(state.factoryPlaces)) {
+    const known = new Set(factory.groups.map(group => group.id));
+    state.factoryPlaces = Object.fromEntries(
+      Object.entries(state.factoryPlaces).filter(([id]) => known.has(id)),
+    );
+  }
 }
 // Deletes everything recorded for bay `id`'s addresses: its name, container names and cleared
 // positions, and its 'slot-<address>' notes and 'slot-<address>-<step>' checks.

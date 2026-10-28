@@ -21,7 +21,9 @@ export interface WorldMapImage {
   bounds: { west: number; east: number; north: number; south: number };
 }
 
-// The owner's map image (1280 × 1280 WebP, the whole map, north up, with the ocean margins), and
+// The owner's map image (2000 × 2000 WebP, the whole map, north up, with the ocean margins; the
+// owner's JPG of the same framing that replaced the first 1280 × 1280 one, re-encoded at WebP
+// quality 0.85), and
 // its calibration: the square of 750,000 game units that the community's interactive maps draw
 // the whole world in, x from about −324,699 (west edge) to 425,302 (east edge) and y from −375,000
 // (north edge) to 375,000 (south edge). The repository holds no world positions to check it
@@ -30,8 +32,8 @@ export interface WorldMapImage {
 // /satisfactory-planner/ as under the Docker server's /.
 export const WORLD_MAP: WorldMapImage = {
   src: './images/satisfactory-map.webp',
-  width: 1280,
-  height: 1280,
+  width: 2000,
+  height: 2000,
   bounds: { west: -324_698.832, east: 425_301.832, north: -375_000, south: 375_000 },
 };
 

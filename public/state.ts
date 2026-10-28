@@ -45,6 +45,9 @@
 //   mapLayers      { layer: false } the world map's layers this profile hides
 //                  (validateMapLayers, #1283), version 27; absent while all are shown; the
 //                  mapLayer update shows or hides one
+//   factoryPlaces  { [group id]: { x, y } } where factories stand on the world map, in game
+//                  units (validateFactoryPlaces, #1283), version 28; absent while none is
+//                  placed; the mapFactory update places, moves or takes off one
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -77,6 +80,7 @@ export {
   bayCapacity,
   bayOfSlot,
   builtinFloors,
+  FACTORY_PLACE_MAX,
   fuelledModes,
   handbookBay,
   handbookFloor,

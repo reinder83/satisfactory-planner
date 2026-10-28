@@ -105,7 +105,7 @@ test('the pins are state version 26; every released format loads unchanged witho
       /Invalid line clocks/,
       JSON.stringify(bad),
     );
-  assert.throws(() => validateState({ ...json(clean), version: 28 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(clean), version: 29 }), /newer planner version/);
   // The update saves the whole map; null forgets it and the state goes back to its version.
   const asked = mutate(json(version25), {
     type: 'lineClocks',

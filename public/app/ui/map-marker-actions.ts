@@ -37,11 +37,16 @@ export async function focusMarker(id: string) {
   markerButton(id)?.focus();
 }
 
-// Deletes marker `id` with an Undo in the toast. Focus is the caller's: the map box, which a
-// second Delete cannot remove anything from (#1255).
-export async function deleteMarker(id: string): Promise<boolean> {
-  const marker = state.mapMarkers?.find(entry => entry.id === id);
-  if (!marker) return false;
+// Deletes marker `id` with an Undo in the toast, which puts it back at `moved` when given (a move
+// not saved yet), else as it was saved. Focus is the caller's: the map box, which a second Delete
+// cannot remove anything from (#1255).
+export async function deleteMarker(
+  id: string,
+  moved?: Pick<MapMarker, 'x' | 'y'>,
+): Promise<boolean> {
+  const saved = state.mapMarkers?.find(entry => entry.id === id);
+  if (!saved) return false;
+  const marker = moved ? { ...saved, x: moved.x, y: moved.y } : saved;
   const profile = profileScope();
   try {
     await save({ type: 'mapMarker', id, value: null });

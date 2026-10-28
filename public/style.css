@@ -4583,6 +4583,83 @@ button.rail-tile:hover {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* A factory on the map (#1283, slice 3): a round dark pin with the factory icon in the accent
+   colour inside a ring of it, its middle on its place, and the factory's name beside it, in
+   the markers' outlined style but heavier. The link is the factory: it takes focus, opens the
+   factory's build order on a press and moves with a drag or the arrow keys. */
+.map-factory {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 6px 0 2px;
+  transform: translate(-17px, -50%);
+  border: 0;
+  border-radius: 17px;
+  color: var(--bright);
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-drag: none;
+}
+.map-factory:hover {
+  color: var(--bright);
+}
+.map-scroll.moving .map-factory {
+  cursor: grabbing;
+}
+.map-factory-pin {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--bg2);
+  box-shadow:
+    0 0 0 1px #0a0c0d,
+    0 1px 4px rgb(0 0 0 / 0.6);
+}
+.map-factory-pin svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--accent);
+}
+.map-factory-label {
+  max-width: 20ch;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow:
+    0 0 2px #000,
+    0 0 4px #000,
+    0 1px 2px #000;
+}
+.map-factory:hover .map-factory-pin {
+  outline: 2px solid var(--bright);
+}
+.map-factory:hover .map-factory-label {
+  text-decoration: underline;
+}
+.map-factory:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* "Place factory": the factory to place and the button, kept together when the toolbar wraps. */
+.map-place {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.map-place select {
+  max-width: 22ch;
+  min-height: 34px;
+}
 /* The marker dialog's types: each a radio with its icon, a 44px target on a phone. */
 .marker-types {
   display: flex;
@@ -4615,6 +4692,14 @@ button.rail-tile:hover {
     min-height: 44px;
     transform: translate(-22px, -50%);
     padding-left: 8px;
+  }
+  .map-factory {
+    min-height: 44px;
+    transform: translate(-22px, -50%);
+    padding-left: 7px;
+  }
+  .map-place select {
+    min-height: 44px;
   }
   .map-layer-toggle,
   .marker-type {
