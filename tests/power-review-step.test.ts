@@ -1,4 +1,4 @@
-// "Power available now" (powerReviewTask in public/progression.ts, #1048). It used to follow the
+// "Power available now" (powerReviewTask in public/power-steps.ts, #1048). It used to follow the
 // ticked power unlocks only, so a player who runs Turbofuel power with 44.4 GW of spare power in
 // the settings, Coal Power ticked and no Fuel Generator in the plan was told to "Build coal
 // extraction, water and generators" in every phase: Petroleum Power was only listed when the

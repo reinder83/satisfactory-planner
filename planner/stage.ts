@@ -75,9 +75,9 @@ export function readStage(
     ...(mining ? { mining } : {}),
   };
 }
-// The prefix of a built line's variable (#1176, addBuiltLines in model.ts): 'built:<recipe id>',
-// the machines that already stand on the recipe's line, beside the recipe's own variable for the
-// machines to add.
+// The prefix of a built line's variable (#1176, addBuiltLines in built-lines.ts):
+// 'built:<recipe id>', the machines that already stand on the recipe's line, beside the recipe's
+// own variable for the machines to add.
 export const BUILT = 'built:';
 // Folds each built line's machines into its recipe's variable, so the stage has one row per line
 // (built and added machines together) and the stage reads exactly as one solved without them.
