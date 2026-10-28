@@ -34,8 +34,8 @@ test('the image corners are the world bounds', () => {
   assert.ok(worldToImage({ x: 1000, y: 0 }).x > origin.x, 'east is to the right');
   assert.ok(worldToImage({ x: 0, y: 1000 }).y > origin.y, 'south is down');
   // The world's origin: 324,698.832 of 750,000.664 units from the west edge, halfway down.
-  close(origin.x, (324_698.832 / 750_000.664) * 1280, 'origin x');
-  close(origin.y, 640, 'origin y');
+  close(origin.x, (324_698.832 / 750_000.664) * WORLD_MAP.width, 'origin x');
+  close(origin.y, WORLD_MAP.height / 2, 'origin y');
 });
 
 test('image to world undoes world to image, inside and outside the image', () => {
@@ -55,10 +55,20 @@ test('image to world undoes world to image, inside and outside the image', () =>
 });
 
 test('another image calibrated to the same world puts a world point on the same spot', () => {
-  const half: WorldMapImage = { ...WORLD_MAP, width: 640, height: 640 };
+  const half: WorldMapImage = {
+    ...WORLD_MAP,
+    width: WORLD_MAP.width / 2,
+    height: WORLD_MAP.height / 2,
+  };
   const point = { x: 123_456, y: -98_765 };
   const full = worldToImage(point);
   const small = worldToImage(point, half);
   close(small.x * 2, full.x, 'x scales with the image');
   close(small.y * 2, full.y, 'y scales with the image');
+  // The owner's first image (1280 × 1280) and the 2000 × 2000 one that replaced it have the same
+  // framing and bounds, so a stored spot is the same place on both, only at a larger scale.
+  const first: WorldMapImage = { ...WORLD_MAP, width: 1280, height: 1280 };
+  const before = worldToImage(point, first);
+  close((before.x * WORLD_MAP.width) / 1280, full.x, 'x on the first image');
+  close((before.y * WORLD_MAP.height) / 1280, full.y, 'y on the first image');
 });

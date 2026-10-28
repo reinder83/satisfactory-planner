@@ -300,7 +300,7 @@ async function checkWorldMap(page: Page) {
   await image.waitFor();
   await page.waitForFunction(() => {
     const img = document.querySelector<HTMLImageElement>('[data-map-image]');
-    return !!img && img.complete && img.naturalWidth === 1280 && img.naturalHeight === 1280;
+    return !!img && img.complete && img.naturalWidth === 2000 && img.naturalHeight === 2000;
   });
   const read = () =>
     page.evaluate(() => {
