@@ -46,6 +46,7 @@ export const SHARED_ROUTES = [
   'factories',
   'flow',
   'logistics',
+  'map',
   'storage',
   'resources',
   'notes',
@@ -60,6 +61,7 @@ export function assertSharedTitles(titles: Record<string, string>, factoryName: 
   assert.equal(titles.factories, `Factories · ${APP}`);
   assert.equal(titles.flow, `${factoryName} · Factories · ${APP}`);
   assert.equal(titles.logistics, `Logistics · ${APP}`);
+  assert.equal(titles.map, `World map · ${APP}`);
   assert.equal(titles.storage, `Storage room · ${APP}`);
   assert.equal(titles.resources, `Power & resources · ${APP}`);
   assert.equal(titles.notes, `Notes · ${APP}`);
