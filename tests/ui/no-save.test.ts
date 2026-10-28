@@ -38,7 +38,15 @@ beforeEach(() => {
   emptyWorkspace();
 });
 
-const NEEDS_SAVE: View[] = ['plan', 'factories', 'logistics', 'storage', 'resources', 'notes'];
+const NEEDS_SAVE: View[] = [
+  'plan',
+  'factories',
+  'logistics',
+  'map',
+  'storage',
+  'resources',
+  'notes',
+];
 
 for (const view of NEEDS_SAVE)
   test(`with no save, #${view} offers one "Create a save" and no zeroed plan`, () => {

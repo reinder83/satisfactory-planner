@@ -10,6 +10,7 @@ import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
 import GroupFlowPage from './pages/GroupFlowPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
 import LogisticsPage from './pages/LogisticsPage.vue';
+import MapPage from './pages/MapPage.vue';
 import NoSavePage from './pages/NoSavePage.vue';
 import NotesPage from './pages/NotesPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
@@ -24,6 +25,7 @@ const NEEDS_SAVE: View[] = [
   'plan',
   'factories',
   'logistics',
+  'map',
   'storage',
   'resources',
   'notes',
@@ -46,6 +48,7 @@ export function vuePage(
   if (view === 'factories')
     return flowGroupOf(route) !== null ? GroupFlowPage : CalculatedFactoriesPage;
   if (view === 'logistics') return LogisticsPage;
+  if (view === 'map') return MapPage;
   if (view === 'storage') return StoragePage;
   if (view === 'profiles') return ProfilesPage;
   if (view === 'account') return AccountPage;

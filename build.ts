@@ -19,7 +19,10 @@ import { fontFile, fontNames } from './fonts.ts';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
-const dist = path.join(root, 'dist');
+// PLANNER_DIST builds somewhere else (tests/map-image-build.test.ts builds into a temporary folder).
+const dist = process.env.PLANNER_DIST
+  ? path.resolve(process.env.PLANNER_DIST)
+  : path.join(root, 'dist');
 const targets = process.argv.length > 2 ? process.argv.slice(2) : ['web', 'pages'];
 for (const target of targets)
   if (!['web', 'pages'].includes(target)) throw Error('Unknown target ' + target);
@@ -244,6 +247,8 @@ async function buildPages() {
   for (const file of ['index.html', 'favicon.svg', 'progression.json'])
     await fs.copyFile(path.join(publicDir, file), path.join(out, file));
   await fs.cp(path.join(publicDir, 'icons'), path.join(out, 'icons'), { recursive: true });
+  // The world map's image (#1283).
+  await fs.cp(path.join(publicDir, 'images'), path.join(out, 'images'), { recursive: true });
   await writeFonts(out);
   let html = shippedPage(
     await fs.readFile(path.join(out, 'index.html'), 'utf8'),

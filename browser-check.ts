@@ -290,6 +290,52 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
 }
+// The world map (#1283) in the Pages edition: the image loads from the build under its subpath,
+// the map opens fitted to its box, the wheel over it zooms it without scrolling the page, and at
+// 390 px the page has no sideways scroll and the zoom buttons are 44 px touch targets.
+async function checkWorldMap(page: Page) {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(base + '#map');
+  const image = page.locator('[data-map-image]');
+  await image.waitFor();
+  await page.waitForFunction(() => {
+    const img = document.querySelector<HTMLImageElement>('[data-map-image]');
+    return !!img && img.complete && img.naturalWidth === 1280 && img.naturalHeight === 1280;
+  });
+  const read = () =>
+    page.evaluate(() => {
+      const box = document.querySelector<HTMLElement>('[data-world-map]')!;
+      const layer = box.querySelector<HTMLElement>('[data-map-layer]')!.getBoundingClientRect();
+      return {
+        width: layer.width,
+        height: layer.height,
+        box: { width: box.clientWidth, height: box.clientHeight },
+        page: window.scrollY,
+        sideways: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+  const fitted = await read();
+  assert.ok(fitted.width > 0 && fitted.width <= fitted.box.width + 1, JSON.stringify(fitted));
+  assert.ok(fitted.height <= fitted.box.height + 1, 'the whole map fits on opening');
+  const box = await page.locator('[data-world-map]').boundingBox();
+  assert.ok(box);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -200);
+  await page.waitForFunction(width => {
+    const layer = document.querySelector('[data-map-layer]');
+    return !!layer && layer.getBoundingClientRect().width > width;
+  }, fitted.width);
+  assert.equal((await read()).page, fitted.page, 'the wheel over the map does not scroll the page');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-map-zoom="fit"]').click();
+  const phone = await read();
+  assert.ok(phone.sideways <= 0, `no sideways scroll at 390 px (${phone.sideways} px)`);
+  for (const which of ['out', 'in', 'fit']) {
+    const button = await page.locator(`[data-map-zoom="${which}"]`).boundingBox();
+    assert.ok(button && button.width >= 44 && button.height >= 44, `${which} is a 44 px target`);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+}
 // Rearranging the flow graph (#1224): a drag of a line's box moves it, the layout is stored with
 // the factory once the drag ends, and after a reload the graph opens with the line where it was
 // put. Since #1240 an input and an output are dragged too, and every box lands on the 5 px grid.
@@ -573,6 +619,7 @@ try {
     (await page.locator('[data-session-to-build]').first().textContent()) ?? '',
     /^\d+ /,
   );
+  await checkWorldMap(page);
   await page.goto(base + '#plan');
   await page.locator('[data-step-materials]').first().waitFor({ state: 'attached' });
   // A ticked step folds into "Done (n)" under the list (SP-42): open it from the keyboard, and

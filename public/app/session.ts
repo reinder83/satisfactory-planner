@@ -28,6 +28,8 @@ export const VIEWS = [
   'plan',
   'factories',
   'logistics',
+  // The world map (#1283).
+  'map',
   'storage',
   'resources',
   'notes',

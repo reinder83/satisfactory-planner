@@ -86,6 +86,7 @@ const NAV: [id: View, icon: string, label: string][] = (
     ['plan', '◫'],
     ['factories', '▥'],
     ['logistics', '⇄'],
+    ['map', '◎'],
     ['storage', '▦'],
     ['resources', '↗'],
     ['notes', '✎'],

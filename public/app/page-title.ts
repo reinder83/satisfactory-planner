@@ -13,6 +13,7 @@ export const PAGE_NAMES: Record<View, string> = {
   plan: 'Build plan',
   factories: 'Factories',
   logistics: 'Logistics',
+  map: 'World map',
   storage: 'Storage room',
   resources: 'Power & resources',
   notes: 'Notes',

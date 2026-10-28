@@ -57,6 +57,8 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
       ['#factories', '▥Factories'],
       // The profile has no factory groups yet, so Logistics says what it needs (SP-09).
       ['#logistics', '⇄Logisticsneeds factories'],
+      // The world map (#1283).
+      ['#map', '◎World map'],
       ['#storage', '▦Storage room'],
       ['#resources', '↗Power & resources'],
       ['#notes', '✎Notes'],
@@ -65,7 +67,7 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
   );
   // Each glyph is shown now (SP-10), and stays out of the link's name.
   const icons = [...document.querySelectorAll('.nav a .navicon')];
-  assert.equal(icons.length, 7, 'every page has a glyph, Notes included');
+  assert.equal(icons.length, 8, 'every page has a glyph, Notes included');
   for (const icon of icons) assert.equal(icon.getAttribute('aria-hidden'), 'true');
 });
 

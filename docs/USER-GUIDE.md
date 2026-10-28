@@ -135,6 +135,10 @@ On the storage map, **Complete room** marks all four checklist steps for the roo
 
 **Notes** keeps the save-wide notes and every phase's notes on one page: the save-wide notes first, then the phase you are working on, open, and the other phases folded underneath. The build plan links there with **Phase notes →**.
 
+## World map
+
+**World map** in the sidebar shows the whole map of the game, north up. It opens with the whole map in view. Drag it to move it, and zoom with the mouse wheel (around the pointer), a pinch on a touch screen, or the **−**, **+** and **Fit** buttons; **Fit** brings the whole map back. Once the map has focus (Tab to it), the arrow keys move it (Shift moves it further) and **+** and **−** zoom it. The map image is © Coffee Stain Studios.
+
 ## Make the plan your own
 
 - **Build plan → Edit steps** lets you rearrange steps with the arrow buttons, rewrite a step's title and details, link a step to one of your production lines, or remove steps you do not want. Removed steps keep their checkmarks and can be restored from **Removed steps** while editing; clearing an edited field restores the original text. Calculated production steps link to their production line automatically: **Production line ↗** opens its details, and **Open factory:** _name_ **→** opens the **Build order →** page of the factory the build plan builds it with, at that line. A line split over several factories says so under the two links; a line in no factory has only **Production line ↗**.

@@ -4382,7 +4382,9 @@ button.rail-tile:hover {
   padding: 4px 10px;
 }
 .fgraph-tools [data-flow-zoom='in'],
-.fgraph-tools [data-flow-zoom='out'] {
+.fgraph-tools [data-flow-zoom='out'],
+.fgraph-tools [data-map-zoom='in'],
+.fgraph-tools [data-map-zoom='out'] {
   font-family: inherit;
   font-size: 18px;
   font-weight: 600;
@@ -4450,6 +4452,43 @@ button.rail-tile:hover {
     min-width: 44px;
     min-height: 44px;
   }
+}
+/* The world map (#1283): the flow graph's toolbar and pan and zoom, the image in a box as tall as
+   it is wide, at most what the window has left under the page's heading and the toolbar (as the
+   flow graph's box), so Fit shows the whole map and the attribution under it. A map narrower than
+   the box sits in its middle. */
+.map-scroll {
+  overflow: auto;
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: max(280px, calc(100vh - 360px));
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+  touch-action: none;
+  overscroll-behavior: contain;
+  cursor: grab;
+}
+.map-scroll.panning {
+  cursor: grabbing;
+}
+.map-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.map-layer {
+  margin: 0 auto;
+}
+.map-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.map-credit {
+  margin: 0;
 }
 .fgraph-node rect {
   fill: var(--panel);
