@@ -1,4 +1,4 @@
-// The "power before the next production block" step (preferredPowerTasks in public/progression.ts,
+// The "power before the next production block" step (preferredPowerTasks in public/power-steps.ts,
 // #871): it names the generator lines the phase's plan builds, not the fuel the preferred main
 // power setting names. Under "Rocket fuel + nuclear" a phase may build only nuclear plants while
 // it makes rocket fuel for other uses, and that step used to say "Expand rocket fuel power".

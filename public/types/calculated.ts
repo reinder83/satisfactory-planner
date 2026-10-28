@@ -184,8 +184,8 @@ export interface CurrentSettings {
   // Production lines that already stand (#1176, slice 3 of #1172): per phase, the machines built
   // on each row id, from the lines ticked as built (or partly built, `builtMachines`) in the
   // profile a recalculation carries progress from (builtLinesOf in public/app/built-capacity.ts).
-  // The solve counts them as existing capacity (addBuiltLines in planner/model.ts): it keeps and
-  // extends them rather than replacing them. Absent unless a recalculation the user started
+  // The solve counts them as existing capacity (addBuiltLines in planner/built-lines.ts): it keeps
+  // and extends them rather than replacing them. Absent unless a recalculation the user started
   // carries production lines, so a plan without it calculates exactly as before.
   builtLines?: BuiltLines;
   // Mining and belts per phase (#1065): each phase plans with the miner, clock, belts and pipes

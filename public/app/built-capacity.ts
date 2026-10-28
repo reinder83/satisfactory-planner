@@ -3,9 +3,9 @@
 // recalculation offers) that carries progress on production lines sends the lines that stand in
 // the profile it carries from (ticked as built, or partly built: builtLinesOf in
 // public/state/carry.ts) as `settings.builtLines`. The solve counts them as existing capacity
-// (addBuiltLines in planner/model.ts), so it keeps and extends them rather than replacing them,
-// and Review says so. Nothing is stored beyond the plan's own settings, and nothing recalculates
-// a stored plan: only these requests send the field.
+// (addBuiltLines in planner/built-lines.ts), so it keeps and extends them rather than replacing
+// them, and Review says so. Nothing is stored beyond the plan's own settings, and nothing
+// recalculates a stored plan: only these requests send the field.
 import { builtLinesOf, recipeBook, type RecipeBook } from '../state.ts';
 import { request } from './api.ts';
 import { plural } from './format.ts';

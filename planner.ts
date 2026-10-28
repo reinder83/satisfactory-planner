@@ -19,6 +19,7 @@
 //   settings.ts     settings(): validation of a profile's settings
 //   recipes.ts      the recipe pool, amplified twins, the nuclear period and the generators
 //   model.ts        run(): one phase's linear program, its demands, solve and check
+//   built-lines.ts  the production lines that already stand, in that program and its solve (#1176)
 //   fit.ts          the two-step fit for whole machines and production amplification
 //   pins.ts         somersloop pins per production line and the ones a phase cannot keep (#1235)
 //   clocks.ts       overclocked production lines and their Power Shard budget (#1239)

@@ -336,7 +336,7 @@ export function standingLines(
 // The production lines that stand in `source` (standingLines) as the planner's
 // `settings.builtLines` (#1176): { phase: { rowId: machines } }, row ids and phases sorted;
 // undefined when none stand. A recalculation that carries production lines sends it, so the solve
-// keeps and extends them (addBuiltLines in planner/model.ts); the carry then matches the new
+// keeps and extends them (addBuiltLines in planner/built-lines.ts); the carry then matches the new
 // plan's lines to the same counts.
 export function builtLinesOf(
   source: Pick<SavedState, 'checks' | 'builtMachines'>,

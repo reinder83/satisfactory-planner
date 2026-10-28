@@ -96,6 +96,30 @@ test('phaseSteps text is byte-identical to the per-call toLocaleString version',
           `from '${new URL('../public/shards.ts', import.meta.url).href}'`,
         ),
     );
+    // Its power steps live in power-steps.ts (#1279), which is copied beside it and imports
+    // formatNumber from the copy; its other imports are from where they are, as above.
+    fs.writeFileSync(
+      path.join(dir, 'power-steps.ts'),
+      fs
+        .readFileSync(new URL('../public/power-steps.ts', import.meta.url), 'utf8')
+        .replaceAll("from './progression.ts'", "from './progression-old.ts'")
+        .replace(
+          "from './power.ts'",
+          `from '${new URL('../public/power.ts', import.meta.url).href}'`,
+        )
+        .replace(
+          "from './preferences.ts'",
+          `from '${new URL('../public/preferences.ts', import.meta.url).href}'`,
+        )
+        .replace(
+          "from './mining.ts'",
+          `from '${new URL('../public/mining.ts', import.meta.url).href}'`,
+        )
+        .replace(
+          "from './somersloops.ts'",
+          `from '${new URL('../public/somersloops.ts', import.meta.url).href}'`,
+        ),
+    );
     const before = (await import(pathToFileURL(file).href)) as { phaseSteps: typeof phaseSteps };
     const data: Progression = JSON.parse(
       fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
