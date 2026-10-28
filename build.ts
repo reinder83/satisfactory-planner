@@ -20,7 +20,9 @@ import { fontFile, fontNames } from './fonts.ts';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
 // PLANNER_DIST builds somewhere else (tests/map-image-build.test.ts builds into a temporary folder).
-const dist = process.env.PLANNER_DIST ? path.resolve(process.env.PLANNER_DIST) : path.join(root, 'dist');
+const dist = process.env.PLANNER_DIST
+  ? path.resolve(process.env.PLANNER_DIST)
+  : path.join(root, 'dist');
 const targets = process.argv.length > 2 ? process.argv.slice(2) : ['web', 'pages'];
 for (const target of targets)
   if (!['web', 'pages'].includes(target)) throw Error('Unknown target ' + target);
