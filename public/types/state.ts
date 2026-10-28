@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–26). Later versions only add optional sections, so an older
+//                  version (1–27). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -26,7 +26,8 @@ import type { ExactClocks, LineClocks, SloopPins } from './calculated.ts';
 // flow graph (groups[].layout.tags, #1231), 24 the somersloops pinned on production lines
 // (sloopPins, #1235), 25 inputs and outputs moved in a factory's flow graph
 // (groups[].layout.places, #1240), 26 the production lines pinned to a clock with Power Shards
-// (lineClocks, #1239).
+// (lineClocks, #1239), 27 markers on the world map and its hidden layers (mapMarkers,
+// mapLayers, #1283).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -56,7 +57,27 @@ export type StateVersion =
   | 23
   | 24
   | 25
-  | 26;
+  | 26
+  | 27;
+
+// The world map (#1283, slice 2): a marker the user placed, at a point in the game's world (game
+// units, x east and y south, whole numbers; public/app/world-map.ts converts them to the image),
+// with a name, a type from a small fixed list and an optional colour from a fixed palette (absent:
+// the type's own colour). validateMapMarkers in state/validate.ts holds the limits.
+export type MapMarkerType = 'resource' | 'landmark' | 'note';
+export type MapMarkerColor = 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'red';
+export interface MapMarker {
+  id: string;
+  name: string;
+  type: MapMarkerType;
+  color?: MapMarkerColor;
+  x: number;
+  y: number;
+}
+// The map's layers (#1283): every one is shown unless the profile hid it, so only a hidden layer
+// is stored (`false`); a layer shown again leaves the field.
+export type MapLayer = 'factories' | 'stations' | 'trainLines' | 'markers';
+export type MapLayers = Partial<Record<MapLayer, boolean>>;
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
 // time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
@@ -266,6 +287,12 @@ export interface ProgressState {
   // phase by recipe id, once they changed a pin; absent means the plan's own
   // (settings.lineClocks). Applied only by a recalculation the user starts (version 26).
   lineClocks?: LineClocks;
+  // The markers on the world map (#1283), in the order they were placed; absent when there are
+  // none (version 27).
+  mapMarkers?: MapMarker[];
+  // The world map's hidden layers (#1283), each `false`; absent while every layer is shown
+  // (version 27).
+  mapLayers?: MapLayers;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -289,6 +316,8 @@ export interface SavedState {
   tickedBy?: Record<string, TickRecord>;
   sloopPins?: SloopPins;
   lineClocks?: LineClocks;
+  mapMarkers?: MapMarker[];
+  mapLayers?: MapLayers;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
@@ -336,6 +365,11 @@ export type UpdateOp =
   // The whole map of production lines pinned to a clock with Power Shards (#1239); null forgets
   // it, so the plan's own clocks apply again.
   | { type: 'lineClocks'; value: LineClocks | null }
+  // One marker on the world map (#1283): placed when no marker has the id, else replaced by what
+  // is sent (name, type, colour and spot); null removes it.
+  | { type: 'mapMarker'; id: string; value: Omit<MapMarker, 'id'> | null }
+  // Shows or hides one layer of the world map (#1283), for this profile.
+  | { type: 'mapLayer'; layer: MapLayer; value: boolean }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';

@@ -23,6 +23,11 @@ import type {
   LinkMode,
   OnSiteReview,
   LinkTransport,
+  MapLayer,
+  MapLayers,
+  MapMarker,
+  MapMarkerColor,
+  MapMarkerType,
   Phase,
   ProgressState,
   SloopPins,
@@ -731,6 +736,73 @@ export function validateLineClocks(raw: unknown): LineClocks | undefined {
   }
   return out;
 }
+// The world map (#1283, slice 2): the marker types and colours a marker may have (their names
+// and icons are the page's, app/map-markers.ts), the layers a profile may hide, and the limits:
+// at most 500 markers, a name of 1 to 60 characters once trimmed, and a spot within a million
+// game units of the world's middle either way (the map's own bounds are about ±425,000, so a
+// later image or calibration has room), kept in whole units.
+export const MAP_MARKER_TYPES: readonly MapMarkerType[] = ['resource', 'landmark', 'note'];
+export const MAP_MARKER_COLORS: readonly MapMarkerColor[] = [
+  'orange',
+  'yellow',
+  'green',
+  'blue',
+  'purple',
+  'red',
+];
+export const MAP_LAYERS: readonly MapLayer[] = ['factories', 'stations', 'trainLines', 'markers'];
+export const MAP_MARKER_MAX = 500;
+export const MAP_MARKER_NAME_MAX = 60;
+export const MAP_WORLD_LIMIT = 1_000_000;
+export const mapMarkerId = (value: unknown): value is string =>
+  typeof value === 'string' && /^mk-[a-z0-9]{4,32}$/.test(value);
+const worldUnit = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= MAP_WORLD_LIMIT;
+// One marker as validateMapMarkers keeps it, or null when it is malformed. Fields it does not
+// know are left out.
+export function cleanMapMarker(raw: unknown): MapMarker | null {
+  if (!plain(raw) || !mapMarkerId(raw.id) || !label(raw.name, MAP_MARKER_NAME_MAX)) return null;
+  if (!MAP_MARKER_TYPES.includes(raw.type as MapMarkerType)) return null;
+  if (raw.color !== undefined && !MAP_MARKER_COLORS.includes(raw.color as MapMarkerColor))
+    return null;
+  if (!worldUnit(raw.x) || !worldUnit(raw.y)) return null;
+  return {
+    id: raw.id,
+    name: raw.name.trim(),
+    type: raw.type as MapMarkerType,
+    ...(raw.color === undefined ? {} : { color: raw.color as MapMarkerColor }),
+    // `|| 0`: a spot of -0.4 rounds to -0, which JSON writes as 0.
+    x: Math.round(raw.x) || 0,
+    y: Math.round(raw.y) || 0,
+  };
+}
+// Returns a clean copy of mapMarkers (#1283), or undefined when absent or empty: the markers in
+// the order they were placed, each id once. Anything malformed refuses the whole state.
+export function validateMapMarkers(raw: unknown): MapMarker[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || raw.length > MAP_MARKER_MAX) fail('Invalid map markers.');
+  const seen = new Set<string>();
+  const out = raw.map(entry => {
+    const marker = cleanMapMarker(entry);
+    if (!marker || seen.has(marker.id)) fail('Invalid map markers.');
+    seen.add(marker.id);
+    return marker;
+  });
+  return out.length ? out : undefined;
+}
+// Returns a clean copy of mapLayers (#1283), or undefined when absent or when every layer is
+// shown: only a hidden layer (`false`) is kept, since shown is what a profile without the field
+// draws.
+export function validateMapLayers(raw: unknown): MapLayers | undefined {
+  if (raw === undefined) return undefined;
+  if (!plain(raw)) fail('Invalid map layers.');
+  for (const [layer, shown] of Object.entries(raw))
+    if (!MAP_LAYERS.includes(layer as MapLayer) || typeof shown !== 'boolean')
+      fail('Invalid map layers.');
+  // In MAP_LAYERS' order, whatever order they came in.
+  const hidden = MAP_LAYERS.filter(layer => raw[layer] === false);
+  return hidden.length ? Object.fromEntries(hidden.map(layer => [layer, false])) : undefined;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -950,7 +1022,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–26 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–27 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -963,11 +1035,12 @@ export function validateState(state: unknown): ProgressState {
     !plain(state) ||
     ![
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+      27,
     ].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "27" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 26
+      // Compared as the old code did, so a version given as "28" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 27
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -1034,6 +1107,10 @@ export function validateState(state: unknown): ProgressState {
   if (pins) clean.sloopPins = pins;
   const clocks = validateLineClocks(state.lineClocks);
   if (clocks) clean.lineClocks = clocks;
+  const markers = validateMapMarkers(state.mapMarkers);
+  if (markers) clean.mapMarkers = markers;
+  const layers = validateMapLayers(state.mapLayers);
+  if (layers) clean.mapLayers = layers;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -1074,7 +1151,7 @@ export function validateState(state: unknown): ProgressState {
   // (groups[].layout.places, #1240) is 25: a release before it would drop those spots and draw the
   // boxes at their automatic places again. The production lines pinned to a clock with Power
   // Shards (lineClocks, #1239) are 26: an older release would drop the pins, and the next
-  // recalculation would run those lines at 100% again.
+  // recalculation would run those lines at 100% again. Version 27 follows the chain.
   clean.version = clean.lineClocks
     ? 26
     : hasPlaceLayouts(clean.factoryGroups)
@@ -1127,6 +1204,11 @@ export function validateState(state: unknown): ProgressState {
                                                   : hasEdits(clean.storageEdits)
                                                     ? 2
                                                     : 1;
+  // Markers on the world map and its hidden layers (mapMarkers, mapLayers, #1283) are 27: an older
+  // release would drop them, the markers being the user's own records. Neither is kept empty, so
+  // a state whose last marker is removed and whose layers are all shown again goes back to the
+  // version above.
+  if (clean.mapMarkers || clean.mapLayers) clean.version = 27;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

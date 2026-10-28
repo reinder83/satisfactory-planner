@@ -5,6 +5,7 @@ import type {
   FactoryGroups,
   GroupAssignment,
   LinkTransport,
+  MapLayer,
   Phase,
   ProgressState,
   SavedState,
@@ -13,8 +14,14 @@ import type {
   UpdateOp,
 } from '../types/index.ts';
 import {
+  MAP_LAYERS,
+  MAP_MARKER_MAX,
   MINES_PLACE,
   type Raw,
+  cleanMapMarker,
+  mapMarkerId,
+  validateMapLayers,
+  validateMapMarkers,
   addedFloorId,
   addedSlot,
   bayId,
@@ -205,10 +212,43 @@ function setLineClocks(state: SavedState, update: Raw) {
   if (update.value === null) delete state.lineClocks;
   else state.lineClocks = update.value as SavedState['lineClocks'];
 }
+// One marker on the world map (#1283): a new id places it after the others, a known one is
+// replaced where it is (its name, type, colour and spot, all sent), and null removes it (a marker
+// already gone is left gone, so a repeated delete changes nothing). One marker per write, so two
+// tabs placing or moving different markers never undo each other.
+function setMapMarker(state: SavedState, update: Raw) {
+  if (!mapMarkerId(update.id) || (update.value !== null && !plain(update.value)))
+    fail('Invalid map marker.');
+  const markers = validateMapMarkers(state.mapMarkers) ?? [];
+  const at = markers.findIndex(marker => marker.id === update.id);
+  if (update.value === null) {
+    if (at >= 0) markers.splice(at, 1);
+  } else {
+    const marker = cleanMapMarker({ ...update.value, id: update.id });
+    if (!marker) fail('Invalid map marker.');
+    if (at < 0 && markers.length >= MAP_MARKER_MAX)
+      fail(`The map holds at most ${MAP_MARKER_MAX} markers. Delete one to place another.`);
+    if (at < 0) markers.push(marker);
+    else markers[at] = marker;
+  }
+  state.mapMarkers = markers;
+}
+// Shows (true) or hides (false) one layer of the world map (#1283) for this profile.
+// validateState keeps only the hidden ones.
+function setMapLayer(state: SavedState, update: Raw) {
+  if (!MAP_LAYERS.includes(update.layer as MapLayer) || typeof update.value !== 'boolean')
+    fail('Invalid map layers.');
+  state.mapLayers = {
+    ...validateMapLayers(state.mapLayers),
+    [update.layer as MapLayer]: update.value,
+  };
+}
 const recordEdits: Record<string, StateEdit> = {
   exactClocks: setExactClocks,
   sloopPins: setSloopPins,
   lineClocks: setLineClocks,
+  mapMarker: setMapMarker,
+  mapLayer: setMapLayer,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,

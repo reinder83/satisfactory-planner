@@ -51,6 +51,8 @@ import {
   validateState,
   validateTaskEdits,
   validateTickedBy,
+  validateMapLayers,
+  validateMapMarkers,
 } from './validate.ts';
 
 // A new profile for a save you are already playing describes the same world.
@@ -83,7 +85,7 @@ export const carryOptions: [key: string, label: string, description: string][] =
   [
     'notes',
     'Notes and personal tasks',
-    'Save-wide notes, step notes and the tasks you added yourself.',
+    'Save-wide notes, step notes, your markers on the world map and the tasks you added yourself.',
   ],
   [
     'planEdits',
@@ -246,6 +248,10 @@ export function newProfileState(
   if (picks.notes) {
     state.notes = { ...state.notes, ...source.notes };
     state.customTasks = structuredClone(source.customTasks || []);
+    // Markers on the world map (#1283) are notes about the same world; the layers shown are the
+    // source profile's view and stay its own.
+    const markers = validateMapMarkers(source.mapMarkers);
+    if (markers) state.mapMarkers = markers;
     for (const task of state.customTasks) {
       const done = source.checks?.[task.id];
       if (done !== undefined) state.checks[task.id] = done;
@@ -818,6 +824,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   );
   if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
   keepAsked(state, previous.state, started.profile.plan, book);
+  keepMap(state, previous.state);
   // The steps kept above keep who ticked them too (#1206), and the version follows.
   carryTickers(state, previous.state);
   state.revision = (previous.state.revision ?? 0) + 1;
@@ -871,6 +878,16 @@ const askedKey = (
       .sort()
       .join('\n');
   }).join('|');
+// The world map (#1283) after a recalculation in place: the same profile in the same world, so
+// its markers and the layers it hides stay, whatever the carry choices.
+function keepMap(state: ProgressState, previous: Pick<SavedState, 'mapMarkers' | 'mapLayers'>) {
+  const markers = validateMapMarkers(previous.mapMarkers);
+  if (markers) state.mapMarkers = markers;
+  else delete state.mapMarkers;
+  const layers = validateMapLayers(previous.mapLayers);
+  if (layers) state.mapLayers = layers;
+  else delete state.mapLayers;
+}
 function keepAsked(
   state: ProgressState,
   source: Pick<SavedState, 'exactClocks' | 'sloopPins' | 'lineClocks'>,
@@ -955,5 +972,7 @@ export function shareState(state: SavedState): ProgressState {
   // And so are the machines that stand on a grown line (#1174), and who ticked what (#1206).
   delete clean.builtMachines;
   delete clean.tickedBy;
+  // The world map's hidden layers (#1283) are how the sharer looks at it; the markers stay.
+  delete clean.mapLayers;
   return validateState(clean);
 }

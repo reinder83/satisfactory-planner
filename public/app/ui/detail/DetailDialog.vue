@@ -3,6 +3,7 @@
 import AltRecipeDialog from './AltRecipeDialog.vue';
 import CalcFactoryDialog from './CalcFactoryDialog.vue';
 import FlowGraphDialog from './FlowGraphDialog.vue';
+import MarkerDialog from './MarkerDialog.vue';
 import SlotDialog from './SlotDialog.vue';
 import type { DetailTarget } from '../detail.ts';
 
@@ -14,4 +15,5 @@ defineProps<{ target: DetailTarget }>();
   <SlotDialog v-else-if="target.kind === 'slot'" :id="target.id" />
   <AltRecipeDialog v-else-if="target.kind === 'alt'" :id="target.id" />
   <FlowGraphDialog v-else-if="target.kind === 'graph'" :id="target.id" />
+  <MarkerDialog v-else-if="target.kind === 'marker'" :id="target.id" />
 </template>

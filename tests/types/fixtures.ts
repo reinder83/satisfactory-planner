@@ -396,6 +396,27 @@ export const version26 = {
   },
 } satisfies SavedState;
 
+// Version 27: markers on the world map and a hidden layer (#1283), on top of version 26: a pure
+// iron node with its own colour, a landmark and a note, at spots in game units, and the markers
+// layer hidden. Synthetic names and spots.
+export const version27 = {
+  ...version26,
+  version: 27,
+  mapMarkers: [
+    {
+      id: 'mk-iron01',
+      name: 'Pure iron by the lake',
+      type: 'resource',
+      color: 'orange',
+      x: -120500,
+      y: 48250,
+    },
+    { id: 'mk-arch02', name: 'Stone arch', type: 'landmark', x: 30000, y: -150000 },
+    { id: 'mk-note03', name: 'Truck parked here', type: 'note', x: 0, y: 0 },
+  ],
+  mapLayers: { markers: false },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -425,6 +446,7 @@ export const states: [SavedState, number][] = [
   [version24, 24],
   [version25, 25],
   [version26, 26],
+  [version27, 27],
 ];
 
 export const backup = {
