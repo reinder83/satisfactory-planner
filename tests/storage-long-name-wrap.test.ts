@@ -23,7 +23,7 @@ const PHONE = 720;
 function mediaBlocks(css: string) {
   const blocks: { query: string; body: string }[] = [];
   const at = /@media([^{]*)\{/g;
-  for (let match; (match = at.exec(css)); ) {
+  for (let match; (match = at.exec(css));) {
     let depth = 1;
     let i = at.lastIndex;
     for (; i < css.length && depth; i++) depth += css[i] === '{' ? 1 : css[i] === '}' ? -1 : 0;

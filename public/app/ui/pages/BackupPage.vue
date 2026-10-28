@@ -290,9 +290,7 @@ async function persistStorage() {
         limit. This is not recorded as a full backup.
       </p>
       <label v-for="save in page.saves" :key="save.id" class="check-row"
-        ><input type="checkbox" :value="save.id" v-model="chosen" data-choose-save />{{
-          save.name
-        }}
+        ><input type="checkbox" :value="save.id" v-model="chosen" data-choose-save />{{ save.name }}
         <span class="small muted"
           >· {{ save.profiles }} profile{{ save.profiles === 1 ? '' : 's' }}</span
         ></label

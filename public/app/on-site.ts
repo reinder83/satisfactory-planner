@@ -57,8 +57,7 @@ type OnSiteStages = [StageKey, { rows?: CalcRow[] }][];
 type OnSiteShares = OnSiteSettings[string]['shares'];
 type OnSiteRates = NonNullable<OnSiteSettings[string]['rates']>;
 type OnSiteGroupsInput =
-  | Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>>
-  | undefined;
+  Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined;
 
 // settings.onSite from the factory groups as they are now and `plan`, the plan being
 // recalculated: per group that marks items it makes on site (factoryGroups.local), its name, the

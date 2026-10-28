@@ -46,7 +46,11 @@ const ungrouped: FactoryGroups = { groups: [], assignments: {} };
 // A rate's no-break space (as the pages write it) as a plain one.
 const plain = (text: string) => text.replace(/ /g, ' ');
 const adviceOf = (name: string, groups = ungrouped) =>
-  lineAdvice(rows.find(candidate => candidate.id === name)!, recycleModel(stage, groups), words)
+  lineAdvice(
+    rows.find(candidate => candidate.id === name)!,
+    recycleModel(stage, groups),
+    words,
+  )
     .filter(line => line.item === HOR)
     .map(line => [line.kind, line.lead, plain(adviceSentence(line))]);
 

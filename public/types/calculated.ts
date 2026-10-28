@@ -10,14 +10,7 @@ import type { ItemRates, StageKey } from './common.ts';
 
 export type Goal = 'minimal' | 'balanced' | 'timed' | 'maximum';
 export type Purity =
-  | 'vanilla'
-  | 'pure'
-  | 'mostly-pure'
-  | 'normal'
-  | 'mostly-impure'
-  | 'impure'
-  | 'random'
-  | 'custom';
+  'vanilla' | 'pure' | 'mostly-pure' | 'normal' | 'mostly-impure' | 'impure' | 'random' | 'custom';
 export type Distribution = 'original' | 'randomized' | 'basic' | 'advanced' | 'fossil';
 export type MainPower =
   | 'auto'
@@ -29,12 +22,7 @@ export type MainPower =
   | 'turbofuel-nuclear'
   | 'rocket-nuclear';
 export type StorageChoice =
-  | 'none'
-  | 'construction'
-  | 'electronics'
-  | 'supplies'
-  | 'packaged'
-  | 'all';
+  'none' | 'construction' | 'electronics' | 'supplies' | 'packaged' | 'all';
 export type DroneFuel =
   | 'none'
   | 'Battery'
@@ -48,10 +36,7 @@ export type SloopUse = 'shards' | 'dna' | 'biofuel';
 // The generators a player may already have (#1068, OWNED_GENERATORS in
 // public/preferences/fuels.ts), by building, and how many of each.
 export type OwnedGeneratorMachine =
-  | 'Biomass Burner'
-  | 'Coal Generator'
-  | 'Fuel Generator'
-  | 'Nuclear Power Plant';
+  'Biomass Burner' | 'Coal Generator' | 'Fuel Generator' | 'Nuclear Power Plant';
 export type OwnedGenerators = Partial<Record<OwnedGeneratorMachine, number>>;
 
 // Node or well-satellite counts by purity.

@@ -26,9 +26,7 @@ import type {
 // is not used); `vehicle`: the transport saved on the link (linkTransportFor); `belt`: belts or
 // pipes, the default.
 export type LinkCarrier =
-  | { kind: 'extract' }
-  | { kind: 'vehicle'; transport: LinkTransport }
-  | { kind: 'belt' };
+  { kind: 'extract' } | { kind: 'vehicle'; transport: LinkTransport } | { kind: 'belt' };
 // The raw resources extractors pump wherever the line using them is: Water Extractors work on
 // any body of water, unlike a node or a resource well.
 export const EXTRACTED_ON_SITE: ReadonlySet<string> = new Set(['Water']);

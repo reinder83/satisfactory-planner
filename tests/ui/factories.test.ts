@@ -1894,7 +1894,7 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
   assert.match(rule(top, '.rail-rows'), /display: flex;/);
   assert.match(rule(top, '.rail-row'), /display: flex;/);
   let phone = '';
-  for (let position = css.indexOf('@media (max-width: 640px)'); position >= 0; ) {
+  for (let position = css.indexOf('@media (max-width: 640px)'); position >= 0;) {
     phone += block('@media (max-width: 640px)', position);
     position = css.indexOf('@media (max-width: 640px)', position + 1);
   }

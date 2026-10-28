@@ -89,7 +89,7 @@ export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRec
         for (const item of Object.keys(recipe.inputs)) if (marked.has(item)) consumed.add(item);
     const copied = new Set<string>();
     // Each pass copies the makers of the items consumed so far; their inputs may add more.
-    for (let size = -1; size !== consumed.size; ) {
+    for (let size = -1; size !== consumed.size;) {
       size = consumed.size;
       for (const recipe of pool)
         if (

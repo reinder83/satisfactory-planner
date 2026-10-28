@@ -265,23 +265,20 @@ test('the lane assignment is stable', () => {
 // Lines of one row each, for lanes alone: the trunk [lo, hi] is an output row on line lo that
 // feeds an input row on line hi, each trunk with an item of its own.
 function trunkLines(spans: [number, number][]): FlowLine[] {
-  const lines = Array.from(
-    { length: Math.max(...spans.flat()) + 1 },
-    (_, i): FlowLine => ({
-      id: `l${i}`,
-      no: i + 1,
-      recipe: `l${i}`,
-      name: `l${i}`,
-      machine: 'Constructor',
-      machines: 1,
-      lastClock: 100,
-      share: 1,
-      machinesHere: 1,
-      mw: 0,
-      inputs: [],
-      outputs: [],
-    }),
-  );
+  const lines = Array.from({ length: Math.max(...spans.flat()) + 1 }, (_, i): FlowLine => ({
+    id: `l${i}`,
+    no: i + 1,
+    recipe: `l${i}`,
+    name: `l${i}`,
+    machine: 'Constructor',
+    machines: 1,
+    lastClock: 100,
+    share: 1,
+    machinesHere: 1,
+    mw: 0,
+    inputs: [],
+    outputs: [],
+  }));
   spans.forEach(([lo, hi], i) => {
     const item = `item${i}`;
     const link: FlowLink = {
