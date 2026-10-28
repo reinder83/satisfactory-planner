@@ -311,3 +311,31 @@ test('the nightly workflow runs the Node suite with every property case (#1274)'
     /^\s+PLANNER_FULL_PROPERTIES:|^\s+- run: .*PLANNER_FULL_PROPERTIES/m,
   );
 });
+
+// A sharded job runs `--shard=${{ matrix.shard }}/N` (node --test or vitest) and its matrix must
+// list exactly the shards 1 to N: a shard missing from the matrix would leave its files untested
+// with every job green (#1274).
+test('each sharded test job runs every shard of its split (#1274)', () => {
+  const sharded = [...jobsOf(workflow)].filter(([, block]) =>
+    block.some(line => /--(test-)?shard=/.test(line)),
+  );
+  assert.deepEqual(
+    sharded.map(([id]) => id),
+    ['node-tests', 'ui-tests'],
+    'the Node and the Vitest jobs are sharded',
+  );
+  for (const [id, block] of sharded) {
+    const total = /--(?:test-)?shard=\$\{\{ matrix\.shard \}\}\/(\d+)/.exec(block.join('\n'))?.[1];
+    const listed = /^ {8}shard: \[([\d, ]+)\]/m.exec(block.join('\n'))?.[1];
+    assert.ok(total && listed, `${id} has a shard matrix and a split`);
+    assert.deepEqual(
+      listed.split(',').map(Number),
+      Array.from({ length: Number(total) }, (_, i) => i + 1),
+      `${id} runs shards 1 to ${total}`,
+    );
+    assert.ok(
+      block.some(line => line.includes(`/${total}`) && line.includes('name:')),
+      id,
+    );
+  }
+});
