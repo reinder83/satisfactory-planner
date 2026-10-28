@@ -1,7 +1,7 @@
 // The biomass start-up steps that are one thing in the game ("Turn leaves and wood into Biomass",
 // "Unlock Obstacle Clearing, then automate Solid Biofuel" and "Unlock Coal Power before switching
 // to coal") are listed once, in the first planned phase that lists them (biomassStartupTasks and
-// generationTasks in public/progression.ts, #872), as each milestone (#758) and alternate unlock
+// generationTasks in public/power-steps.ts, #872), as each milestone (#758) and alternate unlock
 // (#870) is listed once. Before, every phase from the start phase on listed them with the same
 // check keys until a power unlock was ticked, so a tick made in Phase 3 made Phases 4 and 5 look
 // started. The check keys are unchanged.

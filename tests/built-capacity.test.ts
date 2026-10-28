@@ -1,8 +1,8 @@
 // Built-aware solving (#1176, slice 3 of #1172): a recalculation that carries progress on
 // production lines sends the lines that stand in the profile it carries from (builtLinesOf in
 // public/state/carry.ts) as `settings.builtLines`, and the solve counts them as existing capacity
-// (addBuiltLines in planner/model.ts): what they make is credited, their ore and power stay in the
-// budgets, and the solve keeps and extends them rather than switching them for a few buildings.
+// (addBuiltLines in planner/built-lines.ts): what they make is credited, their ore and power stay in
+// the budgets, and the solve keeps and extends them rather than switching them for a few buildings.
 // The somersloops stay on a built amplified line. A plan without the field, and every plan
 // stored before it, calculates exactly as before. Both editions store the field as part of the
 // plan's settings, through a reload, an export and an import.
@@ -209,7 +209,7 @@ test('a plan with nothing built is the plan it was under every objective', () =>
 // #1189: under Maximum output the leanest of the fastest plans switched the built Screws to Cast
 // Screws under every objective: the built Iron Rods go to the plan's other uses there, so keeping
 // the Screws needs new Iron Rods, and the switch saved about one machine of 5,000 while being no
-// faster. There a built line gives way only to speed (keepBuilt in planner/model.ts).
+// faster. There a built line gives way only to speed (keepBuilt in planner/built-lines.ts).
 const MAX = { goal: 'maximum', limitsConfirmed: true };
 const hoursOf = (plan: Pick<StoredCalculatedPlan, 'stages'>) => plan.stages['4'].hours!;
 
@@ -286,8 +286,8 @@ test('a built line the new plan has no use for is not run for nothing', () => {
 
 // #1190's review: Screws have no byproduct, but a line that has one could pay for itself by it
 // once its ore and power were credited. A built line is credited only for the share of it the
-// plan uses (creditSpentShare in planner/model.ts), so under least power and least raw resources
-// a built machine the plan does not need stays idle and nothing more is sunk.
+// plan uses (creditSpentShare in planner/built-lines.ts), so under least power and least raw
+// resources a built machine the plan does not need stays idle and nothing more is sunk.
 const LEAST: [string, object][] = [
   ['least power', { objective: 'power' }],
   ['least raw resources', { objective: 'raw' }],
@@ -307,7 +307,7 @@ const near = (actual: number, expected: number, message: string) =>
 
 // #1193: under the fewest buildings too. There a built machine cost KEEP_SHARE of a new one and its
 // ore almost nothing, so spare built machines ran for their byproducts; now only the share of a
-// built line the plan uses costs KEEP_SHARE (creditUsedShare in planner/model.ts).
+// built line the plan uses costs KEEP_SHARE (creditUsedShare in planner/built-lines.ts).
 // #1198: and under a weighted mix whose buildings weigh, where the buildings share of a built line
 // was not capped at all.
 const WEIGHTED: [string, object][] = [

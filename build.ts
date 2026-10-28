@@ -38,6 +38,7 @@ const SHARED = [
   'handbook-migration.ts',
   'mining.ts',
   'power.ts',
+  'power-steps.ts',
   'preferences.ts',
   'progression.ts',
   'reviewed-plans.ts',
