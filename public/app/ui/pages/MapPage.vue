@@ -4,7 +4,8 @@
   graph does (useGraphPanZoom, graph-pan-zoom.ts): the wheel zooms around the pointer, a drag on
   the map moves it, two fingers pinch, and − / + / Fit zoom around the middle. The box takes focus,
   and then the arrow keys move the map (Shift: further) and + and − zoom it. It opens fitted to the
-  box; the view is the tab's alone and never saved.
+  box, in its middle; the view is the tab's alone and never saved. The box scrolls half its size
+  past each edge of the map (#1289), so a drag moves the map at any zoom, in any direction.
 
   Markers (slice 2): the profile's `mapMarkers` (state version 27), each an icon in its type's
   shape and its colour with its name beside it, at its spot in game units. A click on the map, or
@@ -97,14 +98,56 @@ const drag: GraphLineDrag = {
     if (marker) void saveSpot(marker.id);
   },
 };
+// Room to drag the map past its edges (#1289): half the box on each side, so a drag moves the map
+// at any zoom, also while it is narrower or lower than the box, and any spot of it can come to the
+// middle of the box. The box then scrolls from the map's left edge in its middle (scrollLeft 0)
+// to its right edge there (scrollLeft the drawn width): scrollLeft is the spot in the middle, so a
+// box that changes size keeps it. Measured on opening and whenever the box changes size.
+const boxSize = ref({ width: 0, height: 0 });
+const room = computed(() => ({ width: boxSize.value.width / 2, height: boxSize.value.height / 2 }));
+const measure = () => {
+  const el = box.value;
+  if (el && (el.clientWidth !== boxSize.value.width || el.clientHeight !== boxSize.value.height))
+    boxSize.value = { width: el.clientWidth, height: el.clientHeight };
+};
+let resized: ResizeObserver | undefined;
 const { zoom, panning, moving, show, zoomIn, zoomOut, fit, handlers, onClickCapture } =
-  useGraphPanZoom(box, () => natural, drag);
+  useGraphPanZoom(
+    box,
+    () => natural,
+    drag,
+    () => room.value,
+  );
 const zoomText = computed(() => `${Math.round(zoom.value * 100)}%`);
+
+// A mouse press on the map itself (not on a marker) starts no text selection and no native drag
+// of the image or a selection, which took the pointer from the pan (#1289); the map still takes
+// focus, as the press would have given it.
+const mapHandlers = {
+  ...handlers,
+  pointerdown(e: PointerEvent) {
+    const el = box.value;
+    const target = e.target instanceof Element ? e.target : null;
+    if (el && e.pointerType === 'mouse' && !target?.closest('[data-node], button, a, input')) {
+      e.preventDefault();
+      el.focus({ preventScroll: true });
+    }
+    handlers.pointerdown(e);
+  },
+  dragstart: (e: DragEvent) => e.preventDefault(),
+};
 
 onMounted(async () => {
   await nextTick();
+  measure();
+  if (typeof ResizeObserver === 'function' && box.value) {
+    resized = new ResizeObserver(measure);
+    resized.observe(box.value);
+  }
+  await nextTick();
   await fit();
 });
+onBeforeUnmount(() => resized?.disconnect());
 
 // Each marker as drawn: where its pin's middle is on the drawn map (px), its colour and icon.
 const drawn = computed(() =>
@@ -149,12 +192,18 @@ onBeforeUnmount(() => {
   for (const id of [...timers.keys()]) void saveSpot(id);
 });
 
-// The spot in game units under client point (x, y), kept on the map.
+// The spot in game units under client point (x, y), kept on the map: the point in the box, plus
+// how far it is scrolled, less the room before the map.
 function spotAt(x: number, y: number): WorldPoint | null {
-  const layer = box.value?.querySelector('[data-map-layer]');
-  if (!layer) return null;
-  const rect = layer.getBoundingClientRect();
-  return onMap(imageToWorld({ x: (x - rect.left) / zoom.value, y: (y - rect.top) / zoom.value }));
+  const el = box.value;
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  return onMap(
+    imageToWorld({
+      x: (x - rect.left - el.clientLeft + el.scrollLeft - room.value.width) / zoom.value,
+      y: (y - rect.top - el.clientTop + el.scrollTop - room.value.height) / zoom.value,
+    }),
+  );
 }
 // The marker dialog for a new marker at `spot`, while the map has room for one.
 function placeAt(spot: WorldPoint | null) {
@@ -198,8 +247,8 @@ async function keepInView(id: string) {
       : at + margin > offset + visible
         ? at + margin - visible
         : offset;
-  el.scrollLeft = into(shown.left, el.scrollLeft, el.clientWidth);
-  el.scrollTop = into(shown.top, el.scrollTop, el.clientHeight);
+  el.scrollLeft = into(room.value.width + shown.left, el.scrollLeft, el.clientWidth);
+  el.scrollTop = into(room.value.height + shown.top, el.scrollTop, el.clientHeight);
 }
 // On a focused marker: an arrow key moves it (Shift: further), Delete or Backspace removes it.
 // Enter and Space press the button, which opens it. Ctrl, ⌘ and Alt are the browser's.
@@ -254,7 +303,7 @@ function onKey(e: KeyboardEvent) {
     const step = e.shiftKey ? KEY_STEP_SHIFT : KEY_STEP;
     const area = { width: el.clientWidth, height: el.clientHeight };
     const view = { zoom: zoom.value, left: el.scrollLeft, top: el.scrollTop };
-    void show(panGraphBy(view, arrow[0] * step, arrow[1] * step, area, natural));
+    void show(panGraphBy(view, arrow[0] * step, arrow[1] * step, area, natural, room.value));
   } else if (e.key === '+' || e.key === '=') {
     e.preventDefault();
     void zoomIn();
@@ -343,13 +392,26 @@ function onKey(e: KeyboardEvent) {
       role="group"
       aria-label="World map. The arrow keys move it, + and − zoom it."
       data-world-map
-      v-on="handlers"
+      v-on="mapHandlers"
       @click.capture="onClickCapture"
       @keydown="onKey"
     >
       <div
+        class="map-room"
+        :style="{
+          width: natural.width * zoom + 2 * room.width + 'px',
+          height: natural.height * zoom + 2 * room.height + 'px',
+        }"
+        data-map-room
+      ></div>
+      <div
         class="map-layer"
-        :style="{ width: natural.width * zoom + 'px', height: natural.height * zoom + 'px' }"
+        :style="{
+          left: room.width + 'px',
+          top: room.height + 'px',
+          width: natural.width * zoom + 'px',
+          height: natural.height * zoom + 'px',
+        }"
         data-map-layer
         @click="onMapClick"
       >

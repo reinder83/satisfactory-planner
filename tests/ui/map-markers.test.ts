@@ -21,8 +21,9 @@ import { $, $$, applyUpdate, evil, go, open, page, stubFetch } from './setup.ts'
 import type { MapMarker, ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 // happy-dom lays out nothing, so the map's box is given the size a browser would draw it at, with
-// no border; every element's client rectangle is at (0, 0), so a client point is a point on the
-// drawn map.
+// no border; every element's client rectangle is at (0, 0), so a client point is a point in the
+// box. The map is drawn half the box into what the box scrolls (#1289): onImage() gives the
+// point of the image under a point in the box.
 const BOX = { width: 400, height: 300 };
 const BOX_SIZES: Record<string, number> = {
   clientWidth: BOX.width,
@@ -111,6 +112,12 @@ const key = (el: Element, name: string, init: KeyboardEventInit = {}) => {
   el.dispatchEvent(event);
   return event;
 };
+// The point of the image (px of its natural size) under point (x, y) of the box: the map is
+// drawn at its style's left and top in what the box scrolls.
+const onImage = (x: number, y: number, zoom = FITS) => ({
+  x: (x + box().scrollLeft - parseFloat(layer().style.left)) / zoom,
+  y: (y + box().scrollTop - parseFloat(layer().style.top)) / zoom,
+});
 // Where marker `spot` is drawn on the map (px), as its style says.
 const drawnAt = (el: HTMLElement) => [parseFloat(el.style.left), parseFloat(el.style.top)];
 
@@ -142,7 +149,7 @@ test('a click on the map opens a new marker there; Place marker saves it and foc
     $<HTMLSelectElement>('[data-marker-color]')!.options[0]!.textContent!.trim(),
     'The type’s own (Blue)',
   );
-  const spot = onMap(imageToWorld({ x: 120 / FITS, y: 90 / FITS }));
+  const spot = onMap(imageToWorld(onImage(120, 90)));
   assert.match(
     $('[data-marker-spot]')!.textContent!,
     /^\s*In the game at x [−\d,]+, y [−\d,]+ \(game units\)\./,
@@ -194,8 +201,12 @@ test('a blank name is refused in the dialog; Cancel and Add marker send nothing'
   assert.equal($('#marker-name-error')!.textContent, 'Give the marker a name.');
   assert.equal(name.getAttribute('aria-invalid'), 'true');
   assert.equal(document.activeElement, name);
-  // "Add marker" placed it in the middle of the view: the spot shown is that one.
-  const middle = onMap(imageToWorld({ x: BOX.width / 2 / FITS, y: BOX.height / 2 / FITS }));
+  // "Add marker" placed it in the middle of the view, which Fit puts in the middle of the map.
+  const middle = onMap(imageToWorld(onImage(BOX.width / 2, BOX.height / 2)));
+  assert.deepEqual(onImage(BOX.width / 2, BOX.height / 2), {
+    x: WORLD_MAP.width / 2,
+    y: WORLD_MAP.height / 2,
+  });
   assert.match(
     $('[data-marker-spot]')!.textContent!,
     new RegExp(`x ${middle.x.toLocaleString('en-US').replace('-', '−')},`),
@@ -205,6 +216,47 @@ test('a blank name is refused in the dialog; Cancel and Add marker send nothing'
   assert.equal(dialog().open, false);
   assert.deepEqual(sent, [], 'Cancel saves nothing');
   assert.equal($$('[data-map-marker]').length, 0);
+});
+
+// #1289: the map lies in room half the box wide and high, so a click is placed by where the map
+// is drawn in what the box scrolls; a click in the room around the map places nothing.
+test('a click on a zoomed and moved map places the marker at the spot clicked', async () => {
+  await showMap();
+  for (let i = 0; i < 3; i++) {
+    $<HTMLButtonElement>('[data-map-zoom="in"]')!.click();
+    await settle();
+  }
+  const zoom = parseFloat(layer().style.width) / WORLD_MAP.width;
+  box().scrollLeft = 90;
+  box().scrollTop = 410;
+  const click = new MouseEvent('click', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 250,
+    clientY: 60,
+  });
+  layer().dispatchEvent(click);
+  await settle();
+  assert.equal(dialog().open, true);
+  // The point clicked is 250 − (200 − 90) = 140 px into the map across, 60 − (150 − 410) = 320 down.
+  assert.deepEqual(onImage(250, 60, zoom), { x: 140 / zoom, y: 320 / zoom });
+  const spot = onMap(imageToWorld({ x: 140 / zoom, y: 320 / zoom }));
+  $<HTMLButtonElement>('[data-marker-save]')!.click();
+  await settle();
+  const update = sent[0]! as Extract<UpdateOp, { type: 'mapMarker' }>;
+  assert.deepEqual({ x: update.value!.x, y: update.value!.y }, spot);
+  const [left, top] = drawnAt(marker(update.id)!);
+  assert.ok(
+    Math.abs(left! - 140) < 0.5 && Math.abs(top! - 320) < 0.5,
+    'drawn where it was clicked',
+  );
+  // The room around the map is not the map.
+  $('[data-map-room]')!.dispatchEvent(
+    new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 20, clientY: 20 }),
+  );
+  await settle();
+  assert.equal(dialog().open, false, 'a click beside the map places nothing');
+  assert.equal(sent.length, 1);
 });
 
 test('a press on a marker opens it to edit; Save replaces it where it is', async () => {

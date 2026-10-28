@@ -99,3 +99,40 @@ test('the wheel zooms in going up and out going down, a notch by about a fifth',
   assert.ok(Math.abs(graphWheelFactor(3, 1) - graphWheelFactor(100, 0)) < 0.01);
   assert.equal(graphWheelFactor(1, 2), graphWheelFactor(500, 0));
 });
+
+// The world map's room (#1289): half the box past each edge of the drawing. A zoom keeps the spot
+// under the point also while the drawing is smaller than the box, a drag moves it until an edge
+// reaches the middle of the box, and Fit puts the whole drawing in the middle.
+test('with room past its edges, the drawing zooms, moves and fits around the middle', () => {
+  const room = { width: box.width / 2, height: box.height / 2 };
+  // The spot under a point: the drawing starts `room` px into what the box scrolls.
+  const spot = (view: GraphView, x: number, y: number) => ({
+    x: (view.left + x - room.width) / view.zoom,
+    y: (view.top + y - room.height) / view.zoom,
+  });
+  // 0.2: the drawing is 400 × 240, smaller than the 800 × 500 box both ways.
+  const small: GraphView = { zoom: 0.2, left: 150, top: 90 };
+  for (const factor of [1.25, 1 / 1.25, 2]) {
+    const zoomed = zoomGraphAround(small, factor, { x: 300, y: 200 }, box, size, room);
+    close(spot(zoomed, 300, 200).x, spot(small, 300, 200).x, `x at ${factor}`);
+    close(spot(zoomed, 300, 200).y, spot(small, 300, 200).y, `y at ${factor}`);
+  }
+  // A drag moves it both ways, as far as an edge in the middle: offsets 0 to the drawn size.
+  assert.deepEqual(panGraphBy(small, -100, 60, box, size, room), {
+    zoom: 0.2,
+    left: 250,
+    top: 30,
+  });
+  assert.deepEqual(panGraphBy(small, -5000, 5000, box, size, room), {
+    zoom: 0.2,
+    left: 400,
+    top: 0,
+  });
+  // Fit: the whole drawing, its middle in the middle of the box.
+  const fitted = fitGraphView(box, size, room);
+  assert.equal(fitted.zoom, 0.4);
+  assert.deepEqual(spot(fitted, box.width / 2, box.height / 2), {
+    x: size.width / 2,
+    y: size.height / 2,
+  });
+});
