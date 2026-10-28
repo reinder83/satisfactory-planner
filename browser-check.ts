@@ -266,12 +266,27 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
     before.dialog,
     'the wheel over the drawing does not scroll the dialog',
   );
+  // A double-click first, as on the world map (#1289): it selects nothing to drag, and the drag
+  // still moves the drawing with no native drag.
+  await page.evaluate(() => {
+    const seen: boolean[] = [];
+    Object.assign(window, { graphDragstarts: seen });
+    document.addEventListener('dragstart', e => seen.push(e.defaultPrevented));
+  });
+  await page.mouse.dblclick(spots.background.x, spots.background.y);
   await page.mouse.move(spots.background.x, spots.background.y);
   await page.mouse.down();
   await page.mouse.move(spots.background.x - 30, spots.background.y - 20, { steps: 4 });
   await page.mouse.up();
   const panned = await read();
   assert.ok(panned.left > zoomed.left || panned.top > zoomed.top, 'a drag moves the drawing');
+  const graphDragstarts = await page.evaluate(
+    () => (window as Window & { graphDragstarts?: boolean[] }).graphDragstarts ?? [],
+  );
+  assert.ok(
+    graphDragstarts.every(prevented => prevented),
+    `no native drag in the flow graph: ${JSON.stringify(graphDragstarts)}`,
+  );
   await page.locator('#detail [data-flow-zoom="fit"]').click();
   await page.waitForFunction(() => {
     const el = document.querySelector<HTMLElement>('#detail [data-flow-graph]')!;
@@ -334,7 +349,89 @@ async function checkWorldMap(page: Page) {
     const button = await page.locator(`[data-map-zoom="${which}"]`).boundingBox();
     assert.ok(button && button.width >= 44 && button.height >= 44, `${which} is a 44 px target`);
   }
+  await checkMapPan(page);
   await page.setViewportSize({ width: 1280, height: 720 });
+}
+// Dragging the world map (#1289) on a desktop-wide window, where the box is a wide strip:
+// - one step above Fit the map is narrower than the box, and a drag still moves it sideways and
+//   down (it had nothing to scroll sideways before);
+// - above 100%, after a double-click on the map, a press-drag on the image pans the map and no
+//   native drag of the image or a selection goes through (Chrome dragged a ghost of the map).
+async function checkMapPan(page: Page) {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.locator('[data-map-zoom="fit"]').click();
+  await page.evaluate(() => {
+    const seen: boolean[] = [];
+    Object.assign(window, { mapDragstarts: seen });
+    document.addEventListener('dragstart', e => seen.push(e.defaultPrevented));
+  });
+  const read = () =>
+    page.evaluate(() => {
+      const box = document.querySelector<HTMLElement>('[data-world-map]')!;
+      const layer = box.querySelector<HTMLElement>('[data-map-layer]')!.getBoundingClientRect();
+      const image = document.querySelector('[data-map-image]')!;
+      return {
+        x: layer.x,
+        y: layer.y,
+        width: layer.width,
+        box: box.clientWidth,
+        zoom: document.querySelector('[data-map-zoom-level]')!.textContent!.trim(),
+        selected: !!getSelection()?.containsNode(image, true),
+        dragstarts: (window as Window & { mapDragstarts?: boolean[] }).mapDragstarts ?? [],
+      };
+    });
+  const box = await page.locator('[data-world-map]').boundingBox();
+  assert.ok(box);
+  const middle = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const drag = async (dx: number, dy: number) => {
+    const before = await read();
+    await page.mouse.move(middle.x, middle.y);
+    await page.mouse.down();
+    await page.mouse.move(middle.x + dx / 2, middle.y + dy / 2, { steps: 4 });
+    await page.mouse.move(middle.x + dx, middle.y + dy, { steps: 4 });
+    await page.mouse.up();
+    const after = await read();
+    return { x: after.x - before.x, y: after.y - before.y, after };
+  };
+  await page.locator('[data-map-zoom="in"]').click();
+  const narrow = await read();
+  assert.ok(narrow.width < narrow.box, `the map (${narrow.width} px) is narrower than the box`);
+  let moved = await drag(-150, 0);
+  assert.ok(Math.abs(moved.x + 150) < 2 && Math.abs(moved.y) < 2, `sideways: ${moved.x}`);
+  moved = await drag(120, 90);
+  assert.ok(Math.abs(moved.x - 120) < 2 && Math.abs(moved.y - 90) < 2, `back and down`);
+  // Above 100%: a double-click on the map selects nothing (its clicks open the new-marker dialog,
+  // closed again), and drag after drag on the image pans. Before the fix the first drag left the
+  // map selected, and the next one dragged it natively (an unprevented dragstart) and barely
+  // moved it. Also with the whole page selected.
+  while (parseInt((await read()).zoom) <= 100) await page.locator('[data-map-zoom="in"]').click();
+  await page.mouse.dblclick(middle.x, middle.y);
+  assert.equal((await read()).selected, false, 'a double-click selects nothing of the map');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  const hit = await page.evaluate(
+    ({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[data-map-layer]'),
+    middle,
+  );
+  assert.ok(hit, 'the press is on the map image');
+  for (const [dx, dy, selectAll] of [
+    [-160, -100, false],
+    [-160, 100, false],
+    [200, -60, true],
+  ] as const) {
+    if (selectAll) await page.keyboard.press('Control+A');
+    moved = await drag(dx, dy);
+    assert.ok(
+      Math.abs(moved.x - dx) < 2 && Math.abs(moved.y - dy) < 2,
+      `it pans (all selected: ${selectAll}): ${JSON.stringify(moved)}`,
+    );
+    assert.ok(
+      moved.after.dragstarts.every(prevented => prevented),
+      `no native drag goes through: ${JSON.stringify(moved.after.dragstarts)}`,
+    );
+    if (!selectAll) assert.equal(moved.after.selected, false, 'the drag selects nothing');
+  }
+  await page.evaluate(() => getSelection()?.removeAllRanges());
 }
 // Markers on the world map (#1283, slice 2) in the browser edition: a click on the map places one
 // through the marker dialog, a drag moves it and saves on the drop, a reload draws it where it was

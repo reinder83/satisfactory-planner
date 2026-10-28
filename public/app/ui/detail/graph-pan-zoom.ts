@@ -12,6 +12,9 @@
 // - two fingers pinch to zoom around their middle, and move the drawing as they move;
 // - zoomIn, zoomOut and fit for the buttons, around the middle of the box.
 // show() puts a view back (the stored zoom and scroll offsets, #1224); the dialog saves them.
+// The world map (#1289) passes `room`: how far its box scrolls past each edge of the drawing
+// (graph-view.ts). The zooms and the pinch keep to it, and Fit centres the drawing. The flow
+// graph passes none.
 import { nextTick, ref, type Ref } from 'vue';
 import {
   fitGraphView,
@@ -51,6 +54,7 @@ export function useGraphPanZoom(
   box: Ref<HTMLElement | null>,
   size: () => GraphArea | null,
   lines?: GraphLineDrag,
+  room?: () => GraphArea,
 ) {
   const zoom = ref(1);
   const panning = ref(false);
@@ -94,14 +98,14 @@ export function useGraphPanZoom(
     if (!el || !natural) return;
     const area = visible(el);
     const at = point ?? { x: area.width / 2, y: area.height / 2 };
-    return show(zoomGraphAround(current(el), factor, at, area, natural));
+    return show(zoomGraphAround(current(el), factor, at, area, natural, room?.()));
   }
   const zoomIn = () => zoomBy(GRAPH_ZOOM.step);
   const zoomOut = () => zoomBy(1 / GRAPH_ZOOM.step);
   function fit() {
     const el = box.value;
     const natural = size();
-    if (el && natural) return show(fitGraphView(visible(el), natural));
+    if (el && natural) return show(fitGraphView(visible(el), natural, room?.()));
   }
 
   function onWheel(e: WheelEvent) {
@@ -177,8 +181,16 @@ export function useGraphPanZoom(
       inBox(el, at.x, at.y),
       area,
       natural,
+      room?.(),
     );
-    const moved = panGraphBy(zoomed, at.x - pinchMiddle.x, at.y - pinchMiddle.y, area, natural);
+    const moved = panGraphBy(
+      zoomed,
+      at.x - pinchMiddle.x,
+      at.y - pinchMiddle.y,
+      area,
+      natural,
+      room?.(),
+    );
     pinchDistance = distance;
     pinchMiddle = at;
     void show(moved);
