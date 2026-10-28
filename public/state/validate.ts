@@ -15,6 +15,8 @@ import type {
   ExactClocks,
   FactoryGroup,
   FactoryGroups,
+  FactoryPlace,
+  FactoryPlaces,
   GroupAssignment,
   GroupLayout,
   HandbookMapping,
@@ -803,6 +805,40 @@ export function validateMapLayers(raw: unknown): MapLayers | undefined {
   const hidden = MAP_LAYERS.filter(layer => raw[layer] === false);
   return hidden.length ? Object.fromEntries(hidden.map(layer => [layer, false])) : undefined;
 }
+// Factories on the world map (#1283, slice 3): each factory group placed at most once, so at most
+// as many places as there can be factories (validateGroups keeps 60), each at a spot in game units
+// within MAP_WORLD_LIMIT, as a marker's.
+export const FACTORY_PLACE_MAX = 60;
+// One place as validateFactoryPlaces keeps it (whole game units), or null when it is malformed.
+// Fields it does not know are left out.
+export function cleanFactoryPlace(raw: unknown): FactoryPlace | null {
+  if (!plain(raw) || !worldUnit(raw.x) || !worldUnit(raw.y)) return null;
+  return { x: Math.round(raw.x) || 0, y: Math.round(raw.y) || 0 };
+}
+// Returns a clean copy of factoryPlaces (#1283), or undefined when absent or empty: by factory
+// group id, in the order of `groups` (the Factories page's), each naming one of them. A place
+// whose factory is not in `groups`, a key that is no group id, a spot out of range or too many
+// places refuse the whole state: removing a factory takes its place with it (mutate.ts), and a
+// carry keeps only the places of the factories it keeps (carry.ts), so none is left behind.
+export function validateFactoryPlaces(
+  raw: unknown,
+  groups: readonly Pick<FactoryGroup, 'id'>[],
+): FactoryPlaces | undefined {
+  if (raw === undefined) return undefined;
+  if (!plain(raw) || Object.keys(raw).length > FACTORY_PLACE_MAX) fail('Invalid factory places.');
+  const known = new Set(groups.map(group => group.id));
+  const clean = new Map<string, FactoryPlace>();
+  for (const [id, entry] of Object.entries(raw)) {
+    const place = cleanFactoryPlace(entry);
+    if (!groupId(id) || !known.has(id) || !place) fail('Invalid factory places.');
+    clean.set(id, place);
+  }
+  const out = groups.flatMap(({ id }) => {
+    const place = clean.get(id);
+    return place ? [[id, place] as const] : [];
+  });
+  return out.length ? Object.fromEntries(out) : undefined;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -1022,7 +1058,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–27 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–28 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -1035,12 +1071,12 @@ export function validateState(state: unknown): ProgressState {
     !plain(state) ||
     ![
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-      27,
+      27, 28,
     ].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "28" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 27
+      // Compared as the old code did, so a version given as "29" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 28
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -1111,6 +1147,9 @@ export function validateState(state: unknown): ProgressState {
   if (markers) clean.mapMarkers = markers;
   const layers = validateMapLayers(state.mapLayers);
   if (layers) clean.mapLayers = layers;
+  // Read against the factories as validated above: each place names one of them.
+  const places = validateFactoryPlaces(state.factoryPlaces, clean.factoryGroups.groups);
+  if (places) clean.factoryPlaces = places;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -1209,6 +1248,10 @@ export function validateState(state: unknown): ProgressState {
   // a state whose last marker is removed and whose layers are all shown again goes back to the
   // version above.
   if (clean.mapMarkers || clean.mapLayers) clean.version = 27;
+  // Factories placed on the world map (factoryPlaces, #1283) are 28: an older release would drop
+  // the places and take the factories off the map. An empty map is not kept, so a state whose
+  // last factory is taken off the map (or removed) goes back to the version above.
+  if (clean.factoryPlaces) clean.version = 28;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

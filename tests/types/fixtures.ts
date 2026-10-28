@@ -417,6 +417,17 @@ export const version27 = {
   mapLayers: { markers: false },
 } satisfies SavedState;
 
+// Version 28: factories placed on the world map (#1283, slice 3), on top of version 27: both
+// factories of the fixture (Plates and Wire), at spots in game units. Synthetic spots.
+export const version28 = {
+  ...version27,
+  version: 28,
+  factoryPlaces: {
+    'fg-plates1': { x: -98000, y: 61250 },
+    'fg-wires1': { x: 12500, y: -40000 },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -447,6 +458,7 @@ export const states: [SavedState, number][] = [
   [version25, 25],
   [version26, 26],
   [version27, 27],
+  [version28, 28],
 ];
 
 export const backup = {

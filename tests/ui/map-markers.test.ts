@@ -361,8 +361,8 @@ test('“Show on the map” hides and shows the markers for the profile', async 
   assert.equal(toggle.checked, true);
   assert.deepEqual(
     $$<HTMLInputElement>('[data-map-layer-toggle]').map(input => input.dataset.mapLayerToggle),
-    ['markers'],
-    'the other layers get their switch with their content',
+    ['factories', 'markers'],
+    'train stations and lines get their switch with their content (#1284)',
   );
   toggle.checked = false;
   toggle.dispatchEvent(new Event('change'));

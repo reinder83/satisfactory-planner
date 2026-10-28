@@ -402,6 +402,65 @@ async function checkMapMarkers(page: Page, stored: () => Promise<ProgressState>)
   assert.equal('mapMarkers' in after || 'mapLayers' in after, false);
   assert.equal(after.version, before);
 }
+// Factories on the world map (#1283, slice 3): Place factory puts the picked one in the middle and
+// focuses it (state version 28); a drag of 60 px moves it east and saves it once, keeping y; the
+// end of the drag follows no link; a reload draws it in the same place; Enter on it opens its
+// build order; Delete takes it off the map and the version drops back.
+async function checkMapFactories(page: Page, stored: () => Promise<ProgressState>) {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(base + '#map');
+  await page.locator('[data-map-image]').waitFor();
+  const before = (await stored()).version;
+  const id = await page.locator('[data-map-place-select]').inputValue();
+  assert.ok(id, 'a factory to place');
+  await page.locator('[data-map-place-factory]').click();
+  const factory = page.locator(`[data-map-factory="${id}"]`);
+  await factory.waitFor();
+  assert.equal(await factory.evaluate(el => el === document.activeElement), true, 'focused');
+  const placed = (await stored()).factoryPlaces?.[id];
+  assert.ok(placed);
+  assert.equal((await stored()).version, 28);
+  const pin = await factory.locator('.map-factory-pin').boundingBox();
+  assert.ok(pin);
+  await page.mouse.move(pin.x + pin.width / 2, pin.y + pin.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pin.x + pin.width / 2 + 30, pin.y + pin.height / 2, { steps: 3 });
+  await page.mouse.move(pin.x + pin.width / 2 + 60, pin.y + pin.height / 2, { steps: 3 });
+  await page.mouse.up();
+  await page.waitForFunction(() => !document.querySelector('[data-world-map].moving'));
+  let moved = (await stored()).factoryPlaces?.[id];
+  for (let i = 0; i < 20 && moved?.x === placed.x; i++) {
+    await page.waitForTimeout(100);
+    moved = (await stored()).factoryPlaces?.[id];
+  }
+  assert.ok(moved && moved.x > placed.x, `moved east: ${moved?.x} > ${placed.x}`);
+  assert.equal(moved.y, placed.y);
+  assert.equal(new URL(page.url()).hash, '#map', 'the end of a drag follows no link');
+  const drawnAt = () => factory.evaluate(el => [el.style.left, el.style.top]);
+  const spot = await drawnAt();
+  await page.reload();
+  await factory.waitFor();
+  assert.deepEqual(await drawnAt(), spot, 'after a reload it is where it was put');
+  // Enter follows the link to the factory's build order.
+  await factory.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(
+    group => location.hash.startsWith(`#factories/${group}/flow`),
+    encodeURIComponent(id),
+  );
+  await page.goto(base + '#map');
+  await factory.waitFor();
+  await factory.focus();
+  await page.keyboard.press('Delete');
+  await factory.waitFor({ state: 'detached' });
+  assert.equal(
+    await page.locator('[data-world-map]').evaluate(el => el === document.activeElement),
+    true,
+  );
+  const after = await stored();
+  assert.equal('factoryPlaces' in after, false);
+  assert.equal(after.version, before);
+}
 // Rearranging the flow graph (#1224): a drag of a line's box moves it, the layout is stored with
 // the factory once the drag ends, and after a reload the graph opens with the line where it was
 // put. Since #1240 an input and an output are dragged too, and every box lands on the 5 px grid.
@@ -989,6 +1048,7 @@ try {
   await checkGraphPanZoom(page, graphButton);
   await checkGraphLayout(page, graphGroup!, () => api<ProgressState>('/api/state'));
   await checkMapMarkers(page, () => api<ProgressState>('/api/state'));
+  await checkMapFactories(page, () => api<ProgressState>('/api/state'));
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();

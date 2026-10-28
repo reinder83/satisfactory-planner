@@ -51,6 +51,7 @@ import {
   validateState,
   validateTaskEdits,
   validateTickedBy,
+  validateFactoryPlaces,
   validateMapLayers,
   validateMapMarkers,
 } from './validate.ts';
@@ -90,7 +91,7 @@ export const carryOptions: [key: string, label: string, description: string][] =
   [
     'planEdits',
     'Build-plan edits and factories',
-    'Renamed, reordered and removed steps, plus your factories and their names.',
+    'Renamed, reordered and removed steps, plus your factories, their names and their places on the world map.',
   ],
   [
     'factories',
@@ -260,6 +261,8 @@ export function newProfileState(
   if (picks.planEdits) {
     state.taskEdits = validateTaskEdits(source.taskEdits);
     state.factoryGroups = mergeGroups(state.factoryGroups, source.factoryGroups, plan);
+    // Where the factories stand on the world map (#1283) goes with the factories it carries.
+    keepFactoryPlaces(state, source);
   }
   // Production lines (carryLines): ticks that stay, grown and shrunk lines that keep their built
   // machines, and the rest unticked for review; then the built lines the new plan no longer has
@@ -879,14 +882,41 @@ const askedKey = (
       .join('\n');
   }).join('|');
 // The world map (#1283) after a recalculation in place: the same profile in the same world, so
-// its markers and the layers it hides stay, whatever the carry choices.
-function keepMap(state: ProgressState, previous: Pick<SavedState, 'mapMarkers' | 'mapLayers'>) {
+// its markers, the layers it hides and the places of the factories it still has stay, whatever
+// the carry choices.
+function keepMap(
+  state: ProgressState,
+  previous: Pick<SavedState, 'mapMarkers' | 'mapLayers' | 'factoryPlaces' | 'factoryGroups'>,
+) {
   const markers = validateMapMarkers(previous.mapMarkers);
   if (markers) state.mapMarkers = markers;
   else delete state.mapMarkers;
   const layers = validateMapLayers(previous.mapLayers);
   if (layers) state.mapLayers = layers;
   else delete state.mapLayers;
+  keepFactoryPlaces(state, previous);
+}
+// The places on the world map (#1283) of `source`'s factories that `state` has too, by factory
+// group id: a factory the state does not have (not carried, or left out of a new plan's factories)
+// takes its place with it.
+function keepFactoryPlaces(
+  state: ProgressState,
+  source: Pick<SavedState, 'factoryPlaces' | 'factoryGroups'>,
+) {
+  const places = validateFactoryPlaces(
+    source.factoryPlaces,
+    validateGroups(source.factoryGroups).groups,
+  );
+  const kept = validateFactoryPlaces(
+    Object.fromEntries(
+      Object.entries(places ?? {}).filter(([id]) =>
+        state.factoryGroups.groups.some(group => group.id === id),
+      ),
+    ),
+    state.factoryGroups.groups,
+  );
+  if (kept) state.factoryPlaces = kept;
+  else delete state.factoryPlaces;
 }
 function keepAsked(
   state: ProgressState,

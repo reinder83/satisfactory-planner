@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–27). Later versions only add optional sections, so an older
+//                  version (1–28). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -27,7 +27,7 @@ import type { ExactClocks, LineClocks, SloopPins } from './calculated.ts';
 // (sloopPins, #1235), 25 inputs and outputs moved in a factory's flow graph
 // (groups[].layout.places, #1240), 26 the production lines pinned to a clock with Power Shards
 // (lineClocks, #1239), 27 markers on the world map and its hidden layers (mapMarkers,
-// mapLayers, #1283).
+// mapLayers, #1283), 28 factories placed on the world map (factoryPlaces, #1283).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -58,7 +58,8 @@ export type StateVersion =
   | 24
   | 25
   | 26
-  | 27;
+  | 27
+  | 28;
 
 // The world map (#1283, slice 2): a marker the user placed, at a point in the game's world (game
 // units, x east and y south, whole numbers; public/app/world-map.ts converts them to the image),
@@ -78,6 +79,14 @@ export interface MapMarker {
 // is stored (`false`); a layer shown again leaves the field.
 export type MapLayer = 'factories' | 'stations' | 'trainLines' | 'markers';
 export type MapLayers = Partial<Record<MapLayer, boolean>>;
+// Where a factory stands on the world map (#1283, slice 3), by factory group id: a point in game
+// units as a marker's (whole numbers, x east, y south). A factory is placed at most once; one not
+// placed is not on the map. validateFactoryPlaces in state/validate.ts holds the limits.
+export interface FactoryPlace {
+  x: number;
+  y: number;
+}
+export type FactoryPlaces = Record<string, FactoryPlace>;
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
 // time in UTC, from the ticking device's clock), `by` that device's "Your name" (app/mine.ts),
@@ -293,6 +302,9 @@ export interface ProgressState {
   // The world map's hidden layers (#1283), each `false`; absent while every layer is shown
   // (version 27).
   mapLayers?: MapLayers;
+  // Where the factories stand on the world map (#1283), by factory group id, each a group of
+  // factoryGroups; absent while no factory is placed (version 28).
+  factoryPlaces?: FactoryPlaces;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -318,6 +330,7 @@ export interface SavedState {
   lineClocks?: LineClocks;
   mapMarkers?: MapMarker[];
   mapLayers?: MapLayers;
+  factoryPlaces?: FactoryPlaces;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
@@ -370,6 +383,9 @@ export type UpdateOp =
   | { type: 'mapMarker'; id: string; value: Omit<MapMarker, 'id'> | null }
   // Shows or hides one layer of the world map (#1283), for this profile.
   | { type: 'mapLayer'; layer: MapLayer; value: boolean }
+  // Puts factory group `id` on the world map at `value` (#1283), or moves it there when it is
+  // on the map already; null takes it off the map.
+  | { type: 'mapFactory'; id: string; value: FactoryPlace | null }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';
