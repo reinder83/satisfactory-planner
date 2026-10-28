@@ -134,7 +134,13 @@ test('a split line links the factory it is built with and says so', async () => 
     { group: OTHER, rate: Math.round(total * 0.1) },
     { group: HOME, rate: null },
   ]);
-  assert.equal(homeGroup(rows.find(row => row.id === WIRE)!, small), HOME);
+  assert.equal(
+    homeGroup(
+      rows.find(row => row.id === WIRE)!,
+      small,
+    ),
+    HOME,
+  );
   await showPlan(small);
   let link = factoryLinkOf(WIRE)!;
   assert.equal(link.textContent!.trim(), `Open factory: ${nameOf(HOME)} →`);
@@ -151,7 +157,13 @@ test('a split line links the factory it is built with and says so', async () => 
     { group: HOME, rate: Math.round(total * 0.1) },
     { group: OTHER, rate: null },
   ]);
-  assert.equal(homeGroup(rows.find(row => row.id === WIRE)!, large), OTHER);
+  assert.equal(
+    homeGroup(
+      rows.find(row => row.id === WIRE)!,
+      large,
+    ),
+    OTHER,
+  );
   await showPlan(large);
   link = factoryLinkOf(WIRE)!;
   assert.equal(link.textContent!.trim(), `Open factory: ${nameOf(OTHER)} →`);

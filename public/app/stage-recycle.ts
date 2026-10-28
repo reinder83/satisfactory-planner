@@ -13,8 +13,7 @@ import { waterChoice } from '../mining.ts';
 import type { StoredStage } from '../types/index.ts';
 
 let recycleCache:
-  | { snapshot: StoredStage; groups: string; plan: unknown; model: RecycleModel }
-  | undefined;
+  { snapshot: StoredStage; groups: string; plan: unknown; model: RecycleModel } | undefined;
 
 // The recycling model of `snapshot`, a stage of the open plan (see the top of this file).
 export function recycleModelOf(snapshot: StoredStage): RecycleModel {

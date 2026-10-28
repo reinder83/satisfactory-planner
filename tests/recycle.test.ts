@@ -265,9 +265,11 @@ const handGroups: FactoryGroups = {
 };
 const handModel = recycleModel(stage, handGroups);
 const handAdvice = (id: string) =>
-  lineAdvice(stage.rows!.find(candidate => candidate.id === id)!, handModel, words).map(line =>
-    plain(adviceSentence(line)),
-  );
+  lineAdvice(
+    stage.rows!.find(candidate => candidate.id === id)!,
+    handModel,
+    words,
+  ).map(line => plain(adviceSentence(line)));
 
 test('a line in no group, seen from a group, is named as ungrouped, and the other way round', () => {
   assert.deepEqual(handAdvice('scrap'), ['Send all of it to solution (ungrouped).']);

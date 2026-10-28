@@ -280,7 +280,7 @@ export function cannotFinishSooner(config: CurrentSettings, phase: number, stage
   // line that alone makes a needed item (not a raw resource, nor one you already run), and its inputs.
   const needed = new Set(Object.keys(stage.delivery)),
     running = new Set<CalcRow>();
-  for (let grown = true; grown; ) {
+  for (let grown = true; grown;) {
     grown = false;
     for (const item of needed) {
       const [maker, ...others] = makers(item);

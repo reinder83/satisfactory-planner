@@ -40,8 +40,7 @@ import type { CalcRow, FactoryGroups, OnSiteSettings, StoredStage } from '../typ
 // One end of a line-level transfer: a line (a plan row's id) in a place, or a place that is not a
 // line: a raw resource or existing-supply source, or a destination (storage, the sink, …).
 export type RecycleEnd =
-  | { kind: 'line'; id: string; place: string }
-  | { kind: 'place'; id: string };
+  { kind: 'line'; id: string; place: string } | { kind: 'place'; id: string };
 
 // Something one end sends the other per minute.
 export interface RecycleTransfer {

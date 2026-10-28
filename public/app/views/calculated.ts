@@ -248,18 +248,16 @@ function catalogBook(): RecipeBook {
 
 // The built lines of a phase ('1'-'5') the plan no longer has (#1175, builtLineChanges): the lines
 // they switch to and the ones no longer needed. Worked out once per redraw.
-const changesOf = perRedraw(
-  stepInputs,
-  (stageKey: string): PhaseChanges =>
-    calculated
-      ? builtLineChanges(
-          state?.builtMachines,
-          state?.checks || {},
-          stageKey,
-          calculated,
-          catalogBook(),
-        )
-      : { changed: new Map(), removed: [] },
+const changesOf = perRedraw(stepInputs, (stageKey: string): PhaseChanges =>
+  calculated
+    ? builtLineChanges(
+        state?.builtMachines,
+        state?.checks || {},
+        stageKey,
+        calculated,
+        catalogBook(),
+      )
+    : { changed: new Map(), removed: [] },
 );
 
 // The line of phase `shownPhase` built lines of other recipes switch to (#1175), with what to
@@ -487,9 +485,9 @@ export const andList = listNames;
 export function budgetMeasured(snapshot: StoredStage): boolean {
   return Boolean(
     snapshot.shortfalls ||
-      snapshot.minHours ||
-      snapshot.wholeMachinesOnly ||
-      snapshot.capShortfalls?.length,
+    snapshot.minHours ||
+    snapshot.wholeMachinesOnly ||
+    snapshot.capShortfalls?.length,
   );
 }
 

@@ -703,7 +703,7 @@ const crossings = (inner: readonly Trunk[], outer: readonly Trunk[]): number =>
 // crossings in all, so the swapping ends.
 function closestFirst(lanes: readonly Trunk[][]): Trunk[][] {
   const order = [...lanes].sort((a, b) => longestOn(a) - longestOn(b));
-  for (let swapped = true; swapped; ) {
+  for (let swapped = true; swapped;) {
     swapped = false;
     for (let i = 0; i + 1 < order.length; i++) {
       // i + 1 is below the length.

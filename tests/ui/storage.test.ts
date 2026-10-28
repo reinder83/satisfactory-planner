@@ -1341,8 +1341,7 @@ function pageDragEnd(): (event: unknown, manager: unknown) => Promise<void> {
   while (component && typeof component.vnode.props?.onDragEnd !== 'function')
     component = component.parent;
   const dragEnd = component?.vnode.props?.onDragEnd as
-    | ((event: unknown, manager: unknown) => Promise<void>)
-    | undefined;
+    ((event: unknown, manager: unknown) => Promise<void>) | undefined;
   assert.ok(dragEnd, 'the page handles dragend');
   return dragEnd;
 }

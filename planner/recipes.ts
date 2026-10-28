@@ -219,7 +219,7 @@ export function nuclearPeriod(pool: ChainRecipe[], demand: ItemRates = {}): numb
   const radioactive = (item: string) => !!DATA.items[item]?.radioactive;
   const items = new Set(Object.keys(uranium.outputs).filter(radioactive));
   const chain: ChainRecipe[] = [];
-  for (let grew = true; grew; ) {
+  for (let grew = true; grew;) {
     grew = false;
     for (const recipe of pool)
       if (

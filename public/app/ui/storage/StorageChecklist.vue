@@ -14,15 +14,13 @@ const props = defineProps<{ steps: Step[] }>();
 
 const rows = computed(() =>
   legacy(() =>
-    props.steps.map(
-      (task): PlanStepView => ({
-        ...task,
-        done: checked(task.id),
-        ticked: tickedNote(state, task.id),
-        icon: taskIcon(task),
-        link: null,
-      }),
-    ),
+    props.steps.map((task): PlanStepView => ({
+      ...task,
+      done: checked(task.id),
+      ticked: tickedNote(state, task.id),
+      icon: taskIcon(task),
+      link: null,
+    })),
   ),
 );
 </script>
