@@ -34,12 +34,14 @@ export async function focusFactory(id: string) {
   mapFactoryLink(id)?.focus();
 }
 
-// Takes factory `id` off the map with an Undo in the toast. Focus is the caller's: the map box,
-// where a second Delete takes nothing off (#1255).
-export async function removeFactoryPlace(id: string): Promise<boolean> {
-  const place = state.factoryPlaces?.[id];
+// Takes factory `id` off the map with an Undo in the toast, which puts it back at `moved` when
+// given (a move not saved yet), else where it was saved. Focus is the caller's: the map box, where
+// a second Delete takes nothing off (#1255).
+export async function removeFactoryPlace(id: string, moved?: FactoryPlace): Promise<boolean> {
+  const saved = state.factoryPlaces?.[id];
   const name = state.factoryGroups?.groups.find(group => group.id === id)?.name;
-  if (!place || name === undefined) return false;
+  if (!saved || name === undefined) return false;
+  const place = moved ? { x: moved.x, y: moved.y } : saved;
   const profile = profileScope();
   try {
     await save({ type: 'mapFactory', id, value: null });

@@ -310,7 +310,7 @@ test('on a wide box a drag moves the map both ways while it is narrower than the
   await showWideMap();
   zoomButton('in').click();
   await settle();
-  assert.equal(zoomLevel(), '63%');
+  assert.equal(zoomLevel(), '40%');
   assert.ok(drawnWidth() < 1240, `the map (${drawnWidth()} px) is narrower than the box`);
   const layer = $('[data-map-layer]')!;
   const drag = async (from: [number, number], to: [number, number]) => {
@@ -365,7 +365,7 @@ test('Fit shows the whole map in the middle of a wide box, also after zooming ou
     close(at.x + drawnWidth() / 2, 620, 'across the middle');
     close(at.y + drawnHeight() / 2, 320, 'down the middle');
   };
-  assert.equal(zoomLevel(), '50%');
+  assert.equal(zoomLevel(), '32%');
   centred();
   // Below Fit, down to the flow graph's 10%, around the middle: still in the middle.
   for (let i = 0; i < 12; i++) {
@@ -381,7 +381,7 @@ test('Fit shows the whole map in the middle of a wide box, also after zooming ou
   layer.dispatchEvent(pointer('pointerup', 400, 200));
   zoomButton('fit').click();
   await settle();
-  assert.equal(zoomLevel(), '50%');
+  assert.equal(zoomLevel(), '32%');
   centred();
 });
 

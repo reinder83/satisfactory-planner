@@ -26,7 +26,16 @@ import { validateTransfer } from '../public/transfer.ts';
 import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
-import { factoryAria, placedFactories, unplacedFactories } from '../public/app/map-factories.ts';
+import {
+  PIN_CLEAR,
+  PLACE_STEP,
+  factoryAria,
+  freePlace,
+  placedFactories,
+  unplacedFactories,
+} from '../public/app/map-factories.ts';
+import { onMap } from '../public/app/map-markers.ts';
+import { imageToWorld, worldToImage } from '../public/app/world-map.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
 import { states, version1, version26, version27, version28 } from './types/fixtures.ts';
 import type {
@@ -231,6 +240,32 @@ test('the map helpers: placed and unplaced factories in order, and the words', (
     factoryAria('Alpha'),
     'Alpha, factory. Enter opens its build order, the arrow keys move it, Delete takes it off the map.',
   );
+});
+
+test('a new factory’s place steps aside diagonally from every pin, kept on the map', () => {
+  const zoom = 0.5;
+  const step = PLACE_STEP / zoom;
+  const middle = imageToWorld({ x: 1000, y: 1000 });
+  const at = (x: number, y: number) => onMap(imageToWorld({ x, y }));
+  const drawn = (spot: { x: number; y: number }) => {
+    const point = worldToImage(spot);
+    return { x: Math.round(point.x), y: Math.round(point.y) };
+  };
+  assert.deepEqual(freePlace(middle, [], zoom), onMap(middle), 'a free middle');
+  assert.deepEqual(freePlace(middle, [at(1000 + 70, 1000)], zoom), onMap(middle), '35 px away');
+  // A pin on the middle: one step down and right; that one taken too, one step up and left.
+  assert.deepEqual(drawn(freePlace(middle, [middle], zoom)), { x: 1072, y: 1072 });
+  assert.deepEqual(drawn(freePlace(middle, [middle, at(1072, 1072)], zoom)), { x: 928, y: 928 });
+  const taken = [middle, at(1000 + step, 1000 + step), at(1000 - step, 1000 - step)];
+  assert.deepEqual(drawn(freePlace(middle, taken, zoom)), { x: 1144, y: 1144 });
+  // Close to a pin, under PIN_CLEAR px on screen, also counts as covered.
+  const near = PIN_CLEAR / zoom - 2;
+  assert.notDeepEqual(freePlace(middle, [at(1000 + near, 1000)], zoom), onMap(middle));
+  // In the bottom-right corner the steps down and right stay in the corner: up and left instead.
+  const corner = imageToWorld({ x: 2000, y: 2000 });
+  assert.deepEqual(drawn(freePlace(corner, [onMap(corner)], zoom)), { x: 1928, y: 1928 });
+  // The steps are px on screen: at a higher zoom they are shorter on the map.
+  assert.deepEqual(drawn(freePlace(middle, [middle], 2)), { x: 1018, y: 1018 });
 });
 
 // Both editions: the places are saved, kept through a reload, a full export and import, a

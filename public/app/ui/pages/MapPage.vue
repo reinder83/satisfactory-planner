@@ -19,9 +19,11 @@
   Factories (slice 3): the profile's `factoryPlaces` (state version 28), each a round factory icon
   with the factory's name beside it, a link to the factory's build order (its flow page, as "Build
   order →" on the Factories page). "Place factory" puts the factory picked beside it in the middle
-  of the view and focuses it; a factory is placed at most once, so the picker offers only those
-  not on the map. A drag or the arrow keys move a factory as they move a marker, and Delete takes
-  it off the map with Undo (ui/map-factory-actions.ts). A press without a drag follows the link.
+  of the view, a step aside from any pin already there (freePlace), and focuses it; a factory is
+  placed at most once, so the picker offers only those not on the map. A drag or the arrow keys
+  move a factory as they move a marker, and Delete takes it off the map with Undo
+  (ui/map-factory-actions.ts), back where the keys last moved it. A press without a drag follows
+  the link.
 
   "Show on the map" hides or shows the factories and the markers for this profile (`mapLayers`).
   Train stations and lines (#1284) get their switches with their content.
@@ -33,6 +35,7 @@ import { GRAPH_ZOOM, panGraphBy } from '../../graph-view.ts';
 import {
   FACTORY_ICON,
   factoryAria,
+  freePlace,
   placedFactories,
   unplacedFactories,
   type PlacedFactory,
@@ -283,15 +286,21 @@ const addInMiddle = () => placeAt(middleSpot());
 const edit = (id: string) => showDetail({ kind: 'marker', id });
 
 // "Place factory": the factory picked beside it (the first one not on the map until another is
-// picked) goes in the middle of the map's view, and focus goes to it there.
+// picked) goes in the middle of the map's view, or a step aside from it as far as a pin already
+// covers the middle (freePlace), and focus goes to it there.
 const picked = ref('');
 const pickedFactory = computed(
   () => toPlace.value.find(group => group.id === picked.value) ?? toPlace.value[0],
 );
 async function placeFactory() {
   const factory = pickedFactory.value;
-  const spot = middleSpot();
-  if (!factory || !spot) return;
+  const middle = middleSpot();
+  if (!factory || !middle) return;
+  const pins = [
+    ...factories.value.map(factory => factorySpot(factory)),
+    ...markers.value.map(marker => markerSpot(marker)),
+  ];
+  const spot = freePlace(middle, pins, zoom.value);
   if (await saveFactoryPlace(factory.id, spot)) await focusFactory(factory.id);
 }
 
@@ -345,21 +354,22 @@ function onFactoryKey(e: KeyboardEvent, factory: PlacedFactory) {
   } else if (nudge(e, FACTORY + factory.id, factorySpot(factory)))
     void keepInView(() => drawnFactories.value.find(item => item.factory.id === factory.id));
 }
-// Forgets an unsaved move of node `node`, which is going.
-function forget(node: string) {
+// Forgets an unsaved move of node `node`, which is going, and returns that spot: Undo puts the
+// marker or factory back there, so a move the arrow keys made just before Delete is not lost.
+function forget(node: string): WorldPoint | undefined {
   clearTimeout(timers.get(node));
   timers.delete(node);
+  const spot = moved[node];
   delete moved[node];
+  return spot;
 }
 // Delete on a focused marker or factory: focus goes to the map, where a second Delete removes
 // nothing.
 async function removeMarker(id: string) {
-  forget(MARKER + id);
-  if (await deleteMarker(id)) box.value?.focus();
+  if (await deleteMarker(id, forget(MARKER + id))) box.value?.focus();
 }
 async function takeOff(id: string) {
-  forget(FACTORY + id);
-  if (await removeFactoryPlace(id)) box.value?.focus();
+  if (await removeFactoryPlace(id, forget(FACTORY + id))) box.value?.focus();
 }
 
 // "Show on the map": a layer's switch, saved for this profile at once.

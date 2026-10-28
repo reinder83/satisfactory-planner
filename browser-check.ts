@@ -519,6 +519,19 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   assert.equal((await stored()).version, 28);
   const pin = await factory.locator('.map-factory-pin').boundingBox();
   assert.ok(pin);
+  // Placed in the middle of the view, the map drawn in its room past the edges (#1289).
+  const view = await page.locator('[data-world-map]').evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    return {
+      x: rect.left + el.clientLeft + el.clientWidth / 2,
+      y: rect.top + el.clientTop + el.clientHeight / 2,
+    };
+  });
+  const pinMiddle = { x: pin.x + pin.width / 2, y: pin.y + pin.height / 2 };
+  assert.ok(
+    Math.abs(pinMiddle.x - view.x) < 2 && Math.abs(pinMiddle.y - view.y) < 2,
+    `the pin in the middle of the view: ${JSON.stringify({ pinMiddle, view })}`,
+  );
   await page.mouse.move(pin.x + pin.width / 2, pin.y + pin.height / 2);
   await page.mouse.down();
   await page.mouse.move(pin.x + pin.width / 2 + 30, pin.y + pin.height / 2, { steps: 3 });
@@ -538,7 +551,16 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   await page.reload();
   await factory.waitFor();
   assert.deepEqual(await drawnAt(), spot, 'after a reload it is where it was put');
-  // Enter follows the link to the factory's build order.
+  // A mouse click on the pin follows the link to the factory's build order (the map's own
+  // presses start no native drag, #1289, which leaves the pin's alone).
+  await factory.locator('.map-factory-pin').click();
+  await page.waitForFunction(
+    group => location.hash.startsWith(`#factories/${group}/flow`),
+    encodeURIComponent(id),
+  );
+  await page.goto(base + '#map');
+  await factory.waitFor();
+  // Enter follows it too.
   await factory.focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(

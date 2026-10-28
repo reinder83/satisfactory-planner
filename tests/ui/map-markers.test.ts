@@ -391,6 +391,30 @@ test('Delete removes a focused marker with Undo, and focus goes to the map', asy
   assert.deepEqual(state.mapMarkers, [ARCH, IRON], 'back after the others');
 });
 
+// Delete right after an arrow key, before the move is saved: Undo puts the marker back where the
+// key moved it, not where it was saved.
+test('Delete within the save delay after an arrow key: Undo keeps the move', async () => {
+  await showMap({ version: 27, mapMarkers: [IRON] });
+  const iron = marker(IRON.id)!;
+  iron.focus();
+  key(iron, 'ArrowDown');
+  await settle();
+  const { x, y } = nudgedMarker(IRON, 'ArrowDown', false, FITS)!;
+  assert.deepEqual(sent, [], 'the move is not saved yet');
+  key(marker(IRON.id)!, 'Delete');
+  await settle();
+  assert.deepEqual(sent, [{ type: 'mapMarker', id: IRON.id, value: null }]);
+  $('#toast')!.querySelector<HTMLButtonElement>('button')!.click();
+  await settle();
+  await settle();
+  const { id: _id, ...rest } = IRON;
+  assert.deepEqual(sent[1], { type: 'mapMarker', id: IRON.id, value: { ...rest, x, y } });
+  assert.deepEqual(state.mapMarkers, [{ ...IRON, x, y }]);
+  // The save delay passes and saves nothing more.
+  await new Promise(resolve => setTimeout(resolve, 700));
+  assert.equal(sent.length, 2);
+});
+
 test('“Delete marker” in the dialog removes it with Undo too', async () => {
   await showMap({ version: 27, mapMarkers: [ARCH] });
   marker(ARCH.id)!.click();

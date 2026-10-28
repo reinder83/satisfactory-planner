@@ -9,14 +9,16 @@ import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
 import { flowRoute, state } from '../../public/app/session.ts';
+import { PLACE_STEP } from '../../public/app/map-factories.ts';
 import { MARKER_NUDGE, nudgedMarker, onMap } from '../../public/app/map-markers.ts';
 import { WORLD_MAP, imageToWorld, worldToImage } from '../../public/app/world-map.ts';
 import { $, $$, applyUpdate, evil, go, open, page, stubFetch } from './setup.ts';
 import type { FactoryPlaces, ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 // happy-dom lays out nothing, so the map's box is given the size a browser would draw it at, with
-// no border; every element's client rectangle is at (0, 0), so a client point is a point on the
-// drawn map.
+// no border; every element's client rectangle is at (0, 0), so a client point is a point in the
+// box. The map is drawn half the box into what the box scrolls (#1289): onImage() gives the
+// point of the image under a point in the box.
 const BOX = { width: 400, height: 300 };
 const BOX_SIZES: Record<string, number> = {
   clientWidth: BOX.width,
@@ -98,6 +100,18 @@ async function showMap(progress: Partial<ProgressState> = {}) {
   await settle();
 }
 const box = () => $('[data-world-map]')!;
+const layer = () => $('[data-map-layer]')!;
+// The point of the image (px of its natural size) under point (x, y) of the box.
+const onImage = (x: number, y: number) => ({
+  x: (x + box().scrollLeft - parseFloat(layer().style.left)) / FITS,
+  y: (y + box().scrollTop - parseFloat(layer().style.top)) / FITS,
+});
+type Point = { x: number; y: number };
+const close = (actual: Point, expected: Point, what: string) =>
+  assert.ok(
+    Math.abs(actual.x - expected.x) < 1 && Math.abs(actual.y - expected.y) < 1,
+    `${what}: ${JSON.stringify(actual)}`,
+  );
 const factory = (id: string) => $<HTMLAnchorElement>(`[data-map-factory="${id}"]`);
 const pointer = (type: string, x: number, y: number) =>
   new PointerEvent(type, {
@@ -144,7 +158,12 @@ test('Place factory puts the factory picked in the middle of the view and focuse
   button.click();
   await settle();
   await settle();
-  const middle = onMap(imageToWorld({ x: BOX.width / 2 / FITS, y: BOX.height / 2 / FITS }));
+  // The middle of the view, which Fit puts in the middle of the map.
+  assert.deepEqual(onImage(BOX.width / 2, BOX.height / 2), {
+    x: WORLD_MAP.width / 2,
+    y: WORLD_MAP.height / 2,
+  });
+  const middle = onMap(imageToWorld(onImage(BOX.width / 2, BOX.height / 2)));
   assert.deepEqual(sent, [{ type: 'mapFactory', id: 'fg-wires1', value: middle }]);
   assert.equal(state.version, 28);
   const wire = factory('fg-wires1')!;
@@ -173,6 +192,42 @@ test('Place factory puts the factory picked in the middle of the view and focuse
     '(1)',
     'the switch counts the factories on the map',
   );
+});
+
+// A factory placed while a pin covers the middle of the view steps aside diagonally, PLACE_STEP
+// px on screen at a time, to the first spot no pin covers, a marker's pin as well.
+test('Place factory never puts a factory on a pin already there', async () => {
+  await showMap();
+  const placeNext = async () => {
+    $<HTMLButtonElement>('[data-map-place-factory]')!.click();
+    await settle();
+    await settle();
+    const update = sent.at(-1)! as Extract<UpdateOp, { type: 'mapFactory' }>;
+    return worldToImage(update.value!);
+  };
+  const middle = { x: WORLD_MAP.width / 2, y: WORLD_MAP.height / 2 };
+  const step = PLACE_STEP / FITS;
+  close(await placeNext(), middle, 'the first in the middle');
+  close(await placeNext(), { x: middle.x + step, y: middle.y + step }, 'the second a step aside');
+  assert.equal(sent.length, 2);
+  // With a marker a step up and left of the middle too, the third goes two steps down and right.
+  await showMap({
+    ...placed({ ...state.factoryPlaces }),
+    mapMarkers: [
+      {
+        id: 'mk-iron01',
+        name: 'Iron',
+        type: 'resource',
+        ...onMap(imageToWorld({ x: middle.x - step, y: middle.y - step })),
+      },
+    ],
+  });
+  close(await placeNext(), { x: middle.x + 2 * step, y: middle.y + 2 * step }, 'the third');
+  const pins = $$('[data-map-factory], [data-map-marker]').map(drawnAt);
+  assert.equal(pins.length, 4);
+  for (const [i, a] of pins.entries())
+    for (const b of pins.slice(i + 1))
+      assert.ok(Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!) >= 32, 'no pin on another');
 });
 
 test('every factory placed: no picker; a profile without factories has none either', async () => {
@@ -264,6 +319,29 @@ test('Delete takes a focused factory off the map with Undo, and focus goes to th
   assert.match($('#toast')!.textContent!, /^“Wire” is back on the map\./);
   assert.equal(document.activeElement, factory('fg-wires1'), 'focus on the factory back');
   assert.deepEqual(state.factoryPlaces, { 'fg-plates1': PLATES, 'fg-wires1': WIRE });
+});
+
+// Delete right after an arrow key, before the move is saved: Undo puts the factory back where the
+// key moved it, not where it was saved.
+test('Delete within the save delay after an arrow key: Undo keeps the move', async () => {
+  await showMap(placed({ 'fg-wires1': WIRE }));
+  const wire = factory('fg-wires1')!;
+  wire.focus();
+  key(wire, 'ArrowRight', { shiftKey: true });
+  await settle();
+  const movedTo = nudgedMarker(WIRE, 'ArrowRight', true, FITS)!;
+  assert.deepEqual(sent, [], 'the move is not saved yet');
+  key(factory('fg-wires1')!, 'Delete');
+  await settle();
+  assert.deepEqual(sent, [{ type: 'mapFactory', id: 'fg-wires1', value: null }]);
+  $('#toast')!.querySelector<HTMLButtonElement>('button')!.click();
+  await settle();
+  await settle();
+  assert.deepEqual(sent[1], { type: 'mapFactory', id: 'fg-wires1', value: movedTo });
+  assert.deepEqual(state.factoryPlaces, { 'fg-wires1': movedTo });
+  // The save delay passes and saves nothing more.
+  await new Promise(resolve => setTimeout(resolve, 700));
+  assert.equal(sent.length, 2);
 });
 
 test('“Show on the map” hides and shows the factories for the profile', async () => {
