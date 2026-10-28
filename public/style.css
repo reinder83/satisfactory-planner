@@ -4455,9 +4455,12 @@ button.rail-tile:hover {
 }
 /* The world map (#1283): the flow graph's toolbar and pan and zoom, the image in a box as tall as
    it is wide, at most what the window has left under the page's heading and the toolbar (as the
-   flow graph's box), so Fit shows the whole map and the attribution under it. A map narrower than
-   the box sits in its middle. */
+   flow graph's box), so Fit shows the whole map and the attribution under it. The box scrolls
+   half its size past each edge of the map (#1289): .map-room is that whole area and the map lies
+   in it, so a drag moves the map at any zoom. Nothing in the box is selectable: a selection that
+   held the map image was dragged by the browser instead of panning the map. */
 .map-scroll {
+  position: relative;
   overflow: auto;
   width: 100%;
   aspect-ratio: 1;
@@ -4468,6 +4471,8 @@ button.rail-tile:hover {
   touch-action: none;
   overscroll-behavior: contain;
   cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .map-scroll.panning {
   cursor: grabbing;
@@ -4477,8 +4482,7 @@ button.rail-tile:hover {
   outline-offset: 2px;
 }
 .map-layer {
-  position: relative;
-  margin: 0 auto;
+  position: absolute;
 }
 .map-image {
   display: block;

@@ -24,22 +24,31 @@ export interface GraphPoint {
   x: number;
   y: number;
 }
+// How far (px) the box scrolls past each edge of the drawing: none for the flow graph. The world
+// map has half its box (#1289), so a drag moves it at any zoom and any spot of it can come to the
+// middle of the box; its drawing then starts `room` px into what the box scrolls.
+const NO_ROOM: GraphArea = { width: 0, height: 0 };
 
 export const clampGraphZoom = (zoom: number): number =>
   Math.min(GRAPH_ZOOM.max, Math.max(GRAPH_ZOOM.min, zoom));
 
-// Scroll offsets the box can reach at `zoom`: from 0 to where the drawing's far edge meets the
-// box's, 0 when the drawing is smaller than the box.
-const clampOffset = (offset: number, drawn: number, visible: number): number =>
-  Math.min(Math.max(0, drawn - visible), Math.max(0, offset));
+// Scroll offsets the box can reach at `zoom`: from 0 to where the far edge of the drawing and the
+// room past it meets the box's, 0 when that is smaller than the box.
+const clampOffset = (offset: number, drawn: number, visible: number, room: number): number =>
+  Math.min(Math.max(0, drawn + 2 * room - visible), Math.max(0, offset));
 
 // `view` with its offsets kept inside what the box can scroll to.
-export function clampGraphView(view: GraphView, box: GraphArea, size: GraphArea): GraphView {
+export function clampGraphView(
+  view: GraphView,
+  box: GraphArea,
+  size: GraphArea,
+  room: GraphArea = NO_ROOM,
+): GraphView {
   const zoom = clampGraphZoom(view.zoom);
   return {
     zoom,
-    left: clampOffset(view.left, size.width * zoom, box.width),
-    top: clampOffset(view.top, size.height * zoom, box.height),
+    left: clampOffset(view.left, size.width * zoom, box.width, room.width),
+    top: clampOffset(view.top, size.height * zoom, box.height, room.height),
   };
 }
 
@@ -51,17 +60,19 @@ export function zoomGraphAround(
   point: GraphPoint,
   box: GraphArea,
   size: GraphArea,
+  room: GraphArea = NO_ROOM,
 ): GraphView {
   const zoom = clampGraphZoom(view.zoom * factor);
   const ratio = zoom / view.zoom;
   return clampGraphView(
     {
       zoom,
-      left: (view.left + point.x) * ratio - point.x,
-      top: (view.top + point.y) * ratio - point.y,
+      left: (view.left + point.x - room.width) * ratio - point.x + room.width,
+      top: (view.top + point.y - room.height) * ratio - point.y + room.height,
     },
     box,
     size,
+    room,
   );
 }
 
@@ -72,13 +83,27 @@ export const panGraphBy = (
   dy: number,
   box: GraphArea,
   size: GraphArea,
-): GraphView => clampGraphView({ ...view, left: view.left - dx, top: view.top - dy }, box, size);
+  room: GraphArea = NO_ROOM,
+): GraphView =>
+  clampGraphView({ ...view, left: view.left - dx, top: view.top - dy }, box, size, room);
 
 // The whole drawing in the box: the largest zoom at which it fits, never above natural size (a
-// small graph is not blown up), from its top-left corner.
-export function fitGraphView(box: GraphArea, size: GraphArea): GraphView {
+// small graph is not blown up), from its top-left corner; with `room` (the world map, #1289) in
+// the middle of the box.
+export function fitGraphView(box: GraphArea, size: GraphArea, room?: GraphArea): GraphView {
   const fits = Math.min(box.width / size.width, box.height / size.height, 1);
-  return { zoom: clampGraphZoom(Number.isFinite(fits) && fits > 0 ? fits : 1), left: 0, top: 0 };
+  const zoom = clampGraphZoom(Number.isFinite(fits) && fits > 0 ? fits : 1);
+  if (!room) return { zoom, left: 0, top: 0 };
+  return clampGraphView(
+    {
+      zoom,
+      left: room.width + (size.width * zoom - box.width) / 2,
+      top: room.height + (size.height * zoom - box.height) / 2,
+    },
+    box,
+    size,
+    room,
+  );
 }
 
 // The zoom factor of one wheel event: a notch of a mouse wheel (100 px, or 3 lines) zooms by about
