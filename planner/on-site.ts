@@ -20,7 +20,7 @@ import { recipePool, generators, primaryOutput } from './recipes.ts';
 // A per-group line's row id: the recipe id, a colon and the group id. A check key
 // `calc-<phase>-<rowId>` must pass safeKey (public/state/validate.ts), which allows ':' but not
 // '@', so released versions keep accepting a save that ticks one (#876).
-export const siteRowId = (recipeId: string, group: string) => `${recipeId}:${group}`;
+const siteRowId = (recipeId: string, group: string) => `${recipeId}:${group}`;
 // The name of a group's own balance of an item in the model, `item:<item>@<group>`. Internal to
 // the solve: rows and stages always name the plain item.
 export const siteBalance = (item: string, group: string) => `item:${item}@${group}`;

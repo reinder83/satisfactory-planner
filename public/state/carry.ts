@@ -936,7 +936,7 @@ function keepAsked(
 // edit moved the plan's start phase past it, which raises it to the new start phase. A phase the
 // user was on before the old start phase (a milestone-only phase, #759) stays, since the new plan
 // offers it too; a plan with a guide offers nothing before its start phase (firstPlanPhase).
-export function inPlacePhase(
+function inPlacePhase(
   saved: unknown,
   previousPlan: Pick<StoredCalculatedPlan, 'settings'> | null | undefined,
   plan: Pick<StoredCalculatedPlan, 'settings' | 'guide'>,

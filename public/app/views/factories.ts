@@ -48,7 +48,7 @@ function siteLines(plan: StoredCalculatedPlan): Map<string, OnSiteLine> {
 }
 
 // The group line made on site that factory key `key` names in the open plan, if it is one.
-export const siteLineOf = (key: string): OnSiteLine | undefined =>
+const siteLineOf = (key: string): OnSiteLine | undefined =>
   calculated ? siteLines(calculated).get(key) : undefined;
 
 // A factory's memberships (rowMemberships in group-order.ts): a group's own line made on site
@@ -212,7 +212,7 @@ export interface SiteEntry {
   collapsed: boolean;
   jump: JumpEntry;
 }
-export const SITE_LABELS: Record<SiteEntry['kind'], string> = {
+const SITE_LABELS: Record<SiteEntry['kind'], string> = {
   oil: 'Oil campus',
   nuclear: 'Nuclear site',
 };
@@ -264,7 +264,7 @@ export const completionView = (lines: CompletionLine[], query: string): Completi
         ? inputText(completion.byproducts)
         : '',
     }));
-export const jumpEntry = <T>(
+const jumpEntry = <T>(
   key: string,
   label: string,
   members: T[],

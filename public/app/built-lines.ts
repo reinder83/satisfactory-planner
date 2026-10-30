@@ -61,7 +61,7 @@ function inputParts(line: BuiltLine, row: Pick<CalcRow, 'inputs' | 'equivalent'>
 
 // A machine's name for a count: "Refinery", "Refineries" (the y→ie swap of machinesLabel in
 // flow.ts pluralises Refinery and Foundry).
-export const machineWord = (count: number, machine: string): string =>
+const machineWord = (count: number, machine: string): string =>
   count === 1 ? machine : machine.replace(/y$/, 'ie') + 's';
 
 // The note under the step's title and on the line's card: "5 of 6 built".

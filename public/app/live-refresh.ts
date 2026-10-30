@@ -70,7 +70,7 @@ const TEXT_FIELD =
   'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, [contenteditable]';
 
 // Whether the player is in the middle of something a redraw under them could disturb.
-export function playerBusy(): boolean {
+function playerBusy(): boolean {
   if (pending || hasUnsavedNotes() || hasUnsavedChoices() || editingTask || wizard) return true;
   if (layoutEditing || factoryEditing || planEditing) return true;
   if (document.querySelector('dialog[open]')) return true;

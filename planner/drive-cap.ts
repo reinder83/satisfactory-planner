@@ -49,7 +49,7 @@ const rowRecipe = (row: Pick<CalcRow, 'id' | 'onSite' | 'stock'>): string =>
 // The hard-drive alternates the plan counts on, as its hard-drive steps list them (rows marked
 // `alternate`, from the start phase on, drafts' rows too), without the ones the player owns: each
 // recipe id with its machine-equivalents over those phases, the most used first.
-export function driveAlternates(config: CurrentSettings, stages: Stages): Map<string, number> {
+function driveAlternates(config: CurrentSettings, stages: Stages): Map<string, number> {
   const owned = new Set(config.ownedAlternates || []),
     used = new Map<string, number>();
   for (let phase = Number(config.phase || 1); phase <= 5; phase++)
@@ -62,7 +62,7 @@ export function driveAlternates(config: CurrentSettings, stages: Stages): Map<st
 
 // How long the search for the set may take, in milliseconds: the caps' search budget
 // (CAP_SEARCH_MS in calculate.ts, #1221), so a binding cap holds the Docker server for seconds.
-export const DRIVE_SEARCH_MS = 15000;
+const DRIVE_SEARCH_MS = 15000;
 // The cap on hard drives over the plan made without it (`planned`): that plan when it counts on
 // at most the cap, else the plan again from the set pickDriveSet picks (`replan`, planStages in
 // calculate.ts, with the settings it plans from). Returns the stages, their warnings and the
@@ -115,7 +115,7 @@ function searchPhase(config: CurrentSettings, stages: Stages): number | null {
 // equal sets the smaller wins, and the set is the picked recipes the solution runs. The search is
 // limited as every integer search (5,000 nodes, and the deadline holdToDriveCap set). The phase's
 // SAM conversion as solveGoal plans it: 'needed' tries without it first.
-export function pickDriveSet(config: CurrentSettings, phase: number, cap: number): DrivePick {
+function pickDriveSet(config: CurrentSettings, phase: number, cap: number): DrivePick {
   const conversions =
     phase === 5 && config.sam === 'needed'
       ? [false, true]

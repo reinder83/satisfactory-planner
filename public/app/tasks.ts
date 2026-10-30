@@ -425,7 +425,7 @@ const TASK_TEXT_KINDS: [RegExp, string][] = [
 
 // The TASK_GLYPHS key for a step. Unlock steps are MAM research when titled "MAM: ...",
 // otherwise HUB milestones; anything unmatched counts as production.
-export function taskKind(step: Step): string {
+function taskKind(step: Step): string {
   const id = step.id || '';
   if (id.startsWith('unlock-')) return /^mam:/i.test(step.title || '') ? 'research' : 'milestone';
   for (const [pattern, kind] of TASK_ID_KINDS) if (pattern.test(id)) return kind;
@@ -468,7 +468,7 @@ export const satisfiedStepIds = (shownPhase: Phase = phase()): Set<string> =>
 // Whether "Mine only" (#1199) keeps a step: always while it does not apply, else when the step
 // links to a production line (its own, or a personal task's chosen link) in a factory owned by "me".
 // A step that links to no line (milestones, research, deliveries) is in no factory, so it is hidden.
-export function mineKeepsStep(mine: Set<string> | null, step: Step): boolean {
+function mineKeepsStep(mine: Set<string> | null, step: Step): boolean {
   if (!mine) return true;
   const linked = stepLink(step.id);
   return !!linked && mineKeeps(mine, linked);

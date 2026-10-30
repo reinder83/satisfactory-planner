@@ -194,11 +194,7 @@ export function handoverLines(
 }
 
 // The handover's counts over some of its lines: the whole phase's (phaseHandover) or a factory's.
-export function handoverCount(
-  from: StageKey,
-  lines: HandoverLine[],
-  retired: RetiredLine[],
-): Handover {
+function handoverCount(from: StageKey, lines: HandoverLine[], retired: RetiredLine[]): Handover {
   const handover: Handover = { from, kept: 0, add: 0, clocks: 0, build: 0, retire: retired.length };
   for (const line of lines) {
     if (line.status === 'new' || line.status === 'build') {
@@ -263,7 +259,7 @@ const equivalentOf = (row: CalcRow): number =>
     ? row.equivalent
     : Math.max(0, row.machines - 1) + clockOf(row) / fullOf(row)) *
   (fullOf(row) / 100);
-export function carriedShare({ before }: CarriedLine, row: CalcRow): number {
+function carriedShare({ before }: CarriedLine, row: CalcRow): number {
   const needed = equivalentOf(row);
   return needed > 0 ? Math.min(1, equivalentOf(before) / needed) : 1;
 }

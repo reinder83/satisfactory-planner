@@ -4,7 +4,7 @@
 // editions; index.html's own title only shows until the first page is drawn.
 import type { View } from './session.ts';
 
-export const APP_TITLE = 'Satisfactory Planner';
+const APP_TITLE = 'Satisfactory Planner';
 
 // Each route's page name: the sidebar's labels (Shell.vue), and the pages it has no link for.
 // The wizard's headings name their page themselves ("Create your factory plan", "Edit the

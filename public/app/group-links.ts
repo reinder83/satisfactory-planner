@@ -44,7 +44,7 @@ export { UNGROUPED, rowShares };
 // carries (linkTransportFor below).
 export const MINES = 'mines';
 // Each raw resource and existing-supply item is a source of its own (#231): 'supply/Iron Ore'.
-export const SOURCE = 'supply/';
+const SOURCE = 'supply/';
 export const sourceOf = (item: string) => SOURCE + item;
 export const isSource = (place: string) => place.startsWith(SOURCE);
 export const sourceItem = (place: string) => place.slice(SOURCE.length);
@@ -67,7 +67,7 @@ export const OUTSIDE = {
 } as const;
 
 // Names for the places that are not factory groups, as the Logistics page shows them.
-export const PLACE_NAMES: Record<string, string> = {
+const PLACE_NAMES: Record<string, string> = {
   [UNGROUPED]: 'Ungrouped',
   [OUTSIDE.storage]: 'Protected storage',
   [OUTSIDE.drone]: 'Drone fuel',

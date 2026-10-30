@@ -77,7 +77,7 @@ export function storageRows(
   }));
 }
 // How the Resources page words a container's source (storageSources).
-export const SOURCE_NOTES: Record<StorageSource['source'], string> = {
+const SOURCE_NOTES: Record<StorageSource['source'], string> = {
   surplus: 'from surplus',
   line: 'storage-only line (optional)',
   both: 'from surplus, topped up by a storage-only line (optional)',

@@ -28,7 +28,7 @@ export async function saveMarker(marker: MapMarker): Promise<boolean> {
 }
 
 // The map's own focusable element for marker `id`.
-export const markerButton = (id: string) =>
+const markerButton = (id: string) =>
   document.querySelector<HTMLElement>(`#main [data-map-marker="${CSS.escape(id)}"]`);
 
 // Focuses marker `id` once the page has drawn it, as Save and Undo leave it.

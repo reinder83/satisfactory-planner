@@ -37,7 +37,7 @@ export const zeroPins = (config: Pick<CurrentSettings, 'sloopPins'>, phase: numb
 // then need the amplification budget to hold them all ('budget', every pin above 0 of the phase,
 // since which to give up is the user's choice). Whether a plan fits with them is the two-step
 // fit's question (twoStepFit in fit.ts, 'fit').
-export function checkPins(
+function checkPins(
   config: CurrentSettings,
   phase: number,
   conversion: boolean,

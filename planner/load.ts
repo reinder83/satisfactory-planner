@@ -47,7 +47,7 @@ export interface LoadBalance {
   generationMW: number;
   unitMW: number;
 }
-export function loadBalance(
+function loadBalance(
   { config, power, mining }: PhaseContext,
   stage: Pick<Solved, 'rows' | 'raw' | 'grid'>,
 ): LoadBalance | null {

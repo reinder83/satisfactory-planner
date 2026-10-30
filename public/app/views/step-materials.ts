@@ -46,7 +46,7 @@ function ownedLeft(row: CalcRow, snapshot: StoredStage | undefined): number | nu
 // a switched or grown line (#1175, #1174), none on a line with machines to spare, the ones this
 // phase adds to a line the phase before marked running (#1069), the generators the player does not
 // have yet (#1068), else every machine of the line.
-export function machinesToBuild(
+function machinesToBuild(
   row: CalcRow,
   snapshot: StoredStage | undefined = calcStage(),
   shownPhase: Phase = phase(),
@@ -71,7 +71,7 @@ const waterExtractorsOf = (row: CalcRow, snapshot: StoredStage | undefined): num
 
 // The belt and pipe marks `row` is fed by in phase `shownPhase`: "Mk.4 belts" when an input or
 // output is solid, "Mk.2 pipes" when one is a fluid.
-export function rowLanes(row: CalcRow, shownPhase: Phase = phase()): string[] {
+function rowLanes(row: CalcRow, shownPhase: Phase = phase()): string[] {
   const items = [...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})];
   const stageKey = stageKeyOf(shownPhase);
   return [
@@ -110,7 +110,7 @@ export function stepRow(stepId: string, shownPhase: Phase = phase()): CalcRow | 
 }
 
 // The materials of a build-plan step (rowMaterials), or null for a step that builds no line.
-export function stepMaterials(stepId: string, shownPhase: Phase = phase()): BuildMaterials | null {
+function stepMaterials(stepId: string, shownPhase: Phase = phase()): BuildMaterials | null {
   const row = stepRow(stepId, shownPhase);
   return row ? rowMaterials(row, calculated?.stages[stageKeyOf(shownPhase)], shownPhase) : null;
 }

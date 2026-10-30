@@ -24,7 +24,7 @@ import type {
 import type { OwnedFound } from './owned-ticks.ts';
 
 // The hash routes, one per page.
-export const VIEWS = [
+const VIEWS = [
   'plan',
   'factories',
   'logistics',
@@ -229,10 +229,10 @@ function storedSessionSize(): number {
 // preference remembered in this browser like the session size, never in a saved profile: it
 // changes what one table estimates, not the plan or its progress, so it needs no state version.
 const BUILD_MINUTES_KEY = 'planner-build-minutes';
-export const BUILD_MINUTES_DEFAULT = 3;
+const BUILD_MINUTES_DEFAULT = 3;
 export const BUILD_MINUTES_MAX = 60;
 // `value` as a usable number of minutes (half minutes, 0 to the maximum), or null.
-export function buildMinutesOf(value: unknown): number | null {
+function buildMinutesOf(value: unknown): number | null {
   if (value === null || value === '' || typeof value === 'boolean') return null;
   const minutes = Number(value);
   if (!Number.isFinite(minutes) || minutes < 0 || minutes > BUILD_MINUTES_MAX) return null;

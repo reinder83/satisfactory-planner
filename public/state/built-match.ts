@@ -46,7 +46,7 @@ export function recipeBook(
 }
 
 // A row's main product (above): its first output, or for a generator its building's power.
-export const mainProduct = (row: Pick<CalcRow, 'outputs' | 'power' | 'machine'>) =>
+const mainProduct = (row: Pick<CalcRow, 'outputs' | 'power' | 'machine'>) =>
   row.power < 0 ? 'power:' + row.machine : Object.keys(row.outputs || {})[0];
 
 const factsOfRow = (row: CalcRow): LineFacts => ({

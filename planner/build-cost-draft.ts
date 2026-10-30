@@ -116,7 +116,7 @@ function longCount(plain: CurrentSettings, phase: number, conversion: boolean) {
 // with its deliveries." `within` false (no budget makes the parts in time, so the counts are of
 // the plan over a long time, close to the player's own) keeps the plain "its 40 Fuel Generators
 // need …" wording.
-export function buildCostWords(
+function buildCostWords(
   { hours, buildings, parts: counted }: StageBuildCost,
   within = true,
 ): string {

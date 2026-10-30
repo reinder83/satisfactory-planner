@@ -273,7 +273,7 @@ export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved)
 // finishes sooner, and the integer search is skipped. With whole machines that is the usual case:
 // every line runs at 100% and all a part's output goes to the elevator (#1062). A line at exact
 // clocks, whose last machine runs below 100%, leaves room to spare, so its phase is re-solved.
-export function cannotFinishSooner(config: CurrentSettings, phase: number, stage: Solved): boolean {
+function cannotFinishSooner(config: CurrentSettings, phase: number, stage: Solved): boolean {
   const whole = (row: CalcRow) => !!row.slots || wholeLine(config, phase, row);
   const makers = (item: string) => stage.rows.filter(row => (row.outputs[item] || 0) > 0);
   // The items a sooner plan must make, and the lines that must run: from the delivery parts, every

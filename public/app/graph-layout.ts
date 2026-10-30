@@ -52,7 +52,7 @@ export const lineRowOf = (nodeId: string): string | null =>
   nodeId.startsWith(LINE_PREFIX) ? nodeId.slice(LINE_PREFIX.length) : null;
 
 // A corner as kept: whole units, never left of or above the drawing's edge.
-export const spotUnit = (value: number): number => Math.max(0, Math.round(value));
+const spotUnit = (value: number): number => Math.max(0, Math.round(value));
 // A corner on the grid (#1240): the nearest grid line, never left of or above the drawing's edge.
 export const snapUnit = (value: number): number =>
   Math.max(0, Math.round(value / GRAPH_GRID) * GRAPH_GRID);
