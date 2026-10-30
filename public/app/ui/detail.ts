@@ -8,11 +8,12 @@ import { required } from '../format.ts';
 import DetailDialog from './detail/DetailDialog.vue';
 
 // What #detail shows: a calculated row, a storage container (by address), an alternate recipe
-// (by recipe id), a factory group's flow graph (by group id, #1192) or a marker on the world map
-// (by marker id, or 'new:<x>:<y>' for one about to be placed there, #1283). A factory group's build
+// (by recipe id), a factory group's flow graph (by group id, #1192), a marker on the world map
+// (by marker id, or 'new:<x>:<y>' for one about to be placed there, #1283) or a train station (by
+// station id, or 'new' for one about to be added, #1284). A factory group's build
 // order is a page of its own, #factories/<group>/flow (#895).
 export interface DetailTarget {
-  kind: 'calc' | 'slot' | 'alt' | 'graph' | 'marker';
+  kind: 'calc' | 'slot' | 'alt' | 'graph' | 'marker' | 'station';
   id: string;
 }
 

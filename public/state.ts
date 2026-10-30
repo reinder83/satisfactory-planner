@@ -48,6 +48,9 @@
 //   factoryPlaces  { [group id]: { x, y } } where factories stand on the world map, in game
 //                  units (validateFactoryPlaces, #1283), version 28; absent while none is
 //                  placed; the mapFactory update places, moves or takes off one
+//   trainStations  [{ id: 'ts-…', name, owner?, platforms }] train stations and their platforms in
+//                  order (validateTrainStations, #1284), version 29; absent when there are
+//                  none; the trainStation update adds, replaces or removes one
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -94,6 +97,14 @@ export {
   MAP_MARKER_NAME_MAX,
   MAP_MARKER_TYPES,
   MAP_WORLD_LIMIT,
+  OUTPOST_NODE_MAX,
+  STATION_OWNER_KINDS,
+  TRAIN_CARGO_MAX,
+  TRAIN_PLATFORM_KINDS,
+  TRAIN_PLATFORM_MAX,
+  TRAIN_STATION_MAX,
+  TRAIN_STATION_NAME_MAX,
+  trainStationId,
   mapMarkerId,
   mappingFits,
   mergeAmplifiedUnlocks,
@@ -105,6 +116,7 @@ export {
   tickRecord,
   validateState,
   validateTickedBy,
+  validateTrainStations,
 } from './state/validate.ts';
 export { checkBase, mutate, noteConflict, staleWrite } from './state/mutate.ts';
 export {

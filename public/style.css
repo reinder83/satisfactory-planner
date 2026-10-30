@@ -2035,6 +2035,110 @@ p.eyebrow {
 .group-links {
   margin-top: 18px;
 }
+/* Train stations on the Logistics page (#1284, ui/factories/TrainStations.vue): a card per
+   station, its platforms numbered in order, and "+ Add train station" under them. */
+.train-stations {
+  margin-top: 18px;
+}
+.station-platform-list {
+  margin: 4px 0 10px;
+  padding-left: 2.2em;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.station-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 12px 0 0;
+}
+/* The station editor (ui/detail/StationDialog.vue): the outpost's node counts side by side, and
+   one row per platform with its number, type, belt and tools, its cargo under them. */
+.station-outpost,
+.station-platforms {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+.station-outpost legend,
+.station-platforms legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.station-nodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: 0 12px;
+}
+.platform-list {
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.platform-row {
+  border-top: 1px solid var(--line2);
+  padding: 8px 0;
+}
+.platform-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0 12px;
+}
+.platform-head .field {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.platform-number {
+  flex: 0 0 100%;
+  color: var(--bright);
+}
+.platform-tools {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+.platform-tools .btn {
+  min-width: 40px;
+}
+.platform-cargo {
+  margin-top: 4px;
+}
+.cargo-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.cargo-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cargo-list .item-icon {
+  width: 24px;
+  height: 24px;
+}
+.cargo-list .btn.quiet {
+  min-width: 24px;
+  border-bottom: 0;
+  font-size: 15px;
+}
+.cargo-add {
+  max-width: 24rem;
+}
+@media (max-width: 720px) {
+  .cargo-list .btn.quiet {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 /* One card per group (#213): In and Out side by side, stacking (In first) when narrow. */
 .group-cards {
   display: grid;

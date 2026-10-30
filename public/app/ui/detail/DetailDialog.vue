@@ -5,6 +5,7 @@ import CalcFactoryDialog from './CalcFactoryDialog.vue';
 import FlowGraphDialog from './FlowGraphDialog.vue';
 import MarkerDialog from './MarkerDialog.vue';
 import SlotDialog from './SlotDialog.vue';
+import StationDialog from './StationDialog.vue';
 import type { DetailTarget } from '../detail.ts';
 
 defineProps<{ target: DetailTarget }>();
@@ -16,4 +17,5 @@ defineProps<{ target: DetailTarget }>();
   <AltRecipeDialog v-else-if="target.kind === 'alt'" :id="target.id" />
   <FlowGraphDialog v-else-if="target.kind === 'graph'" :id="target.id" />
   <MarkerDialog v-else-if="target.kind === 'marker'" :id="target.id" />
+  <StationDialog v-else-if="target.kind === 'station'" :id="target.id" />
 </template>

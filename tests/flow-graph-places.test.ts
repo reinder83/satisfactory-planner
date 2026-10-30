@@ -153,7 +153,7 @@ test('every released state loads unchanged; version 25 only with a moved place; 
   // message, as a release before this one refuses a version-25 state.
   assert.equal(validateState({ ...json(version25), version: 3 }).version, 25);
   assert.throws(
-    () => validateState({ ...json(version25), version: 29 }),
+    () => validateState({ ...json(version25), version: 30 }),
     /newer planner version\. Update the app to import it\./,
   );
 });

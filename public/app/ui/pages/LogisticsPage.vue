@@ -5,7 +5,8 @@
   nothing between them yet: each gets a short explanation with the way forward instead of an
   empty page. A milestone-only phase (#759) says why with MilestoneOnlyNotice.vue and its
   "Go to Phase N", as the Factories page does. With no calculated plan open (only while render()
-  swaps the page after leaving a profile) it draws its header alone.
+  swaps the page after leaving a profile) it draws its header alone. Below, in every phase, the
+  train stations and their platforms (#1284, ui/factories/TrainStations.vue).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -13,6 +14,7 @@ import { calcStage, calculated, milestoneOnly, phaseLabel, phase } from '../../s
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import GroupLinks from '../factories/GroupLinks.vue';
+import TrainStations from '../factories/TrainStations.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 
@@ -48,4 +50,5 @@ const page = computed(() =>
     sends the others appears here.
   </div>
   <GroupLinks v-else />
+  <TrainStations v-if="page.calculated" />
 </template>

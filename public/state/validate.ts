@@ -5,12 +5,18 @@
 // Types: ProgressState is what validateState returns, SavedState anything it accepts
 // (public/types/state.ts). Input arrives as unknown and is narrowed by the checks below
 // (plain, safeKey, label, ...), which are type guards; nothing is trusted before them.
-import { laterVehicleFuels, vehicleFuels } from '../preferences.ts';
+import { laterVehicleFuels, minedResources, vehicleFuels } from '../preferences.ts';
 import { SLOOP_PIN_MAX } from '../somersloops.ts';
 import { ALTERNATE_RECIPE_IDS } from './alternates.ts';
 import { ITEM_NAMES } from './items.ts';
 import type {
+  BeltMark,
   BuiltMachines,
+  NodePurityCounts,
+  StationOwner,
+  TrainPlatform,
+  TrainPlatformKind,
+  TrainStation,
   CustomTask,
   ExactClocks,
   FactoryGroup,
@@ -839,6 +845,116 @@ export function validateFactoryPlaces(
   });
   return out.length ? Object.fromEntries(out) : undefined;
 }
+// Train logistics (#1284, slice 1): the limits of a profile's train stations. At most 200
+// stations, a name of 1 to 60 characters once trimmed, at most 40 platforms a station (a long
+// train has fewer cars), at most 8 items of mixed cargo on one loading platform, and at most 99
+// nodes of each purity on a mining outpost. A belt is a conveyor belt mark, 1 to 6.
+export const TRAIN_STATION_MAX = 200;
+export const TRAIN_STATION_NAME_MAX = 60;
+export const TRAIN_PLATFORM_MAX = 40;
+export const TRAIN_CARGO_MAX = 8;
+export const OUTPOST_NODE_MAX = 99;
+export const TRAIN_PLATFORM_KINDS: readonly TrainPlatformKind[] = ['load', 'unload', 'empty'];
+export const STATION_OWNER_KINDS: readonly StationOwner['kind'][] = [
+  'factory',
+  'outpost',
+  'storage',
+];
+const NODE_PURITIES = ['pure', 'normal', 'impure'] as const;
+export const trainStationId = (value: unknown): value is string =>
+  typeof value === 'string' && /^ts-[a-z0-9]{4,32}$/.test(value);
+const beltMark = (value: unknown): value is BeltMark =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 6;
+// What one station's parts may be. `strict` is for an update (mutate.ts), which is refused when
+// any part is malformed. Without it, as validateState reads a stored station, a malformed part is
+// left out and the rest is kept: an unknown or repeated cargo item, a belt that is no mark, a
+// node count that is no whole number from 0 to 99, a platform past the 40th or of no known kind,
+// and an owner that is no factory of the profile (removing a factory leaves its stations without
+// an owner, never deletes them).
+export interface StationRules {
+  factories: ReadonlySet<string>;
+  strict: boolean;
+}
+// A station's owner as kept, undefined for none, or null when it is malformed.
+function cleanStationOwner(raw: unknown, rules: StationRules): StationOwner | undefined | null {
+  if (raw === undefined) return undefined;
+  if (!plain(raw)) return null;
+  if (raw.kind === 'factory')
+    return groupId(raw.id) && rules.factories.has(raw.id) ? { kind: 'factory', id: raw.id } : null;
+  if (raw.kind === 'storage') return { kind: 'storage' };
+  if (raw.kind !== 'outpost' || !minedResources.includes(raw.resource as string)) return null;
+  const counts = raw.nodes === undefined ? {} : raw.nodes;
+  if (!plain(counts))
+    return rules.strict ? null : { kind: 'outpost', resource: raw.resource as string, nodes: {} };
+  const nodes: NodePurityCounts = {};
+  for (const purity of NODE_PURITIES) {
+    const count = counts[purity];
+    if (count === undefined || count === 0) continue;
+    if (!Number.isInteger(count) || (count as number) < 0 || (count as number) > OUTPOST_NODE_MAX) {
+      if (rules.strict) return null;
+      continue;
+    }
+    nodes[purity] = count as number;
+  }
+  return { kind: 'outpost', resource: raw.resource as string, nodes };
+}
+// One platform as kept, or null when it is malformed (no known kind; under `strict` any part).
+function cleanPlatform(raw: unknown, rules: StationRules): TrainPlatform | null {
+  if (!plain(raw) || !TRAIN_PLATFORM_KINDS.includes(raw.kind as TrainPlatformKind)) return null;
+  if (raw.kind === 'empty') return { kind: 'empty' };
+  let belt: BeltMark | undefined;
+  if (beltMark(raw.belt)) belt = raw.belt;
+  else if (raw.belt !== undefined && rules.strict) return null;
+  const withBelt = belt === undefined ? {} : { belt };
+  if (raw.kind === 'unload') return { kind: 'unload', ...withBelt };
+  const listed = raw.cargo === undefined ? [] : raw.cargo;
+  if (!Array.isArray(listed)) return rules.strict ? null : { kind: 'load', cargo: [], ...withBelt };
+  const cargo: string[] = [];
+  for (const item of listed) {
+    if (knownItems.has(item) && !cargo.includes(item as string) && cargo.length < TRAIN_CARGO_MAX)
+      cargo.push(item as string);
+    else if (rules.strict) return null;
+  }
+  return { kind: 'load', cargo, ...withBelt };
+}
+// One station as kept, or null when it cannot be kept: no plain object, no station id or no
+// name (and, under `strict`, any malformed part). Fields it does not know are left out.
+export function cleanTrainStation(raw: unknown, rules: StationRules): TrainStation | null {
+  if (!plain(raw) || !trainStationId(raw.id) || !label(raw.name, TRAIN_STATION_NAME_MAX))
+    return null;
+  const owner = cleanStationOwner(raw.owner, rules);
+  if (owner === null && rules.strict) return null;
+  const listed = raw.platforms === undefined ? [] : raw.platforms;
+  if (!Array.isArray(listed) && rules.strict) return null;
+  const platforms: TrainPlatform[] = [];
+  for (const entry of Array.isArray(listed) ? listed : []) {
+    const platform = cleanPlatform(entry, rules);
+    if ((!platform || platforms.length >= TRAIN_PLATFORM_MAX) && rules.strict) return null;
+    if (platform && platforms.length < TRAIN_PLATFORM_MAX) platforms.push(platform);
+  }
+  return { id: raw.id, name: raw.name.trim(), ...(owner ? { owner } : {}), platforms };
+}
+// Returns a clean copy of trainStations (#1284), or undefined when absent, empty or no list: the
+// stations in the order added, each id once (a repeated id keeps the first), at most
+// TRAIN_STATION_MAX. A station that cannot be kept is left out and the others stay, as do the
+// good parts of a station with a malformed one (cleanTrainStation); `groups` are the profile's
+// factories, which a station's factory owner must name.
+export function validateTrainStations(
+  raw: unknown,
+  groups: readonly Pick<FactoryGroup, 'id'>[],
+): TrainStation[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const rules: StationRules = { factories: new Set(groups.map(group => group.id)), strict: false };
+  const seen = new Set<string>();
+  const out: TrainStation[] = [];
+  for (const entry of raw) {
+    const station = cleanTrainStation(entry, rules);
+    if (!station || seen.has(station.id) || out.length >= TRAIN_STATION_MAX) continue;
+    seen.add(station.id);
+    out.push(station);
+  }
+  return out.length ? out : undefined;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -1058,7 +1174,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–28 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–29 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections or values that default to blank. The one rewrite is of
 // keys, not of a version: an amplified twin's unlock records and a group line's unlock tick merge
 // into their recipe's (mergeOldUnlockKeys).
@@ -1071,12 +1187,12 @@ export function validateState(state: unknown): ProgressState {
     !plain(state) ||
     ![
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-      27, 28,
+      27, 28, 29,
     ].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "29" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 28
+      // Compared as the old code did, so a version given as "30" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 29
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -1150,6 +1266,9 @@ export function validateState(state: unknown): ProgressState {
   // Read against the factories as validated above: each place names one of them.
   const places = validateFactoryPlaces(state.factoryPlaces, clean.factoryGroups.groups);
   if (places) clean.factoryPlaces = places;
+  // Also read against those factories: a station whose factory is gone keeps everything else.
+  const stations = validateTrainStations(state.trainStations, clean.factoryGroups.groups);
+  if (stations) clean.trainStations = stations;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -1252,6 +1371,10 @@ export function validateState(state: unknown): ProgressState {
   // the places and take the factories off the map. An empty map is not kept, so a state whose
   // last factory is taken off the map (or removed) goes back to the version above.
   if (clean.factoryPlaces) clean.version = 28;
+  // Train stations and their platforms (trainStations, #1284) are 29: an older release would drop
+  // the stations. An empty list is not kept, so a state whose last station is deleted goes back
+  // to the version above.
+  if (clean.trainStations) clean.version = 29;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
