@@ -50,7 +50,7 @@ jobs:
       - run: npm ci
       - run: node --test --test-shard=${{ matrix.shard }}/2 tests/*.test.ts
 
-  # The Vitest component tests (202 files) in three shards, side by side: `vitest run --shard`
+  # The Vitest component tests in three shards, side by side: `vitest run --shard`
   # deals the files out by a hash of their paths, so each shard gets about a third (#1274). A
   # shard runs its files in the same isolated workers as a whole run does.
   ui-tests:

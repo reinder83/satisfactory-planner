@@ -102,7 +102,7 @@ export interface SiteRouting {
   inputs: Map<string, Record<string, PoolParts>>;
   outputs: Map<string, Record<string, PoolParts>>;
 }
-export const NO_SITES: SiteRouting = { inputs: new Map(), outputs: new Map() };
+const NO_SITES: SiteRouting = { inputs: new Map(), outputs: new Map() };
 
 // How a phase's lines made on site share their items, from the Logistics page's books (itemBooks
 // in group-links.ts; `planned` is the plan's settings.onSite, #907). For each item and group
@@ -274,7 +274,7 @@ function perItem(pools: Record<string, number>): ItemRates {
 // augmenters add). A plan saved without availableMW uses `sparePowerMW`. The stage's
 // additionalHeadroomMW is requiredMW minus both. ADA's power remark (app/ada-panel.ts) states
 // these figures (#334).
-export function stageSupply(
+function stageSupply(
   stage: StoredStage,
   sparePowerMW = 0,
 ): { generationMW: number; spareMW: number } {

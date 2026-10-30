@@ -1,10 +1,9 @@
-// Existing-production rows ("Production you already run") and their item search.
+// Existing-production rows ("Production you already run").
 // Shown on wizard step 1 and as the guided "What are you already producing?"
 // question. Two things are kept apart: wizard.supplyRows, the rows as typed
 // (possibly half-finished), and settings.existingSupply, the { item: rate } map
 // the planner receives. The rows and their item search are drawn and handled by
 // ui/wizard/SupplyRows.vue.
-import { itemMatches } from '../format.ts';
 import { draft, workspace } from '../session.ts';
 import { readGuidedForm } from './guided.ts';
 import { readWizard, type WizardDraft } from './wizard.ts';
@@ -24,18 +23,7 @@ export interface SupplyRow {
 //
 // One row per declared item plus a blank one, so there is nothing to press
 // before typing and no way to leave a half-finished row behind.
-// Suggestions are drawn in the page rather than by a native <datalist>: that
-// popup is browser chrome, so it cannot be themed, cannot be read back, and
-// Chrome suppresses it outright on an input with autocomplete off. A list we
-// own works the same everywhere and can be driven from the keyboard.
-const SUPPLY_SUGGESTIONS = 8;
-
-// Up to SUPPLY_SUGGESTIONS catalog items for the typed text, case-insensitive:
-// names that start with it first, then names that merely contain it.
-export function supplyMatches(query: unknown): string[] {
-  return itemMatches(workspace.catalog.supplyItems || [], query, SUPPLY_SUGGESTIONS);
-}
-
+//
 // The rows being edited, which is not the same thing as the rows that count. A
 // half-finished row — a name with no rate yet — has to survive a re-render, or
 // picking a suggestion would erase what you just picked.

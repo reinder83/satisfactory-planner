@@ -607,7 +607,7 @@ export function validateOnSiteReview(raw: unknown): OnSiteReview | undefined {
 // that stand on a production line a recalculation grew, by the line's check key
 // ('calc-<phase>-<rowId>', a planned phase), each a whole count from 1 to MAX_BUILT_MACHINES.
 const MAX_BUILT_MACHINES = 100000;
-export function validateBuiltMachines(raw: unknown): BuiltMachines | undefined {
+function validateBuiltMachines(raw: unknown): BuiltMachines | undefined {
   if (raw === undefined) return undefined;
   const bad = () => fail('Invalid count of built machines.');
   if (!plain(raw) || Object.keys(raw).length > 20000) bad();
@@ -662,7 +662,7 @@ export function validateTickedBy(
 // amplified twin ('amp:'), which is always whole machines; duplicates go, ids are sorted and an
 // empty phase is dropped. An empty map stays: it asks for no line at exact clocks, which differs
 // from a plan calculated with some.
-export function validateExactClocks(raw: unknown): ExactClocks | undefined {
+function validateExactClocks(raw: unknown): ExactClocks | undefined {
   if (raw === undefined) return undefined;
   const bad = () => fail('Invalid exact clocks.');
   if (!plain(raw) || Object.keys(raw).length > 5) bad();
@@ -684,7 +684,7 @@ export function validateExactClocks(raw: unknown): ExactClocks | undefined {
 // empty phase is dropped. An empty map stays: it asks for no pins, which differs from a plan
 // calculated with some. Whether a count fills whole machines is the planner's check (settings()),
 // which knows each recipe's machine.
-export function validateSloopPins(raw: unknown): SloopPins | undefined {
+function validateSloopPins(raw: unknown): SloopPins | undefined {
   if (raw === undefined) return undefined;
   const bad = () => fail('Invalid somersloop pins.');
   if (!plain(raw) || Object.keys(raw).length > 5) bad();
@@ -710,7 +710,7 @@ export function validateSloopPins(raw: unknown): SloopPins | undefined {
 export const LINE_CLOCK_MAX = 250;
 // Whether `clock` is a line clock the planner takes: a number in % above 100 and at most 250, to
 // four decimals as the game takes it (lineClocksSetting in planner/settings.ts).
-export const validLineClock = (clock: unknown): clock is number =>
+const validLineClock = (clock: unknown): clock is number =>
   typeof clock === 'number' &&
   Number.isFinite(clock) &&
   clock > 100 &&
@@ -724,7 +724,7 @@ export const validLineClock = (clock: unknown): clock is number =>
 // no clocks, which differs from a plan calculated with some. Whether the recipe exists is the
 // planner's check (settings()), which knows the game data; an import drops unknown ones
 // (dropUnknownPins in transfer.ts).
-export function validateLineClocks(raw: unknown): LineClocks | undefined {
+function validateLineClocks(raw: unknown): LineClocks | undefined {
   if (raw === undefined) return undefined;
   const bad = () => fail('Invalid line clocks.');
   if (!plain(raw) || Object.keys(raw).length > 5) bad();

@@ -63,7 +63,7 @@ export const pinnedClockOf = (
 ): number | undefined => clocks[phase]?.[recipe];
 // `clocks` with each phase's keys sorted and without an empty phase, as the planner and
 // validateState keep them.
-export function normalClocks(clocks: LineClocks): LineClocks {
+function normalClocks(clocks: LineClocks): LineClocks {
   const out: LineClocks = {};
   for (const phase of CLOCK_PHASES) {
     const lines = clocks[phase] ?? {};
@@ -165,7 +165,7 @@ export function lineClocksSettings(
   return out;
 }
 // "250% with 3 Power Shards in each machine", or "100% without Power Shards" for no pin.
-export const clockPinWords = (clock: number | undefined): string =>
+const clockPinWords = (clock: number | undefined): string =>
   clock === undefined
     ? '100% without Power Shards'
     : `${localeNumber(clock)}% with ${powerShardWords(shardsPerMachine(clock))} in each machine`;
@@ -174,7 +174,7 @@ export const clockChangeWords = (lines: ClockChange[]): string =>
   lines.map(line => `${line.name} (Phase ${line.phase}): ${clockPinWords(line.after)}`).join('; ');
 
 // The clock a phase of the plan could not keep on line `recipe`, or undefined.
-export const droppedClock = (
+const droppedClock = (
   plan: Pick<StoredCalculatedPlan, 'stages'>,
   phase: StageKey,
   recipe: string,

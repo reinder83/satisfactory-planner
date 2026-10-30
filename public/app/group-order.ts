@@ -222,7 +222,7 @@ export function groupedBuildOrder<T extends Pick<CalcRow, 'inputs' | 'outputs'>>
 // Whether `maker` can supply `user` in the build order (#876): a factory group's own line made on
 // site feeds only the rows with a share in its group (rowPlaces), so a row of another group never
 // waits for it. Once its group is removed it is a line like any other.
-export function sitesFeed(groups: GroupsInput) {
+function sitesFeed(groups: GroupsInput) {
   const known = new Set((groups?.groups || []).map(group => group.id));
   return (maker: CalcRow, user: CalcRow): boolean => {
     const site = maker.onSite?.group;

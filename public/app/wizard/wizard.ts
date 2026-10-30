@@ -147,7 +147,7 @@ interface CreatedProfile {
 
 // Copy the carry panel's choices into wizard.carryFrom / wizard.carry. Does
 // nothing when the panel is not on screen. Also called by the create submit.
-export function readCarry(form: HTMLFormElement | null, data?: FormData) {
+function readCarry(form: HTMLFormElement | null, data?: FormData) {
   const wizardDraft = draft();
   if (!form?.querySelector('.carry-list')) return;
   const formData = data || new FormData(form),
@@ -855,7 +855,7 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
 // (draft.ownedAlternates).
 export const settingsOwnedKeys = (wizardDraft: WizardDraft): string[] =>
   (wizardDraft.preview?.settings.ownedAlternates || []).map(id => 'recipe-unlock-' + id);
-export const ownedUnlockKeys = (wizardDraft: WizardDraft): Set<string> =>
+const ownedUnlockKeys = (wizardDraft: WizardDraft): Set<string> =>
   new Set([...(wizardDraft.ownedAlternates || []), ...settingsOwnedKeys(wizardDraft)]);
 
 // The steps Review's "What you already have" ticks in the new profile (#1068), from the preview:
@@ -865,7 +865,7 @@ export const ownedUnlockKeys = (wizardDraft: WizardDraft): Set<string> =>
 // them as finished work; records carried from another profile still win there, an untick included.
 // The alternates owned are those ticked there and those chosen on step 2 (ownedUnlockKeys).
 // None while every box is clear.
-export function alreadyHaveKeys(wizardDraft: WizardDraft): string[] {
+function alreadyHaveKeys(wizardDraft: WizardDraft): string[] {
   const plan = wizardDraft.preview;
   if (!plan || !progressionData?.buildings) return [];
   const owned = ownedUnlockKeys(wizardDraft);

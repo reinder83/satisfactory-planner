@@ -59,7 +59,7 @@ export const lineShards = (clock: number, machines: number): number =>
 
 // Which of a phase's clocks it can keep before anything is solved, and why it cannot keep the
 // others ('research', 'unavailable'; see the header).
-export function checkClocks(
+function checkClocks(
   config: CurrentSettings,
   phase: number,
   conversion: boolean,
@@ -83,7 +83,7 @@ export function checkClocks(
 }
 // `config` with phase `phase`'s clocks replaced by `clocks`: the phase's entry left out when
 // `clocks` is empty, and the field left out when no phase has any.
-export function withPhaseClocks(
+function withPhaseClocks(
   config: CurrentSettings,
   phase: number,
   clocks: Record<string, number>,

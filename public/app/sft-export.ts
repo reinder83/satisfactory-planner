@@ -173,7 +173,7 @@ export function sftTab(
 
 // zlib-deflates `text` (as UTF-8) with the browser's (and Node's) CompressionStream: 'deflate' is the zlib
 // format the file's reader inflates, so no library is needed.
-export async function sftDeflate(text: string): Promise<Uint8Array> {
+async function sftDeflate(text: string): Promise<Uint8Array> {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }

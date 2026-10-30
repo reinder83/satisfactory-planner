@@ -28,7 +28,7 @@ import {
 } from '../../graph-view.ts';
 
 // How far (px) a press moves before it is a drag rather than a click.
-export const PAN_THRESHOLD = 4;
+const PAN_THRESHOLD = 4;
 
 interface Press {
   id: number;

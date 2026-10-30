@@ -42,7 +42,7 @@ export type NoteStatus = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict';
 const blank = (text: string) => (text.trim() ? text : '');
 
 // "Keep both": the other version first, then this box's text, a blank line between.
-export const bothVersions = (theirs: string, mine: string) =>
+const bothVersions = (theirs: string, mine: string) =>
   [theirs, mine].filter(text => blank(text)).join('\n\n');
 
 // Drafts whose write failed after their box went away, by save/profile/key, with the saved text

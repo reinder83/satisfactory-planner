@@ -285,7 +285,7 @@ export function changedLineCount(rows: readonly CalcRow[]): number {
 // 8 Coal Generators, enough for this line's 6: build none. "; with several, counted over them
 // together ("… of the 30 Fuel Generators this phase's 2 Fuel Generator lines run: build 27 more
 // between them. "). '' for any other line. It reads the stored plan and changes nothing.
-export function ownedGeneratorsText(row: CalcRow, snapshot: StoredStage | undefined): string {
+function ownedGeneratorsText(row: CalcRow, snapshot: StoredStage | undefined): string {
   if (!(row.power < 0)) return '';
   const entry = ownedBeyondKept(snapshot?.grid).find(owned => owned.machine === row.machine);
   if (!entry) return '';
@@ -678,7 +678,7 @@ export function ownedTicksNotice(): OwnedFound | null {
 // An expansion table row's phase (SP-22): its label, and whether it is the phase being worked
 // on, which the dialogs mark with an accent edge and a "current" tag. Post Phase 5 works on
 // Phase 5's targets, so that row is the current one then, and its tag says so.
-export function expansionPhase(rowPhase: string) {
+function expansionPhase(rowPhase: string) {
   const current = rowPhase === stage();
   return {
     label: phaseLabel(rowPhase),

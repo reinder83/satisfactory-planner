@@ -83,7 +83,7 @@ export function recipePool(config: CurrentSettings, phase: number, conversion: b
 }
 // Every recipe of `pool` taking `cost` times its inputs, except the Packager's, which keep theirs;
 // the same objects at 1× or without a cost.
-export function withRecipeCost<T extends Pick<Recipe, 'inputs' | 'machine'>>(
+function withRecipeCost<T extends Pick<Recipe, 'inputs' | 'machine'>>(
   pool: T[],
   cost?: number,
 ): T[] {

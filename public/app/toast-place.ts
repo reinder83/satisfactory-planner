@@ -36,7 +36,7 @@ const keyboardMayShow = (focused: HTMLElement) =>
 
 // Puts a toast that has just been shown at the bottom, or at the top when the focused control
 // is under it there or, on a phone or tablet, is a form field. A hidden toast takes the bottom again.
-export function placeToast(el: HTMLElement) {
+function placeToast(el: HTMLElement) {
   delete el.dataset.place;
   if (!el.classList.contains('show')) return;
   const focused = document.activeElement;

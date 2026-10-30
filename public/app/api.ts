@@ -2,7 +2,7 @@
 // toasts, and navigation that guards unsaved notes. Edits to the open profile go through
 // save(); other POSTs (profiles, imports, account) use post(); both use request().
 import { appRoot } from '../app-root.ts';
-import { browserMode, browserRequest } from '../browser-api.ts';
+import { browserMode, browserRequest, loadBrowserProgression } from '../browser-api.ts';
 import { required } from './format.ts';
 import { entryPlace, placeEntry, placedState, startPlace } from './history-place.ts';
 import {
@@ -27,7 +27,7 @@ import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
 import { listNames } from '../wording.ts';
-import type { ProgressState, UpdateOp, WorkspaceSummary } from '../types/index.ts';
+import type { ProgressState, Progression, UpdateOp, WorkspaceSummary } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
 // (calcProgress in wizard/wizard.ts), which browser-api.ts calls with each phase it solves, and
@@ -132,6 +132,11 @@ export async function request<T = unknown>(path: string, options: RequestOptions
   });
   return replyData<T>(response);
 }
+
+// progression.json for boot(). The Pages edition shares the one fetch of its browser API, which
+// reads the file too; the Docker edition's server does not.
+export const loadProgression = (): Promise<Progression> =>
+  browserMode ? loadBrowserProgression() : request<Progression>('/progression.json');
 
 // The parsed JSON body of a reply to request() or requestIfChanged(), or its error.
 async function replyData<T>(response: Response): Promise<T> {

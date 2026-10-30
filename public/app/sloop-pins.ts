@@ -68,7 +68,7 @@ export const pinOf = (pins: SloopPins, phase: StageKey, recipe: string): number 
   pins[phase]?.[recipe];
 // `pins` with each phase's keys sorted and without an empty phase, as the planner and validateState
 // keep them.
-export function normalPins(pins: SloopPins): SloopPins {
+function normalPins(pins: SloopPins): SloopPins {
   const out: SloopPins = {};
   for (const phase of PIN_PHASES) {
     const lines = pins[phase] ?? {};
@@ -170,7 +170,7 @@ export function sloopPinsSettings(
   return out;
 }
 // "8 somersloops", "1 somersloop", "none", or "the planner's choice" for no pin.
-export const pinWords = (sloops: number | undefined): string =>
+const pinWords = (sloops: number | undefined): string =>
   sloops === undefined
     ? 'the planner’s choice'
     : sloops === 0
@@ -195,16 +195,14 @@ export function pinsOverBudget(
 }
 
 // The pin a phase of the plan could not keep on line `recipe` (#1235), or undefined.
-export const droppedPin = (
+const droppedPin = (
   plan: Pick<StoredCalculatedPlan, 'stages'>,
   phase: StageKey,
   recipe: string,
 ): SloopPinDrop | undefined =>
   plan.stages[phase]?.sloopPinsDropped?.find(drop => drop.recipe === recipe);
 // Every pin the plan could not keep, as [phase, drop], in phase order.
-export const droppedPins = (
-  plan: Pick<StoredCalculatedPlan, 'stages'>,
-): [StageKey, SloopPinDrop][] =>
+const droppedPins = (plan: Pick<StoredCalculatedPlan, 'stages'>): [StageKey, SloopPinDrop][] =>
   PIN_PHASES.flatMap(phase =>
     (plan.stages[phase]?.sloopPinsDropped ?? []).map((drop): [StageKey, SloopPinDrop] => [
       phase,

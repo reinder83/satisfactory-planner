@@ -616,7 +616,7 @@ function routeBack(
 }
 
 // A label is the item over its rate, as wide as the longer of the two.
-export const labelWidth = (edge: GraphEdge) =>
+const labelWidth = (edge: GraphEdge) =>
   Math.ceil(Math.max([...edge.item].length, [...edge.rateText].length) * GRAPH.char) + 8;
 
 // Each drawn edge's label at rest (#1231), on one of `curves` (by edge, in the order it tries

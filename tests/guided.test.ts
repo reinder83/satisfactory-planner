@@ -863,8 +863,13 @@ test('a plan saved before existing production existed still renders every page',
 test('the item search ranks prefix matches first and stays short', () => {
   const context = ui();
   guided(context);
+  // The search over what the planner can credit, as ui/wizard/SupplyRows.vue hands it to
+  // form/ItemSearch.vue (eight suggestions at most).
   const matches = (query: string) =>
-    vm.runInContext(`JSON.stringify(supplyMatches(${JSON.stringify(query)}))`, context);
+    vm.runInContext(
+      `JSON.stringify(itemMatches(workspace.catalog.supplyItems || [], ${JSON.stringify(query)}, 8))`,
+      context,
+    );
   assert.equal(matches(''), '[]', 'nothing typed, nothing offered');
   const frame = JSON.parse(matches('frame'));
   assert.ok(

@@ -4,7 +4,14 @@
 import { readStoredData } from '../browser-store.ts';
 import { firstPlanPhase, milestoneOnlyPhase } from '../progression.ts';
 import { initialState } from '../state.ts';
-import { downloadJson, dropToastAction, request, toast, writeQueue } from './api.ts';
+import {
+  downloadJson,
+  dropToastAction,
+  loadProgression,
+  request,
+  toast,
+  writeQueue,
+} from './api.ts';
 import { required } from './format.ts';
 import { phaseToOpen } from './opening-phase.ts';
 import { render } from './shell.ts';
@@ -24,7 +31,7 @@ import type {
 import type { OwnedFound } from './owned-ticks.ts';
 
 // The hash routes, one per page.
-export const VIEWS = [
+const VIEWS = [
   'plan',
   'factories',
   'logistics',
@@ -229,10 +236,10 @@ function storedSessionSize(): number {
 // preference remembered in this browser like the session size, never in a saved profile: it
 // changes what one table estimates, not the plan or its progress, so it needs no state version.
 const BUILD_MINUTES_KEY = 'planner-build-minutes';
-export const BUILD_MINUTES_DEFAULT = 3;
+const BUILD_MINUTES_DEFAULT = 3;
 export const BUILD_MINUTES_MAX = 60;
 // `value` as a usable number of minutes (half minutes, 0 to the maximum), or null.
-export function buildMinutesOf(value: unknown): number | null {
+function buildMinutesOf(value: unknown): number | null {
   if (value === null || value === '' || typeof value === 'boolean') return null;
   const minutes = Number(value);
   if (!Number.isFinite(minutes) || minutes < 0 || minutes > BUILD_MINUTES_MAX) return null;
@@ -651,7 +658,7 @@ export async function boot() {
       showSignedOut(required('#app'));
       return;
     }
-    progressionData = await request<Progression>('/progression.json');
+    progressionData = await loadProgression();
     // Open the save and profile this tab had open (#1052), else the workspace's active save at
     // its active profile, then honour a deep link.
     const own = tabOpened(workspace);
