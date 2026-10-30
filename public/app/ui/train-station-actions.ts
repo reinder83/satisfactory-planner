@@ -26,7 +26,7 @@ export async function saveStation(station: TrainStation): Promise<boolean> {
 }
 
 // The Logistics page's "Edit" button of station `id`, where focus goes after a save.
-export const stationButton = (id: string) =>
+const stationButton = (id: string) =>
   document.querySelector<HTMLElement>(`#main [data-station-edit="${CSS.escape(id)}"]`);
 
 export async function focusStation(id: string) {

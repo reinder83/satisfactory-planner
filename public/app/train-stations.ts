@@ -31,7 +31,7 @@ export const beltChoices = (): { mark: BeltMark; label: string }[] =>
     mark: (i + 1) as BeltMark,
     label: `${belt.mark} (${belt.cap.toLocaleString('en-US')}/min)`,
   }));
-export const beltLabel = (mark: BeltMark | undefined): string =>
+const beltLabel = (mark: BeltMark | undefined): string =>
   mark ? (beltChoices()[mark - 1]?.label ?? '') : '';
 // What a loading platform's cargo can be: the solid items, which go by belt into a freight wagon
 // (`fluids` is flow.ts's FLUIDS, passed in because flow.ts brings the page's modules along).

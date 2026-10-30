@@ -855,11 +855,6 @@ export const TRAIN_PLATFORM_MAX = 40;
 export const TRAIN_CARGO_MAX = 8;
 export const OUTPOST_NODE_MAX = 99;
 export const TRAIN_PLATFORM_KINDS: readonly TrainPlatformKind[] = ['load', 'unload', 'empty'];
-export const STATION_OWNER_KINDS: readonly StationOwner['kind'][] = [
-  'factory',
-  'outpost',
-  'storage',
-];
 const NODE_PURITIES = ['pure', 'normal', 'impure'] as const;
 export const trainStationId = (value: unknown): value is string =>
   typeof value === 'string' && /^ts-[a-z0-9]{4,32}$/.test(value);
@@ -871,7 +866,7 @@ const beltMark = (value: unknown): value is BeltMark =>
 // node count that is no whole number from 0 to 99, a platform past the 40th or of no known kind,
 // and an owner that is no factory of the profile (removing a factory leaves its stations without
 // an owner, never deletes them).
-export interface StationRules {
+interface StationRules {
   factories: ReadonlySet<string>;
   strict: boolean;
 }

@@ -30,7 +30,7 @@ import type {
 } from '../../../types/index.ts';
 import { announce } from '../../announce.ts';
 import { whileBusy } from '../../busy.ts';
-import { required } from '../../format.ts';
+import { knownItem, required } from '../../format.ts';
 import { FLUIDS } from '../../flow.ts';
 import { calculated, state } from '../../session.ts';
 import {
@@ -150,12 +150,19 @@ async function addCargo(at: number, item: string) {
   // A fresh, empty search field for the next item, with focus in it while there is room.
   entry.search++;
   announce(`${item} added to platform ${at + 1}.`);
-  await focusIn(
-    entry.key,
-    entry.platform.cargo.length < TRAIN_CARGO_MAX
-      ? '[data-cargo-add] input'
-      : '[data-cargo-remove]:last-of-type',
-  );
+  if (entry.platform.cargo.length < TRAIN_CARGO_MAX)
+    return focusIn(entry.key, '[data-cargo-add] input');
+  // Full: the field goes, so focus goes to the × of the item just added.
+  await nextTick();
+  [...(row(entry.key)?.querySelectorAll<HTMLElement>('[data-cargo-remove]') ?? [])].at(-1)?.focus();
+}
+// Enter in the cargo field: the item search picks a suggestion itself (and cancels the key). With
+// no suggestion to pick, Enter adds the item the text names exactly, and never submits the form.
+function cargoEnter(at: number, event: KeyboardEvent) {
+  if (event.defaultPrevented) return;
+  event.preventDefault();
+  const item = knownItem(CARGO_ITEMS, (event.target as HTMLInputElement).value);
+  if (item) void addCargo(at, item);
 }
 async function removeCargo(at: number, item: string) {
   const entry = draft.value[at]!;
@@ -402,6 +409,7 @@ function typed() {
                 :key="entry.search"
                 class="cargo-add"
                 data-cargo-add
+                @keydown.enter="cargoEnter(i, $event)"
               >
                 <ItemSearch
                   :items="CARGO_ITEMS"

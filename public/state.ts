@@ -98,13 +98,11 @@ export {
   MAP_MARKER_TYPES,
   MAP_WORLD_LIMIT,
   OUTPOST_NODE_MAX,
-  STATION_OWNER_KINDS,
   TRAIN_CARGO_MAX,
   TRAIN_PLATFORM_KINDS,
   TRAIN_PLATFORM_MAX,
   TRAIN_STATION_MAX,
   TRAIN_STATION_NAME_MAX,
-  trainStationId,
   mapMarkerId,
   mappingFits,
   mergeAmplifiedUnlocks,
@@ -116,7 +114,6 @@ export {
   tickRecord,
   validateState,
   validateTickedBy,
-  validateTrainStations,
 } from './state/validate.ts';
 export { checkBase, mutate, noteConflict, staleWrite } from './state/mutate.ts';
 export {

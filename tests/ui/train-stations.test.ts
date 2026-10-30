@@ -320,3 +320,48 @@ test('a station without an owner, or of storage, says so', async () => {
     'No platforms yet',
   );
 });
+
+test('Enter in the cargo field adds the item it names and never saves the station', async () => {
+  await showLogistics({ version: 29, trainStations: [MINE] } as Partial<ProgressState>);
+  $<HTMLButtonElement>(`[data-station-edit="${MINE.id}"]`)!.click();
+  await settle();
+  const cargo = () => inRow<HTMLInputElement>(1, '[data-cargo-add] input');
+  const enter = () => {
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    cargo().dispatchEvent(event);
+    return event;
+  };
+  // Not an item: nothing is added and the form is not submitted.
+  type(cargo(), 'Unobtainium');
+  assert.equal(enter().defaultPrevented, true);
+  await settle();
+  // The exact name of an item, with no suggestion list open: added.
+  type(cargo(), 'coal');
+  assert.equal(enter().defaultPrevented, true);
+  await settle();
+  assert.deepEqual(
+    $$('[data-cargo]').map(item => item.dataset.cargo),
+    ['Iron Ore', 'Coal'],
+  );
+  assert.equal(document.activeElement, cargo());
+  assert.deepEqual(sent, [], 'nothing is saved before Save');
+  // Up to eight items; with the eighth the field goes and focus is on its ×.
+  for (const item of [
+    'Limestone',
+    'Copper Ore',
+    'Caterium Ore',
+    'Raw Quartz',
+    'Sulfur',
+    'Bauxite',
+  ]) {
+    type(cargo(), item);
+    enter();
+    await settle();
+  }
+  assert.equal($$('[data-cargo]').length, 8);
+  assert.equal(rows()[1]!.querySelector('[data-cargo-add]'), null);
+  assert.equal(
+    document.activeElement!.getAttribute('aria-label'),
+    'Remove Bauxite from platform 2',
+  );
+});
