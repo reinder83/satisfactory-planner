@@ -19,6 +19,7 @@ Most calculators stop at the numbers. This one keeps going: which milestone to u
 - **Knows what to bring.** Each step says what it takes to build (buildings, belts and the parts they cost), and **Today's session** lists your next few builds, printable, with a note that fits the game's To-Do list.
 - **Whole machines.** Solid-part lines run at 100% by default, with the surplus listed and what that costs against exact clocks; any single line can be set to exact clocks, and fluids and power stay precisely balanced.
 - **Storage map.** Every item gets a container address in a storage room you can rearrange.
+- **World map.** The whole map of the game, with markers for your nodes, landmarks and notes and your factories where they stand.
 - **Yours to edit.** Reorder and rewrite steps, sort production lines into factories at your own sites, add notes and personal tasks.
 - **Progress you keep.** Several saves, several profiles per save, each with its own progress. Updates never change an existing plan behind your back.
 - **ADA.** A sarcastic assistant who reads your plan and tells you what is actually next.

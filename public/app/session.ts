@@ -4,7 +4,14 @@
 import { readStoredData } from '../browser-store.ts';
 import { firstPlanPhase, milestoneOnlyPhase } from '../progression.ts';
 import { initialState } from '../state.ts';
-import { downloadJson, dropToastAction, request, toast, writeQueue } from './api.ts';
+import {
+  downloadJson,
+  dropToastAction,
+  loadProgression,
+  request,
+  toast,
+  writeQueue,
+} from './api.ts';
 import { required } from './format.ts';
 import { phaseToOpen } from './opening-phase.ts';
 import { render } from './shell.ts';
@@ -651,7 +658,7 @@ export async function boot() {
       showSignedOut(required('#app'));
       return;
     }
-    progressionData = await request<Progression>('/progression.json');
+    progressionData = await loadProgression();
     // Open the save and profile this tab had open (#1052), else the workspace's active save at
     // its active profile, then honour a deep link.
     const own = tabOpened(workspace);

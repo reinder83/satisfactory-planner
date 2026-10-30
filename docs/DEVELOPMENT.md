@@ -27,6 +27,8 @@ Server options: `HOST`, `PORT`, `DATA_DIR`, optional `APP_USER`/`APP_PASSWORD`, 
 
 The frontend lives in `public/`: `app.ts` is the entry point and `public/app/` holds the UI modules (the Vue components under `ui/`, the data behind the pages under `views/`, the profile wizard under `wizard/`). The release build bundles `public/app/` into a single minified `app.js` and minifies the other scripts and the stylesheet file by file. The Docker image runs that build in its first stage and serves `dist/web`; the Pages workflow publishes `dist/satisfactory-planner`. The server-side modules in the image (`server.ts`, `planner.ts`, …) are not minified.
 
+Both editions' `index.html` preload `app.js` and every script it imports (`modulepreload` links, written by `build.ts`), so the first load does not wait for one level of imports after another.
+
 `npm run build -- pages` creates an allowlisted, minified static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it.
 
 To build and run the Docker image from your checkout:

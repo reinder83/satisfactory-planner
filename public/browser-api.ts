@@ -709,6 +709,23 @@ export function workerJobs(
       ),
   };
 }
+// progression.json, for the summary's step counts (#746) and for the interface, which reads it at
+// boot. Fetched once per page load and shared: the interface used to fetch it a second time
+// itself, with its own request. A failed load is forgotten, so the next call tries again.
+let progressionLoad: Promise<Progression> | undefined;
+export function loadBrowserProgression(): Promise<Progression> {
+  if (!progressionLoad) {
+    const loading = (progressionLoad = (async () => {
+      const response = await fetch(new URL('./progression.json', import.meta.url));
+      if (!response.ok) throw Error('Could not load the milestone data.');
+      return (await response.json()) as Progression;
+    })());
+    loading.catch(() => {
+      if (progressionLoad === loading) progressionLoad = undefined;
+    });
+  }
+  return progressionLoad;
+}
 // Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
 // wrapper, the catalog and progression.json. If that fails (no IndexedDB, the catalog or
 // progression.json did not load), the calls already waiting fail with that error and the next
@@ -726,11 +743,8 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
       const catalog = (await response.json()) as Catalog;
-      // progression.json, for the summary's step counts (#746). The interface loads it at boot
-      // too, and cannot start without it.
-      const steps = await fetch(new URL('./progression.json', import.meta.url));
-      if (!steps.ok) throw Error('Could not load the milestone data.');
-      const progression = (await steps.json()) as Progression;
+      // progression.json, for the summary's step counts (#746); the interface shares the load.
+      const progression = await loadBrowserProgression();
       // The handbook migration's recipes (#497), fetched only when the record or an import (#605)
       // holds an original profile. A failed fetch fails that request and changes nothing; the
       // next one tries again.

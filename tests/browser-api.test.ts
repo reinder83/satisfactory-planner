@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {
   browserRequest,
   createBrowserApi,
+  loadBrowserProgression,
   workerCalculator,
   type CalculatorWorker,
 } from '../public/browser-api.ts';
@@ -268,6 +269,35 @@ test('a failed progression.json load is not cached either', async () => {
   }
 });
 
+// The interface shares the browser API's load of progression.json instead of fetching it a
+// second time (the Pages edition requested it twice on first load): calls made together get one
+// fetch, and a failed load is forgotten so the next call asks again. That the shared load is kept
+// after it succeeds is checked at the end of the last test of this file, which leaves it cached
+// like the API, so this one only fails the load.
+test('progression.json is fetched once for calls made together, and again after a failure', async () => {
+  const saved = { fetch: globalThis.fetch };
+  const requested: string[] = [];
+  Object.assign(globalThis, {
+    fetch: async (url: URL) => {
+      requested.push(url.pathname.split('/').pop()!);
+      return new Response('', { status: 503 });
+    },
+  });
+  try {
+    const [first, second] = await Promise.allSettled([
+      loadBrowserProgression(),
+      loadBrowserProgression(),
+    ]);
+    assert.equal(first.status, 'rejected');
+    assert.equal(second.status, 'rejected');
+    assert.deepEqual(requested, ['progression.json'], 'two calls at once, one request');
+    await assert.rejects(loadBrowserProgression(), /milestone data/);
+    assert.deepEqual(requested, ['progression.json', 'progression.json'], 'asked again');
+  } finally {
+    Object.assign(globalThis, saved);
+  }
+});
+
 // A stand-in worker that records what it is sent; the test answers for it with reply().
 function fakeWorkers() {
   interface Spawned {
@@ -499,6 +529,9 @@ test('the Pages edition opens an upgraded browser with its original profile migr
   });
   try {
     const summary = (await browserRequest('/api/workspace')) as WorkspaceSummary;
+    assert.deepEqual(fetched, ['catalog.json', 'progression.json', 'recipes.json']);
+    // The interface asks for the same file at boot (loadProgression in app/api.ts): no new fetch.
+    await loadBrowserProgression();
     assert.deepEqual(fetched, ['catalog.json', 'progression.json', 'recipes.json']);
     const listed = summary.saves[0]!.profiles[0]!;
     // The summary counts each phase's steps from progression.json (#746), up to the phase
