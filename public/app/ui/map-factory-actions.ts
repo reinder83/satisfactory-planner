@@ -25,7 +25,7 @@ export async function saveFactoryPlace(id: string, place: FactoryPlace): Promise
 }
 
 // The map's own focusable element for factory `id`.
-export const mapFactoryLink = (id: string) =>
+const mapFactoryLink = (id: string) =>
   document.querySelector<HTMLElement>(`#main [data-map-factory="${CSS.escape(id)}"]`);
 
 // Focuses factory `id` on the map once the page has drawn it.

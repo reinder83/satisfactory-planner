@@ -62,7 +62,7 @@ export interface LaneNeighbours {
   overlapping: Map<string, Set<string>>;
 }
 export type LaneFlow = Pick<GroupFlow, 'lines' | 'lanes'>;
-export function laneNeighbours(flow: LaneFlow): LaneNeighbours {
+function laneNeighbours(flow: LaneFlow): LaneNeighbours {
   const slot = rowSlots(flow.lines);
   const spans = flow.lanes.flatMap(lane => {
     const ends = [lane.from, ...lane.to].flatMap(id => slot.get(id) ?? []);

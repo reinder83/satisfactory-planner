@@ -24,7 +24,7 @@ import type { GroupLayout } from '../../../types/index.ts';
 export const LAYOUT_SAVE_DELAY = 600;
 
 // The stored layout of factory group `groupId`, if it has one.
-export const storedGroupLayout = (groupId: string): GroupLayout | undefined =>
+const storedGroupLayout = (groupId: string): GroupLayout | undefined =>
   factoryGroupsState().groups.find(group => group.id === groupId)?.layout;
 
 // `view` gives the view on screen (null while the graph is not drawn).

@@ -59,7 +59,7 @@ export function leftOutWords(survey: MiningSettings['extraction']): string {
   );
 }
 // How many nodes and well satellites a node survey leaves out of the plan (#1183), in all.
-export const leftOutTotal = (survey: MiningSettings['extraction']): number =>
+const leftOutTotal = (survey: MiningSettings['extraction']): number =>
   leftOutCounts(survey).reduce((sum, [, , count]) => sum + count, 0);
 // "3 resource nodes left out", "1 resource node left out": the short note the sidebar footer and
 // a profile card give a plan whose node survey leaves nodes out (#1183); '' when it leaves none.
@@ -76,7 +76,7 @@ export const minerWords = ({ mark, clock }: { mark: number; clock: number }): st
 // carries what the miner gives at the phase's clock (a low belt cap: Miner Mk.3 at 250% on Mk.2
 // belts), when it names the highest clock any of its nodes runs at: "Miner Mk.3 at up to 100%
 // (what a Mk.2 belt carries)". The planner's nodes already run at those clocks (sourceClock).
-export function stageMinerWords(mining: StageMining): string {
+function stageMinerWords(mining: StageMining): string {
   const clock = mining.miner.clock;
   const clocks = Object.entries(mining.sources)
     .filter(([resource]) => !MINED_FLUIDS.includes(resource))
@@ -191,7 +191,7 @@ function clockRunWords(runs: MiningRun[], fluid: boolean): string {
 // One way to tap a draw, in words, without the resource's name: "6 pure and 7 normal nodes with
 // Miner Mk.2: 12 at 100% and 1 at 41.67%" and, for a resource well, "4 well satellites (2 pure, 2
 // normal) on about 1 Resource Well Pressurizer at 85%", with the Power Shards and MW.
-export function adviceWords(advice: MiningAdvice, fluid: boolean): string {
+function adviceWords(advice: MiningAdvice, fluid: boolean): string {
   const nodeRuns = advice.runs.filter(run => !isWellKind(run.kind)),
     wellRuns = advice.runs.filter(run => isWellKind(run.kind));
   const parts: string[] = [];
@@ -536,7 +536,7 @@ export function overclockSaving(
 }
 // What a stage stored at 100% says it was calculated with (#1137, #1169), or '' (overclockSaving):
 // recalculated now, its nodes are planned overclocked after the Power Shards research.
-export function overclockAdviceWords(saving: { now: number; overclocked: number } | null): string {
+function overclockAdviceWords(saving: { now: number; overclocked: number } | null): string {
   if (!saving) return '';
   const saved = saving.now - saving.overclocked;
   return `This plan was calculated with these miners and extractors at 100%. Plans calculated now run them overclocked, up to what their belts and pipes carry, after researching Power Shards in the MAM (Blue Power Slugs, then Overclock Production): the same draw takes ${miningNumber(saving.overclocked)} machines instead of ${miningNumber(saving.now)}, ${miningNumber(saved)} fewer. To plan it that way, Edit settings and recalculate in place.`;

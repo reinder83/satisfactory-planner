@@ -83,7 +83,7 @@ type Metric = {
   dust: number;
 };
 const perMinute = (unit: string) => (value: number) => `${num(value)}${unit}`;
-export const METRICS: Metric[] = [
+const METRICS: Metric[] = [
   { heading: 'Buildings', value: p => p.buildings, text: num, delta: num, dust: 0.005 },
   {
     heading: 'Buildings to add',
@@ -198,7 +198,7 @@ function phaseRow(profile: ComparedProfile, base: ComparedProfile, phase: StageK
 
 // The estimated building time of a phase in hours: its buildings to add times `minutes` each.
 // 0 at 0 minutes; null when the phase's buildings to add are unknown.
-export function buildHoursOf(entry: ComparedPhase, minutes: number): number | null {
+function buildHoursOf(entry: ComparedPhase, minutes: number): number | null {
   if (minutes <= 0) return 0;
   return entry.newBuildings == null ? null : (entry.newBuildings * minutes) / 60;
 }

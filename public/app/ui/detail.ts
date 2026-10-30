@@ -100,7 +100,7 @@ function returnFocus(dialog: HTMLDialogElement) {
   if (lost && back?.isConnected) back.focus();
 }
 
-export function unmountDetail() {
+function unmountDetail() {
   app?.unmount();
   app = null;
 }

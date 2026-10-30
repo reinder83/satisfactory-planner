@@ -9,8 +9,7 @@ import { factoryGroupsState } from './views/factories.ts';
 import { stageBudgets } from '../mining.ts';
 
 // The tab's name in Satisfactory Tools, and the file's: "Iron & steel, Phase 3".
-export const sftTabName = (groupName: string, phaseKey: string) =>
-  `${groupName}, ${phaseLabel(phaseKey)}`;
+const sftTabName = (groupName: string, phaseKey: string) => `${groupName}, ${phaseLabel(phaseKey)}`;
 
 // Writes the .sft file of factory group `groupId` in the phase shown, and says what to do with it.
 export async function exportGroupToSft(groupId: string): Promise<void> {

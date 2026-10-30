@@ -36,7 +36,7 @@ import { buildOrder, stagePower, stageRows, stageSurplus } from './stage.ts';
 
 // The id suffix of a storage-only line: '<recipe>:stock' (safeKey allows ':', as for a group's
 // own line, '<recipe>:<group>'; group ids start with 'fg-', so they cannot clash).
-export const STOCK_SUFFIX = ':stock';
+const STOCK_SUFFIX = ':stock';
 // What filling a container completely is worth against the machines its lines cost: far more, so
 // storage is filled whenever the budgets and the spare power allow.
 const FILL_WORTH = 1000;

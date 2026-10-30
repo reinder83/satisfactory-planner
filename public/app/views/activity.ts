@@ -7,7 +7,7 @@ import { activityEntries, type ActivityEntry, type LoggedStep } from '../activit
 import { currentSave, phaseOptions, state } from '../session.ts';
 import { planTasks } from '../tasks.ts';
 
-export function loggedSteps(): LoggedStep[] {
+function loggedSteps(): LoggedStep[] {
   if (!currentSave?.id || !state) return [];
   return phaseOptions().flatMap(phase =>
     planTasks(phase).map(step => ({ id: step.id, title: step.title, phase })),

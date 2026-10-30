@@ -28,7 +28,7 @@ import type { TickRecord, UpdateOp } from '../types/index.ts';
 import type { ConfirmOptions } from './ui/confirm.ts';
 
 export const TICKS_FORMAT = 'satisfactory-planner-ticks';
-export const TICKS_VERSION = 1;
+const TICKS_VERSION = 1;
 // The progress backup's format (GET /api/export in both editions).
 const BACKUP_FORMAT = 'satisfactory-planner-backup';
 // As many ids as a state may hold checks (validateState).
@@ -240,7 +240,7 @@ export function mergePreview(
 const counted = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 // Who and when, as the file says: "Anna's base / Anna, exported 14/10/2026, 14:05:00".
-export function sourceWords(source: ProgressSource, date = localDate): string {
+function sourceWords(source: ProgressSource, date = localDate): string {
   const who = [source.saveName, source.profileName].filter(Boolean).join(' / ');
   const when = date(source.exportedAt);
   const kind =

@@ -82,7 +82,7 @@ export const BUILT = 'built:';
 // Folds each built line's machines into its recipe's variable, so the stage has one row per line
 // (built and added machines together) and the stage reads exactly as one solved without them.
 // Run once the solution is checked against its model, whose constraints count both variables.
-export function foldBuilt(solved: Solution) {
+function foldBuilt(solved: Solution) {
   for (const [name, value] of Object.entries(solved.values)) {
     if (!name.startsWith(BUILT)) continue;
     const id = name.slice(BUILT.length);

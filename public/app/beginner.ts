@@ -38,7 +38,7 @@ export function setBeginnerMode(value: boolean) {
 
 // Called once at startup and on every change. A page without a root element (the tests' bare
 // documents) is left alone.
-export function markPage() {
+function markPage() {
   if (typeof document !== 'undefined')
     document.documentElement?.toggleAttribute?.('data-beginner', beginner);
 }

@@ -29,7 +29,7 @@ export type LinkCarrier =
   { kind: 'extract' } | { kind: 'vehicle'; transport: LinkTransport } | { kind: 'belt' };
 // The raw resources extractors pump wherever the line using them is: Water Extractors work on
 // any body of water, unlike a node or a resource well.
-export const EXTRACTED_ON_SITE: ReadonlySet<string> = new Set(['Water']);
+const EXTRACTED_ON_SITE: ReadonlySet<string> = new Set(['Water']);
 export function linkCarrier(links: FactoryGroups['links'], from: string, to: string): LinkCarrier {
   if (isSource(from) && EXTRACTED_ON_SITE.has(sourceItem(from))) return { kind: 'extract' };
   const transport = linkTransportFor(links, from, to);
@@ -58,7 +58,7 @@ export const VEHICLES: Record<LinkMode, { name: string; slots: number; burnMW: n
   drone: { name: 'Drone', slots: 9, burnMW: 0 },
 };
 // What one Fluid Freight Car holds, in m³.
-export const FLUID_CAR_M3 = 1600;
+const FLUID_CAR_M3 = 1600;
 // What one Fluid Truck's tank holds, in m³ (#1177): a tank takes one fluid, so each fluid of a
 // link has trucks of its own.
 export const FLUID_TRUCK_M3 = 3200;
@@ -80,10 +80,10 @@ export const fluidTruckLoads = (rate: number): number => rate / FLUID_TRUCK_M3;
 // Freight cars per Electric Locomotive (#232): the owner's rule of thumb of one locomotive per
 // four cars. The wiki's Freight Car weight table has one locomotive pulling 5 fully loaded cars
 // up the steepest buildable incline (2 m ramps) and 13 up 1 m ramps, so four leaves a margin.
-export const CARS_PER_LOCOMOTIVE = 4;
+const CARS_PER_LOCOMOTIVE = 4;
 // The belt or pipe ports of one Freight Platform or Fluid Freight Platform (#1067): a car is
 // loaded and unloaded through both, so it moves at most two belts (or pipes) of a flow.
-export const PLATFORM_PORTS = 2;
+const PLATFORM_PORTS = 2;
 // The choices a link offers, in menu order; 'belt' is the default belt or pipe.
 // The Fluid Truck is offered only on a link that carries a fluid (linkModeOptions).
 export const LINK_MODES: ['belt' | LinkMode, string][] = [
