@@ -52,6 +52,7 @@ import {
   validateTaskEdits,
   validateTickedBy,
   validateFactoryPlaces,
+  validateTrainStations,
   validateMapLayers,
   validateMapMarkers,
 } from './validate.ts';
@@ -91,7 +92,7 @@ export const carryOptions: [key: string, label: string, description: string][] =
   [
     'planEdits',
     'Build-plan edits and factories',
-    'Renamed, reordered and removed steps, plus your factories, their names and their places on the world map.',
+    'Renamed, reordered and removed steps, plus your factories, their names, their places on the world map and your train stations.',
   ],
   [
     'factories',
@@ -263,6 +264,9 @@ export function newProfileState(
     state.factoryGroups = mergeGroups(state.factoryGroups, source.factoryGroups, plan);
     // Where the factories stand on the world map (#1283) goes with the factories it carries.
     keepFactoryPlaces(state, source);
+    // So do the train stations (#1284): a station of a factory the new profile does not have
+    // keeps everything but its owner.
+    keepStations(state, source);
   }
   // Production lines (carryLines): ticks that stay, grown and shrunk lines that keep their built
   // machines, and the rest unticked for review; then the built lines the new plan no longer has
@@ -886,7 +890,10 @@ const askedKey = (
 // the carry choices.
 function keepMap(
   state: ProgressState,
-  previous: Pick<SavedState, 'mapMarkers' | 'mapLayers' | 'factoryPlaces' | 'factoryGroups'>,
+  previous: Pick<
+    SavedState,
+    'mapMarkers' | 'mapLayers' | 'factoryPlaces' | 'factoryGroups' | 'trainStations'
+  >,
 ) {
   const markers = validateMapMarkers(previous.mapMarkers);
   if (markers) state.mapMarkers = markers;
@@ -895,6 +902,15 @@ function keepMap(
   if (layers) state.mapLayers = layers;
   else delete state.mapLayers;
   keepFactoryPlaces(state, previous);
+  // The train stations (#1284) stand in the same world too.
+  keepStations(state, previous);
+}
+// `source`'s train stations (#1284) on `state`, read against `state`'s own factories: a station
+// whose factory `state` does not have keeps its name and platforms and loses only its owner.
+function keepStations(state: ProgressState, source: Pick<SavedState, 'trainStations'>) {
+  const stations = validateTrainStations(source.trainStations, state.factoryGroups.groups);
+  if (stations) state.trainStations = stations;
+  else delete state.trainStations;
 }
 // The places on the world map (#1283) of `source`'s factories that `state` has too, by factory
 // group id: a factory the state does not have (not carried, or left out of a new plan's factories)

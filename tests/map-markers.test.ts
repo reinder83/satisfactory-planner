@@ -173,7 +173,7 @@ test('the fields are checked: bounded counts and lengths, known types and finite
     );
   // A newer planner's state is refused with the update message, never stripped.
   assert.throws(
-    () => validateState({ ...json(version27), version: 29 }),
+    () => validateState({ ...json(version27), version: 30 }),
     /newer planner version\. Update the app/,
   );
 });

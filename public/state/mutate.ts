@@ -20,6 +20,10 @@ import {
   type Raw,
   cleanFactoryPlace,
   cleanMapMarker,
+  cleanTrainStation,
+  TRAIN_STATION_MAX,
+  trainStationId,
+  validateTrainStations,
   mapMarkerId,
   validateFactoryPlaces,
   validateMapLayers,
@@ -263,6 +267,38 @@ function setMapFactory(state: SavedState, update: Raw) {
   }
   state.factoryPlaces = places;
 }
+// One train station (#1284, slice 1): a station whose id no station has is added after the
+// others, one that exists is replaced where it is by what is sent (its name, owner and platforms
+// in order), and null removes it (a station already gone stays gone). The station is checked
+// whole: any malformed part refuses the write, and a factory owner must be a factory of the
+// profile. One station per write, so two tabs editing different stations never undo each other.
+function setTrainStation(state: SavedState, update: Raw) {
+  if (!trainStationId(update.id) || (update.value !== null && !plain(update.value)))
+    fail('Invalid train station.');
+  const groups = validateGroups(state.factoryGroups).groups;
+  const stations = validateTrainStations(state.trainStations, groups) ?? [];
+  const at = stations.findIndex(station => station.id === update.id);
+  if (update.value === null) {
+    if (at >= 0) stations.splice(at, 1);
+  } else {
+    const owner = update.value.owner;
+    if (plain(owner) && owner.kind === 'factory' && !groups.some(group => group.id === owner.id))
+      fail('Unknown factory.');
+    const factories = new Set(groups.map(group => group.id));
+    const station = cleanTrainStation(
+      { ...update.value, id: update.id },
+      { factories, strict: true },
+    );
+    if (!station) fail('Invalid train station.');
+    if (at < 0 && stations.length >= TRAIN_STATION_MAX)
+      fail(
+        `A profile holds at most ${TRAIN_STATION_MAX} train stations. Delete one to add another.`,
+      );
+    if (at < 0) stations.push(station);
+    else stations[at] = station;
+  }
+  state.trainStations = stations;
+}
 const recordEdits: Record<string, StateEdit> = {
   exactClocks: setExactClocks,
   sloopPins: setSloopPins,
@@ -270,6 +306,7 @@ const recordEdits: Record<string, StateEdit> = {
   mapMarker: setMapMarker,
   mapLayer: setMapLayer,
   mapFactory: setMapFactory,
+  trainStation: setTrainStation,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,

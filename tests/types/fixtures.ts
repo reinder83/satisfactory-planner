@@ -428,6 +428,43 @@ export const version28 = {
   },
 } satisfies SavedState;
 
+// Version 29: train stations and their platforms (#1284, slice 1), on top of version 28: one of
+// each owner (the Plates factory, a mining outpost, storage, and one with no owner) and every
+// kind of platform, mixed cargo and a platform without a belt picked among them. Synthetic.
+export const version29 = {
+  ...version28,
+  version: 29,
+  trainStations: [
+    {
+      id: 'ts-iron01',
+      name: 'Iron mine',
+      owner: { kind: 'outpost', resource: 'Iron Ore', nodes: { pure: 3, normal: 1 } },
+      platforms: [
+        { kind: 'empty' },
+        { kind: 'load', cargo: ['Iron Ore'], belt: 4 },
+        { kind: 'load', cargo: ['Iron Ore'], belt: 4 },
+      ],
+    },
+    {
+      id: 'ts-plates2',
+      name: 'Plates drop-off',
+      owner: { kind: 'factory', id: 'fg-plates1' },
+      platforms: [
+        { kind: 'unload', belt: 4 },
+        { kind: 'unload', belt: 4 },
+        { kind: 'load', cargo: ['Iron Plate', 'Iron Rod'], belt: 3 },
+      ],
+    },
+    {
+      id: 'ts-store03',
+      name: 'Overflow storage',
+      owner: { kind: 'storage' },
+      platforms: [{ kind: 'unload' }],
+    },
+    { id: 'ts-spare04', name: 'Spare siding', platforms: [] },
+  ],
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -459,6 +496,7 @@ export const states: [SavedState, number][] = [
   [version26, 26],
   [version27, 27],
   [version28, 28],
+  [version29, 29],
 ];
 
 export const backup = {
