@@ -2493,26 +2493,30 @@ p.eyebrow {
   margin-left: 4px;
 }
 /* The build plan's tabs (#1243, CalculatedPlanPage.vue, ui/plan/plan-tabs.ts): .tabs as a WAI-ARIA
-   tab list under the phase title. A tab's count (the notices in it that ask for something) takes
+   tab list under the phase title; the Logistics page's tabs (#1295, LogisticsPage.vue) look the same. A tab's count (the notices in it that ask for something) takes
    the accent. On a phone the tabs wrap two to a row, each growing to fill it, so the page
    never scrolls sideways. A panel takes focus from the tab list (Tab) with the ring a control shows. */
-.plan-tabs {
+.plan-tabs,
+.logistics-tabs {
   width: fit-content;
   max-width: 100%;
   margin: 0 0 20px;
 }
-.plan-tabs .tab {
+.plan-tabs .tab,
+.logistics-tabs .tab {
   white-space: nowrap;
 }
 .plan-tabs .count {
   color: var(--accent);
 }
-[data-plan-panel]:focus-visible {
+[data-plan-panel]:focus-visible,
+[data-logistics-panel]:focus-visible {
   outline: 2px solid var(--accent-hi);
   outline-offset: 4px;
 }
 @media (max-width: 720px) {
-  .plan-tabs .tab {
+  .plan-tabs .tab,
+  .logistics-tabs .tab {
     flex: 1 1 40%;
     padding: 10px 12px;
   }
