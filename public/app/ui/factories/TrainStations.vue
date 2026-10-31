@@ -3,13 +3,16 @@
   a card with its name, who it belongs to (a factory, a mining outpost or storage) and its
   platforms in order, and "Edit station ↗", which opens its editor (ui/detail/StationDialog.vue);
   "+ Add train station" opens the editor for a new one. Stations are not tied to a phase, so the
-  section shows in every phase. The trains and lines that run between them come in later slices.
+  section shows in every phase. A mining outpost's card also says when its loading platforms or
+  the trains that load there take less than its extractors give (outpostChecks in
+  app/train-lines.ts, #1284 slice 3).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { TRAIN_STATION_MAX } from '../../../state.ts';
 import { state } from '../../session.ts';
 import { ownerText, platformCounts, platformText } from '../../train-stations.ts';
+import { trainsView } from '../../views/trains.ts';
 import { showDetail } from '../detail.ts';
 import { legacy } from '../bridge.ts';
 
@@ -17,6 +20,7 @@ const view = computed(() =>
   legacy(() => {
     const groups = state.factoryGroups?.groups ?? [];
     const stations = state.trainStations ?? [];
+    const { outposts } = trainsView();
     return {
       full: stations.length >= TRAIN_STATION_MAX,
       cards: stations.map(station => ({
@@ -25,6 +29,7 @@ const view = computed(() =>
         owner: ownerText(station.owner, groups),
         count: platformCounts(station.platforms),
         platforms: station.platforms.map(platformText),
+        checks: outposts[station.id] ?? [],
       })),
     };
   }),
@@ -56,6 +61,16 @@ const open = (id: string) => showDetail({ kind: 'station', id });
         <ol v-if="card.platforms.length" class="station-platform-list" data-station-platforms>
           <li v-for="(platform, i) in card.platforms" :key="i">{{ platform }}</li>
         </ol>
+        <ul
+          v-if="card.checks.length"
+          class="notice warn line-check-list"
+          :aria-label="`Checks: ${card.name}`"
+          data-station-checks
+        >
+          <li v-for="check in card.checks" :key="check.key" :data-station-check="check.key">
+            {{ check.text }}
+          </li>
+        </ul>
         <button
           type="button"
           class="btn"

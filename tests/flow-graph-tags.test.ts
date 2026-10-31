@@ -429,7 +429,7 @@ test('every released state loads unchanged with the switch off; version 23 only 
   // message, as a release before this one refuses a version-23 state.
   assert.equal(validateState({ ...json(version23), version: 3 }).version, 23);
   assert.throws(
-    () => validateState({ ...json(version23), version: 30 }),
+    () => validateState({ ...json(version23), version: 31 }),
     /newer planner version\. Update the app to import it\./,
   );
 });

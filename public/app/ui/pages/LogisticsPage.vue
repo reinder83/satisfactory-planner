@@ -32,6 +32,7 @@ import {
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import GroupLinks from '../factories/GroupLinks.vue';
+import TrainLines from '../factories/TrainLines.vue';
 import TrainStations from '../factories/TrainStations.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
@@ -126,6 +127,7 @@ const subtitle = computed(() => {
     </div>
     <div v-bind="panelAttrs('trains')" data-logistics-panel="trains">
       <TrainStations />
+      <TrainLines />
     </div>
   </template>
 </template>

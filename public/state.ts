@@ -50,7 +50,14 @@
 //                  placed; the mapFactory update places, moves or takes off one
 //   trainStations  [{ id: 'ts-…', name, owner?, platforms }] train stations and their platforms in
 //                  order (validateTrainStations, #1284), version 29; absent when there are
-//                  none; the trainStation update adds, replaces or removes one
+//                  none; the trainStation update adds, replaces or removes one; version 30
+//                  adds `place` (on the world map), a platform's `pipe` and outposts on oil
+//                  and resource wells (`wells`)
+//   trainLines     [{ id: 'tl-…', name, cars, stops, direction, roundTrip? }] train lines and
+//                  their trains (validateTrainLines in state/trains.ts, #1284), version 30;
+//                  absent when there are none; the trainLine update adds, replaces or removes one
+//   trainLayout    { stations?, zoom?, pan? } how the network diagram is drawn
+//                  (validateTrainLayout, #1284), version 30; the trainLayout update sets it
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -97,12 +104,6 @@ export {
   MAP_MARKER_NAME_MAX,
   MAP_MARKER_TYPES,
   MAP_WORLD_LIMIT,
-  OUTPOST_NODE_MAX,
-  TRAIN_CARGO_MAX,
-  TRAIN_PLATFORM_KINDS,
-  TRAIN_PLATFORM_MAX,
-  TRAIN_STATION_MAX,
-  TRAIN_STATION_NAME_MAX,
   mapMarkerId,
   mappingFits,
   mergeAmplifiedUnlocks,
@@ -115,6 +116,23 @@ export {
   validateState,
   validateTickedBy,
 } from './state/validate.ts';
+export {
+  OUTPOST_NODE_MAX,
+  outpostResourceList,
+  ROUND_TRIP_MAX,
+  roundTripOf,
+  TRAIN_CAR_MAX,
+  TRAIN_CARGO_MAX,
+  TRAIN_DIRECTIONS,
+  TRAIN_LINE_MAX,
+  TRAIN_LINE_NAME_MAX,
+  TRAIN_PLATFORM_KINDS,
+  TRAIN_PLATFORM_MAX,
+  TRAIN_STATION_MAX,
+  TRAIN_STATION_NAME_MAX,
+  TRAIN_STOP_MAX,
+  wellsOnly,
+} from './state/trains.ts';
 export { checkBase, mutate, noteConflict, staleWrite } from './state/mutate.ts';
 export {
   alreadyWholeMachines,

@@ -52,7 +52,7 @@ import type {
   WorkspaceSummary,
 } from '../public/types/index.ts';
 
-const CARGO_ITEMS = cargoItems(new Set(['Water', 'Crude Oil']));
+const CARGO_ITEMS = cargoItems();
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const MINE: TrainStation = {
   id: 'ts-mine01',
@@ -96,7 +96,7 @@ test('train stations are state version 29; every released format loads unchanged
   }
   // A newer planner's state is refused with the update message, never stripped.
   assert.throws(
-    () => validateState({ ...json(version29), version: 30 }),
+    () => validateState({ ...json(version29), version: 31 }),
     /newer planner version\. Update the app/,
   );
 });
@@ -136,7 +136,7 @@ test('a malformed station or part is left out and the rest is kept', () => {
       ],
     },
     { ...DROP, owner: { kind: 'factory', id: 'fg-gone01' } },
-    { ...DROP, id: 'ts-drop03', owner: { kind: 'outpost', resource: 'Water' } },
+    { ...DROP, id: 'ts-drop03', owner: { kind: 'outpost', resource: 'Unobtainium' } },
     { ...DROP, id: 'ts-drop04', owner: { kind: 'outpost', resource: 'Coal', nodes: 'many' } },
     { ...DROP, id: 'ts-drop05', owner: 'storage', platforms: 'four' },
   ]);
@@ -225,7 +225,8 @@ test('the update adds, replaces and removes one station; a removed factory leave
     bad({ name: 'A', platforms: 'none' }),
     bad({ name: 'A', platforms: Array(TRAIN_PLATFORM_MAX + 1).fill({ kind: 'empty' }) }),
     bad({ name: 'A', owner: { kind: 'outpost', resource: 'Iron Ore', nodes: { pure: 100 } } }),
-    bad({ name: 'A', owner: { kind: 'outpost', resource: 'Water', nodes: {} } }),
+    bad({ name: 'A', owner: { kind: 'outpost', resource: 'Unobtainium', nodes: {} } }),
+    bad({ name: 'A', owner: { kind: 'outpost', resource: 'Iron Ore', nodes: {}, wells: true } }),
     bad({ name: 'A', owner: { kind: 'shop' }, platforms: [] }),
     { type: 'trainStation', id: 'ts-new01' } as UpdateOp,
   ])
@@ -292,7 +293,7 @@ test('the station words: owners, platforms, counts and a new name', () => {
   assert.equal(newStationName([{ name: 'Station 2' }]), 'Station 3');
   assert.equal(newStationName([{ name: 'Station 2' }, { name: 'Station 3' }]), 'Station 4');
   assert.match(newStationId(), /^ts-[a-z0-9]{10}$/);
-  assert.equal(CARGO_ITEMS.includes('Water'), false, 'fluids go by pipe, not on a belt');
+  assert.equal(CARGO_ITEMS.includes('Water'), true, 'a fluid freight wagon carries fluids');
   assert.equal(CARGO_ITEMS.includes('Iron Ore'), true);
   // The editor's list operations never change their input.
   const list = ['a', 'b', 'c'];

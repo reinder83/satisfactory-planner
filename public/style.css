@@ -2053,6 +2053,104 @@ p.eyebrow {
   gap: 8px 12px;
   margin: 12px 0 0;
 }
+/* Train lines on the Logistics page (#1284, ui/factories/TrainLines.vue): a card per line in its
+   colour (the same in the network diagram and on the map: .line-color-0 to -5, by the line's place
+   in the list, from the palette's own tokens), its checks as a warn list and its wagons as a table. */
+.train-lines {
+  margin-top: 18px;
+}
+.line-color-0 {
+  --line-color: var(--accent);
+}
+.line-color-1 {
+  --line-color: var(--blue);
+}
+.line-color-2 {
+  --line-color: var(--green);
+}
+.line-color-3 {
+  --line-color: var(--gold);
+}
+.line-color-4 {
+  --line-color: var(--red);
+}
+.line-color-5 {
+  --line-color: var(--ink);
+}
+.line-cards {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+.line-card {
+  border-left: 3px solid var(--line-color);
+}
+.line-card h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.line-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--line-color);
+  align-self: center;
+}
+.line-card p {
+  margin: 2px 0 6px;
+  overflow-wrap: anywhere;
+}
+.line-checks-ok {
+  color: var(--green);
+}
+.line-check-list {
+  margin: 8px 0;
+  padding-left: 30px;
+}
+.line-check-list li + li {
+  margin-top: 6px;
+}
+.line-check-list .btn {
+  margin: 4px 0 0 6px;
+}
+.line-wagons {
+  margin: 8px 0 10px;
+}
+.line-wagons caption {
+  text-align: left;
+  padding: 6px 14px 0;
+}
+.line-wagon-full {
+  color: var(--accent);
+}
+/* The line editor (ui/detail/LineDialog.vue): the train as a row of cars, each a chip. */
+.line-consist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.line-car {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.line-car.loco {
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}
+.line-stop-add .btn {
+  margin-bottom: 6px;
+}
+.line-preview h3 {
+  margin: 14px 0 4px;
+}
 /* The station editor (ui/detail/StationDialog.vue): the outpost's node counts side by side, and
    one row per platform with its number, type, belt and tools, its cargo under them. */
 .station-outpost,

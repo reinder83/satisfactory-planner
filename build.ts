@@ -73,6 +73,7 @@ const SHARED = [
   'state/restore.ts',
   'state/stale-pins.ts',
   'state/summary.ts',
+  'state/trains.ts',
   'state/validate.ts',
 ];
 // The folders of public/ that hold shared scripts.
