@@ -148,7 +148,7 @@ test('the field is checked: the profile’s factories, finite spots in range, a 
   );
   // A newer planner's state is refused with the update message, never stripped.
   assert.throws(
-    () => validateState({ ...json(version28), version: 30 }),
+    () => validateState({ ...json(version28), version: 31 }),
     /newer planner version\. Update the app/,
   );
 });

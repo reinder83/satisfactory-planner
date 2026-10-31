@@ -231,6 +231,30 @@ function storedSessionSize(): number {
     return 4;
   }
 }
+// The Logistics page's open tab (#1295): "Between factories" (the links) or "Trains". A view
+// preference remembered in this browser like the session size, never in a saved profile, so
+// coming back to Logistics opens the tab left open; it needs no state version. Kept in memory as
+// well, so switching works where the browser refuses storage.
+const LOGISTICS_TAB_KEY = 'planner-logistics-tab';
+export type LogisticsTab = 'links' | 'trains';
+const logisticsTabOf = (value: unknown): LogisticsTab | null =>
+  value === 'links' || value === 'trains' ? value : null;
+export let logisticsTab: LogisticsTab = storedLogisticsTab();
+export function setLogisticsTab(value: LogisticsTab) {
+  if (!logisticsTabOf(value)) return;
+  logisticsTab = value;
+  try {
+    localStorage.setItem(LOGISTICS_TAB_KEY, value);
+  } catch {}
+}
+// The stored tab, or "Between factories" when nothing usable is stored or storage is refused.
+function storedLogisticsTab(): LogisticsTab {
+  try {
+    return logisticsTabOf(localStorage.getItem(LOGISTICS_TAB_KEY)) ?? 'links';
+  } catch {
+    return 'links';
+  }
+}
 // The minutes one building takes to place, which "Compare profiles" assumes for its time to
 // finish (#1074): an estimate the user sets, 0 to 60 in half minutes, 3 unless chosen. A view
 // preference remembered in this browser like the session size, never in a saved profile: it

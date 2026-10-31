@@ -20,10 +20,6 @@ import {
   type Raw,
   cleanFactoryPlace,
   cleanMapMarker,
-  cleanTrainStation,
-  TRAIN_STATION_MAX,
-  trainStationId,
-  validateTrainStations,
   mapMarkerId,
   validateFactoryPlaces,
   validateMapLayers,
@@ -57,6 +53,15 @@ import {
   validateTaskEdits,
 } from './validate.ts';
 import { ITEM_NAMES } from './items.ts';
+import {
+  cleanTrainStation,
+  setTrainLayout,
+  setTrainLine,
+  TRAIN_STATION_MAX,
+  trainStationId,
+  validateTrainLines,
+  validateTrainStations,
+} from './trains.ts';
 
 // Operations that send a whole value the tab worked out from the state it last showed: a
 // phase's full step order, a floor's bay order (#191), a container move with the items the
@@ -299,6 +304,25 @@ function setTrainStation(state: SavedState, update: Raw) {
   }
   state.trainStations = stations;
 }
+// The profile's train stations as validateState keeps them.
+const stationsOf = (state: SavedState) =>
+  validateTrainStations(state.trainStations, validateGroups(state.factoryGroups).groups) ?? [];
+// One train line (#1284, slice 2; setTrainLine in trains.ts).
+function setLine(state: SavedState, update: Raw) {
+  const stations = stationsOf(state);
+  state.trainLines = setTrainLine(
+    validateTrainLines(state.trainLines, stations) ?? [],
+    stations,
+    update,
+  );
+}
+// The network diagram's layout (#1284, slice 4; setTrainLayout in trains.ts). Presentation only,
+// sent whole as the flow graph's is, so it is not base-sensitive either.
+function setLayout(state: SavedState, update: Raw) {
+  const layout = setTrainLayout(stationsOf(state), update);
+  if (layout) state.trainLayout = layout;
+  else delete state.trainLayout;
+}
 const recordEdits: Record<string, StateEdit> = {
   exactClocks: setExactClocks,
   sloopPins: setSloopPins,
@@ -307,6 +331,8 @@ const recordEdits: Record<string, StateEdit> = {
   mapLayer: setMapLayer,
   mapFactory: setMapFactory,
   trainStation: setTrainStation,
+  trainLine: setLine,
+  trainLayout: setLayout,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,

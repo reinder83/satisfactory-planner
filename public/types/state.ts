@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–29). Later versions only add optional sections, so an older
+//                  version (1–30). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -28,7 +28,10 @@ import type { ExactClocks, LineClocks, SloopPins } from './calculated.ts';
 // (groups[].layout.places, #1240), 26 the production lines pinned to a clock with Power Shards
 // (lineClocks, #1239), 27 markers on the world map and its hidden layers (mapMarkers,
 // mapLayers, #1283), 28 factories placed on the world map (factoryPlaces, #1283), 29 train
-// stations and their platforms (trainStations, #1284).
+// stations and their platforms (trainStations, #1284), 30 train lines and their trains
+// (trainLines), the network diagram's layout (trainLayout), stations placed on the world map
+// (trainStations[].place), a platform's pipe (platforms[].pipe) and an outpost on oil or resource
+// wells (owner.resource Crude Oil, Nitrogen Gas or Water; owner.wells), #1284 slices 2 to 4.
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -61,7 +64,8 @@ export type StateVersion =
   | 26
   | 27
   | 28
-  | 29;
+  | 29
+  | 30;
 
 // The world map (#1283, slice 2): a marker the user placed, at a point in the game's world (game
 // units, x east and y south, whole numbers; public/app/world-map.ts converts them to the image),
@@ -98,15 +102,21 @@ export type FactoryPlaces = Record<string, FactoryPlace>;
 // whatever arrives, or is an empty platform (for a locomotive or spacing). A load or unload
 // platform has the conveyor belt mark that feeds or drains it (1 to 6: Mk.1 to Mk.6), or none
 // picked yet. validateTrainStations in state/validate.ts holds the limits.
+// Version 30 (#1284, slices 2 to 4) adds: an outpost on oil nodes ('Crude Oil') or on resource
+// wells (`wells: true`, the counts then being the well's satellite nodes: Crude Oil, Nitrogen
+// Gas, Water; the last two are wells only); a pipe on a load or unload platform (1 or 2: Mk.1 or
+// Mk.2), for fluid cargo; and `place`, where the station stands on the world map (game units, as a
+// factory's place).
 export type NodePurityCounts = Partial<Record<'impure' | 'normal' | 'pure', number>>;
 export type StationOwner =
   | { kind: 'factory'; id: string }
-  | { kind: 'outpost'; resource: string; nodes: NodePurityCounts }
+  | { kind: 'outpost'; resource: string; nodes: NodePurityCounts; wells?: true }
   | { kind: 'storage' };
 export type BeltMark = 1 | 2 | 3 | 4 | 5 | 6;
+export type PipeMark = 1 | 2;
 export type TrainPlatform =
-  | { kind: 'load'; cargo: string[]; belt?: BeltMark }
-  | { kind: 'unload'; belt?: BeltMark }
+  | { kind: 'load'; cargo: string[]; belt?: BeltMark; pipe?: PipeMark }
+  | { kind: 'unload'; belt?: BeltMark; pipe?: PipeMark }
   | { kind: 'empty' };
 export type TrainPlatformKind = TrainPlatform['kind'];
 export interface TrainStation {
@@ -114,6 +124,34 @@ export interface TrainStation {
   name: string;
   owner?: StationOwner;
   platforms: TrainPlatform[];
+  place?: FactoryPlace;
+}
+
+// Train lines (#1284, slice 2; version 30): a named line runs one train, its consist front to
+// back (`cars`: locomotives and freight wagons; the front one stands at the station building and
+// each car behind it at the platform in the same place), along its stops (station ids of
+// trainStations, in order) either as a one-way loop (back to the first stop after the last) or
+// back and forth (out and back the same way, which needs a locomotive at each end). `roundTrip` is
+// the minutes one round trip takes, entered by the user (absent: not entered yet).
+// validateTrainLines in state/validate.ts holds the limits.
+export type TrainCar = 'loco' | 'wagon';
+export type TrainDirection = 'oneWay' | 'backAndForth';
+export interface TrainLine {
+  id: string;
+  name: string;
+  cars: TrainCar[];
+  stops: string[];
+  direction: TrainDirection;
+  roundTrip?: number;
+}
+// How the network diagram on the Logistics page's Trains tab is drawn (#1284, slice 4; version 30):
+// presentation only, as a factory's flow graph layout (GroupLayout). `stations` is where the user
+// put a station's box, by station id (its top-left corner in the drawing's units, whole numbers on
+// a 5-unit grid); `zoom` and `pan` the last view. Each part is left out when it says nothing.
+export interface TrainLayout {
+  stations?: Record<string, [x: number, y: number]>;
+  zoom?: number;
+  pan?: [left: number, top: number];
 }
 
 // Who ticked a step and when (#1206, co-op slice 3 of #1077): `at` the moment of the tick (an ISO
@@ -336,6 +374,12 @@ export interface ProgressState {
   // Train stations and their platforms (#1284), in the order added; absent while there are none
   // (version 29).
   trainStations?: TrainStation[];
+  // Train lines with their trains (#1284), in the order added; absent while there are none
+  // (version 30).
+  trainLines?: TrainLine[];
+  // The network diagram's layout (#1284); absent while it is drawn automatically at natural size
+  // (version 30).
+  trainLayout?: TrainLayout;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -363,6 +407,8 @@ export interface SavedState {
   mapLayers?: MapLayers;
   factoryPlaces?: FactoryPlaces;
   trainStations?: TrainStation[];
+  trainLines?: TrainLine[];
+  trainLayout?: TrainLayout;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
@@ -421,6 +467,11 @@ export type UpdateOp =
   // One train station (#1284): added after the others when no station has the id, else replaced
   // where it is by what is sent (name, owner and platforms); null removes it.
   | { type: 'trainStation'; id: string; value: Omit<TrainStation, 'id'> | null }
+  // One train line (#1284): added after the others when no line has the id, else replaced where
+  // it is by what is sent (name, train, stops, direction and round trip); null removes it.
+  | { type: 'trainLine'; id: string; value: Omit<TrainLine, 'id'> | null }
+  // The whole network diagram layout (#1284); null or an empty one drops the field.
+  | { type: 'trainLayout'; layout: TrainLayout | null }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';

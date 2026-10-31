@@ -465,6 +465,67 @@ export const version29 = {
   ],
 } satisfies SavedState;
 
+// Version 30 (#1284, slices 2 to 4): train lines with their trains (both directions, a round trip
+// entered and not), the network diagram's layout, a station placed on the world map, a pipe on a
+// fluid platform, and outposts on oil nodes and on resource wells.
+export const version30 = {
+  ...version29,
+  version: 30,
+  trainStations: [
+    {
+      id: 'ts-iron01',
+      name: 'Iron mine',
+      owner: { kind: 'outpost', resource: 'Iron Ore', nodes: { pure: 3, normal: 1 } },
+      platforms: [
+        { kind: 'empty' },
+        { kind: 'load', cargo: ['Iron Ore'], belt: 4 },
+        { kind: 'load', cargo: ['Iron Ore'], belt: 4 },
+      ],
+      place: { x: -120500, y: 48200 },
+    },
+    ...version29.trainStations.slice(1),
+    {
+      id: 'ts-oil05',
+      name: 'Oil field',
+      owner: { kind: 'outpost', resource: 'Crude Oil', nodes: { normal: 2 } },
+      platforms: [{ kind: 'empty' }, { kind: 'load', cargo: ['Crude Oil'], pipe: 2 }],
+    },
+    {
+      id: 'ts-well06',
+      name: 'Nitrogen well',
+      owner: {
+        kind: 'outpost',
+        resource: 'Nitrogen Gas',
+        nodes: { pure: 4, impure: 1 },
+        wells: true,
+      },
+      platforms: [{ kind: 'load', cargo: ['Nitrogen Gas'], pipe: 1 }],
+    },
+  ],
+  trainLines: [
+    {
+      id: 'tl-ore01',
+      name: 'Ore shuttle',
+      cars: ['loco', 'wagon', 'wagon', 'loco'],
+      stops: ['ts-iron01', 'ts-plates2'],
+      direction: 'backAndForth',
+      roundTrip: 4.5,
+    },
+    {
+      id: 'tl-loop02',
+      name: 'Overflow loop',
+      cars: ['loco', 'wagon'],
+      stops: ['ts-plates2', 'ts-store03', 'ts-oil05'],
+      direction: 'oneWay',
+    },
+  ],
+  trainLayout: {
+    stations: { 'ts-iron01': [30, 30], 'ts-plates2': [320, 45] },
+    zoom: 0.8,
+    pan: [10, 0],
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -497,6 +558,7 @@ export const states: [SavedState, number][] = [
   [version27, 27],
   [version28, 28],
   [version29, 29],
+  [version30, 30],
 ];
 
 export const backup = {

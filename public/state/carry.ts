@@ -52,10 +52,10 @@ import {
   validateTaskEdits,
   validateTickedBy,
   validateFactoryPlaces,
-  validateTrainStations,
   validateMapLayers,
   validateMapMarkers,
 } from './validate.ts';
+import { validateTrainLayout, validateTrainLines, validateTrainStations } from './trains.ts';
 
 // A new profile for a save you are already playing describes the same world.
 // These groups say which of the previous profile's records are facts about that
@@ -92,7 +92,7 @@ export const carryOptions: [key: string, label: string, description: string][] =
   [
     'planEdits',
     'Build-plan edits and factories',
-    'Renamed, reordered and removed steps, plus your factories, their names, their places on the world map and your train stations.',
+    'Renamed, reordered and removed steps, plus your factories, their names, their places on the world map and your train stations and lines.',
   ],
   [
     'factories',
@@ -892,7 +892,13 @@ function keepMap(
   state: ProgressState,
   previous: Pick<
     SavedState,
-    'mapMarkers' | 'mapLayers' | 'factoryPlaces' | 'factoryGroups' | 'trainStations'
+    | 'mapMarkers'
+    | 'mapLayers'
+    | 'factoryPlaces'
+    | 'factoryGroups'
+    | 'trainStations'
+    | 'trainLines'
+    | 'trainLayout'
   >,
 ) {
   const markers = validateMapMarkers(previous.mapMarkers);
@@ -906,11 +912,21 @@ function keepMap(
   keepStations(state, previous);
 }
 // `source`'s train stations (#1284) on `state`, read against `state`'s own factories: a station
-// whose factory `state` does not have keeps its name and platforms and loses only its owner.
-function keepStations(state: ProgressState, source: Pick<SavedState, 'trainStations'>) {
+// whose factory `state` does not have keeps its name, platforms and map place and loses only its
+// owner. The train lines between them and the network diagram's layout go with them.
+function keepStations(
+  state: ProgressState,
+  source: Pick<SavedState, 'trainStations' | 'trainLines' | 'trainLayout'>,
+) {
   const stations = validateTrainStations(source.trainStations, state.factoryGroups.groups);
   if (stations) state.trainStations = stations;
   else delete state.trainStations;
+  const lines = validateTrainLines(source.trainLines, stations ?? []);
+  if (lines) state.trainLines = lines;
+  else delete state.trainLines;
+  const layout = validateTrainLayout(source.trainLayout, stations ?? []);
+  if (layout) state.trainLayout = layout;
+  else delete state.trainLayout;
 }
 // The places on the world map (#1283) of `source`'s factories that `state` has too, by factory
 // group id: a factory the state does not have (not carried, or left out of a new plan's factories)

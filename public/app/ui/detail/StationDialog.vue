@@ -1,6 +1,9 @@
 <!--
-  A train station (#1284, slice 1), in #detail (kind 'station'): `id` is the station's id, or 'new'
-  for one about to be added (the Logistics page's "+ Add train station"). Its name (1 to 60
+  A train station (#1284, slice 1), in #detail (kind 'station'): `id` is the station's id, 'new'
+  for one about to be added (the Logistics page's "+ Add train station"), or 'new:<x>:<y>' for one
+  about to be added at that spot of the world map (the map's "+ Add train station", slice 4). Since
+  version 30 a loading platform may carry fluids (with the pipe that fills it), an outpost may be
+  on oil nodes or resource wells, and a station keeps its place on the map through an edit. Its name (1 to 60
   characters), who it belongs to (a factory of the profile, a mining outpost with its resource and
   nodes, or storage) and its platforms in order are edited here: each platform loads cargo (one
   item, or several for mixed cargo, picked with the item search), unloads or stays empty, and a
@@ -22,7 +25,9 @@ import {
 } from '../../../state.ts';
 import type {
   BeltMark,
+  FactoryPlace,
   NodePurityCounts,
+  PipeMark,
   StationOwner,
   TrainPlatform,
   TrainPlatformKind,
@@ -39,6 +44,8 @@ import {
   outpostResources,
   PLATFORM_KINDS,
   PURITIES,
+  pipeChoices,
+  wellsChoice,
   moveAt,
   newStationId,
   newStationName,
@@ -54,15 +61,28 @@ import { deleteStation, focusStation, saveStation } from '../train-station-actio
 import DialogFrame from './DialogFrame.vue';
 
 const props = defineProps<{ id: string }>();
-const CARGO_ITEMS = cargoItems(FLUIDS);
+const CARGO_ITEMS = cargoItems();
 const BELT_CHOICES = beltChoices();
+const PIPE_CHOICES = pipeChoices();
 const OUTPOST_RESOURCES = outpostResources();
 
 const stations = () => legacy(() => state.trainStations ?? []);
 const groups = computed(() => legacy(() => state.factoryGroups?.groups ?? []));
-const isNew = props.id === 'new';
+const isNew = props.id === 'new' || props.id.startsWith('new:');
+// The spot of the map a new station is added at ('new:<x>:<y>'), in game units.
+function newPlace(): FactoryPlace | undefined {
+  const [, x, y] = props.id.split(':');
+  const spot = { x: Number(x), y: Number(y) };
+  return Number.isFinite(spot.x) && Number.isFinite(spot.y) && x && y ? spot : undefined;
+}
+const placeAt = isNew ? newPlace() : undefined;
 const start: TrainStation | null = isNew
-  ? { id: newStationId(), name: newStationName(stations()), platforms: [] }
+  ? {
+      id: newStationId(),
+      name: newStationName(stations()),
+      platforms: [],
+      ...(placeAt ? { place: placeAt } : {}),
+    }
   : (stations().find(station => station.id === props.id) ?? null);
 const gone = computed(() => !isNew && !stations().some(station => station.id === start?.id));
 
@@ -74,6 +94,13 @@ const ownerOf = (owner: StationOwner | undefined) =>
 const owner = ref(ownerOf(start?.owner));
 const startOutpost = start?.owner?.kind === 'outpost' ? start.owner : null;
 const resource = ref(startOutpost?.resource ?? OUTPOST_RESOURCES[0]!);
+// On resource wells (version 30): asked for Crude Oil, which has both; Nitrogen Gas and Water are
+// always on wells, the ordinary resources never.
+const onWells = ref(!!startOutpost?.wells);
+const wellsAsked = computed(() => wellsChoice(resource.value));
+const wells = computed(() =>
+  wellsAsked.value === 'always' ? true : wellsAsked.value === 'never' ? false : onWells.value,
+);
 // Each purity's count as typed ('' for none).
 const nodes = ref<Record<keyof NodePurityCounts, number | ''>>({
   pure: startOutpost?.nodes.pure ?? '',
@@ -83,8 +110,9 @@ const nodes = ref<Record<keyof NodePurityCounts, number | ''>>({
 const badNodes = ref(false);
 // What the plan's node survey counts of the resource picked, as a hint.
 const planNodes = computed(() => {
-  const counts = legacy(() => calculated?.settings?.extraction?.nodes?.[resource.value]);
-  return counts ? nodesText(counts) : '';
+  const survey = legacy(() => calculated?.settings?.extraction);
+  const counts = (wells.value ? survey?.wells : survey?.nodes)?.[resource.value];
+  return counts ? nodesText(counts, wells.value) : '';
 });
 
 // The platforms being edited, each with a key of its own so a moved platform keeps its row.
@@ -125,6 +153,20 @@ function setBelt(at: number, value: string) {
   if (value) platform.belt = Number(value) as BeltMark;
   else delete platform.belt;
 }
+function setPipe(at: number, value: string) {
+  const platform = draft.value[at]!.platform;
+  if (platform.kind === 'empty') return;
+  if (value) platform.pipe = Number(value) as PipeMark;
+  else delete platform.pipe;
+}
+// Which connections a platform offers: an unloading platform both (whatever arrives), a loading
+// one a belt for solid cargo (or none picked yet) and a pipe for fluid cargo.
+const lanesOf = (platform: TrainPlatform) => {
+  if (platform.kind === 'empty') return { belt: false, pipe: false };
+  if (platform.kind === 'unload') return { belt: true, pipe: true };
+  const fluid = platform.cargo.filter(item => FLUIDS.has(item)).length;
+  return { belt: !platform.cargo.length || fluid < platform.cargo.length, pipe: fluid > 0 };
+};
 async function move(at: number, by: -1 | 1, which: 'up' | 'down') {
   const to = at + by;
   if (to < 0 || to >= draft.value.length) return;
@@ -184,7 +226,12 @@ function ownerToSave(): StationOwner | undefined | null {
     if (!Number.isInteger(count) || count < 0 || count > OUTPOST_NODE_MAX) return null;
     counts[purity] = count;
   }
-  return { kind: 'outpost', resource: resource.value, nodes: counts };
+  return {
+    kind: 'outpost',
+    resource: resource.value,
+    nodes: counts,
+    ...(wells.value ? { wells: true as const } : {}),
+  };
 }
 
 async function submit(event: Event) {
@@ -206,6 +253,7 @@ async function submit(event: Event) {
     name: name.value.trim(),
     ...(kept ? { owner: kept } : {}),
     platforms: draft.value.map(entry => entry.platform),
+    ...(start.place ? { place: start.place } : {}),
   };
   const saved = await whileBusy(element.querySelector<HTMLElement>('[data-station-save]')!, () =>
     saveStation(station),
@@ -221,7 +269,7 @@ async function removeStation(event: Event) {
   if (!done) return;
   required<HTMLDialogElement>('#detail').close();
   await nextTick();
-  document.querySelector<HTMLElement>('#main [data-station-add]')?.focus();
+  document.querySelector<HTMLElement>('#main [data-station-add], #main [data-world-map]')?.focus();
 }
 
 function typed() {
@@ -305,6 +353,13 @@ function typed() {
             badNodes ? `Give each node count as a whole number from 0 to ${OUTPOST_NODE_MAX}.` : ''
           "
         ></p>
+        <label v-if="wellsAsked === 'either'" class="check-row" data-outpost-wells-field
+          ><input v-model="onWells" type="checkbox" data-outpost-wells /> On a resource well (the
+          counts are its satellite nodes)</label
+        >
+        <p v-else-if="wellsAsked === 'always'" class="small muted" data-outpost-wells-note>
+          {{ resource }} comes from resource wells: count the well’s satellite nodes.
+        </p>
         <p v-if="planNodes" class="small muted" data-outpost-plan>
           The plan’s node survey counts {{ planNodes }} of {{ resource }}.
         </p>
@@ -340,9 +395,9 @@ function typed() {
                   </option>
                 </select></label
               >
-              <label v-if="entry.platform.kind !== 'empty'" class="field"
+              <label v-if="lanesOf(entry.platform).belt" class="field"
                 >Belt<select
-                  :value="entry.platform.belt ?? ''"
+                  :value="entry.platform.kind === 'empty' ? '' : (entry.platform.belt ?? '')"
                   :aria-label="`Belt: platform ${i + 1}`"
                   data-platform-belt
                   @change="setBelt(i, ($event.target as HTMLSelectElement).value)"
@@ -350,6 +405,19 @@ function typed() {
                   <option value="">Not picked</option>
                   <option v-for="belt in BELT_CHOICES" :key="belt.mark" :value="belt.mark">
                     {{ belt.label }}
+                  </option>
+                </select></label
+              >
+              <label v-if="lanesOf(entry.platform).pipe" class="field"
+                >Pipe<select
+                  :value="entry.platform.kind === 'empty' ? '' : (entry.platform.pipe ?? '')"
+                  :aria-label="`Pipe: platform ${i + 1}`"
+                  data-platform-pipe
+                  @change="setPipe(i, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Not picked</option>
+                  <option v-for="pipe in PIPE_CHOICES" :key="pipe.mark" :value="pipe.mark">
+                    {{ pipe.label }}
                   </option>
                 </select></label
               >
@@ -388,7 +456,8 @@ function typed() {
             <div v-if="entry.platform.kind === 'load'" class="platform-cargo">
               <span class="field">Cargo</span>
               <p v-if="!entry.platform.cargo.length" class="small muted" data-cargo-none>
-                No cargo picked yet. Pick one item, or several for mixed cargo.
+                No cargo picked yet. Pick one item, or several for mixed cargo; a fluid goes in a
+                fluid freight wagon by pipe.
               </p>
               <ul v-else class="cargo-list">
                 <li v-for="item in entry.platform.cargo" :key="item" :data-cargo="item">

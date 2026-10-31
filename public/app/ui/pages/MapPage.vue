@@ -25,8 +25,17 @@
   (ui/map-factory-actions.ts), back where the keys last moved it. A press without a drag follows
   the link.
 
-  "Show on the map" hides or shows the factories and the markers for this profile (`mapLayers`).
-  Train stations and lines (#1284) get their switches with their content.
+  Train stations and lines (#1284, slice 4): the profile's train stations with a place on the map
+  (`trainStations[].place`, state version 30), each a square pin with the train icon and its name,
+  the same stations the Logistics page's Trains tab lists. "Add train station" opens the station
+  editor for a new station in the middle of the view; "Place station" puts the station picked beside
+  it there. A press without a drag, or Enter, opens the station's editor; a drag or the arrow keys
+  move it as a marker, and Delete takes it off the map (the station stays) with Undo
+  (ui/train-station-actions.ts). The train lines are drawn between their placed stops in each
+  line's colour: solid back and forth (⇄), dashed one-way (→), with the line's name.
+
+  "Show on the map" hides or shows the factories, the train stations, the train lines and the
+  markers for this profile (`mapLayers`).
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
@@ -49,6 +58,15 @@ import {
   nudgedMarker,
   onMap,
 } from '../../map-markers.ts';
+import {
+  mapLinePath,
+  mapLines,
+  placedStations,
+  STATION_ICON,
+  stationAria,
+  unplacedStations,
+  type PlacedStation,
+} from '../../map-stations.ts';
 import { flowRoute, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
@@ -58,13 +76,14 @@ import {
   type ImagePoint,
   type WorldPoint,
 } from '../../world-map.ts';
-import { MAP_MARKER_MAX } from '../../../state.ts';
+import { MAP_MARKER_MAX, TRAIN_STATION_MAX } from '../../../state.ts';
 import type { MapLayer, MapMarker } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 import { showDetail } from '../detail.ts';
 import { useGraphPanZoom, type GraphLineDrag } from '../detail/graph-pan-zoom.ts';
 import { focusFactory, removeFactoryPlace, saveFactoryPlace } from '../map-factory-actions.ts';
 import { deleteMarker, saveMarker } from '../map-marker-actions.ts';
+import { focusStation, removeStationPlace, saveStationPlace } from '../train-station-actions.ts';
 import PageHeader from '../PageHeader.vue';
 
 // How far (px on screen) an arrow key moves the map, and with Shift.
@@ -83,11 +102,22 @@ const groups = computed(() => legacy(() => state.factoryGroups?.groups ?? []));
 const factories = computed(() => legacy(() => placedFactories(groups.value, state.factoryPlaces)));
 const toPlace = computed(() => legacy(() => unplacedFactories(groups.value, state.factoryPlaces)));
 const showFactories = computed(() => legacy(() => mapLayerShown(state.mapLayers, 'factories')));
+const stations = computed(() => legacy(() => state.trainStations ?? []));
+const lines = computed(() => legacy(() => state.trainLines ?? []));
+const onMapStations = computed(() => placedStations(stations.value));
+const stationsToPlace = computed(() => unplacedStations(stations.value));
+const showStations = computed(() => legacy(() => mapLayerShown(state.mapLayers, 'stations')));
+const showLines = computed(() => legacy(() => mapLayerShown(state.mapLayers, 'trainLines')));
 
 // What can be dragged and nudged, by its node id for the pan and zoom (`data-node`): a marker
-// ('marker:<id>') or a factory ('factory:<group id>').
+// ('marker:<id>'), a factory ('factory:<group id>') or a train station ('station:<id>').
 const MARKER = 'marker:';
 const FACTORY = 'factory:';
+const STATION = 'station:';
+const stationOf = (node: string) =>
+  node.startsWith(STATION)
+    ? onMapStations.value.find(placed => placed.station.id === node.slice(STATION.length))
+    : undefined;
 const markerOf = (node: string) =>
   node.startsWith(MARKER) ? markers.value.find(m => m.id === node.slice(MARKER.length)) : undefined;
 const factoryOf = (node: string) =>
@@ -100,11 +130,13 @@ const moved = reactive<Record<string, WorldPoint>>({});
 const markerSpot = (marker: MapMarker): WorldPoint => moved[MARKER + marker.id] ?? marker;
 const factorySpot = (factory: PlacedFactory): WorldPoint =>
   moved[FACTORY + factory.id] ?? factory.place;
+const stationSpot = (placed: PlacedStation): WorldPoint =>
+  moved[STATION + placed.station.id] ?? placed.place;
 // The saved spot of node `node`, or null for one that is gone.
 function savedSpot(node: string): WorldPoint | null {
   const marker = markerOf(node);
   if (marker) return { x: marker.x, y: marker.y };
-  return factoryOf(node)?.place ?? null;
+  return factoryOf(node)?.place ?? stationOf(node)?.place ?? null;
 }
 // A drag works in whole image px (useGraphPanZoom rounds), so it starts from the spot rounded to
 // the image and moves the exact spot by as many px: a drag straight across keeps y exactly.
@@ -113,7 +145,14 @@ const drag: GraphLineDrag = {
   at(node) {
     const marker = markerOf(node);
     const factory = marker ? undefined : factoryOf(node);
-    const world = marker ? markerSpot(marker) : factory ? factorySpot(factory) : null;
+    const station = marker || factory ? undefined : stationOf(node);
+    const world = marker
+      ? markerSpot(marker)
+      : factory
+        ? factorySpot(factory)
+        : station
+          ? stationSpot(station)
+          : null;
     if (!world) return null;
     const exact = worldToImage(world);
     const image = { x: Math.round(exact.x), y: Math.round(exact.y) };
@@ -213,6 +252,31 @@ const drawnFactories = computed(() =>
   }),
 );
 
+// Each placed station as drawn, and the train lines between them (solid back and forth, dashed
+// one-way), in px on the drawn map.
+const drawnStations = computed(() =>
+  onMapStations.value.map(placed => {
+    const at = worldToImage(stationSpot(placed));
+    return {
+      station: placed.station,
+      left: at.x * zoom.value,
+      top: at.y * zoom.value,
+      aria: stationAria(placed.station, lines.value),
+    };
+  }),
+);
+const drawnLines = computed(() =>
+  mapLines(lines.value, stations.value, station => {
+    const placed = onMapStations.value.find(entry => entry.station.id === station.id);
+    return placed ? stationSpot(placed) : undefined;
+  }).map(line => ({
+    ...line,
+    d: mapLinePath(line, zoom.value),
+    labelX: line.label.x * zoom.value,
+    labelY: line.label.y * zoom.value - 8,
+  })),
+);
+
 // Saving a moved marker or factory: at once when a drag ends or it loses focus, NUDGE_SAVE_DELAY
 // after the last arrow key, and before the page goes; only when it moved.
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -228,6 +292,7 @@ async function saveSpot(node: string) {
   }
   const marker = markerOf(node);
   if (marker) await saveMarker({ ...marker, x: spot.x, y: spot.y });
+  else if (node.startsWith(STATION)) await saveStationPlace(node.slice(STATION.length), spot);
   else await saveFactoryPlace(node.slice(FACTORY.length), spot);
   // A later move made meanwhile stays to be saved.
   if (moved[node] === spot) delete moved[node];
@@ -304,6 +369,44 @@ async function placeFactory() {
   if (await saveFactoryPlace(factory.id, spot)) await focusFactory(factory.id);
 }
 
+// The pins already on the map, in game units, which a new one keeps clear of (freePlace).
+const pinSpots = () => [
+  ...factories.value.map(factory => factorySpot(factory)),
+  ...markers.value.map(marker => markerSpot(marker)),
+  ...onMapStations.value.map(placed => stationSpot(placed)),
+];
+// "Add train station": the station editor for a new station in the middle of the view (a step
+// aside from any pin there), placed there when it is added.
+function addStation() {
+  const middle = middleSpot();
+  if (!middle) return;
+  if (stations.value.length >= TRAIN_STATION_MAX) {
+    toast(
+      `A profile holds at most ${TRAIN_STATION_MAX} train stations. Delete one to add another.`,
+      true,
+    );
+    return;
+  }
+  const spot = freePlace(middle, pinSpots(), zoom.value);
+  showDetail({ kind: 'station', id: `new:${spot.x}:${spot.y}` });
+}
+// "Place station": the station picked beside it (the first one not on the map until another is
+// picked) goes in the middle of the view, and focus goes to it there.
+const pickedStationId = ref('');
+const pickedStation = computed(
+  () =>
+    stationsToPlace.value.find(station => station.id === pickedStationId.value) ??
+    stationsToPlace.value[0],
+);
+async function placeStation() {
+  const station = pickedStation.value;
+  const middle = middleSpot();
+  if (!station || !middle) return;
+  const spot = freePlace(middle, pinSpots(), zoom.value);
+  if (await saveStationPlace(station.id, spot)) await focusStation(station.id);
+}
+const editStation = (id: string) => showDetail({ kind: 'station', id });
+
 // Brings what is drawn at (left, top) on the map (px) into view inside the box, as far as it is
 // out of it.
 async function keepInView(find: () => { left: number; top: number } | undefined) {
@@ -354,6 +457,18 @@ function onFactoryKey(e: KeyboardEvent, factory: PlacedFactory) {
   } else if (nudge(e, FACTORY + factory.id, factorySpot(factory)))
     void keepInView(() => drawnFactories.value.find(item => item.factory.id === factory.id));
 }
+// On a focused station: an arrow key moves it, Delete or Backspace takes it off the map. Enter and
+// Space press the button, which opens its editor.
+function onStationKey(e: KeyboardEvent, id: string) {
+  if (browserKey(e)) return;
+  const placed = onMapStations.value.find(entry => entry.station.id === id);
+  if (!placed) return;
+  if (removeKey(e)) {
+    e.preventDefault();
+    void takeOffStation(id);
+  } else if (nudge(e, STATION + id, stationSpot(placed)))
+    void keepInView(() => drawnStations.value.find(item => item.station.id === id));
+}
 // Forgets an unsaved move of node `node`, which is going, and returns that spot: Undo puts the
 // marker or factory back there, so a move the arrow keys made just before Delete is not lost.
 function forget(node: string): WorldPoint | undefined {
@@ -370,6 +485,9 @@ async function removeMarker(id: string) {
 }
 async function takeOff(id: string) {
   if (await removeFactoryPlace(id, forget(FACTORY + id))) box.value?.focus();
+}
+async function takeOffStation(id: string) {
+  if (await removeStationPlace(id, forget(STATION + id))) box.value?.focus();
 }
 
 // "Show on the map": a layer's switch, saved for this profile at once.
@@ -435,6 +553,15 @@ function onKey(e: KeyboardEvent) {
         focused marker the arrow keys move it, Enter edits it and Delete removes it.
       </template>
       <template v-else-if="markers.length">The markers are hidden.</template>
+      <template v-if="showStations">
+        Add train station opens the station editor for a new station in the middle of the view.
+        Press a station to edit it, or drag it to move it; on a focused station the arrow keys move
+        it, Enter edits it and Delete takes it off the map.
+      </template>
+      <template v-else-if="onMapStations.length">The train stations are hidden.</template>
+      <template v-if="showLines && drawnLines.length">
+        Train lines run between their stations: solid back and forth, dashed one-way.
+      </template>
     </p>
     <div class="map-bar">
       <div class="fgraph-tools" data-map-tools>
@@ -491,6 +618,29 @@ function onKey(e: KeyboardEvent) {
             + Place factory
           </button></span
         >
+        <button
+          v-if="showStations"
+          class="btn"
+          type="button"
+          data-map-add-station
+          @click="addStation"
+        >
+          + Add train station
+        </button>
+        <span v-if="showStations && pickedStation" class="map-place" data-map-station-place
+          ><select
+            :value="pickedStation.id"
+            aria-label="Train station to place on the map"
+            data-map-station-select
+            @change="pickedStationId = ($event.target as HTMLSelectElement).value"
+          >
+            <option v-for="station in stationsToPlace" :key="station.id" :value="station.id">
+              {{ station.name }}
+            </option></select
+          ><button class="btn" type="button" data-map-place-station @click="placeStation">
+            + Place station
+          </button></span
+        >
       </div>
       <fieldset class="map-layers" data-map-layers>
         <legend>Show on the map</legend>
@@ -512,6 +662,26 @@ function onKey(e: KeyboardEvent) {
             @change="toggleLayer($event, 'markers')"
           />
           Markers <span class="muted" data-map-marker-count>({{ markers.length }})</span></label
+        >
+        <label class="map-layer-toggle"
+          ><input
+            type="checkbox"
+            :checked="showStations"
+            data-map-layer-toggle="stations"
+            @change="toggleLayer($event, 'stations')"
+          />
+          Train stations
+          <span class="muted" data-map-station-count>({{ onMapStations.length }})</span></label
+        >
+        <label class="map-layer-toggle"
+          ><input
+            type="checkbox"
+            :checked="showLines"
+            data-map-layer-toggle="trainLines"
+            @change="toggleLayer($event, 'trainLines')"
+          />
+          Train lines
+          <span class="muted" data-map-line-count>({{ drawnLines.length }})</span></label
         >
       </fieldset>
     </div>
@@ -554,6 +724,27 @@ function onKey(e: KeyboardEvent) {
           draggable="false"
           data-map-image
         />
+        <svg
+          v-if="showLines && drawnLines.length"
+          class="map-lines"
+          :width="natural.width * zoom"
+          :height="natural.height * zoom"
+          aria-hidden="true"
+          data-map-lines
+        >
+          <g
+            v-for="line in drawnLines"
+            :key="line.id"
+            :class="['map-line', 'line-color-' + line.color, { dashed: line.dashed }]"
+            :data-map-line="line.id"
+          >
+            <path class="map-line-shadow" :d="line.d" />
+            <path class="map-line-path" :d="line.d" />
+            <text class="map-line-label" :x="line.labelX" :y="line.labelY" text-anchor="middle">
+              {{ line.label.text }}
+            </text>
+          </g>
+        </svg>
         <template v-if="showFactories">
           <a
             v-for="item in drawnFactories"
@@ -573,6 +764,26 @@ function onKey(e: KeyboardEvent) {
             ></span>
             <span class="map-factory-label" aria-hidden="true">{{ item.factory.name }}</span>
           </a>
+        </template>
+        <template v-if="showStations">
+          <button
+            v-for="item in drawnStations"
+            :key="item.station.id"
+            type="button"
+            class="map-station"
+            :style="{ left: item.left + 'px', top: item.top + 'px' }"
+            :data-node="'station:' + item.station.id"
+            :data-map-station="item.station.id"
+            :aria-label="item.aria"
+            @click="editStation(item.station.id)"
+            @keydown="onStationKey($event, item.station.id)"
+            @blur="saveSpot('station:' + item.station.id)"
+          >
+            <span class="map-station-pin" aria-hidden="true"
+              ><svg viewBox="0 0 20 20"><path :d="STATION_ICON" fill-rule="evenodd" /></svg
+            ></span>
+            <span class="map-station-label" aria-hidden="true">{{ item.station.name }}</span>
+          </button>
         </template>
         <template v-if="showMarkers">
           <button
