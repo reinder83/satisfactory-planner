@@ -10,7 +10,8 @@ import { save, toast } from '../api.ts';
 import { onProfile, profileScope, state, type ProfileScope } from '../session.ts';
 import { render } from '../shell.ts';
 import { stationDeletedNews, stationRestoredNews } from '../train-stations.ts';
-import type { TrainLine, TrainStation } from '../../types/index.ts';
+import { stationBackOnMapNews, stationOffMapNews } from '../map-stations.ts';
+import type { FactoryPlace, TrainLine, TrainStation } from '../../types/index.ts';
 
 const fieldsOf = ({ id: _id, ...fields }: TrainStation): Omit<TrainStation, 'id'> => fields;
 
@@ -88,4 +89,36 @@ async function undoDelete(station: TrainStation, profile: ProfileScope, lines: T
   await restoreStops(station.id, lines);
   toast(stationRestoredNews(station.name));
   await focusStation(station.id);
+}
+
+// On the world map (#1284, slice 4): station `id` put at `place` (placed, or moved there), saved
+// whole as any edit of the station is. Resolves false when it was refused.
+export async function saveStationPlace(id: string, place: FactoryPlace): Promise<boolean> {
+  const station = state.trainStations?.find(entry => entry.id === id);
+  if (!station) return false;
+  return saveStation({ ...station, place: { x: place.x, y: place.y } });
+}
+// Takes station `id` off the map (the station stays, with its lines), with an Undo in the toast
+// that puts it back at `moved` when given (a move not saved yet), else where it was saved. Focus
+// is the caller's: the map box, where a second Delete takes nothing off.
+export async function removeStationPlace(id: string, moved?: FactoryPlace): Promise<boolean> {
+  const station = state.trainStations?.find(entry => entry.id === id);
+  if (!station?.place) return false;
+  const place = moved ? { x: moved.x, y: moved.y } : station.place;
+  const profile = profileScope();
+  const { place: _place, ...rest } = station;
+  if (!(await saveStation(rest))) return false;
+  toast(stationOffMapNews(station.name), false, {
+    label: 'Undo',
+    run: () => void undoOffMap(id, station.name, place, profile),
+  });
+  return true;
+}
+async function undoOffMap(id: string, name: string, place: FactoryPlace, profile: ProfileScope) {
+  if (!onProfile(profile)) return;
+  const station = state.trainStations?.find(entry => entry.id === id);
+  if (!station || station.place) return;
+  if (!(await saveStationPlace(id, place))) return;
+  toast(stationBackOnMapNews(name));
+  await focusStation(id);
 }

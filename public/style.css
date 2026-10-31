@@ -2126,6 +2126,83 @@ p.eyebrow {
 .line-wagon-full {
   color: var(--accent);
 }
+/* The network diagram (#1284, ui/factories/TrainDiagram.vue): the flow graph's box, toolbar and
+   station boxes; each line a curve in its colour (dashed one-way), the lines of the station
+   pointed at or focused drawn thicker and the rest faded; a station's platforms as small glyphs. */
+.tdiag-scroll {
+  height: auto;
+  min-height: 220px;
+  max-height: min(560px, calc(100vh - 260px));
+}
+.tdiag-line {
+  fill: none;
+  stroke: var(--line-color);
+  stroke-width: 2.5;
+}
+.tdiag-line.dashed {
+  stroke-dasharray: 9 5;
+}
+.tdiag-line.hl {
+  stroke-width: 4;
+}
+.tdiag-line.faded,
+.tdiag-label.faded {
+  opacity: 0.15;
+}
+.tdiag-station.faded {
+  opacity: 0.35;
+}
+.tdiag-arrow path {
+  fill: var(--line-color);
+}
+.tdiag-label {
+  font-size: 11px;
+  fill: var(--line-color);
+  paint-order: stroke;
+  stroke: var(--bg2);
+  stroke-width: 3px;
+}
+.fgraph-node .tdiag-platform rect {
+  fill: var(--panel2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.tdiag-platform text {
+  font-size: 10.5px;
+  fill: var(--muted);
+}
+.fgraph-node .tdiag-platform.load rect {
+  stroke: var(--accent);
+}
+.tdiag-platform.load text {
+  fill: var(--accent);
+}
+.fgraph-node .tdiag-platform.unload rect {
+  stroke: var(--blue);
+}
+.tdiag-platform.unload text {
+  fill: var(--blue);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tdiag-line,
+  .tdiag-label,
+  .tdiag-station {
+    transition: opacity 0.15s;
+  }
+}
+.tdiag-legend {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.tdiag-legend li {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.tdiag-legend .line-swatch {
+  margin-right: 6px;
+}
 /* The line editor (ui/detail/LineDialog.vue): the train as a row of cars, each a chip. */
 .line-consist {
   display: flex;
@@ -4854,6 +4931,93 @@ button.rail-tile:hover {
 .map-factory:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+/* Train stations on the world map (#1284, slice 4): a square dark pin with the train icon in the
+   blue of an unloading platform, its name beside it, drawn as a factory's; the train lines under
+   every pin, each in its line's colour over a dark casing, dashed one-way, with its name. */
+.map-station {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 6px 0 2px;
+  transform: translate(-16px, -50%);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--bright);
+  cursor: pointer;
+  touch-action: none;
+}
+.map-scroll.moving .map-station {
+  cursor: grabbing;
+}
+.map-station-pin {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--blue);
+  border-radius: 5px;
+  background: var(--bg2);
+  box-shadow: var(--drop);
+}
+.map-station-pin svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--blue);
+}
+.map-station-label {
+  max-width: 20ch;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow:
+    0 0 2px var(--bg2),
+    0 0 4px var(--bg2),
+    0 1px 2px var(--bg2);
+}
+.map-station:hover .map-station-pin {
+  outline: 2px solid var(--bright);
+}
+.map-station:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.map-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.map-line-shadow {
+  fill: none;
+  stroke: var(--bg2);
+  stroke-width: 7;
+  stroke-linejoin: round;
+  opacity: 0.6;
+}
+.map-line-path {
+  fill: none;
+  stroke: var(--line-color);
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+}
+.map-line.dashed .map-line-path {
+  stroke-dasharray: 10 6;
+}
+.map-line-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--line-color);
+  paint-order: stroke;
+  stroke: var(--bg2);
+  stroke-width: 3px;
 }
 /* "Place factory": the factory to place and the button, kept together when the toolbar wraps. */
 .map-place {

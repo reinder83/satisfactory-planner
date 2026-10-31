@@ -32,6 +32,7 @@ import {
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import GroupLinks from '../factories/GroupLinks.vue';
+import TrainDiagram from '../factories/TrainDiagram.vue';
 import TrainLines from '../factories/TrainLines.vue';
 import TrainStations from '../factories/TrainStations.vue';
 import PageHeader from '../PageHeader.vue';
@@ -128,6 +129,8 @@ const subtitle = computed(() => {
     <div v-bind="panelAttrs('trains')" data-logistics-panel="trains">
       <TrainStations />
       <TrainLines />
+      <!-- Drawn while its tab is open: the pan and zoom measure the box it scrolls in. -->
+      <TrainDiagram v-if="active === 'trains'" />
     </div>
   </template>
 </template>
