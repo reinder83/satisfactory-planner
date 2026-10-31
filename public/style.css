@@ -2119,6 +2119,11 @@ p.eyebrow {
 .line-wagons {
   margin: 8px 0 10px;
 }
+/* Wide enough that no column squeezes its words into a tall row: on a phone it scrolls sideways
+   inside its box, as the other tables do. */
+.line-wagons table {
+  min-width: 40rem;
+}
 .line-wagons caption {
   text-align: left;
   padding: 6px 14px 0;
@@ -2129,7 +2134,7 @@ p.eyebrow {
 /* The network diagram (#1284, ui/factories/TrainDiagram.vue): the flow graph's box, toolbar and
    station boxes; each line a curve in its colour (dashed one-way), the lines of the station
    pointed at or focused drawn thicker and the rest faded; a station's platforms as small glyphs. */
-.tdiag-scroll {
+.fgraph-scroll.tdiag-scroll {
   height: auto;
   min-height: 220px;
   max-height: min(560px, calc(100vh - 260px));
@@ -4952,6 +4957,12 @@ button.rail-tile:hover {
 }
 .map-scroll.moving .map-station {
   cursor: grabbing;
+}
+/* On a phone a station's pin is a 44px touch target, its icon centred in it. */
+@media (max-width: 720px) {
+  .map-station {
+    min-height: 44px;
+  }
 }
 .map-station-pin {
   display: grid;

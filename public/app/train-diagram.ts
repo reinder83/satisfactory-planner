@@ -13,7 +13,10 @@ import type { TrainLine, TrainPlatformKind, TrainStation } from '../types/index.
 export const DIAGRAM = {
   width: 200,
   height: 64,
-  columnGap: 120,
+  // Room between columns for a line's label (cut to labelChars, the list under the drawing has
+  // it whole).
+  columnGap: 210,
+  labelChars: 32,
   rowGap: 48,
   margin: 30,
   // How far apart lines between the same stations run.
@@ -212,7 +215,10 @@ export function trainDiagram(
       labels.push({
         line: line.id,
         color,
-        text: `${line.name} ${DIRECTION_TEXT[line.direction].mark} ${goods.length ? goods.join(', ') : 'no cargo yet'}`,
+        text: shorten(
+          `${line.name} ${DIRECTION_TEXT[line.direction].mark} ${goods.length ? goods.join(', ') : 'no cargo yet'}`,
+          DIAGRAM.labelChars,
+        ),
         x: middle(x1, c1, c2, x2),
         y: middle(y1, y1, y2, y2) - 8,
       });
