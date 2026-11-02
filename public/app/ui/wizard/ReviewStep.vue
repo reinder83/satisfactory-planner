@@ -14,7 +14,7 @@
 import { computed } from 'vue';
 import { durationOfHours, num } from '../../format.ts';
 import { draft, workspace } from '../../session.ts';
-import { budgetMeasured, draftHeading } from '../../views/calculated.ts';
+import { budgetMeasured, draftBuildingsNote, draftHeading } from '../../views/calculated.ts';
 import { draftAdvice } from '../../draft-advice.ts';
 import DraftAdvice from '../plan/DraftAdvice.vue';
 import { power } from '../../wizard/fields.ts';
@@ -122,6 +122,7 @@ const view = computed(() =>
           phase,
           heading: draftHeading(stageResult, phase),
           reason: stageResult.reason,
+          buildingsNote: draftBuildingsNote(stageResult),
           advice: draftAdvice(stageResult, preview.settings, {
             phase: Number(phase),
             alternates: workspace?.catalog?.alternates,
@@ -215,6 +216,9 @@ const view = computed(() =>
     <div v-for="phaseDraft in view.drafts" :key="phaseDraft.phase" class="notice warn">
       <b>{{ phaseDraft.heading }}</b> {{ phaseDraft.reason
       }}<DraftAdvice :advice="phaseDraft.advice" />
+      <p v-if="phaseDraft.buildingsNote" class="small" data-review-draft-buildings>
+        {{ phaseDraft.buildingsNote }}
+      </p>
     </div>
     <details class="panel">
       <summary>Assumptions and calculation limits</summary>

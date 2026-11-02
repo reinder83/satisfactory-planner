@@ -139,7 +139,12 @@ test('the toast’s Undo is a focusable button that unticks the step through the
   await click(openBox(0));
   const button = undo()!;
   assert.equal(button.tagName, 'BUTTON');
-  assert.equal(button.textContent, 'Undo');
+  assert.equal(button.textContent, 'Undo last tick');
+  // The key that presses it is on the toast, outside the button's name (#1280).
+  const key = $('#toast .toast-key')!;
+  assert.equal(key.textContent, '(Ctrl+Z)');
+  assert.equal(key.getAttribute('aria-hidden'), 'true');
+  assert.equal(button.parentElement, key.parentElement);
   button.focus();
   assert.equal(document.activeElement, button);
   // Focused, it outlasts its time.

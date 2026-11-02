@@ -84,6 +84,14 @@ function hideToast() {
   required('#toast').className = '';
 }
 
+// The key that presses the toast's button, as the user's keyboard writes it (#1280).
+const toastKey = () =>
+  /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘Z' : 'Ctrl+Z';
+
+// The button, and after it the key that presses it. The button is the last control in the page, so
+// a keyboard user reaches the action by the key, which the toast then says (#1280); a touch screen
+// has no such key, so style.css hides the words there. They are left out of the accessible name:
+// the button says its shortcut by aria-keyshortcuts.
 function toastButton(action: ToastAction) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -92,7 +100,14 @@ function toastButton(action: ToastAction) {
   button.textContent = action.label;
   button.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
   button.addEventListener('click', () => runToastAction(action));
-  return button;
+  const key = document.createElement('span');
+  key.className = 'toast-key';
+  key.setAttribute('aria-hidden', 'true');
+  key.textContent = `(${toastKey()})`;
+  const group = document.createElement('span');
+  group.className = 'toast-actions';
+  group.append(button, ' ', key);
+  return group;
 }
 
 function runToastAction(action: ToastAction) {

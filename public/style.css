@@ -1977,6 +1977,14 @@ p.eyebrow {
 .notice.error strong {
   color: var(--bright);
 }
+/* The browser edition's notice (BrowserNotice.vue) ends in a link to Backup: 24px tall at least,
+   the target size WCAG 2.5.8 asks (#1280), with room either side so a thumb finds it. */
+.notice .notice-backup {
+  display: inline-block;
+  min-height: 24px;
+  line-height: 24px;
+  padding-inline: 6px;
+}
 .notice .btn {
   margin: 6px 0;
 }
@@ -2700,12 +2708,24 @@ p.eyebrow {
     flex: 1 1 40%;
     padding: 10px 12px;
   }
+  /* Two tabs share one row (#1280): the share is what each label needs, since "Between
+     factories" is wider than 40% of a 390px phone and wrapped Trains onto a row of its own. */
+  .logistics-tabs {
+    width: 100%;
+  }
+  .logistics-tabs .tab {
+    flex: 1 1 auto;
+  }
 }
 .factory-card .build-held {
   color: var(--accent-hi);
 }
 
 /* ── Tables ────────────────────────────────────────────── */
+.table-wrap[tabindex]:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
 .table-wrap {
   overflow: auto;
   border: 1px solid var(--line);
@@ -4640,6 +4660,21 @@ button.rail-tile:hover {
 }
 /* "Show storage and sink as tags" (#1231): a checkbox beside the zoom buttons, wrapping under
    them on a phone, its whole label a 44px-high target there. */
+/* The help over the graph (#1280): a "How to use" line that opens on a phone, where the
+   paragraph would take most of the screen; where there is room it stays open and the line is
+   left out. */
+.fgraph-help > summary {
+  min-height: 24px;
+  cursor: pointer;
+}
+.fgraph-help p {
+  margin: 4px 0 0;
+}
+@media (min-width: 721px) {
+  .fgraph-help[open] > summary {
+    display: none;
+  }
+}
 .fgraph-switch {
   display: inline-flex;
   align-items: center;
@@ -5316,10 +5351,26 @@ button.rail-tile:hover {
   align-items: center;
   gap: 14px;
 }
-#toast .toast-action {
+#toast .toast-actions {
   flex: none;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#toast .toast-action {
+  flex: none;
   padding: 6px 12px;
+}
+/* The key that presses the button (#1280): said for a keyboard, left out where there is none. */
+#toast .toast-key {
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  #toast .toast-key {
+    display: none;
+  }
 }
 /* At the top when the focused control it is about lies under the bottom strip (#663,
    app/toast-place.ts), over the sticky edit bar so it stays readable. */
