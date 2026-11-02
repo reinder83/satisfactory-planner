@@ -200,9 +200,51 @@ function stationChecks(line: TrainLine, station: TrainStation): TrainCheck[] {
   });
   return out;
 }
+// The loading stops of `wagon` that fill it before an unloading stop empties it (#1280), in the
+// order the line calls, round the loop: a wagon that loads at two stations and is unloaded only
+// after both carries what both bring. Each group of two or more is returned with its fills; a
+// stop on its own is the per-stop check's.
+function loadsTogether(
+  line: TrainLine,
+  stations: readonly TrainStation[],
+  wagon: Wagon,
+  facts: ItemFacts,
+): WagonFill[][] {
+  const called = calledStations(line, stations).flatMap(station => {
+    const platform = station.platforms[wagon.car - 2];
+    return platform && platform.kind !== 'empty' ? [{ station, platform }] : [];
+  });
+  // Start just after an unloading stop, so no group is cut where the list ends; a wagon that is
+  // never unloaded is one group (its own check says so).
+  const lastUnload = called.findLastIndex(stop => stop.platform.kind === 'unload');
+  const ordered = [...called.slice(lastUnload + 1), ...called.slice(0, lastUnload + 1)];
+  const groups: WagonFill[][] = [[]];
+  for (const { station, platform } of ordered) {
+    if (platform.kind === 'unload') groups.push([]);
+    else {
+      const fill = wagonFill(
+        wagon,
+        { station, platform, at: wagon.car - 1 },
+        line.roundTrip,
+        facts,
+      );
+      if (fill) groups.at(-1)!.push(fill); // groups starts with one and only grows
+    }
+  }
+  return groups.filter(group => group.length > 1);
+}
+// What a group of fills takes of one wagon: its stacks of 32 for solids, m³ for fluids.
+const wagonUse = (fills: WagonFill[]) =>
+  fills.reduce((sum, fill) => sum + (fill.fluid ? fill.perTrip : fill.perTrip / fill.stack), 0);
+
 // Each wagon: loaded somewhere, unloaded somewhere, one kind of wagon, and room for what its belt
-// brings in one round trip.
-function wagonChecks(line: TrainLine, wagons: Wagon[], facts: ItemFacts): TrainCheck[] {
+// brings in one round trip, at each stop and over the stops that load it before it is unloaded.
+function wagonChecks(
+  line: TrainLine,
+  stations: readonly TrainStation[],
+  wagons: Wagon[],
+  facts: ItemFacts,
+): TrainCheck[] {
   const out: TrainCheck[] = [];
   for (const wagon of wagons) {
     const cargo = wagonCargo(wagon);
@@ -236,6 +278,22 @@ function wagonChecks(line: TrainLine, wagons: Wagon[], facts: ItemFacts): TrainC
         station: stop.station.id,
       });
     }
+    for (const fills of loadsTogether(line, stations, wagon, facts)) {
+      // A stop that is full alone has said so; the total would only repeat it.
+      if (fills.some(fill => !fill.fits)) continue;
+      const fluid = fills[0]!.fluid; // a group has at least two fills
+      const room = fluid ? FLUID_WAGON_M3 : WAGON_SLOTS;
+      const used = wagonUse(fills);
+      if (used <= room + 1e-9) continue;
+      const names = listNames(fills.map(fill => fill.station));
+      out.push({
+        key: `wagon-total:${wagon.number}:${fills.map(fill => fill.station).join('+')}`,
+        text: fluid
+          ? `Wagon ${wagon.number} is loaded at ${names} before it is unloaded: together they bring ${trainFigure(used)} m³ in a ${trainFigure(line.roundTrip ?? 0)}-minute round trip, more than the ${trainFigure(room)} m³ a fluid freight wagon holds. Add a wagon or shorten the round trip.`
+          : `Wagon ${wagon.number} is loaded at ${names} before it is unloaded: together they fill ${trainFigure(used)} stacks in a ${trainFigure(line.roundTrip ?? 0)}-minute round trip, more than the ${trainFigure(room)} the wagon holds. Add a wagon or shorten the round trip.`,
+        station: wagon.loads.find(stop => stop.station.name === fills[0]!.station)?.station.id,
+      });
+    }
   }
   return out;
 }
@@ -249,7 +307,7 @@ export function lineChecks(
   if (line.stops.length < 2) out.push({ key: 'stops', text: 'A line needs at least two stops.' });
   for (const station of calledStations(line, stations)) out.push(...stationChecks(line, station));
   const wagons = wagonPlan(line, stations);
-  out.push(...wagonChecks(line, wagons, facts));
+  out.push(...wagonChecks(line, stations, wagons, facts));
   if (!line.roundTrip && wagons.some(wagon => wagon.loads.length))
     out.push({
       key: 'round-trip',

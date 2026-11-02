@@ -78,6 +78,8 @@ const panelAttrs = (tab: LogisticsTab) => ({
   tabindex: 0,
   hidden: active.value !== tab || undefined,
 });
+// The small line over the title names the open tab's subject (#1280).
+const eyebrow = computed(() => (active.value === 'trains' ? 'TRAINS' : 'BETWEEN FACTORIES'));
 const subtitle = computed(() => {
   if (!page.value.calculated) return '';
   if (active.value === 'trains')
@@ -89,7 +91,7 @@ const subtitle = computed(() => {
 </script>
 
 <template>
-  <PageHeader eyebrow="BETWEEN FACTORIES" title="Logistics" :subtitle="subtitle" />
+  <PageHeader :eyebrow="eyebrow" title="Logistics" :subtitle="subtitle" />
   <template v-if="page.calculated">
     <div
       class="tabs logistics-tabs"

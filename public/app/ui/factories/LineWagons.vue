@@ -2,6 +2,8 @@
   "What each wagon carries" (#1284, slice 2): one row per freight wagon of a line's train, front to
   back, with the cargo its loading platforms put in, where it loads and unloads, the belt (or pipe)
   that fills it and what one round trip brings against what it holds (wagonRows in views/trains.ts).
+  The table scrolls sideways on a phone, so its box is a labelled region that takes keyboard
+  focus (#1280): the arrow keys scroll it.
 -->
 <script setup lang="ts">
 import type { WagonRow } from '../../views/trains.ts';
@@ -10,7 +12,13 @@ defineProps<{ rows: WagonRow[]; lineName: string }>();
 </script>
 
 <template>
-  <div class="table-wrap line-wagons" data-line-wagons>
+  <div
+    class="table-wrap line-wagons"
+    role="region"
+    tabindex="0"
+    :aria-label="`What each wagon of ${lineName} carries`"
+    data-line-wagons
+  >
     <table>
       <caption class="small muted">
         What each wagon of
