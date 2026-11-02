@@ -473,6 +473,29 @@ test('the graph opens as it was left: the lines where they were put, the zoom an
   assert.deepEqual(layoutSaves(calls), [], 'opening and closing saves nothing');
 });
 
+// #1280: the help over the graph is a paragraph where there is room, and a "How to use" line that
+// opens on a phone, so it does not take the screen from the graph.
+test('the help over the graph is open with room and folded on a phone', async () => {
+  await showFactories();
+  await openGraph();
+  const help = $<HTMLDetailsElement>('#detail [data-flow-graph-help]')!;
+  assert.equal(help.querySelector('summary')!.textContent, 'How to use');
+  assert.equal(help.open, true, 'open where there is room');
+  assert.match(help.querySelector('p')!.textContent!, /Drag the background to move the graph/);
+  dialog().close();
+  await settle();
+  const real = globalThis.matchMedia;
+  globalThis.matchMedia = ((query: string) => ({
+    matches: query === '(max-width: 720px)',
+  })) as typeof matchMedia;
+  try {
+    await openGraph();
+    assert.equal($<HTMLDetailsElement>('#detail [data-flow-graph-help]')!.open, false);
+  } finally {
+    globalThis.matchMedia = real;
+  }
+});
+
 test('Reset layout goes back to the automatic layout at 100%, asking first when a line was moved', async () => {
   const automatic = graphOf();
   const [first] = lineIds(automatic) as [string];
@@ -489,6 +512,8 @@ test('Reset layout goes back to the automatic layout at 100%, asking first when 
   await settle();
   assert.equal(asked.length, 1);
   assert.match(asked[0]!, /go back to their automatic places/);
+  // It says what the graph does when opened again: fitted, not at the 100% it shows now (#1280).
+  assert.match(asked[0]!, /to 100%. Opened again, it is fitted to the window.$/);
   assert.deepEqual(drawnAt(first), [900, 30]);
   assert.deepEqual(layoutSaves(calls), []);
   // Confirmed: the automatic layout at natural size, and the stored layout goes.

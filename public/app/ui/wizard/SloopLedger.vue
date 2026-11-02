@@ -107,9 +107,9 @@ const view = computed(() =>
     <div ref="ledger" class="notice" :class="view.over ? 'warn' : 'info'" data-sloop-ledger>
       <b>Somersloop ledger.</b>
       <template v-if="view.augmenters"
-        >{{ view.augmenters }} augmenter{{ view.augmenters > 1 ? 's' : '' }} cost
-        {{ view.sloops }} sloops and give Phase 5 {{ view.mw }} MW plus a {{ view.boost }}%
-        multiplier on the grid's base production.
+        >{{ view.augmenters }} augmenter{{ view.augmenters > 1 ? 's cost' : ' costs' }}
+        {{ view.sloops }} sloops and {{ view.augmenters > 1 ? 'give' : 'gives' }} Phase 5
+        {{ view.mw }} MW plus a {{ view.boost }}% multiplier on the grid's base production.
         {{
           view.fueled
             ? `Fueling ${view.fueled} of them adds ${view.matrix} Alien Power Matrix/min to the plan — the rate is derived here, never entered.`

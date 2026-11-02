@@ -92,7 +92,7 @@ test('the delivery step shows as done once every counter is full, without a tick
   assert.equal(note.textContent, 'Done: every delivery counter is at its target.');
   assert.equal(done.getAttribute('aria-describedby'), note.id);
   assert.equal(state.checks['deliver-1'], undefined, 'no tick written');
-  assert.match($('[data-plan-progress]')!.textContent!, /^1 of \d+ done$/);
+  assert.match($('[data-plan-progress]')!.textContent!, /^1 of \d+ done in this phase$/);
   // "Hide completed" hides it like a ticked step.
   setHideDone(true);
   render();

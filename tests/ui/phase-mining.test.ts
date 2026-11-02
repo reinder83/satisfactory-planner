@@ -140,6 +140,12 @@ test('Logistics names each mined resource’s nodes and what its belts still nee
     plain($('[data-lane-unlock]')?.textContent),
     'Mk.5 belts need Tier 7 · Logistics Mk.5, which is not ticked yet: until then, plan with Mk.4 belts (480/min). Mk.2 pipes need Tier 6 · Pipeline Engineering Mk.2, which is not ticked yet: until then, plan with Mk.1 pipes (300 m³/min).',
   );
+  // The counts use the marks the milestones give, which the line above says may be ahead of the
+  // ticks: a flow that fits the lower mark fits it until then (#1280).
+  assert.match(
+    plain($('[data-lane-unlock-hint]')?.textContent),
+    /^The counts below use the marks this phase's milestones give; a flow within the lower mark's capacity fits it until you tick them.$/,
+  );
   // Ticked, the marks need nothing more.
   page();
   open({
@@ -153,6 +159,7 @@ test('Logistics names each mined resource’s nodes and what its belts still nee
   go('logistics');
   render();
   assert.equal($('[data-lane-unlock]'), null);
+  assert.equal($('[data-lane-unlock-hint]'), null);
 });
 
 test('property: no phase’s belts or pipes come before their tier, unless their unlock is ticked', () => {

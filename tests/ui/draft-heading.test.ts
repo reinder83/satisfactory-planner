@@ -238,3 +238,50 @@ test('a build-cost draft over a cap is headed by its build cost first', () => {
     'without a cap it reads as before',
   );
 });
+
+// #1280: a draft held by a cap on buildings lists its own plan's buildings in the Review table,
+// which is not the figure the cap is compared with, so the draft's notice says what it is.
+test('the wizard Review says what the Buildings of a cap draft count', () => {
+  const plan = generated();
+  const rows = plan.stages['3'].rows!.slice(0, 3).map(row => ({ ...row, machines: 4 }));
+  const capped = {
+    feasible: false,
+    reason: 'This phase needs at least 102 buildings; the cap is 100 buildings.',
+    rows,
+    capShortfalls: [{ name: 'buildings' as const, needed: 102, cap: 100 }],
+  } as (typeof plan.stages)['3'];
+  const review = (stage: (typeof plan.stages)['3']) => {
+    page();
+    open();
+    setWizard({
+      step: 5,
+      saveId: null,
+      saveName: 'World',
+      name: '',
+      settings: structuredClone(plan.settings),
+      preview: {
+        ...plan,
+        settings: { ...plan.settings, phase: '1' },
+        stages: { ...plan.stages, 3: stage },
+      },
+      carryFrom: null,
+      carry: Object.fromEntries(carryOptions.map(([k]) => [k, true])),
+      mode: 'advanced',
+      guidedStep: 1,
+      guidedAsk: null,
+      tutorial: 'doing',
+    });
+    go('wizard');
+    render();
+  };
+  review(capped);
+  assert.match(
+    $$('[data-review-draft-buildings]')
+      .map(note => note.textContent!.trim())
+      .join(' '),
+    /^The Buildings column counts this draft's own plan, 12: the plan without the cap and before production amplification, with every line rounded up to whole machines\./,
+  );
+  // A draft held by a budget, or by a cap on power, has nothing to explain.
+  review({ ...capped, capShortfalls: [{ name: 'mw' as const, needed: 856, cap: 700 }] });
+  assert.equal($$('[data-review-draft-buildings]').length, 0);
+});

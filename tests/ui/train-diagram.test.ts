@@ -9,7 +9,12 @@ import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
 import { setLogisticsTab, state } from '../../public/app/session.ts';
-import { automaticSpots, DIAGRAM, stationColumns } from '../../public/app/train-diagram.ts';
+import {
+  automaticSpots,
+  DIAGRAM,
+  stationColumns,
+  trainDiagram,
+} from '../../public/app/train-diagram.ts';
 import { $, $$, answerConfirms, applyUpdate, evil, go, open, page, stubFetch } from './setup.ts';
 import type { ProgressState, TrainLine, TrainStation, UpdateOp } from '../../public/types/index.ts';
 
@@ -212,4 +217,44 @@ test('no stations: the diagram says what it will show', async () => {
   await showDiagram({ version: 1, trainStations: undefined, trainLines: undefined });
   assert.ok($('[data-diagram-empty]'));
   assert.equal($('[data-diagram]'), null);
+});
+
+// #1280: lines between the same stations run a few units apart, so their labels, each at the
+// middle of its line, sat on one another; and a label could sit on a station's box.
+test('the labels of parallel lines are spread, and none sits on a station', () => {
+  const stations = [MINE, WORKS];
+  const lines: TrainLine[] = ['one', 'two', 'three', 'four'].map((name, index) => ({
+    ...SHUTTLE,
+    id: 'tl-par0' + index,
+    name: 'Line ' + name,
+  }));
+  const model = trainDiagram(
+    stations,
+    lines,
+    {},
+    () => ['Iron Ore'],
+    () => '',
+  );
+  assert.equal(model.labels.length, lines.length, 'every line keeps its label');
+  const boxes = model.labels.map(label => ({
+    x: label.x,
+    y: label.y,
+    width: label.text.length * DIAGRAM.labelChar + DIAGRAM.labelPad,
+  }));
+  const overlap = (a: (typeof boxes)[number], b: (typeof boxes)[number]) =>
+    Math.abs(a.x - b.x) < (a.width + b.width) / 2 && Math.abs(a.y - b.y) < DIAGRAM.labelHeight;
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++)
+      assert.ok(!overlap(boxes[i]!, boxes[j]!), `labels ${i} and ${j} apart`);
+  // Not on a station's box either.
+  model.labels.forEach((label, i) => {
+    for (const box of model.stations)
+      assert.ok(
+        label.x + boxes[i]!.width / 2 <= box.x ||
+          label.x - boxes[i]!.width / 2 >= box.x + box.width ||
+          label.y + DIAGRAM.labelHeight / 2 <= box.y ||
+          label.y - DIAGRAM.labelHeight / 2 >= box.y + box.height,
+        `${label.line} clear of ${box.id}`,
+      );
+  });
 });

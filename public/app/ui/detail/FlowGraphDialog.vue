@@ -322,6 +322,9 @@ function onNodeKey(e: KeyboardEvent, node: GraphNode) {
   layout.later();
   void keepInView(node.id);
 }
+// The help over the graph is open where there is room for it and a "How to use" line on a phone,
+// where it would take most of the screen from the graph (#1280).
+const roomy = globalThis.matchMedia?.('(max-width: 720px)').matches !== true;
 // Back to the automatic layout at natural size, from the top-left corner; asked first when a box
 // was moved, since that is work to redo.
 async function resetLayout() {
@@ -329,7 +332,7 @@ async function resetLayout() {
     (Object.keys(layout.spots.value).length || Object.keys(layout.places.value).length) &&
     !(await confirmAction({
       title: 'Reset the layout?',
-      body: 'The production lines, inputs and outputs you moved go back to their automatic places, and the graph to 100%.',
+      body: 'The production lines, inputs and outputs you moved go back to their automatic places, and the graph to 100%. Opened again, it is fitted to the window.',
       confirmLabel: 'Reset layout',
     }))
   )
@@ -350,22 +353,25 @@ async function resetLayout() {
       No production lines of this factory produce anything in {{ view.phase }}.
     </p>
     <template v-else>
-      <p class="small muted">
-        What comes in on the left, this factory's production lines from left to right in the order
-        they feed each other, and what leaves on the right. Each arrow is one item, per minute. Drag
-        the background to move the graph, drag a production line, an input or an output to move it
-        (or the arrow keys on a focused box), zoom with the mouse wheel, a pinch or the buttons, and
-        press a production line to open it. Moved boxes snap to a 5 px grid, so they line up. The
-        graph opens as you left it, until you reset the layout.
-        <template v-if="view.quiet && !layout.tags.value">
-          What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
-        </template>
-        <template v-else-if="view.quiet">
-          What goes to Protected storage (▣) and the AWESOME Sink (♻) is shown as tags on each
-          production line.
-        </template>
-        Point at a box or focus it to light up its arrows.
-      </p>
+      <details class="fgraph-help small muted" :open="roomy" data-flow-graph-help>
+        <summary>How to use</summary>
+        <p>
+          What comes in on the left, this factory's production lines from left to right in the order
+          they feed each other, and what leaves on the right. Each arrow is one item, per minute.
+          Drag the background to move the graph, drag a production line, an input or an output to
+          move it (or the arrow keys on a focused box), zoom with the mouse wheel, a pinch or the
+          buttons, and press a production line to open it. Moved boxes snap to a 5 px grid, so they
+          line up. The graph opens as you left it, until you reset the layout.
+          <template v-if="view.quiet && !layout.tags.value">
+            What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
+          </template>
+          <template v-else-if="view.quiet">
+            What goes to Protected storage (▣) and the AWESOME Sink (♻) is shown as tags on each
+            production line.
+          </template>
+          Point at a box or focus it to light up its arrows.
+        </p>
+      </details>
       <div class="fgraph-tools" data-flow-graph-tools>
         <button
           class="btn"

@@ -153,6 +153,12 @@ test("a line's card: train, stops, checks with their buttons, and what each wago
   );
   assert.match(shuttle.querySelector('[data-line-stops]')!.textContent!, /Iron mine/);
   assert.deepEqual(checkKeys(shuttle), ['rear-loco']);
+  // The table scrolls sideways on a phone, so its box is a labelled region the keyboard can focus
+  // (#1280).
+  const scroller = shuttle.querySelector<HTMLElement>('[data-line-wagons]')!;
+  assert.equal(scroller.getAttribute('role'), 'region');
+  assert.equal(scroller.tabIndex, 0);
+  assert.equal(scroller.getAttribute('aria-label'), 'What each wagon of Ore shuttle carries');
   // The wagon table: what the platforms decide.
   const wagon = shuttle.querySelector('[data-wagon="1"]')!;
   assert.deepEqual(

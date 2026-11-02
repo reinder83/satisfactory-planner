@@ -18,6 +18,7 @@ const settle = async () => {
 const tab = (id: string) => $<HTMLButtonElement>(`[data-logistics-tab="${id}"]`)!;
 const panel = (id: string) => $(`[data-logistics-panel="${id}"]`)!;
 const subtitle = () => $('#main .subtitle')?.textContent?.trim() ?? '';
+const eyebrow = () => $('#main .eyebrow')?.textContent?.trim() ?? '';
 const key = (target: Element, name: string) =>
   target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
 
@@ -60,6 +61,7 @@ test('two tabs under the header: Between factories open, Trains beside it', asyn
   assert.equal(panel('trains').querySelector('[data-logistics-empty]'), null);
   assert.ok(panel('trains').querySelector('[data-train-stations]'), 'the stations are on Trains');
   assert.match(subtitle(), /What each factory sends the others/);
+  assert.equal(eyebrow(), 'BETWEEN FACTORIES');
 });
 
 test('arrow keys, Home and End move and open; the open tab is remembered', async () => {
@@ -72,6 +74,8 @@ test('arrow keys, Home and End move and open; the open tab is remembered', async
   assert.equal(panel('trains').hidden, false);
   assert.equal(panel('links').hidden, true);
   assert.match(subtitle(), /train stations and the lines between them/);
+  // The small line over the title follows the tab too (#1280).
+  assert.equal(eyebrow(), 'TRAINS');
   key(tab('trains'), 'ArrowRight');
   await settle();
   assert.equal(document.activeElement, tab('links'), 'the arrows wrap');

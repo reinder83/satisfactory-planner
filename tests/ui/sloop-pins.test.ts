@@ -141,7 +141,7 @@ test('a count that does not fill whole machines is refused with why, before anyt
   assert.deepEqual(calls, [], 'nothing is sent');
   assert.equal(
     text('[data-sloop-pin-error]'),
-    'Pin a whole number of machines: a multiple of 4 from 0 to 104.',
+    "Pin a whole number of machines: a multiple of 4 from 0 to 104, the most whole machines take of the game's 106 somersloops.",
   );
   assert.equal(field.getAttribute('aria-invalid'), 'true');
   assert.equal($('[data-sloop-pin-error]')!.getAttribute('role'), 'alert');

@@ -29,7 +29,7 @@ test('a phase without steps draws an empty bar with a valid range', async () => 
   assert.equal(bar.getAttribute('aria-valuemax'), '1', 'the maximum is above the minimum');
   assert.equal(bar.getAttribute('aria-valuenow'), '0');
   assert.equal(bar.getAttribute('aria-valuetext'), 'No steps in this phase');
-  assert.equal($('[data-plan-progress]')!.textContent, '0 of 0 done');
+  assert.equal($('[data-plan-progress]')!.textContent, '0 of 0 done in this phase');
 });
 
 test('a phase with steps keeps its count as the range', async () => {

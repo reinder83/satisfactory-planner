@@ -153,7 +153,7 @@ export function tickNews(id: string, title: string, done: boolean) {
 export function announceTick(id: string, title: string) {
   const profile = profileScope();
   toast(tickNews(id, title, true), false, {
-    label: 'Undo',
+    label: 'Undo last tick',
     run: () => void undoTick(id, title, profile),
   });
 }

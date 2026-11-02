@@ -109,8 +109,8 @@ test('a save export with one save lists its profiles, their phase and steps done
     `anna.json holds the save “Coop world” with 2 profiles, exported ${localStamp(data.exportedAt)}:`,
   );
   assert.deepEqual(question.list, [
-    `Main: Phase 3, 12 of ${total} steps done`,
-    `Co-op: Phase 4, 3 of ${total} steps done`,
+    `Main: Phase 3, 12 of ${total} steps done in all phases`,
+    `Co-op: Phase 4, 3 of ${total} steps done in all phases`,
   ]);
   assert.equal(
     question.note,
@@ -130,8 +130,8 @@ test('a save export with several saves names each profile with its save', () => 
   assert.equal(question.title, 'Import these saves?');
   assert.match(question.body, /^anna\.json holds 2 saves with 2 profiles, exported /);
   assert.deepEqual(question.list, [
-    `North · Main: Phase 3, 1 of ${total} steps done`,
-    `South · Main: Phase 3, 0 of ${total} steps done`,
+    `North · Main: Phase 3, 1 of ${total} steps done in all phases`,
+    `South · Main: Phase 3, 0 of ${total} steps done in all phases`,
   ]);
   assert.match(
     question.note!,
@@ -153,7 +153,7 @@ test('a one-profile export and a share read as a save with one profile', () => {
   ]);
   const question = savesImportQuestion(shared, workspaceOf(2), context('share.json'));
   assert.match(question.body, /^share\.json holds the save “Shared” with 1 profile, exported/);
-  assert.deepEqual(question.list, [`Plan: Phase 3, 0 of ${total} steps done`]);
+  assert.deepEqual(question.list, [`Plan: Phase 3, 0 of ${total} steps done in all phases`]);
 });
 
 test('an old export with an original profile counts its ticks, and a file without a date says none', () => {
@@ -257,7 +257,7 @@ test('a backup on another phase says so, and a bare state reads without a source
   );
   assert.equal(
     profileProgressText(plan, ticking(2, '4'), context()),
-    `Phase 4, 2 of ${total} steps done`,
+    `Phase 4, 2 of ${total} steps done in all phases`,
   );
 });
 
@@ -291,11 +291,11 @@ test('ticks outside the build-plan steps are named as other ticks', () => {
   // A profile's line in the import question adds them when it has any, as its card counts them.
   assert.equal(
     profileProgressText(plan, withSlots(ticking(2), 1), context()),
-    `Phase 3, 2 of ${total} steps done + 1 other tick`,
+    `Phase 3, 2 of ${total} steps done in all phases + 1 other tick`,
   );
   assert.equal(
     profileProgressText(plan, withSlots(ticking(2), 3), context()),
-    `Phase 3, 2 of ${total} steps done + 3 other ticks`,
+    `Phase 3, 2 of ${total} steps done in all phases + 3 other ticks`,
   );
 });
 

@@ -508,6 +508,17 @@ export function draftHeading(snapshot: StoredStage, phase?: string): string {
   return overBudget ? `Planning draft — ${what} exceeded.` : 'Planning draft.';
 }
 
+// What the Buildings figure of a draft phase `snapshot` is, when a cap on buildings is what the
+// draft is about (#1280): the draft keeps the rows of the plan the goal needs without the cap
+// and without production amplification, each line rounded up to whole machines, which is not the
+// figure the cap is compared with ("needs 294 buildings"). '' for any other draft.
+export function draftBuildingsNote(snapshot: StoredStage): string {
+  const capped = snapshot.capShortfalls?.some(({ name }) => name === 'buildings');
+  if (!capped || !snapshot.rows) return '';
+  const count = snapshot.rows.reduce((sum, row) => sum + row.machines, 0);
+  return `The Buildings column counts this draft's own plan, ${num(count)}: the plan without the cap and before production amplification, with every line rounded up to whole machines. The figure the cap is compared with is counted differently, so the two can differ.`;
+}
+
 // How to build `row`: how many machines run at 100% and whether one last machine runs
 // underclocked, with per-machine output text. `easy` is an optional rounded-up clock for
 // that last machine and the extra inputs/outputs it causes; it is never offered for nuclear

@@ -41,7 +41,7 @@ const progress = computed(() =>
       <span :style="{ width: progress.percent + '%' }"></span>
     </div>
     <span class="small muted" data-plan-progress aria-hidden="true"
-      >{{ progress.done }} of {{ progress.total }} done</span
+      >{{ progress.done }} of {{ progress.total }} done in this phase</span
     >
   </div>
 </template>

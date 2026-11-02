@@ -113,3 +113,25 @@ test('the production line dialog opens with what stands and what to add', async 
     /^5 Refineries built, so add 1, which takes [\d.,]+ m³\/min more Heavy Oil Residue\./,
   );
 });
+
+// #1280: a line a recalculation left unticked for review (stored as false, once ticked) says so on
+// its card; a line never ticked and a ticked one do not.
+test('a line left unticked for review says it was running on its card', async () => {
+  const card = () => $(`[data-check="${KEY}"]`)!.closest<HTMLElement>('.factory-card')!;
+  await show({ checks: { [KEY]: false } }, 'factories');
+  assert.equal(
+    text(card().querySelector('[data-review-line]')),
+    'Was running before: check that it still fits this plan, then tick it.',
+  );
+  page();
+  await show({}, 'factories');
+  assert.equal(card().querySelector('[data-review-line]'), null, 'never ticked: no note');
+  page();
+  await show({ checks: { [KEY]: true } }, 'factories');
+  assert.equal(card().querySelector('[data-review-line]'), null, 'running: no note');
+  // A grown line has its own, more exact note.
+  page();
+  await show(GROWN, 'factories');
+  assert.equal(card().querySelector('[data-review-line]'), null);
+  assert.ok(card().querySelector('[data-grown]'));
+});

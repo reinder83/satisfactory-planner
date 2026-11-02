@@ -5,6 +5,7 @@
 // one colour per line, parallel lines side by side. A station the user moved sits where they put
 // it (`spots`, the stored `trainLayout.stations`, on the flow graph's 5-unit grid); the others at
 // their automatic spots, and every line follows its stations.
+import { spreadLabels, type GraphBox, type GraphCurve } from './graph-labels.ts';
 import { snapUnit } from './graph-layout.ts';
 import { DIRECTION_TEXT, LINE_COLORS } from './train-lines.ts';
 import type { TrainLine, TrainPlatformKind, TrainStation } from '../types/index.ts';
@@ -26,6 +27,13 @@ export const DIAGRAM = {
   nameChars: 26,
   captionChars: 30,
   platformGlyphs: 8,
+  // A line's label, for placing it clear of the others and of the stations (#1280): its height,
+  // and a character's width at the label's 11px size, plus room either side.
+  labelHeight: 14,
+  labelChar: 6,
+  labelPad: 8,
+  // A label is drawn this far above its line.
+  labelRise: 8,
 } as const;
 
 export interface DiagramStation {
@@ -165,6 +173,63 @@ function lineSegments(
   return pairs;
 }
 
+// Lines between the same stations run a few units apart, so their labels, each at the middle of
+// its line's first curve, sat on one another; and a label could land on a station's box. Each label
+// goes where it covers neither a station nor a label placed before it (spreadLabels, as the flow
+// graph's labels do), sliding along its line's curves; one with no free spot stays at the middle
+// of its first curve, as before (#1280).
+function placeLabels(
+  labels: DiagramLabel[],
+  curves: ReadonlyMap<string, readonly GraphCurve[]>,
+  stations: readonly DiagramStation[],
+) {
+  // The text is drawn `labelRise` above its line, so the stations move down by that much to stand
+  // where they are against the text.
+  const boxes: GraphBox[] = stations.map(station => ({
+    x: station.x + station.width / 2,
+    y: station.y + station.height / 2 + DIAGRAM.labelRise,
+    width: station.width,
+    height: station.height,
+  }));
+  // Lines between the same stations run a few units apart, closer than a label is tall, and a
+  // label is wider than the room along the lines, so sliding alone cannot part them: after its own
+  // line a label tries rows above and below it, a row at a time.
+  const rows = labels.length;
+  const shifted = (curve: GraphCurve, by: number): GraphCurve => ({
+    from: { x: curve.from.x, y: curve.from.y + by },
+    c1: { x: curve.c1.x, y: curve.c1.y + by },
+    c2: { x: curve.c2.x, y: curve.c2.y + by },
+    to: { x: curve.to.x, y: curve.to.y + by },
+  });
+  const placed = spreadLabels(
+    labels.flatMap(label => {
+      const own = curves.get(label.line);
+      if (!own?.length) return [];
+      const first = own[0]!; // the check above found a curve
+      const near = Array.from({ length: rows }, (_, i) => i + 1).flatMap(row => [
+        shifted(first, -row * DIAGRAM.labelHeight),
+        shifted(first, row * DIAGRAM.labelHeight),
+      ]);
+      return [
+        {
+          id: label.line,
+          width: label.text.length * DIAGRAM.labelChar + DIAGRAM.labelPad,
+          curves: [...own, ...near],
+        },
+      ];
+    }),
+    DIAGRAM.labelHeight,
+    boxes,
+    true,
+  );
+  for (const label of labels) {
+    const spot = placed.get(label.line);
+    if (!spot) continue;
+    label.x = spot.x;
+    label.y = spot.y - DIAGRAM.labelRise;
+  }
+}
+
 // The diagram of `stations` and `lines` with the stored spots of moved stations, `cargo` giving
 // each line's cargo for its label and `caption` each station's second line (its owner).
 export function trainDiagram(
@@ -195,11 +260,24 @@ export function trainDiagram(
   const segments: DiagramSegment[] = [];
   const labels: DiagramLabel[] = [];
   const spread = Math.min(DIAGRAM.parallel, 48 / Math.max(1, lines.length));
+  // Each line's curves, a label's places to sit.
+  const curves = new Map<string, GraphCurve[]>();
   lines.forEach((line, index) => {
     const color = index % LINE_COLORS;
     const off = (index - (lines.length - 1) / 2) * spread;
     lineSegments(line, at).forEach(([from, to], i) => {
       const shape = curve(from, to, off);
+      const [x1, c1, c2, x2] = shape.points as [number, number, number, number];
+      const [y1, , , y2] = shape.ys as [number, number, number, number];
+      curves.set(line.id, [
+        ...(curves.get(line.id) ?? []),
+        {
+          from: { x: x1, y: y1 },
+          c1: { x: c1, y: y1 },
+          c2: { x: c2, y: y2 },
+          to: { x: x2, y: y2 },
+        },
+      ]);
       segments.push({
         id: `${line.id}:${i}`,
         line: line.id,
@@ -209,8 +287,6 @@ export function trainDiagram(
         dashed: line.direction === 'oneWay',
       });
       if (i) return;
-      const [x1, c1, c2, x2] = shape.points as [number, number, number, number];
-      const [y1, , , y2] = shape.ys as [number, number, number, number];
       const goods = cargo(line);
       labels.push({
         line: line.id,
@@ -220,10 +296,11 @@ export function trainDiagram(
           DIAGRAM.labelChars,
         ),
         x: middle(x1, c1, c2, x2),
-        y: middle(y1, y1, y2, y2) - 8,
+        y: middle(y1, y1, y2, y2) - DIAGRAM.labelRise,
       });
     });
   });
+  placeLabels(labels, curves, drawn);
   const width = Math.max(
     DIAGRAM.width + 2 * DIAGRAM.margin,
     ...drawn.map(station => station.x + station.width + DIAGRAM.margin + DIAGRAM.swing),

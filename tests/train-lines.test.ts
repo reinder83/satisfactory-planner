@@ -486,6 +486,50 @@ test('the line checks: consist, stops, platforms, wagons and what a wagon holds'
   assert.ok(mixed.includes('wagon-mixed:1'));
 });
 
+// #1280: a wagon loaded at two stations before it is unloaded carries what both bring, so it is
+// checked on the total as well as at each stop.
+test('a wagon that loads at two stations is checked on the total it carries', () => {
+  const mine = (id: string, name: string): TrainStation => ({
+    id,
+    name,
+    platforms: [{ kind: 'load', cargo: ['Iron Ore'], belt: 5 }],
+  });
+  const stations: TrainStation[] = [
+    mine('ts-a', 'North mine'),
+    mine('ts-b', 'South mine'),
+    { id: 'ts-c', name: 'Works', platforms: [{ kind: 'unload', belt: 5 }] },
+  ];
+  const line = (roundTrip: number, stops: string[]): TrainLine => ({
+    id: 'tl-two',
+    name: 'Two mines',
+    cars: ['loco', 'wagon'],
+    stops,
+    direction: 'oneWay',
+    roundTrip,
+  });
+  const checks = (roundTrip: number, stops = ['ts-a', 'ts-b', 'ts-c']) =>
+    lineChecks(line(roundTrip, stops), stations, FACTS);
+  // 780/min for 3 minutes is 2,340 at each stop, 23.4 of the 32 stacks of 100: each fits alone,
+  // together they fill 46.8.
+  const total = checks(3).filter(check => check.key.startsWith('wagon-total:'));
+  assert.equal(total.length, 1);
+  assert.equal(
+    total[0]!.text,
+    'Wagon 1 is loaded at North mine and South mine before it is unloaded: together they fill 46.8 stacks in a 3-minute round trip, more than the 32 the wagon holds. Add a wagon or shorten the round trip.',
+  );
+  assert.equal(total[0]!.station, 'ts-a');
+  assert.ok(!checks(3).some(check => check.key.startsWith('wagon-full:')), 'each fits alone');
+  // A shorter round trip fits both.
+  assert.deepEqual(checks(1.5), []);
+  // One mine on its own has nothing to add up.
+  assert.deepEqual(checks(3, ['ts-a', 'ts-c']), []);
+  // The stops are a loop: after the works the wagon loads at South mine, then North mine, before
+  // it comes round to the works again, so both fill it.
+  assert.ok(
+    checks(3, ['ts-a', 'ts-c', 'ts-b']).some(check => check.key.startsWith('wagon-total:')),
+  );
+});
+
 test('the editor helpers: a wagon goes in front of the rear locomotive; words and names', () => {
   assert.deepEqual(withWagon(['loco', 'wagon', 'loco'], 'backAndForth'), [
     'loco',
