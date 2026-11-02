@@ -328,11 +328,15 @@ function recalculate(event: Event) {
   <section v-if="view" class="panel group-links" data-group-links>
     <h2>Between factories</h2>
     <p class="small muted">
-      What comes into each factory and what goes out per minute, with the best belt or pipe you have
-      unlocked. Flows inside a factory are left out. Pick a vehicle on a factory's outgoing link and
-      give its round trip to see how many it takes.
+      What comes into each factory and what goes out per minute, with the best belt or pipe this
+      phase's milestones give. Flows inside a factory are left out. Pick a vehicle on a factory's
+      outgoing link and give its round trip to see how many it takes.
     </p>
     <p v-if="view.unlock" class="small" data-lane-unlock>{{ view.unlock }}</p>
+    <p v-if="view.unlock" class="small muted" data-lane-unlock-hint>
+      The counts below use the marks this phase's milestones give; a flow within the lower mark's
+      capacity fits it until you tick them.
+    </p>
     <p v-if="!view.links.length" class="small">Nothing moves between factories yet.</p>
     <div v-else class="group-cards">
       <article

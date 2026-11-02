@@ -65,7 +65,8 @@ const view = computed(() =>
   <StepHeading>What is different this time?</StepHeading>
   <p>
     Starting from the settings of <b>{{ view.from || 'this save' }}</b
-    >. Tick only what changes; the rest is kept as it is.
+    >. Tick only what changes; the rest is kept as it is. Phase starts ticked, because a new profile
+    usually begins at a later phase: untick it if that stays the same.
   </p>
   <div class="guided-known">
     <span v-for="[label, value] in view.known" :key="label"

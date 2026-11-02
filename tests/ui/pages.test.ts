@@ -69,9 +69,9 @@ test('Saves & profiles asks for a fresh summary when it opens, after pending wri
   go('profiles');
   render();
   // Until the reply, the summary it had.
-  assert.match($$('.profile-card')[1]!.textContent!, /5 checks complete · Phase 4/);
+  assert.match($$('.profile-card')[1]!.textContent!, /5 checks complete in total · Phase 4/);
   await vi.waitFor(() =>
-    assert.match($$('.profile-card')[1]!.textContent!, /6 checks complete · Phase 5/),
+    assert.match($$('.profile-card')[1]!.textContent!, /6 checks complete in total · Phase 5/),
   );
   assert.deepEqual(
     calls.map(([path]) => path),
@@ -281,8 +281,8 @@ test('a profile card says 1 check, N checks, or none yet', () => {
     $$('.profile-card').map(c => c.querySelector('.small')!.textContent),
     [
       'No checks complete yet · Phase 2',
-      '1 check complete · Phase 2',
-      `${num(1234)} checks complete · Phase 2`,
+      '1 check complete in total · Phase 2',
+      `${num(1234)} checks complete in total · Phase 2`,
     ],
   );
 });
@@ -306,7 +306,10 @@ test('Saves & profiles lists every profile, escaped, with its actions', () => {
     cards[1]!.querySelector('p')!.textContent,
     evil + ' purity · 2× elevator · 3× power',
   );
-  assert.equal(cards[1]!.querySelector('.small')!.textContent, '5 checks complete · Phase 4');
+  assert.equal(
+    cards[1]!.querySelector('.small')!.textContent,
+    '5 checks complete in total · Phase 4',
+  );
   assert.match(
     cards[0]!.querySelector('[data-open-save]')!.textContent,
     /Continue current profile/,
@@ -669,7 +672,7 @@ test('a migrated profile’s backup page has its download, restore and transfer 
     [
       'Full saves & transfer',
       'Co-op progress',
-      'Download this profile',
+      'Back up this profile',
       'Restore this profile',
       'Calculation assumptions',
     ],

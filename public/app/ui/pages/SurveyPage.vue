@@ -193,8 +193,20 @@ function submit() {
           today.
         </p>
         <div class="form-grid">
-          <SelectField label="Miner" name="mark" :options="marks" :value="page.mark" />
-          <SelectField label="Clock speed" name="clock" :options="clocks" :value="page.clock" />
+          <SelectField
+            label="Miner"
+            name="mark"
+            help="extractionMark"
+            :options="marks"
+            :value="page.mark"
+          />
+          <SelectField
+            label="Clock speed"
+            name="clock"
+            help="extractionClock"
+            :options="clocks"
+            :value="page.clock"
+          />
         </div>
         <div class="notice info">
           <b>At these settings</b> one iron node gives {{ page.samples.impure }}/min impure,

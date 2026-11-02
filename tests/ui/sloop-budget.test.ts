@@ -171,7 +171,11 @@ test('the ledger follows the fields as they are typed and shows the real budget'
   await type('augmenters', '10');
   await type('fueledAugmenters', '10');
   assert.equal(text('[data-sloop-available]'), '106', 'the budget as typed');
-  assert.match(text('[data-sloop-ledger]'), /10 augmenters cost 100 sloops/);
+  assert.match(text('[data-sloop-ledger]'), /10 augmenters cost 100 sloops and give Phase 5/);
+  // One augmenter reads in the singular (#1280).
+  await type('augmenters', '1');
+  assert.match(text('[data-sloop-ledger]'), /1 augmenter costs 10 sloops and gives Phase 5/);
+  await type('augmenters', '10');
   assert.match(text('[data-sloop-ledger]'), /Fueling 10 of them adds 50 Alien Power Matrix\/min/);
   assert.match(
     text('[data-sloop-ledger]'),

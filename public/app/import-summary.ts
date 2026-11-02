@@ -58,8 +58,9 @@ export interface ImportContext {
   phaseLabel: (phase: string) => string;
 }
 
-// A profile's progress in words: "Phase 3, 412 of 980 steps done", or "Phase 3, 30 ticked"
-// without a plan (or without progression.json).
+// A profile's progress in words: "Phase 3, 412 of 980 steps done in all phases", or "Phase 3, 30
+// ticked" without a plan (or without progression.json). It says what it counts, since the build
+// plan counts the phase it shows and the profile card every tick (#1280).
 export function profileProgressText(
   plan: StoredCalculatedPlan | null | undefined,
   state: SavedState,
@@ -68,7 +69,7 @@ export function profileProgressText(
   const phase = context.phaseLabel(state.settings.phase);
   const steps = stepsDone(plan, state, context.progression);
   if (!steps) return `${phase}, ${Object.values(state.checks).filter(Boolean).length} ticked`;
-  return `${phase}, ${steps.done} of ${plural(steps.total, 'step')} done${otherWords(steps.other)}`;
+  return `${phase}, ${steps.done} of ${plural(steps.total, 'step')} done in all phases${otherWords(steps.other)}`;
 }
 
 // " + 3 other ticks" for ticks outside the build-plan steps, nothing for none.

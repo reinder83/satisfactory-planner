@@ -1015,6 +1015,14 @@ test('an answer redraws the question, and All settings keeps it', async () => {
       .classList.contains('is-picked'),
   );
   assert.ok($('input[name=hours]'), 'a timed goal asks for its hours');
+  // With its help tip, keyed guidedHours (#1021).
+  assert.match(
+    $('input[name=hours]')!
+      .closest('label')!
+      .querySelector('.setting-help')!
+      .getAttribute('aria-label')!,
+    /^Hours per phase. The planner sizes the factory/,
+  );
   await click('[data-guided-advanced]');
   assert.equal(wizard!.mode, 'advanced');
   assert.equal(wizard!.step, 3, 'lands on the step that owns the question');

@@ -614,3 +614,36 @@ test('the browser edition creates a new plan with mining per phase from the wiza
   assert.equal(plan.settings.phaseMining, true);
   assert.deepEqual(plan.stages['2'].mining!.miner, { mark: 2, clock: 2.5 });
 });
+
+// #1280: when one extractor runs below 100% either way, the options at 100% and at 250% are the
+// same advice, so it is one line without a clock to tell the two apart.
+test('a fluid whose options at 100% and 250% are the same advice gives one line', () => {
+  // Only the fields the advice reads, so a single cast says what the fixture leaves out.
+  const stageFor = (rate: number) =>
+    ({
+      raw: { 'Crude Oil': rate },
+      mining: {
+        miner: { mark: 3, clock: 2.5 },
+        budgets: { 'Crude Oil': 600 },
+        belt: { mark: 'Mk.5', cap: 780 },
+        pipe: { mark: 'Mk.2', cap: 600 },
+        sources: {
+          'Crude Oil': [
+            {
+              kind: 'pure',
+              machine: 'Oil Extractor',
+              nodes: 1,
+              base: 240,
+              cap: 600,
+              machineMW: 40,
+            },
+          ],
+        },
+      },
+    }) as Pick<StoredStage, 'mining' | 'raw'>;
+  const words = (rate: number) => stageMiningAdvice(stageFor(rate))[0]!.words;
+  // 120.3 m³/min is one extractor at 50.12%, whichever clock the phase plans.
+  assert.equal(words(120.3), 'Tap 1 pure node with Oil Extractors: 1 at 50.12% (16.05 MW).');
+  // 400 needs the overclock: the two options differ and each says its clock.
+  assert.match(words(400), /^At 100%: .*; at 250%: tap 1 pure node/);
+});

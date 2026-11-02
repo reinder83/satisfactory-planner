@@ -114,7 +114,7 @@ const page = computed(() =>
           editable: !!profile.settings,
           summary: profile.settings ? profileSummary(profile.settings) : '',
           // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
-          progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
+          progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete in total' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
           bar: phaseBar(profile),
         })),
       };

@@ -238,18 +238,21 @@ export const fluidClocks = (clock: number): number[] =>
 // The advice for a fluid at each clock its phase offers (fluidClocks): "at 100%: …; at 250%: …",
 // or only "at 100%: …" before Phase 4.
 function fluidWords(rate: number, sources: MiningSource[], clock: number): string {
-  return (
-    fluidClocks(clock)
-      .map(at => {
-        const option = miningAdvice(rate, sources, at);
-        const words = option.short
-          ? `the nodes give only ${miningNumber(rate - option.short)} m³/min`
-          : 'tap ' + adviceWords(option, true);
-        return `at ${miningNumber(at * 100)}%: ${words}`;
-      })
-      .join('; ')
-      .replace(/^a/, 'A') + '.'
-  );
+  const options = fluidClocks(clock).map(at => {
+    const option = miningAdvice(rate, sources, at);
+    const words = option.short
+      ? `the nodes give only ${miningNumber(rate - option.short)} m³/min`
+      : 'tap ' + adviceWords(option, true);
+    return { at, words };
+  });
+  // When one extractor runs below 100% either way, the clocks give the same advice (#1280): one
+  // line, with no clock to tell it from.
+  const first = options[0];
+  const same = options.length > 1 && options.every(option => option.words === first?.words);
+  const lines = same
+    ? [first!.words] // the check above found options
+    : options.map(option => `at ${miningNumber(option.at * 100)}%: ${option.words}`);
+  return lines.join('; ').replace(/^[at]/, letter => letter.toUpperCase()) + '.';
 }
 
 // What a stage's draw of each raw resource taps, the resources with nodes that it draws from,

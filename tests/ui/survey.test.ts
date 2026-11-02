@@ -105,6 +105,15 @@ test('the survey has four screens as tabs and links to the map', async () => {
   assert.match(main(), /upload your save/i);
   assert.match(main(), /never sends your save anywhere/i);
   assert.ok($('select[name=mark]') && $('select[name=clock]'));
+  // Their help is keyed by what they are, not by the field names (#1021): the clock's text is the
+  // one that explains the 250% default.
+  const helpOf = (name: string) =>
+    $(`select[name=${name}]`)!.closest('label')!.querySelector('.setting-help');
+  assert.match(helpOf('mark')!.getAttribute('aria-label')!, /^The miner you will have running/);
+  assert.match(
+    helpOf('clock')!.getAttribute('aria-label')!,
+    /^Overclocking multiplies extraction. 250%/,
+  );
   assert.equal($('[data-extraction-back]')!.textContent.trim(), 'Cancel');
   assert.equal($('[data-extraction-cancel]'), null, 'nothing to leave alone yet');
   // Ten ores, three purities each, with their icons.

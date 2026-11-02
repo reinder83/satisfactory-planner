@@ -100,6 +100,7 @@ const view = computed(() =>
     <InputField
       label="Hours per phase (target-time option)"
       name="hours"
+      help="guidedHours"
       :value="view.hours"
       min="0.25"
       max="2000"

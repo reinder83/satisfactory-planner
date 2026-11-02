@@ -351,7 +351,7 @@ async function persistStorage() {
   <template v-else>
     <div class="backup-grid">
       <section class="panel">
-        <h2>Download this profile</h2>
+        <h2>Back up this profile</h2>
         <a class="btn primary" :href="page.exportUrl" download>Download this profile</a>
         <p class="small muted">
           For all accounts, profiles and calculation snapshots, back up the Docker data volume. This

@@ -247,6 +247,7 @@ async function submit(event: Event) {
           <InputField
             label="Hours per phase"
             name="hours"
+            help="guidedHours"
             :value="page.hours"
             min="0.25"
             max="2000"

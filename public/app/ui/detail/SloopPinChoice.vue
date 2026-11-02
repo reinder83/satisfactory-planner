@@ -30,6 +30,7 @@ import {
 } from '../../sloop-pins.ts';
 import { calcStage, calculated, stage, state } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { SLOOP_PIN_MAX } from '../../../somersloops.ts';
 import { localeNumber } from '../../../wording.ts';
 import { legacy } from '../bridge.ts';
 import type { CalcRow } from '../../../types/index.ts';
@@ -101,7 +102,7 @@ function pin(event: Event) {
     error.value =
       current.slots === 1
         ? `Pin a whole number from 0 to ${current.max}.`
-        : `Pin a whole number of machines: a multiple of ${current.slots} from 0 to ${current.max}.`;
+        : `Pin a whole number of machines: a multiple of ${current.slots} from 0 to ${current.max}, the most whole machines take of the game's ${SLOOP_PIN_MAX} somersloops.`;
     field?.focus();
     return;
   }

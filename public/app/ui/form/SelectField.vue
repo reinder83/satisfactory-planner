@@ -1,6 +1,7 @@
 <!-- A labelled <select> from [value, label] pairs, showing `value` (the first option when no
      option has it, as a select does by itself). `name` is the form field the screen reads it
-     back from, and its help text key. The value is set on the select, after its options. -->
+     back from, and its help text key unless `help` names another (a field called `clock` has
+     the help text `extractionClock`, #1021). The value is set on the select, after its options. -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import HelpTip from './HelpTip.vue';
@@ -10,6 +11,7 @@ const props = withDefaults(
   defineProps<{
     label: string;
     name: string;
+    help?: string;
     options: readonly (readonly string[])[];
     value?: string | number;
   }>(),
@@ -24,7 +26,7 @@ const shown = computed(() =>
 
 <template>
   <label class="field"
-    >{{ label }} <HelpTip :name="name" /><select :name="name" :value="shown">
+    >{{ label }} <HelpTip :name="help ?? name" /><select :name="name" :value="shown">
       <option v-for="[optionValue, optionLabel] in options" :key="optionValue" :value="optionValue">
         {{ optionLabel }}
       </option>

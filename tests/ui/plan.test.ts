@@ -85,7 +85,7 @@ test('the migrated plan shows the phase checklist, counters, notes link and deli
   assert.equal($('#main h1')!.textContent, 'Phase 3');
   assert.equal($$('#main .checklist .task').length, 9);
   // SP-43: one progress indicator, the bar with "n of total done"; the tiles are one line.
-  assert.equal($('[data-plan-progress]')!.textContent, '0 of 9 done');
+  assert.equal($('[data-plan-progress]')!.textContent, '0 of 9 done in this phase');
   assert.equal($('#main .stat'), null, 'no summary tiles');
   // The phase notes moved to the Notes page (#243): the plan keeps a one-line link there.
   assert.equal($$('#main textarea').length, 0, 'no notes editor on the plan');
@@ -233,7 +233,11 @@ test('the checklist can be searched and can hide completed steps', async () => {
   assert.ok(!steps().includes('phase-3-survey'), 'completed steps are hidden');
   assert.ok(steps().includes('phase-3-iron'), 'unfinished steps stay visible');
   assert.equal($('.checklist-tools .muted')!.textContent, '8 of 9 steps');
-  assert.equal($('[data-plan-progress]')!.textContent, '1 of 9 done', 'progress counts every step');
+  assert.equal(
+    $('[data-plan-progress]')!.textContent,
+    '1 of 9 done in this phase',
+    'progress counts every step',
+  );
   for (const task of planTasks()) state.checks[task.id] = true;
   render();
   await nextTick();
@@ -668,7 +672,10 @@ test('the calculated plan shows its snapshot, warnings, deliveries and assumptio
   assert.equal($('#main .subtitle')!.textContent, evil);
   assert.match($('#main [data-draft]')!.textContent, /Planning draft/);
   assert.match($('#main [data-draft]')!.textContent, /at least 12 hours per phase/);
-  assert.equal($('[data-plan-progress]')!.textContent, '1 of ' + planTasks().length + ' done');
+  assert.equal(
+    $('[data-plan-progress]')!.textContent,
+    '1 of ' + planTasks().length + ' done in this phase',
+  );
   assert.equal($<HTMLInputElement>(`[data-check="calc-3-${row.id}"]`)!.checked, true);
   assert.equal(
     $$('#main .task-link[data-calc-factory]').length > 0,
