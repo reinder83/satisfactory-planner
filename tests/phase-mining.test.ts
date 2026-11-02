@@ -447,11 +447,15 @@ test('no 250% extractor option where a phase plans 100%: a fluid’s advice offe
         const offered = [...entry.words.matchAll(/at ([\d.,]+)%: /gi)].map(match =>
           Number(match[1]!.replace(',', '.')),
         );
-        assert.deepEqual(
-          offered,
-          fluidClocks(stage.mining!.miner.clock).map(clock => clock * 100),
-          `${name}: ${entry.resource} in Phase ${phase}`,
-        );
+        const expected = fluidClocks(stage.mining!.miner.clock).map(clock => clock * 100);
+        // Options that give the same advice are one line without a clock (#1280).
+        if (!offered.length && expected.length > 1)
+          assert.match(
+            entry.words,
+            /^(Tap|The nodes)/,
+            `${name}: ${entry.resource} in Phase ${phase}`,
+          );
+        else assert.deepEqual(offered, expected, `${name}: ${entry.resource} in Phase ${phase}`);
         if (stage.mining!.miner.clock <= 1)
           assert.doesNotMatch(entry.words, /250%|Power Shard/, `${name}: ${phase}`);
       }

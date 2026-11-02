@@ -130,7 +130,7 @@ test('a press ticks only the factory’s lines not running yet, says how many, a
     [key(ids[2]!)]: true,
     [key(ids[3]!)]: true,
   });
-  assert.equal(text($('#toast')), 'Marked 3 lines of Alpha running; 1 already was. Undo');
+  assert.equal(text($('#toast')), 'Marked 3 lines of Alpha running; 1 already was. Undo (Ctrl+Z)');
   assert.equal(text(button(ALPHA)), 'Mark all not running', 'now the reverse');
   assert.equal(document.activeElement, button(ALPHA), 'focus stays on the button');
   const cards = $$<HTMLInputElement>(`#cards-${ALPHA} input[data-check]`);
@@ -169,7 +169,7 @@ test('Ctrl+Z undoes it too, and the reverse clears the lines with an undo of its
   await settle();
   const sent = updates.filter(([path]) => path === '/api/update').map(([, body]) => body);
   assert.deepEqual(sent, [{ type: 'checks', keys: rowIds().slice(0, 4).map(key), value: false }]);
-  assert.equal(text($('#toast')), 'Marked 4 lines of Alpha not running. Undo');
+  assert.equal(text($('#toast')), 'Marked 4 lines of Alpha not running. Undo (Ctrl+Z)');
   toastShortcut(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
   await settle();
   assert.deepEqual(state.checks, before);

@@ -1979,7 +1979,7 @@ p.eyebrow {
 }
 /* The browser edition's notice (BrowserNotice.vue) ends in a link to Backup: 24px tall at least,
    the target size WCAG 2.5.8 asks (#1280), with room either side so a thumb finds it. */
-.notice .notice-backup {
+.notice .backup-link {
   display: inline-block;
   min-height: 24px;
   line-height: 24px;
