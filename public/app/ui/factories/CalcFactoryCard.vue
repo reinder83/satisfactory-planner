@@ -135,9 +135,9 @@ const card = computed(() =>
       // recipe, "4 to switch from Iron Plate, 1 to add" (#1175, the chip's To switch).
       grown: grownCard(row),
       switched: !!changedLine(row),
-      // A line stored as unticked (false), not just never ticked: it was ticked once, and a
-      // recalculation that changed it left it for review (#1280). The card says so, as the others
-      // that are left for a reason do.
+      // A line stored as unticked (false), not just never ticked: it was ticked once, and either a
+      // recalculation that changed it left it for review (#1280) or the player unticked it by hand;
+      // a stored false is the same either way, so the note says what is true of both (#1019).
       review: state.checks[check] === false,
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
@@ -194,7 +194,7 @@ const card = computed(() =>
       {{ card.carried.text }}
     </div>
     <div v-else-if="card.review && !card.switched" class="small build-carried" data-review-line>
-      Was running before: check that it still fits this plan, then tick it.
+      Unticked now; it was running before. If it still fits this plan, tick it again.
     </div>
     <footer>
       <label class="check-row"

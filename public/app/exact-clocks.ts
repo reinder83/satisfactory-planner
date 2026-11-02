@@ -3,7 +3,7 @@
 // line to run at exact clocks instead: whole machines at 100% but the last, underclocked to the
 // exact remainder. The choice is saved in the progress state (`exactClocks`, state version 16,
 // from the line's dialog, ui/detail/ExactClockChoice.vue) and changes nothing until the user starts
-// a recalculation (ui/plan/ExactClocksRecalc.vue), which freezes it in the new plan's
+// a recalculation (ui/plan/RecalcBanner.vue), which freezes it in the new plan's
 // `settings.exactClocks`; a state without the field follows the plan's own choice. The planner
 // reads it in planner/model.ts (exactClockLine, wholeLine).
 //

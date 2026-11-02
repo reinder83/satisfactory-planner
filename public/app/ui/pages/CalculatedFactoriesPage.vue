@@ -10,10 +10,10 @@
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is. When the
-  items the groups make on site differ from the plan's, OnSiteRecalc.vue says the plan needs a
-  recalculation and offers one the user starts (#877); ExactClocksRecalc.vue does the same for the
-  lines asked to run at exact clocks (#1066).
-  A milestone-only phase (#759) shows only the header, the two recalculation notices (they are
+  items the groups make on site differ from the plan's, or the lines asked to run at exact clocks
+  or the pins asked for (#1066, #1235, #1239) do, RecalcBanner.vue says the plan needs a
+  recalculation, in one notice with one button however many of them are pending (#877, #1280).
+  A milestone-only phase (#759) shows only the header, the recalculation notice (it is
   about the whole plan, #1014) and why it has no production lines; the page with no calculated
   plan open shows only the header (the profile just left, before render() swaps
   the page).
@@ -68,10 +68,7 @@ import FilterChips from '../factories/FilterChips.vue';
 import { UNGROUPED } from '../../group-order.ts';
 import JumpBar from '../factories/JumpBar.vue';
 import MineOnly from '../factories/MineOnly.vue';
-import OnSiteRecalc from '../factories/OnSiteRecalc.vue';
-import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
-import SloopPinsRecalc from '../plan/SloopPinsRecalc.vue';
-import ShardPinsRecalc from '../plan/ShardPinsRecalc.vue';
+import RecalcBanner from '../plan/RecalcBanner.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import SiteSection from '../factories/SiteSection.vue';
@@ -228,8 +225,8 @@ async function roundUp(event: Event) {
 <template>
   <template v-if="page && milestones">
     <PageHeader eyebrow="CALCULATED PRODUCTION" title="Factories" />
-    <!-- The recalculation notices are about the whole plan, not this phase (#1014). -->
-    <OnSiteRecalc /><ExactClocksRecalc /><SloopPinsRecalc /><ShardPinsRecalc />
+    <!-- The recalculation notice is about the whole plan, not this phase (#1014). -->
+    <RecalcBanner on-site />
     <MilestoneOnlyNotice />
   </template>
   <template v-else-if="page">
@@ -239,7 +236,7 @@ async function roundUp(event: Event) {
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
     <GroupEditBar />
-    <OnSiteRecalc /><ExactClocksRecalc /><SloopPinsRecalc /><ShardPinsRecalc />
+    <RecalcBanner on-site />
     <div v-if="!page.whole" class="notice info round-up-offer">
       Prefer extra production over underclocking?
       <button class="btn quiet" data-round-up @click="roundUp">Round up production…</button>

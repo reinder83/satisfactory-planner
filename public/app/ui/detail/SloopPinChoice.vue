@@ -7,7 +7,7 @@
   whole map, `sloopPins`, through save() in api.ts) while "Planner's choice" forgets this line's
   pin. Neither recalculates anything: the note under it says the plan keeps the line as it was
   calculated until the user starts "Recalculate in place with somersloop pins" on the build plan
-  (SloopPinsRecalc.vue). Saving what the plan already has forgets the saved map (null), so a state
+  (RecalcBanner.vue). Saving what the plan already has forgets the saved map (null), so a state
   goes back to the version it had. A count that does not fill whole machines is refused here with
   the reason, before anything is saved.
 -->

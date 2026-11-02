@@ -5,7 +5,7 @@
   sending the overflow to storage or the sink. The box saves the choice (`exactClocks`, the whole
   map, through save() in api.ts) and recalculates nothing: the note under it says the plan runs the
   line as it was calculated until the user starts "Recalculate in place with exact clocks" on the build plan
-  (ExactClocksRecalc.vue). Choosing what the plan already has forgets the saved choice (null), so a
+  (RecalcBanner.vue). Choosing what the plan already has forgets the saved choice (null), so a
   state goes back to the version it had. A fluid line, and a nuclear one, always runs at exact
   clocks and says so instead, as does a storage-only line (#1061); generators and amplified lines
   show nothing.
