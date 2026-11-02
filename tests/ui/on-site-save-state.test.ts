@@ -3,7 +3,7 @@
 // to do rather than as busy (a normal cursor, not the wait cursor, #948); only while its save is
 // on its way is it busy (aria-disabled, app/busy.ts). After a
 // save the picker says so and, while the plan needs a recalculation, offers "Go to the
-// recalculation", which brings OnSiteRecalc.vue's notice into view and focuses its button.
+// recalculation", which brings RecalcBanner.vue's notice into view and focuses its button.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test, vi } from 'vitest';

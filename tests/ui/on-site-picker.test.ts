@@ -1,7 +1,7 @@
 // The Factories page's "Made on site" picker and its recalculation prompt (#877, part of #868):
 // which items a group is offered, that only Save stores the choice (factoryLocal), that a changed
 // choice marks the plan as needing a recalculation the user starts, and that nothing recalculates
-// by itself (OnSitePicker.vue, OnSiteRecalc.vue, app/on-site-picker.ts).
+// by itself (OnSitePicker.vue, RecalcBanner.vue, app/on-site-picker.ts).
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';

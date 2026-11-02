@@ -7,7 +7,7 @@
   150%, 200% or 250%, one, two or three Power Shards in every machine, or 100% for no pin (the
   whole map, `lineClocks`, through save() in api.ts). Nothing recalculates: the note under it says
   the plan keeps the line as it was calculated until the user starts "Recalculate in place with
-  Power Shard pins" on the build plan (ShardPinsRecalc.vue). Saving what the plan already has
+  Power Shard pins" on the build plan (RecalcBanner.vue). Saving what the plan already has
   forgets the saved map (null), so a state goes back to the version it had.
 -->
 <script setup lang="ts">

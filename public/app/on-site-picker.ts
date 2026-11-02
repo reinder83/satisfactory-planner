@@ -3,7 +3,7 @@
 // calculated with the items the groups mark now, and what a group's heading says it makes on
 // site (#931). A
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
-// the user starts (OnSiteRecalc.vue). Nothing here recalculates.
+// the user starts (ui/plan/RecalcBanner.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
 import { onSiteCopyable, onSitePlannable, onSitePlannedItems, onSiteWanted } from './on-site.ts';
 import { milestoneOnlyPhase } from '../progression.ts';

@@ -3,7 +3,7 @@
 // line); 0 asks for none, and the planner places the rest of the phase's amplification budget
 // itself. The pins are saved in the progress state (`sloopPins`, state version 24, from the line's
 // dialog, ui/detail/SloopPinChoice.vue) and change nothing until the user starts a recalculation
-// (ui/plan/SloopPinsRecalc.vue), which freezes them in the new plan's `settings.sloopPins`; a state
+// (ui/plan/RecalcBanner.vue), which freezes them in the new plan's `settings.sloopPins`; a state
 // without the field follows the plan's own pins. The planner keeps them in planner/pins.ts, or
 // plans a phase without the ones it cannot keep and records them in `sloopPinsDropped`.
 //

@@ -1,5 +1,6 @@
 // The plan's own recalculation offers (#1071): "Recalculate in place with exact clocks"
-// (plan/ExactClocksRecalc.vue), "… with items made on site" (factories/OnSiteRecalc.vue),
+// (plan/RecalcBanner.vue, one button for the four notices that need it: exact clocks,
+// both kinds of pin, items made on site, #1280),
 // "… with transport fuel" (factories/GroupLinks.vue) and "… with what you have"
 // (plan/OwnedTicksNotice.vue, #1068). Each recalculates the open profile in place
 // through the request Edit settings' "Recalculate in place" sends (POST /api/recalculate,

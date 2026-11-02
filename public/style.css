@@ -1988,6 +1988,12 @@ p.eyebrow {
 .notice .btn {
   margin: 6px 0;
 }
+/* The one recalculation notice (RecalcBanner.vue, #1280): with one source its words run on in the
+   paragraph as the source's own notice always read; with several, each source's words get a line. */
+.recalc-banner[data-recalc-many] .recalc-part {
+  display: block;
+  margin-top: 4px;
+}
 /* A factory dialog's byproduct advice (#1022): a paragraph per byproduct or recycled input, each
    other line it names an inline link to that line's dialog. */
 .recycle-advice p {
@@ -5370,6 +5376,29 @@ button.rail-tile:hover {
 @media (pointer: coarse) {
   #toast .toast-key {
     display: none;
+  }
+}
+/* On a narrow screen the message, with the next step it names, took a narrow column beside the
+   button and its key and ran to a dozen lines (#1021: 121px at 390px, 214px at 320px, over the
+   step list). It gets the toast's full width instead, and the button and its key stand in a row
+   under it. Nothing is cut: the whole message stays on screen. */
+@media (max-width: 720px) {
+  #toast.show:has(.toast-action) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 14px;
+  }
+  #toast .toast-actions {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+/* A narrow window with a mouse (no touch) does not need the phone's 44px button: 32px keeps the
+   toast lower over the step list, and is still well over the 24px WCAG 2.5.8 asks. */
+@media (max-width: 720px) and (pointer: fine) {
+  #toast .toast-action {
+    min-height: 32px;
   }
 }
 /* At the top when the focused control it is about lies under the bottom strip (#663,

@@ -14,7 +14,7 @@
   do rather than as busy (#939, #948), and busy only while it saves (app/busy.ts); once saved it
   has nothing to do again, so focus goes on to the first box (ui/refocus.ts). An item the group marks that it no longer uses
   stays listed, so it can be cleared. Saving never recalculates: the page then says the plan needs
-  a recalculation and offers it (OnSiteRecalc.vue), at the top of the page, far above this group.
+  a recalculation and offers it (ui/plan/RecalcBanner.vue), at the top of the page, far above this group.
   So after a save the picker says "Saved." in a live region and, while the plan needs a
   recalculation, offers "Go to the recalculation", which brings that notice into view and focuses
   its button.
@@ -60,7 +60,7 @@ const discarded = ref(false);
 // it is saved or discarded: the picker says why, beside Save and Discard.
 const held = ref(false);
 const holding = computed(() => held.value && changed.value);
-// Whether the plan needs a recalculation for the marks as saved (OnSiteRecalc.vue shows it).
+// Whether the plan needs a recalculation for the marks as saved (RecalcBanner.vue shows it).
 const needsRecalc = computed(() =>
   legacy(() => !!calculated && !!onSiteChange(calculated, factoryGroupsState())),
 );

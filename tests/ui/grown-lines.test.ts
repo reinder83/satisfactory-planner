@@ -10,7 +10,7 @@ import { beforeEach, test } from 'vitest';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { state, type View } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, applyUpdate, generatedWith, go, open, page, stubFetch } from './setup.ts';
 import type { CurrentCalculatedPlan, ProgressState } from '../../public/types/index.ts';
 
 // The plan with a storage rate of 5/min, whose Phase 4 Residual Fuel line needs 6 Refineries.
@@ -115,13 +115,14 @@ test('the production line dialog opens with what stands and what to add', async 
 });
 
 // #1280: a line a recalculation left unticked for review (stored as false, once ticked) says so on
-// its card; a line never ticked and a ticked one do not.
+// its card, in words that are as true of a line the player unticked by hand (#1019), which is stored
+// the same way; a line never ticked and a ticked one have no note.
 test('a line left unticked for review says it was running on its card', async () => {
   const card = () => $(`[data-check="${KEY}"]`)!.closest<HTMLElement>('.factory-card')!;
   await show({ checks: { [KEY]: false } }, 'factories');
   assert.equal(
     text(card().querySelector('[data-review-line]')),
-    'Was running before: check that it still fits this plan, then tick it.',
+    'Unticked now; it was running before. If it still fits this plan, tick it again.',
   );
   page();
   await show({}, 'factories');
@@ -134,4 +135,21 @@ test('a line left unticked for review says it was running on its card', async ()
   await show(GROWN, 'factories');
   assert.equal(card().querySelector('[data-review-line]'), null);
   assert.ok(card().querySelector('[data-grown]'));
+});
+
+// #1019: the data cannot tell a line a recalculation left unticked from one the player unticked by
+// hand (both are stored as false), so the note's words fit both.
+test('a line the player unticks by hand gets the same note', async () => {
+  await show({ checks: { [KEY]: true } }, 'factories');
+  const card = () => $(`[data-check="${KEY}"]`)!.closest<HTMLElement>('.factory-card')!;
+  assert.equal(card().querySelector('[data-review-line]'), null);
+  stubFetch({ '/api/update': applyUpdate });
+  card().querySelector<HTMLInputElement>('input[data-check]')!.click();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await nextTick();
+  assert.equal(state.checks[KEY], false);
+  assert.equal(
+    text(card().querySelector('[data-review-line]')),
+    'Unticked now; it was running before. If it still fits this plan, tick it again.',
+  );
 });

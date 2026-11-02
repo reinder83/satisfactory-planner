@@ -3,7 +3,7 @@
 // 'amp:<recipe>' and the factories' own lines of it are one line), so the line needs fewer
 // machines. The pins are saved in the progress state (`lineClocks`, state version 26, from the
 // line's dialog, ui/detail/ShardPinChoice.vue) and change nothing until the user starts a
-// recalculation (ui/plan/ShardPinsRecalc.vue), which freezes them in the new plan's
+// recalculation (ui/plan/RecalcBanner.vue), which freezes them in the new plan's
 // `settings.lineClocks`; a state without the field follows the plan's own clocks. The planner
 // keeps them in planner/clocks.ts, or plans a phase without the ones it cannot keep and records
 // them in `lineClocksDropped`, which the warnings, ADA and the dialog report, never silently.
