@@ -349,7 +349,8 @@ export interface ProgressState {
   // they changed a line's choice; absent means the plan's own (settings.exactClocks). Applied only
   // by a recalculation the user starts (version 16).
   exactClocks?: ExactClocks;
-  // Only on a profile whose carried progress grew a built line (version 19, #1174).
+  // Only on a profile whose carried progress grew a built line (version 19, #1174), or whose
+  // player counted the machines built on a line (#1300, the builtCount update).
   builtMachines?: BuiltMachines;
   // Who ticked a step and when (#1206), by check key: only ticks made since, and only while the
   // check is ticked (version 21).
@@ -429,6 +430,17 @@ export type UpdateOp =
   // (#1052): the write is refused (409) when the note now says something else (checkBase).
   | { type: 'note'; key: string; value: string; base?: string }
   | { type: 'delivery'; key: string; value: number }
+  // The machines built on production line `key` (calc-<phase>-<row id>, #1300), counted by the
+  // player: kept in builtMachines, 0 or null forgetting the count. `running`, when sent, sets the
+  // line's Running check too (ticked once the count reaches the line's machines, unticked when a
+  // ticked line is counted below them); `ticked` is who ticked it and when (#1206).
+  | {
+      type: 'builtCount';
+      key: string;
+      value: number | null;
+      running?: boolean;
+      ticked?: TickRecord;
+    }
   | { type: 'phase'; value: Phase }
   | { type: 'addTask'; id: string; title: string; phase: Phase }
   | { type: 'removeTask'; id: string }

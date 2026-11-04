@@ -6,7 +6,9 @@
 // the machines added to them, the clocks changed, the lines still to build and the ones retired.
 // The Factories page gives each factory its part of it (handoverLines, placeHandover). Everything
 // here reads the stored plan and the saved checks: nothing is ticked, stored or recalculated, and
-// a line's Running box in this phase stays the user's to tick.
+// a line's Running box in this phase stays the user's to tick. A line the phase before left
+// partly built, with its machines counted there (builtMachines, #1300, or a grown line's, #1174),
+// hands over its counted machines the same way, "Built in Phase 3: 41 × Refinery".
 import {
   formatNumber,
   milestoneOnlyPhase,
@@ -17,10 +19,33 @@ import type { CalcRow, Phase, StageKey, StoredCalculatedPlan } from '../types/in
 
 type HandoverPlan = Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>;
 
-// A line the phase before ran: that phase, and the row it ran there.
+// A line the phase before ran: that phase, and the row it ran there. A line it left partly built
+// (#1300) is `partly`, and `before` is its row as far as it stands (partlyBuiltRow).
 export interface CarriedLine {
   from: StageKey;
   before: CalcRow;
+  partly?: boolean;
+}
+
+// The machines counted on a line the phase before left unticked (builtMachines, by check key).
+type BuiltCounts = Readonly<Record<string, number>> | undefined;
+
+// Row `before` as far as its `count` built machines go (fewer than it has): that many machines at
+// the line's clock, none of them adjustable, with its rates scaled to them.
+function partlyBuiltRow(before: CalcRow, count: number): CalcRow {
+  const share = Math.min(1, count / (before.equivalent > 0 ? before.equivalent : before.machines));
+  const scale = (rates: CalcRow['inputs']) =>
+    Object.fromEntries(Object.entries(rates || {}).map(([item, rate]) => [item, rate * share]));
+  return {
+    ...before,
+    machines: count,
+    equivalent: count,
+    lastClock: 0,
+    inputs: scale(before.inputs),
+    outputs: scale(before.outputs),
+    peakMW: before.peakMW * share,
+    generationMW: before.generationMW * share,
+  };
 }
 
 // The phase a handover into `phase` comes from: the one before it, when the plan builds both
@@ -33,17 +58,27 @@ function previousStage(plan: HandoverPlan, phase: Phase): StageKey | null {
   return String(previous) as StageKey;
 }
 
-// Row `rowId` as the phase before `phase` ran it, or null when that phase did not mark it running.
+// Row `rowId` as the phase before `phase` ran it, or null when that phase did not mark it running
+// and counted none of its machines built (`built`, the progress state's builtMachines, #1300): a
+// line it left unticked with some machines counted hands those over (partly), one with all of
+// them counted hands over whole.
 export function carriedLine(
   plan: HandoverPlan,
   checks: Record<string, boolean>,
   phase: Phase,
   rowId: string,
+  built?: BuiltCounts,
 ): CarriedLine | null {
   const from = previousStage(plan, phase);
-  if (!from || !checks['calc-' + from + '-' + rowId]) return null;
+  if (!from) return null;
+  const key = 'calc-' + from + '-' + rowId,
+    count = checks[key] ? Infinity : (built?.[key] ?? 0);
+  if (!(count >= 1)) return null;
   const before = plan.stages[from]?.rows?.find(row => row.id === rowId);
-  return before ? { from, before } : null;
+  if (!before) return null;
+  return count >= before.machines
+    ? { from, before }
+    : { from, before: partlyBuiltRow(before, count), partly: true };
 }
 
 const SAME = 1e-6;
@@ -113,10 +148,10 @@ export function carriedChange(carried: CarriedLine, row: CalcRow): string {
 
 // The sentence that opens a carried line's step: what already runs, then what to add or change.
 export function carriedText(carried: CarriedLine, row: CalcRow): string {
-  const { before, from } = carried,
+  const { before } = carried,
     oldClock = clockOf(before);
   const running =
-    `Running since Phase ${from}: ${formatNumber(before.machines)} × ${before.machine}` +
+    `${sinceWords(carried)}: ${formatNumber(before.machines)} × ${before.machine}` +
     (fullOf(before) > 100 ? ` at ${percent(fullOf(before))}` : '') +
     (oldClock < fullOf(before) - SAME ? `, the last at ${percent(oldClock)}.` : '.');
   return running + ' ' + carriedChange(carried, row) + ' ';
@@ -138,8 +173,9 @@ export function phaseHandover(
   plan: HandoverPlan,
   checks: Record<string, boolean>,
   phase: Phase,
+  built?: BuiltCounts,
 ): Handover | null {
-  const handover = handoverLines(plan, checks, phase);
+  const handover = handoverLines(plan, checks, phase, built);
   return handover && handoverCount(handover.from, handover.lines, handover.retired);
 }
 
@@ -170,6 +206,7 @@ export function handoverLines(
   plan: HandoverPlan,
   checks: Record<string, boolean>,
   phase: Phase,
+  built?: BuiltCounts,
 ): HandoverLines | null {
   const from = previousStage(plan, phase);
   const rows = plan.stages[phase as StageKey]?.rows || [];
@@ -177,7 +214,7 @@ export function handoverLines(
   if (!from || !rows.length || rows.every(running)) return null;
   const before = new Set((plan.stages[from]?.rows || []).map(row => row.id));
   const lines = rows.map((row): HandoverLine => {
-    const carried = carriedLine(plan, checks, phase, row.id);
+    const carried = carriedLine(plan, checks, phase, row.id, built);
     const base = { row, change: '', added: 0, clock: false, running: running(row) };
     if (!carried) return { ...base, status: before.has(row.id) ? 'build' : 'new' };
     const change = lineChange(carried, row),
@@ -275,24 +312,32 @@ export function phaseCarry(
   plan: HandoverPlan,
   checks: Record<string, boolean>,
   phase: Phase,
+  built?: BuiltCounts,
 ): PhaseCarry | null {
   const from = previousStage(plan, phase);
   if (!from) return null;
   const shares = new Map<string, number>();
   for (const row of plan.stages[phase as StageKey]?.rows || []) {
     if (checks['calc-' + phase + '-' + row.id]) continue;
-    const carried = carriedLine(plan, checks, phase, row.id);
+    const carried = carriedLine(plan, checks, phase, row.id, built);
     if (carried) shares.set(row.id, carriedShare(carried, row));
   }
   return { from, shares };
 }
 
+// How a carried line's state starts: "Running since Phase 1", or "Built in Phase 3" for a line
+// that phase left partly built (#1300).
+const sinceWords = ({ from, partly }: CarriedLine): string =>
+  partly ? `Built in Phase ${from}` : `Running since Phase ${from}`;
+
 // A carried line's state on its factory card and in its dialog: "Running since Phase 1: 2 of 5
-// machines", or "3 machines, 2 needed here" when this phase needs fewer.
-export function carriedMachinesText({ from, before }: CarriedLine, row: CalcRow): string {
+// machines", or "3 machines, 2 needed here" when this phase needs fewer; "Built in Phase 3: 41 of
+// 89 machines" for a line that phase left partly built.
+export function carriedMachinesText(carried: CarriedLine, row: CalcRow): string {
+  const { before } = carried;
   const count =
     before.machines <= row.machines
       ? `${formatNumber(before.machines)} of ${machinesWord(row.machines)}`
       : `${machinesWord(before.machines)}, ${formatNumber(row.machines)} needed here`;
-  return `Running since Phase ${from}: ${count}`;
+  return `${sinceWords(carried)}: ${count}`;
 }

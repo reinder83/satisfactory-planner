@@ -846,7 +846,9 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   await loadContext(done.saveId, done.profileId);
   setWizard(null);
   navigate('plan');
-  toast(recalculatedText(done.reviewCount, kept, done.grownCount, done.changedCount));
+  toast(
+    recalculatedText(done.reviewCount, kept, done.grownCount, done.changedCount, done.recounted),
+  );
 }
 
 // The unlock steps (`recipe-unlock-<recipe>`) of the alternates the player already has (#1068):

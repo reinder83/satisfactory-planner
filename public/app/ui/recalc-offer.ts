@@ -136,7 +136,15 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
       setWorkspace(done.workspace);
       await loadContext(done.saveId, done.profileId);
       render();
-      toast(recalculatedText(done.reviewCount, kept, done.grownCount, done.changedCount));
+      toast(
+        recalculatedText(
+          done.reviewCount,
+          kept,
+          done.grownCount,
+          done.changedCount,
+          done.recounted,
+        ),
+      );
       void refocus();
     } catch (error) {
       button.textContent = offer.label;

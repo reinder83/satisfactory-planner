@@ -472,13 +472,13 @@ test('ADA points at the lines a recalculation grew, on the plan and factories pa
     assert.equal(line.tone, 'calm');
     assert.match(
       line.text,
-      /^2 production lines in .* need more machines than you built under the earlier plan. Their steps say how many stand and how many to add./,
+      /^2 production lines in .* are partly built. Their steps say how many stand and how many to add./,
     );
     assert.ok(!ids(facts({ view, grownLines: 0 })).includes('grown-lines'));
     assert.ok(!ids(facts({ view })).includes('grown-lines'), 'absent means none');
   }
   const one = adaRemarks(facts({ view: 'plan', grownLines: 1 })).find(r => r.id === 'grown-lines')!;
-  assert.match(one.text, /^1 production line in .* needs more machines .* Its step says/);
+  assert.match(one.text, /^1 production line in .* is partly built. Its step says/);
 });
 
 test('ADA points at the built lines a recalculation changed, on the plan and factories pages (#1175)', () => {

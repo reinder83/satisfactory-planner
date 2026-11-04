@@ -604,9 +604,11 @@ export function validateOnSiteReview(raw: unknown): OnSiteReview | undefined {
   return Object.keys(checks).length ? { checks } : undefined;
 }
 // Returns a clean copy of builtMachines (#1174), or undefined when absent or empty: the machines
-// that stand on a production line a recalculation grew, by the line's check key
-// ('calc-<phase>-<rowId>', a planned phase), each a whole count from 1 to MAX_BUILT_MACHINES.
-const MAX_BUILT_MACHINES = 100000;
+// that stand on a production line a recalculation grew, or that the player counted (#1300), by the
+// line's check key ('calc-<phase>-<rowId>', a planned phase), each a whole count from 1 to
+// MAX_BUILT_MACHINES.
+export const MAX_BUILT_MACHINES = 100000;
+export const BUILT_KEY = /^calc-[1-5]-./;
 function validateBuiltMachines(raw: unknown): BuiltMachines | undefined {
   if (raw === undefined) return undefined;
   const bad = () => fail('Invalid count of built machines.');
@@ -615,7 +617,7 @@ function validateBuiltMachines(raw: unknown): BuiltMachines | undefined {
   for (const [key, count] of Object.entries(raw as Raw)) {
     if (
       !safeKey(key) ||
-      !/^calc-[1-5]-./.test(key) ||
+      !BUILT_KEY.test(key) ||
       !Number.isSafeInteger(count) ||
       (count as number) < 1 ||
       (count as number) > MAX_BUILT_MACHINES

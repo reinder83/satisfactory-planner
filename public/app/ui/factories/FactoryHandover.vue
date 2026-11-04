@@ -31,7 +31,7 @@ const props = defineProps<{ place: string }>();
 const view = computed(() =>
   legacy(() => {
     if (!calculated || factoryEditing) return null;
-    const handover = handoverLines(calculated, state.checks, phase());
+    const handover = handoverLines(calculated, state.checks, phase(), state.builtMachines);
     if (!handover) return null;
     const inPlace =
       props.place === UNGROUPED

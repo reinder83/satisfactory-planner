@@ -11,7 +11,9 @@
   #1235) and its Power Shard pin (ShardPinChoice.vue, #1239),
   lane advice, the outputs (only where the headline does not already say them), expansion by
   phase (the card's line of what the same line needs later, then per phase its machines, what to
-  add, its clocks and its power, #1299) and the note saved under `factory-<row id>`. The easier rounded setting is left out
+  add, its clocks and its power, #1299) and the note saved under `factory-<row id>`. The line's
+  built-machines counter (BuiltCounter.vue, #1300) opens its machine setup, after the flow, which
+  stays first (SP-21); it ticks the header's Running box at the full count. The easier rounded setting is left out
   when the profile already runs whole machines. Opened by openCalculatedFactory in
   factory-detail.ts. Headed as the row's build-plan step is titled (buildRowName), so a factory
   group's own line made on site is "Wire for Alpha", as the links that open it say, and the
@@ -47,6 +49,7 @@ import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import MachineCells from './MachineCells.vue';
 import RecycleAdvice from './RecycleAdvice.vue';
+import BuiltCounter from '../BuiltCounter.vue';
 import { toggleCheck } from '../actions.ts';
 
 const props = defineProps<{ id: string }>();
@@ -172,6 +175,7 @@ const view = computed(() =>
     <p v-for="note in view.burn" :key="note" class="small muted" data-burn-note>{{ note }}</p>
     <RecycleAdvice :id="view.row.id" />
     <h3>Machine setup</h3>
+    <BuiltCounter :row="view.row" :name="view.title" place="dialog" />
     <MachineCells
       :counts="view.machines.counts"
       :total-caption="view.machines.total"

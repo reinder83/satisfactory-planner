@@ -14,7 +14,9 @@
   The chip at the top says whether it runs, runs from the phase before with how many machines
   (#1069), or is held back by a missing supplier with the
   reason above the footer (RunningChip.vue, SP-15); it follows the Running box. The box is named
-  "Running: <line name>" (#1254), so the page's many Running boxes can be told apart.
+  "Running: <line name>" (#1254), so the page's many Running boxes can be told apart. Beside it the
+  footer has the line's built-machines counter, "Built 41 / 58" (BuiltCounter.vue, #1300), which
+  ticks the box once the count reaches the line's machines.
   Under the "Not running" or "Running" filter a tick takes the card off the page once it is
   saved; focus then goes to the Running box of the card that takes its place (ui/refocus.ts),
   else the chosen filter chip, never to <body> (#1019).
@@ -44,6 +46,7 @@ import { power, powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
+import BuiltCounter, { type CounterHooks } from '../BuiltCounter.vue';
 import RunningChip from './RunningChip.vue';
 import { lineLaterText } from '../../tasks.ts';
 import { factoryLink, toggleCheck } from '../actions.ts';
@@ -64,6 +67,27 @@ async function tickRunning(event: Event) {
   });
   if (await toggleCheck(event)) await refocus();
 }
+
+// The counter ticks or unticks the line in its own write (#1300): under a filter that then hides
+// the card, focus goes to the same counter control of the card in its place, as the Running box's.
+let counterRefocus: (() => Promise<void>) | null = null;
+const counterHooks: CounterHooks = {
+  before(trigger, update, control) {
+    counterRefocus =
+      update.running === undefined
+        ? null
+        : refocusAfterRemoval(trigger, {
+            row: '#main .factory-card',
+            control,
+            fallback: ['#factory-filter [aria-checked="true"]'],
+          });
+  },
+  async after(saved) {
+    const refocus = counterRefocus;
+    counterRefocus = null;
+    if (saved) await refocus?.();
+  },
+};
 
 const card = computed(() =>
   legacy(() => {
@@ -205,6 +229,7 @@ const card = computed(() =>
       Unticked now; it was running before. If it still fits this plan, tick it again.
     </div>
     <footer>
+      <BuiltCounter :row="row" :name="row.name" place="card" :hooks="counterHooks" />
       <label class="check-row"
         ><input
           type="checkbox"

@@ -105,7 +105,8 @@ export interface AdaFacts {
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
   siteReview?: number;
-  // Lines of the phase shown that a recalculation grew, not ticked yet (#1174, grownShares in
+  // Lines of the phase shown partly built, not ticked yet: grown by a recalculation (#1174) or
+  // counted by the player (#1300) (grownShares in
   // app/views/calculated.ts): their built machines stand, the rest is to add.
   grownLines?: number;
   // Lines of the phase shown whose built machines a recalculation changed otherwise (#1175,
@@ -695,7 +696,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.grownLines ?? 0) > 0,
     text: facts =>
-      `${plural(facts.grownLines!, 'production line')} in ${facts.phaseLabel} ${facts.grownLines === 1 ? 'needs' : 'need'} more machines than you built under the earlier plan. ${facts.grownLines === 1 ? 'Its step says' : 'Their steps say'} how many stand and how many to add. I kept count, so you do not have to.`,
+      `${plural(facts.grownLines!, 'production line')} in ${facts.phaseLabel} ${facts.grownLines === 1 ? 'is' : 'are'} partly built. ${facts.grownLines === 1 ? 'Its step says' : 'Their steps say'} how many stand and how many to add. Count the rest up as they go in, and I will keep the tally.`,
   },
   {
     id: 'changed-lines',

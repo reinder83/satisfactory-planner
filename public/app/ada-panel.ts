@@ -212,7 +212,8 @@ function waterFacts(): Pick<AdaFacts, 'waterExtracted' | 'waterChoice'> {
 // counts it (handoverLines in handover.ts): the lines kept running and those with something to
 // add or change. None where nothing is handed over or nothing is kept.
 function handoverFacts(): Pick<AdaFacts, 'handover'> {
-  const handover = calculated && handoverLines(calculated, state.checks, phase());
+  const handover =
+    calculated && handoverLines(calculated, state.checks, phase(), state.builtMachines);
   if (!handover) return {};
   const kept = handover.lines.filter(line => line.status === 'keep' || line.status === 'add');
   if (!kept.length) return {};

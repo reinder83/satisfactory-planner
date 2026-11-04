@@ -24,6 +24,9 @@ export function tickStamp(now = new Date()): TickRecord {
 export function tickStamped(operation: UpdateOp, now = new Date()): UpdateOp {
   if (operation.type === 'check' && operation.value === true && !operation.ticked)
     return { ...operation, ticked: tickStamp(now) };
+  // The built-machines counter's tick at the line's full count (#1300).
+  if (operation.type === 'builtCount' && operation.running === true && !operation.ticked)
+    return { ...operation, ticked: tickStamp(now) };
   if (
     operation.type === 'checks' &&
     operation.value === true &&

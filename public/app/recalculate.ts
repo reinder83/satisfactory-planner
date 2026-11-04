@@ -8,6 +8,7 @@
 import { post } from './api.ts';
 import type { RequestOptions } from './api.ts';
 import { plural } from './format.ts';
+import { recountedText } from './built-lines.ts';
 import { backupName } from './profile-edit.ts';
 import { workspace } from './session.ts';
 import type { WorkspaceSummary } from '../types/index.ts';
@@ -24,6 +25,9 @@ export interface RecalculatedProfile {
   grownCount?: number;
   // Built lines changed otherwise (#1175): shrunk, switched or no longer needed; absent likewise.
   changedCount?: number;
+  // Partly built lines whose machines the new plan changed, with their counts (#1300); absent
+  // likewise.
+  recounted?: { name: string; built: number; needed: number }[];
 }
 
 // What POST /api/recalculate is sent: the profile it recalculates, the name it keeps and the
@@ -80,18 +84,23 @@ export const changedText = (changedCount: number): string =>
     : 'their steps and the note above the plan say') +
   ' what to switch, spare or dismantle';
 
+type RecalculatedLine = NonNullable<RecalculatedProfile['recounted']>[number];
+
 // The toast after a recalculation in place: the grown lines that keep their built machines, the
-// built lines that changed otherwise, the lines left for review, and where the previous version
-// is kept.
+// built lines that changed otherwise, the partly built lines whose machines changed (#1300), the
+// lines left for review, and where the previous version is kept.
 export function recalculatedText(
   reviewCount: number,
   kept: string,
   grownCount = 0,
   changedCount = 0,
+  recounted: readonly RecalculatedLine[] = [],
 ): string {
+  const recount = recountedText(recounted);
   const grown =
     (grownCount ? ' ' + grownText(grownCount) + '.' : '') +
-    (changedCount ? ' ' + changedText(changedCount) + '.' : '');
+    (changedCount ? ' ' + changedText(changedCount) + '.' : '') +
+    (recount ? ' ' + recount : '');
   const review = reviewCount
     ? ' ' + plural(reviewCount, 'production line') + ' left unticked for review.'
     : '';

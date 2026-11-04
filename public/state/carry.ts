@@ -209,6 +209,7 @@ export function newProfileState(
   reviewCount: number;
   grownCount: number;
   changedCount: number;
+  recounted: RecountedLine[];
   carried: number;
 } {
   const state = initialState();
@@ -225,6 +226,7 @@ export function newProfileState(
       reviewCount: 0,
       grownCount: 0,
       changedCount: 0,
+      recounted: [],
       carried: Object.values(clean.checks).filter(Boolean).length,
     };
   }
@@ -273,10 +275,11 @@ export function newProfileState(
   // (carryFormerLines).
   let reviewCount = 0,
     grownCount = 0,
-    changedCount = 0;
+    changedCount = 0,
+    recounted: RecountedLine[] = [];
   if (picks.factories && plan) {
     const machines = standingLines(source, sourcePlan, book);
-    ({ reviewCount, grownCount, changedCount } = carryLines(
+    ({ reviewCount, grownCount, changedCount, recounted } = carryLines(
       state,
       plan,
       source,
@@ -300,6 +303,7 @@ export function newProfileState(
     reviewCount,
     grownCount,
     changedCount,
+    recounted,
     carried: Object.values(clean.checks).filter(Boolean).length,
   };
 }
@@ -389,19 +393,29 @@ function carryLines(
   source: Pick<SavedState, 'checks' | 'builtMachines'>,
   sourcePlan: RowsPlan | null | undefined,
   standing: ReadonlyMap<string, number>,
-): { reviewCount: number; grownCount: number; changedCount: number } {
+): {
+  reviewCount: number;
+  grownCount: number;
+  changedCount: number;
+  recounted: RecountedLine[];
+} {
   const previous = planRows(sourcePlan),
     split = new Set(siteTicksForReview(plan, source, sourcePlan)),
     built: Record<string, number> = {};
   let reviewCount = 0,
     grownCount = 0,
     changedCount = 0;
+  const recounted: RecountedLine[] = [];
   for (const [key, row] of planRows(plan)) {
     const old = previous.get(key);
     if (!safeKey(key)) continue;
     const stands = split.has(key) ? 0 : (standing.get(key) ?? 0);
     if (!source.checks?.[key] || (!old && stands >= 1)) {
       if (stands >= 1) changedCount += keepStanding(state, built, key, row, stands, !old);
+      // A partly built line whose machines the new plan changed keeps its count (#1300), and
+      // the toast says so.
+      if (old && stands >= 1 && stands < row.machines && old.machines !== row.machines)
+        recounted.push({ name: row.name, built: stands, needed: row.machines });
       continue;
     }
     const grown =
@@ -430,7 +444,15 @@ function carryLines(
     } else reviewCount++;
   }
   if (Object.keys(built).length) state.builtMachines = built;
-  return { reviewCount, grownCount, changedCount };
+  return { reviewCount, grownCount, changedCount, recounted };
+}
+// A line partly built in the source (its machines counted, not ticked, #1300) whose machine count
+// the new plan changed: its name, the machines that stand and the machines it needs now, for the
+// toast's "Rubber keeps its count: 41 built, 58 needed".
+export interface RecountedLine {
+  name: string;
+  built: number;
+  needed: number;
 }
 // A line of the new plan with `stands` machines standing on it that its source did not tick as
 // it is now (a grown line partly built, a shrunk line's spares, a line an earlier plan had left):
@@ -673,6 +695,7 @@ export function calculatedProfile<P extends RowsPlan>(
     reviewCount: started.reviewCount,
     grownCount: started.grownCount,
     changedCount: started.changedCount,
+    recounted: started.recounted,
     carried: started.carried,
   };
 }
@@ -859,6 +882,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
     reviewCount: started.reviewCount,
     grownCount: started.grownCount,
     changedCount: started.changedCount,
+    recounted: started.recounted,
     carried: Object.values(state.checks).filter(Boolean).length,
   };
 }

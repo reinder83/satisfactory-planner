@@ -28,6 +28,7 @@ import { rankOffThread } from './ranking.ts';
 import { response } from './routing.ts';
 import { progressionData, recipeBookData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
+import type { RecountedLine } from '../public/state.ts';
 import type {
   ProgressState,
   RankReply,
@@ -113,7 +114,13 @@ export function profileRoutes({
         reviewedReplacement(reviewed, user.id, input.settings, input.planCreatedAt) ??
         calculate(input.settings),
       backupId = randomId();
-    let carried = { reviewCount: 0, grownCount: 0, changedCount: 0, carried: 0 };
+    let carried: {
+      reviewCount: number;
+      grownCount: number;
+      changedCount: number;
+      recounted: RecountedLine[];
+      carried: number;
+    } = { reviewCount: 0, grownCount: 0, changedCount: 0, recounted: [], carried: 0 };
     await commit(draft => {
       const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
       const index = draftSave?.profiles.findIndex(p => p.id === profile.id) ?? -1;
@@ -143,6 +150,7 @@ export function profileRoutes({
       reviewCount: carried.reviewCount,
       grownCount: carried.grownCount,
       changedCount: carried.changedCount,
+      recounted: carried.recounted,
       carriedChecks: carried.carried,
       workspace: currentSummary(user),
     });

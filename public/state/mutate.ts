@@ -14,6 +14,8 @@ import type {
   UpdateOp,
 } from '../types/index.ts';
 import {
+  BUILT_KEY,
+  MAX_BUILT_MACHINES,
   MAP_LAYERS,
   MAP_MARKER_MAX,
   MINES_PLACE,
@@ -186,6 +188,35 @@ function setChecks(state: SavedState, update: Raw) {
     if (update.value === null) delete state.checks[key];
     else state.checks[key] = update.value;
   }
+}
+// The machines built on one production line, counted by the player (#1300): `value` machines
+// stand on line `key` (calc-<phase>-<row id>), kept in builtMachines, the field a carry keeps a
+// grown line's machines in (state version 19, #1174), so it means the same to every release that
+// reads it: unticked, the line is partly built; ticked, all its machines stand and the count waits
+// for an untick. 0 or null forgets the count (the field holds counts from 1). `running`, when
+// sent, sets the line's Running check in the same write: the counter ticks a line counted up to
+// its machines and unticks a ticked one counted below them; who ticked it goes as for a check.
+// One line per write, so it is never base-sensitive.
+function setBuilt(state: SavedState, update: Raw) {
+  const { key, value, running } = update;
+  if (
+    !safeKey(key) ||
+    !BUILT_KEY.test(key) ||
+    (value !== null &&
+      (!Number.isSafeInteger(value) ||
+        (value as number) < 0 ||
+        (value as number) > MAX_BUILT_MACHINES)) ||
+    (running !== undefined && typeof running !== 'boolean')
+  )
+    fail('Invalid count of built machines.');
+  const built = { ...state.builtMachines };
+  if (value) built[key] = value as number;
+  else delete built[key];
+  if (Object.keys(built).length) state.builtMachines = built;
+  else delete state.builtMachines;
+  if (running === undefined) return;
+  keepTicker(state, key, running, update.ticked);
+  state.checks[key] = running as boolean;
 }
 function setPhase(state: SavedState, update: Raw) {
   state.settings.phase = update.value as Phase;
@@ -363,6 +394,7 @@ const recordEdits: Record<string, StateEdit> = {
   note: setRecord,
   delivery: setRecord,
   checks: setChecks,
+  builtCount: setBuilt,
   phase: setPhase,
   addTask,
   removeTask,
