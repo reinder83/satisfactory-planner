@@ -211,3 +211,36 @@ test('the recalculation toast says what a counted line has and needs now', () =>
     'Recalculated in place. Rubber keeps its count: 41 built, 58 needed. The previous version is kept as “Kept” under Profiles.',
   );
 });
+
+test("the step's full count sends focus to the next step's checkbox, not its folded counter", async () => {
+  await show({ version: 19, builtMachines: { [KEY]: 4 } }, 'plan');
+  const task = () => $(`.task [data-check="${KEY}"]`)?.closest<HTMLElement>('.task');
+  const input = task()!.querySelector<HTMLInputElement>('[data-built-input]')!;
+  input.focus();
+  stubFetch({ '/api/update': applyUpdate });
+  task()!.querySelector<HTMLButtonElement>('[data-built-step="1"]')!.click();
+  await settle();
+  assert.equal(state.checks[KEY], true);
+  const now = document.activeElement as HTMLElement;
+  assert.notEqual(now, document.body);
+  assert.ok(now.matches('input[data-check]'), 'a step checkbox has focus');
+  assert.notEqual(now.dataset.check, KEY);
+  const folded = now.closest('details');
+  assert.ok(!folded || now.closest('summary'), 'the target is in a summary, not a closed details');
+});
+
+test('Escape in the typed number puts the shown count back and saves nothing', async () => {
+  await show({ version: 19, builtMachines: { [KEY]: 2 } });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  const input = counterIn(card()).querySelector<HTMLInputElement>('[data-built-input]')!;
+  input.focus();
+  input.value = '4';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await settle();
+  assert.equal(input.value, '2');
+  input.blur();
+  await settle();
+  assert.equal(input.value, '2');
+  assert.deepEqual(sent(calls), []);
+});

@@ -115,9 +115,12 @@ async function check(event: Event) {
 // The built-machines counter's tick at the full count, or untick of a ticked line (#1300), as
 // the checkbox's: a tick holds the step in place and says so, an untick brings it back at once with
 // focus on the same counter control.
+// Focus goes to the next step's checkbox in its summary, as a checkbox tick does: its counter sits
+// in a folded <details> and cannot take focus.
+const CHECKBOX = 'input[data-check]';
 const counterHooks: CounterHooks = {
   before(trigger, update, control) {
-    if (update.running === true) holdStep(props.step.id, trigger, control);
+    if (update.running === true) holdStep(props.step.id, trigger, CHECKBOX);
     else if (update.running === false) letGo(props.step.id);
   },
   async after(saved, update, control) {

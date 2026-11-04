@@ -99,6 +99,12 @@ function step(event: Event, delta: number) {
   void commit(count.value.built + delta, event.currentTarget, `[data-built-step="${delta}"]`);
 }
 
+// Escape puts the shown count back: the field would else commit the typed number as it loses focus.
+function cancel(event: Event) {
+  reset(draft, String(count.value.built));
+  (event.target as HTMLInputElement).value = draft.value;
+}
+
 function typed(event: Event) {
   const input = event.target as HTMLInputElement;
   const value = input.value.trim() === '' ? NaN : Number(input.value);
@@ -143,6 +149,7 @@ function typed(event: Event) {
       :value="draft"
       @input="draft = ($event.target as HTMLInputElement).value"
       @change="typed"
+      @keydown.esc="cancel"
       @blur="left"
     /><span :id="id + '-of'" class="built-of"
       ><span aria-hidden="true">/ </span><span class="visually-hidden">of </span

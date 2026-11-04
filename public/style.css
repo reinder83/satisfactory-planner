@@ -8423,6 +8423,7 @@ th.resource-cell {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   margin-right: 2px;
+  white-space: nowrap;
 }
 .built-counter .built-step {
   min-width: 32px;
