@@ -9,7 +9,8 @@
     them yet: each gets a short explanation with the way forward instead of an empty page. A
     milestone-only phase (#759) says why with MilestoneOnlyNotice.vue and its "Go to Phase N", as
     the Factories page does.
-  - Trains, in every phase (stations and lines are not tied to a phase): the train stations and
+  - Trains, in every phase (stations and lines are not tied to a phase): "Create stations from
+    train links" (ui/factories/TrainsFromLinks.vue, #1301), the train stations and
     their platforms (ui/factories/TrainStations.vue), the lines with their trains, what each
     wagon carries and the checks (ui/factories/TrainLines.vue) and the network diagram
     (ui/factories/TrainDiagram.vue).
@@ -35,6 +36,7 @@ import GroupLinks from '../factories/GroupLinks.vue';
 import TrainDiagram from '../factories/TrainDiagram.vue';
 import TrainLines from '../factories/TrainLines.vue';
 import TrainStations from '../factories/TrainStations.vue';
+import TrainsFromLinks from '../factories/TrainsFromLinks.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import { tabKeyTarget } from '../plan/plan-tabs.ts';
@@ -129,6 +131,7 @@ const subtitle = computed(() => {
       <GroupLinks v-else />
     </div>
     <div v-bind="panelAttrs('trains')" data-logistics-panel="trains">
+      <TrainsFromLinks />
       <TrainStations />
       <TrainLines />
       <!-- Drawn while its tab is open: the pan and zoom measure the box it scrolls in. -->
