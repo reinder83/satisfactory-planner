@@ -779,6 +779,9 @@ test('a profile plans production from the phase it was created for', () => {
       tag: 'current',
       required: 4,
       add: '+4',
+      // A line at 100% with no power figure in this bare stage (#1299).
+      clock: '100%',
+      power: '—',
       running: false,
     },
     'the starting phase builds its own machines from scratch',

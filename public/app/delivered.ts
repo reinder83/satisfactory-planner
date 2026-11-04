@@ -15,6 +15,7 @@
 // no stage then).
 import { deliveryKey } from '../progression.ts';
 import { lineLoad, VARIABLE_POWER } from '../power.ts';
+import { laterPhase } from './later-phases.ts';
 import { duration, localeNumber, powerAmount } from '../wording.ts';
 import type { CalcRow, StageKey, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
 
@@ -153,19 +154,6 @@ export function batchLineText({ part, amount, minutes, freedMW, upTo, later }: B
   const about = /^(about|less)/.test(time) ? time : 'about ' + time;
   const until = later ? ` until Phase ${later} needs it again` : '';
   return `Make ${localeNumber(amount)} × ${part} (${about} at this rate), then switch the line off${until}: frees ${upTo ? 'up to ' : ''}${powerAmount(freedMW)}.`;
-}
-
-// The first phase after `stageKey` whose plan builds line `rowId`, or null.
-function laterPhase(
-  plan: StoredCalculatedPlan,
-  stageKey: StageKey,
-  rowId: string,
-): StageKey | null {
-  for (let next = Number(stageKey) + 1; next <= 5; next++) {
-    const key = String(next) as StageKey;
-    if (plan.stages[key]?.rows?.some(row => row.id === rowId)) return key;
-  }
-  return null;
 }
 
 // What a dimmed step says under its title.

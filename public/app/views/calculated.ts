@@ -64,11 +64,11 @@ import {
   type OwnedFound,
 } from '../owned-ticks.ts';
 import { power } from '../wizard/fields.ts';
-import { factoryGroupsState, siteGroupName } from './factories.ts';
+import { clockText, factoryGroupsState, siteGroupName } from './factories.ts';
 import { perRedraw } from '../per-redraw.ts';
 import { AMPLIFIER_WORDS } from '../../somersloops.ts';
 import { gameShards, SHARD_RESEARCH, shardsPerMachine, powerShardWords } from '../../shards.ts';
-import { ownedBeyondKept } from '../../power.ts';
+import { lineLoad, ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 import type { StepList, StepTable } from '../../step-table.ts';
 
@@ -630,11 +630,13 @@ export const easierSetup = (setup: ReturnType<typeof machineSetup>): EasySetup |
 // Phases where a line is not built yet, or needs no more machines, have nothing
 // to add: say so with a dash rather than claiming capacity is being kept.
 // One row per phase from the profile's start phase on: { phase, required, add }, the machines
-// required for row `id` and how many to add over the most installed so far.
+// required for row `id` and how many to add over the most installed so far, with the line's clocks
+// and power in that phase (#1299), so the dialog shows what the same line grows to.
 export function calcExpansion(id: string) {
   let installed = 0;
   return fromStart(calculated?.stages).map(([stagePhase, snapshot]) => {
-    const required = snapshot.rows?.find(row => row.id === id)?.machines || 0;
+    const row = snapshot.rows?.find(candidate => candidate.id === id);
+    const required = row?.machines || 0;
     const add = Math.max(0, required - installed);
     installed = Math.max(installed, required);
     return {
@@ -642,10 +644,31 @@ export function calcExpansion(id: string) {
       ...expansionPhase(stagePhase),
       required: required || '—',
       add: add ? '+' + add : '—',
+      clock: required && row ? expansionClock(row) : '—',
+      power: required && row ? expansionPower(row, snapshot) : '—',
       // The line's Running tick in that phase (#1069).
       running: !!required && !!state.checks['calc-' + stagePhase + '-' + id],
     };
   });
+}
+
+// A line's clocks in one phase of the expansion table: "100%", "100%, last at 62.5%", "250%, last
+// at 57.8%", as the card's machine line gives them (clockText).
+function expansionClock(row: CalcRow): string {
+  const full = row.clock ?? 100,
+    last = clockText(row.lastClock, full);
+  return num(full) + '%' + (last ? `, last at ${last}%` : '');
+}
+
+// A line's power in one phase of the expansion table: a generator's output, else what it draws at
+// peak (a stage with a grid, #1064: its clocked power with the utility allowance, as the dialog's
+// machine setup says; an older plan's whole-machine peak). '—' for a line that draws none.
+function expansionPower(row: CalcRow, snapshot: StoredStage): string {
+  if (row.generationMW > 0) return 'generates ' + power(row.generationMW);
+  const peak = snapshot.grid
+    ? lineLoad(row).peak * (calculated?.settings?.powerFactor ?? 1)
+    : row.peakMW || 0;
+  return peak > 0 ? power(peak) : '—';
 }
 
 // What a line the phase before marked running already does in the phase shown, and what this
