@@ -2049,6 +2049,48 @@ p.eyebrow {
 .group-links {
   margin-top: 18px;
 }
+/* Create stations from train links (#1301): the panel over the stations
+   (ui/factories/TrainsFromLinks.vue) and the preview's list of links, one card each
+   (ui/detail/TrainProposalDialog.vue). */
+.trains-from-links {
+  margin-top: 18px;
+}
+.proposal-list {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 14px;
+  padding: 0;
+  list-style: none;
+}
+.proposal-card {
+  overflow-wrap: anywhere;
+}
+.proposal-pick {
+  font-size: 14px;
+}
+.proposal-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.proposal-parts {
+  margin: 4px 0 8px;
+}
+.proposal-parts p {
+  margin: 2px 0 4px;
+}
+.proposal-parts ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.proposal-parts li + li {
+  margin-top: 3px;
+}
+.proposal-trip input {
+  max-width: 10rem;
+}
+.proposal-estimate {
+  color: var(--ink);
+}
 /* Train stations on the Logistics page (#1284, ui/factories/TrainStations.vue): a card per
    station, its platforms numbered in order, and "+ Add train station" under them. */
 .train-stations {

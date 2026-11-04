@@ -80,7 +80,7 @@ export const fluidTruckLoads = (rate: number): number => rate / FLUID_TRUCK_M3;
 // Freight cars per Electric Locomotive (#232): the owner's rule of thumb of one locomotive per
 // four cars. The wiki's Freight Car weight table has one locomotive pulling 5 fully loaded cars
 // up the steepest buildable incline (2 m ramps) and 13 up 1 m ramps, so four leaves a margin.
-const CARS_PER_LOCOMOTIVE = 4;
+export const CARS_PER_LOCOMOTIVE = 4;
 // The belt or pipe ports of one Freight Platform or Fluid Freight Platform (#1067): a car is
 // loaded and unloaded through both, so it moves at most two belts (or pipes) of a flow.
 const PLATFORM_PORTS = 2;

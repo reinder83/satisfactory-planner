@@ -7,6 +7,7 @@ import LineDialog from './LineDialog.vue';
 import MarkerDialog from './MarkerDialog.vue';
 import SlotDialog from './SlotDialog.vue';
 import StationDialog from './StationDialog.vue';
+import TrainProposalDialog from './TrainProposalDialog.vue';
 import type { DetailTarget } from '../detail.ts';
 
 defineProps<{ target: DetailTarget }>();
@@ -20,4 +21,5 @@ defineProps<{ target: DetailTarget }>();
   <MarkerDialog v-else-if="target.kind === 'marker'" :id="target.id" />
   <StationDialog v-else-if="target.kind === 'station'" :id="target.id" />
   <LineDialog v-else-if="target.kind === 'line'" :id="target.id" />
+  <TrainProposalDialog v-else-if="target.kind === 'trains'" />
 </template>
