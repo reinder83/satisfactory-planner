@@ -28,8 +28,9 @@
 //                  (validateExactClocks, #1066), version 16; absent means the plan's own
 //   builtMachines  { 'calc-<phase>-<rowId>': count } machines that stand on a production line a
 //                  recalculation grew (validateBuiltMachines, #1174), version 19; or shrunk,
-//                  or no longer has (#1175, state/built-match.ts); only a carry sets it
-//                  (carryLines, carryFormerLines), no update op edits it
+//                  or no longer has (#1175, state/built-match.ts), set by a carry
+//                  (carryLines, carryFormerLines); and the machines the player counted on a
+//                  line (#1300, the builtCount update), the same meaning
 //   tickedBy       { key: { at, by? } } who ticked a step and when (validateTickedBy, #1206),
 //                  version 21; kept by a tick of a step not ticked yet (the check and checks
 //                  updates' ticked or tickedBy), only while its step is ticked
@@ -162,6 +163,7 @@ export {
   siteTicksForReview,
   UNLOCKED_WITH,
   wholeMachineProfile,
+  type RecountedLine,
 } from './state/carry.ts';
 export {
   currentPayoff,

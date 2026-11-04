@@ -54,6 +54,7 @@ import {
 import { render } from '../../shell.ts';
 import {
   batchStepNote,
+  counterRow,
   filteredPlanTasks,
   idleStepNotes,
   laterStepNote,
@@ -115,6 +116,7 @@ const list = computed(() =>
         clocks: clockNote(task.id, link?.id),
         batch: batchStepNote(task.id),
         later: laterStepNote(task.id),
+        counter: counterRow(task.id),
         materials: stepMaterialWords(task.id),
         icon: taskIcon(task),
         link,

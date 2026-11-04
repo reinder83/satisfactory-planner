@@ -379,6 +379,7 @@ export function createBrowserApi(
         reviewCount: next.reviewCount,
         grownCount: next.grownCount,
         changedCount: next.changedCount,
+        recounted: next.recounted,
         carriedChecks: next.carried,
         workspace: summary(data),
       };

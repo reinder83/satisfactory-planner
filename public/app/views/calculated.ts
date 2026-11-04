@@ -25,6 +25,10 @@ import {
   changedNote,
   changedTable,
   builtLineChanges,
+  countShare,
+  groupCount,
+  countOfLine,
+  type LineCount,
   spareIntro,
   spareLine,
   spareNote,
@@ -310,7 +314,8 @@ function ownedGeneratorsText(row: CalcRow, snapshot: StoredStage | undefined): s
 // again (carriedText in handover.ts, #1069): what already runs and what to add or change; '' for
 // any other line. It reads the saved ticks of the phase before and changes none.
 function carriedStepText(row: CalcRow, shownPhase: Phase): string {
-  const carried = calculated && carriedLine(calculated, state.checks, shownPhase, row.id);
+  const carried =
+    calculated && carriedLine(calculated, state.checks, shownPhase, row.id, state.builtMachines);
   return carried ? carriedText(carried, row) : '';
 }
 
@@ -684,14 +689,14 @@ export function carriedLineText(row: CalcRow): string {
 // the share of each that already runs (phaseCarry in handover.ts, #1069). It reads the saved
 // ticks and changes none.
 export const currentCarry = (): PhaseCarry | null =>
-  calculated ? phaseCarry(calculated, state.checks, phase()) : null;
+  calculated ? phaseCarry(calculated, state.checks, phase(), state.builtMachines) : null;
 
 // A line's card state while it runs from the phase before and is not ticked here yet: that phase
 // and "Running since Phase 1: 2 of 5 machines" (carriedMachinesText in handover.ts, #1069), else
 // null.
 export function carriedCard(row: CalcRow): { from: string; text: string } | null {
   if (!calculated || state.checks['calc-' + phase() + '-' + row.id]) return null;
-  const carried = carriedLine(calculated, state.checks, phase(), row.id);
+  const carried = carriedLine(calculated, state.checks, phase(), row.id, state.builtMachines);
   return carried ? { from: carried.from, text: carriedMachinesText(carried, row) } : null;
 }
 
@@ -737,7 +742,11 @@ export function currentBuildStatus(): BuildStatus | null {
   const ordered = groupedRows(snapshot.rows, state.factoryGroups);
   // The lines still running from the phase before, at the share they make (#1069), and the grown
   // lines at the share their built machines make (#1174).
-  const carried = new Map([...(currentCarry()?.shares || []), ...grownShares(snapshot.rows)]);
+  // A line both runs from the phase before and has more machines counted here (#1300) runs at the
+  // larger share.
+  const carried = new Map(currentCarry()?.shares || []);
+  for (const [id, share] of grownShares(snapshot.rows))
+    carried.set(id, Math.max(share, carried.get(id) ?? 0));
   // Where the lines made on site send their items, by the profile's groups (#907).
   const sites = siteRouting(snapshot, factoryGroupsState(), calculated.settings.onSite);
   const key =
@@ -759,6 +768,43 @@ export function currentBuildStatus(): BuildStatus | null {
     };
   }
   return buildCache.status;
+}
+
+// The built-machines counter of a line of phase `shownPhase` (#1300, countOfLine in built-lines.ts):
+// its machines built and needed, from the machines the phase before hands over on the same row
+// (carriedLine) up. Post Phase 5 reads Phase 5's, as it shares its steps and checks.
+export function lineCountOf(row: CalcRow, shownPhase: Phase = phase()): LineCount {
+  const stageKey = shownPhase === 'post' ? '5' : shownPhase;
+  const carried =
+    calculated && carriedLine(calculated, state.checks, shownPhase, row.id, state.builtMachines);
+  return countOfLine(
+    state?.builtMachines,
+    state?.checks || {},
+    stageKey,
+    row,
+    carried ? carried.before.machines : 0,
+  );
+}
+
+// The share of a build-plan step that its line's counted machines make (#1300), for the phase
+// checklist's bar: a production line's own step, not ticked, with some but not all of its machines
+// built; 0 for any other step.
+export function stepBuiltShare(stepId: string): number {
+  const prefix = 'calc-' + stage() + '-';
+  if (!stepId.startsWith(prefix) || state.checks[stepId]) return 0;
+  const row = calcStage()?.rows?.find(candidate => candidate.id === stepId.slice(prefix.length));
+  if (!row) return 0;
+  const share = countShare(lineCountOf(row));
+  return share < 1 ? share : 0;
+}
+
+// A factory's machines built and needed in the phase shown (#1300, groupCount): its lines' counted
+// machines, a line split over several factories by its share in this one (rowPlaces).
+export function groupBuiltCount(
+  groupId: string,
+  shareOf: (row: CalcRow) => number,
+): { built: number; needed: number } {
+  return groupCount(calcStage()?.rows || [], row => lineCountOf(row), shareOf);
 }
 
 // The grown lines of the phase shown (#1174, grownLine) with the share their built machines make

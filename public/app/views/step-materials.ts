@@ -56,7 +56,8 @@ function machinesToBuild(
   const grown = grownLine(row, shownPhase);
   if (grown) return grown.add;
   if (spareLineOf(row, shownPhase)) return 0;
-  const carried = calculated && carriedLine(calculated, state.checks, shownPhase, row.id);
+  const carried =
+    calculated && carriedLine(calculated, state.checks, shownPhase, row.id, state.builtMachines);
   if (carried)
     return carried.before.machine === row.machine
       ? Math.max(0, row.machines - carried.before.machines)

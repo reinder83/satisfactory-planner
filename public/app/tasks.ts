@@ -94,6 +94,8 @@ export interface PlanStepView extends Step {
   // What the same line needs in the later phases of the plan (#1299, laterStepNote): "Phase 4: 89 ·
   // Phase 5: 225 Refineries", or "Not needed after Phase 3", under the step's text.
   later?: string;
+  // A production line's own step: the line, for its built-machines counter (#1300, counterRow).
+  counter?: CalcRow | null;
   // The glossary terms its text marks (#1076): those no step above it on screen marked first.
   terms?: string[];
   // What a production line's own step takes to build (#1073, stepMaterialWords in
@@ -329,6 +331,15 @@ export function lineLaterText(rowId: string): string {
 export function laterStepNote(stepId: string): string {
   const prefix = 'calc-' + stage() + '-';
   return stepId.startsWith(prefix) ? lineLaterText(stepId.slice(prefix.length)) : '';
+}
+
+// The line a step's built-machines counter counts (#1300, ui/BuiltCounter.vue): only a line's own
+// step (calc-<stage>-<row id>) of the phase shown has one, not a personal task linked to the line.
+export function counterRow(stepId: string): CalcRow | null {
+  const prefix = 'calc-' + stage() + '-';
+  if (!stepId.startsWith(prefix)) return null;
+  const rowId = stepId.slice(prefix.length);
+  return (calcStage()?.rows || []).find(row => row.id === rowId) ?? null;
 }
 
 // The production line (row) a step links to: its saved link, or else the automatic one. A saved

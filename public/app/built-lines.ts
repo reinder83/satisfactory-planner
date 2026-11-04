@@ -18,7 +18,8 @@ import {
 } from '../state.ts';
 import type { StepTable } from '../step-table.ts';
 import { listNames } from '../wording.ts';
-import type { CalcRow, StoredCalculatedPlan } from '../types/index.ts';
+import type { CalcRow, StoredCalculatedPlan, UpdateOp } from '../types/index.ts';
+import type { RecountedLine } from '../state.ts';
 
 // A grown line's machines: those that stand, those the plan needs and those to add.
 export interface BuiltLine {
@@ -383,4 +384,125 @@ export function formerTable(lines: readonly FormerLine[], phaseName: string): St
     ]),
     caption: `${phaseName}: production lines no longer needed`,
   };
+}
+
+// The built-machines counter (#1300): "Built 41 / 58" on a production line's card, in its dialog
+// and in its build-plan step, the player's own count of the machines that stand on the line in
+// the phase shown. It writes the same `builtMachines` (the builtCount update in
+// public/state/mutate.ts) a carry keeps a grown line's machines in (#1174), so a counted line is
+// partly built exactly as a grown one is: its step's table, its card's ◑ Partly built chip and
+// "Built so far" (grownShares in views/calculated.ts) read it, and so does a later carry
+// (standingLines in public/state/carry.ts). A ticked line has all its machines built; its count
+// stays for an untick. A line the phase before ran, or left partly built, already stands with
+// those machines (carriedLine in handover.ts), so the count starts from them (`floor`) and only
+// a count above them is stored.
+export interface LineCount {
+  // The machines that stand now, from 0 to `needed`.
+  built: number;
+  // The line's machines in the phase shown.
+  needed: number;
+  // The machines the phase before hands over, at most `needed`: the counter's lowest value.
+  floor: number;
+  ticked: boolean;
+}
+
+// What the counter of `row` reads in phase `stageKey` ('1'-'5'): `checks` and `builtMachines` are
+// the progress state's, `carried` the machines the phase before hands over on the same row (0
+// when none).
+export function countOfLine(
+  builtMachines: Readonly<Record<string, number>> | undefined,
+  checks: Readonly<Record<string, boolean>>,
+  stageKey: string,
+  row: Pick<CalcRow, 'id' | 'machines'>,
+  carried = 0,
+): LineCount {
+  const key = 'calc-' + stageKey + '-' + row.id,
+    needed = Math.max(0, row.machines),
+    ticked = !!checks[key],
+    floor = Math.min(needed, Math.max(0, carried)),
+    own = builtMachines?.[key] ?? 0;
+  return {
+    built: ticked ? needed : Math.min(needed, Math.max(own >= 1 ? own : 0, floor)),
+    needed,
+    floor,
+    ticked,
+  };
+}
+
+// The update that sets the counter of line `key` to `value` (a typed or stepped number), kept
+// between the counter's floor and the line's machines and made whole; null when it changes
+// nothing. A count at the line's machines also ticks it Running, and a ticked line counted below
+// them is unticked; a count no higher than what the phase before hands over is not stored (the
+// key is forgotten), since those machines are counted already.
+export function countUpdate(
+  count: LineCount,
+  key: string,
+  value: number,
+): Extract<UpdateOp, { type: 'builtCount' }> | null {
+  if (!Number.isFinite(value) || count.needed < 1) return null;
+  const next = Math.min(count.needed, Math.max(count.floor, Math.round(value)));
+  if (next === count.built) return null;
+  const update: Extract<UpdateOp, { type: 'builtCount' }> = {
+    type: 'builtCount',
+    key,
+    value: next > count.floor ? next : null,
+  };
+  if (!count.ticked && next === count.needed) update.running = true;
+  if (count.ticked && next < count.needed) update.running = false;
+  return update;
+}
+
+// The counter's words: "41 of 58 Refineries built", for its screen-reader name and its status.
+export const countWords = (count: LineCount, machine: string): string =>
+  `${formatNumber(count.built)} of ${formatNumber(count.needed)} ${machineWord(count.needed, machine)} built`;
+
+// The share of the line its counted machines make (builtShare for a counted line): built machines
+// against needed ones, for the phase checklist's bar (PlanProgress.vue).
+export const countShare = (count: LineCount): number =>
+  count.needed > 0 ? Math.min(1, count.built / count.needed) : 0;
+
+// A factory's machines built and needed in one phase (the Factories page's group heading, #1300):
+// each line's counted machines and its machines, a line split over several factories by its share
+// in this one (`shareOf`, rowPlaces' share). Unrounded.
+export function groupCount(
+  rows: readonly CalcRow[],
+  countOf: (row: CalcRow) => LineCount,
+  shareOf: (row: CalcRow) => number,
+): { built: number; needed: number } {
+  let built = 0,
+    needed = 0;
+  for (const row of rows) {
+    const share = shareOf(row);
+    if (!(share > 0)) continue;
+    const count = countOf(row);
+    built += count.built * share;
+    needed += count.needed * share;
+  }
+  return { built, needed };
+}
+
+// The heading's line: "312 / 641 machines built". Both rounded, and the built ones never rounded
+// up to the whole while some are missing.
+export function groupCountText({ built, needed }: { built: number; needed: number }): string {
+  const total = Math.round(needed),
+    done = Math.min(built < needed - 1e-9 ? Math.max(0, total - 1) : total, Math.round(built));
+  return `${formatNumber(done)} / ${formatNumber(total)} ${total === 1 ? 'machine' : 'machines'} built`;
+}
+
+// The partly built lines a recalculation changed (#1300), for its toast: "Rubber keeps its count:
+// 41 built, 58 needed.", or with several the first two and how many more: "3 partly built
+// production lines keep their counts: Rubber 41 built, 58 needed; Plastic 10 built, 12 needed; and
+// 1 more."
+export function recountedText(lines: readonly RecountedLine[] = []): string {
+  const words = (line: RecountedLine) =>
+    `${formatNumber(line.built)} built, ${formatNumber(line.needed)} needed`;
+  if (!lines.length) return '';
+  if (lines.length === 1) return `${lines[0]!.name} keeps its count: ${words(lines[0]!)}.`;
+  const named = lines.slice(0, 2).map(line => `${line.name} ${words(line)}`);
+  const more = lines.length - named.length;
+  return (
+    `${formatNumber(lines.length)} partly built production lines keep their counts: ` +
+    named.join('; ') +
+    (more ? `; and ${formatNumber(more)} more.` : '.')
+  );
 }

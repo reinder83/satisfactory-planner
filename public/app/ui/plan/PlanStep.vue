@@ -21,7 +21,9 @@
   own step ends with what it takes to build (`step.materials`, #1073): "To build: 2 Refineries + 1
   Water Extractor + Mk.2 belts and Mk.1 pipes" and the parts those buildings cost, after what the
   same line needs in the plan's later phases (`step.later`, #1299: "Later phases: Phase 4: 89 ·
-  Phase 5: 225 Refineries"). Its text marks the glossary
+  Phase 5: 225 Refineries"), after its built-machines counter (`step.counter`, #1300,
+  ui/BuiltCounter.vue), whose tick at the full count is held in place as the checkbox's is, and
+  whose untick brings the step back with focus on the same control. Its text marks the glossary
   terms in `step.terms` (#1076, ui/TermText.vue); the words stay the step's `body`. A step just ticked is
   `held` in place for a few seconds (tick-hold.ts, #1054), and `leaving` as it fades out of it.
 -->
@@ -37,6 +39,7 @@ import TermText from '../TermText.vue';
 import StepIcon from './StepIcon.vue';
 import StepList from './StepList.vue';
 import StepTable from './StepTable.vue';
+import BuiltCounter, { type CounterHooks } from '../BuiltCounter.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
 import { aimFlowLine, refocusAfterRemoval, refocusOn } from '../refocus.ts';
@@ -108,6 +111,26 @@ async function check(event: Event) {
   if (saved) announceTick(id, title);
   await settled(id, saved);
 }
+
+// The built-machines counter's tick at the full count, or untick of a ticked line (#1300), as
+// the checkbox's: a tick holds the step in place and says so, an untick brings it back at once with
+// focus on the same counter control.
+const counterHooks: CounterHooks = {
+  before(trigger, update, control) {
+    if (update.running === true) holdStep(props.step.id, trigger, control);
+    else if (update.running === false) letGo(props.step.id);
+  },
+  async after(saved, update, control) {
+    const { id, title } = props.step;
+    if (update.running === true) {
+      if (saved) announceTick(id, title);
+      await settled(id, saved);
+    } else if (update.running === false && saved) {
+      toast(tickNews(id, title, false));
+      await focusStep(id, control);
+    }
+  },
+};
 
 // "Mark done" on the lead step: the same saved checklist key as its checkbox, held in place the
 // same way. Meanwhile it says "Marked done" and does nothing more, keeping focus; when the step
@@ -276,6 +299,13 @@ async function deletePersonal(event: Event) {
         <TermText :text="step.body" :terms="step.terms ?? []" />
       </p>
       <p v-if="!step.table && !step.list && !step.body">Your own task for this phase.</p>
+      <BuiltCounter
+        v-if="step.counter"
+        :row="step.counter"
+        :name="step.link?.name ?? step.title"
+        place="step"
+        :hooks="counterHooks"
+      />
       <p v-if="step.batch" class="small step-batch" data-step-batch>
         <b>Batch:</b> {{ step.batch }}
       </p>

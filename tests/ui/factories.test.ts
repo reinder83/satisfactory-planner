@@ -127,6 +127,7 @@ async function findLine(value: string) {
   await nextTick();
 }
 
+// Beside the Running box, the built-machines counter's −, field and + (#1300).
 test('each factory card has one dialog button and one Running box (SP-19)', async () => {
   const tabStops = (card: Element) =>
     [...card.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea')].map(
@@ -135,11 +136,14 @@ test('each factory card has one dialog button and one Running box (SP-19)', asyn
           ? 'checkbox'
           : control.classList.contains('name')
             ? 'name'
-            : control.outerHTML,
+            : control.matches('[data-built-step], [data-built-input]')
+              ? 'built ' + (control.dataset.builtStep ?? 'input')
+              : control.outerHTML,
     );
+  const stops = ['name', 'built -1', 'built input', 'built 1', 'checkbox'];
   render();
   for (const card of $$('#main .factory-card')) {
-    assert.deepEqual(tabStops(card), ['name', 'checkbox']);
+    assert.deepEqual(tabStops(card), stops);
     assert.doesNotMatch(card.textContent!, /Details/);
   }
   open({ calculated: generated() });
@@ -147,7 +151,7 @@ test('each factory card has one dialog button and one Running box (SP-19)', asyn
   await nextTick();
   const cards = $$('#main .factory-card');
   assert.ok(cards.length > 0);
-  for (const card of cards) assert.deepEqual(tabStops(card), ['name', 'checkbox']);
+  for (const card of cards) assert.deepEqual(tabStops(card), stops);
 });
 
 test('shared sites group their outputs above the individual factory list', async () => {

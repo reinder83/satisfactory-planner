@@ -22,7 +22,9 @@
   one meaning nobody. Outside edit mode, a muted line under it gives the factory's machines in the
   phase shown and each later phase of the plan, with a rough footprint in foundations, labelled
   as an estimate from machine footprints only (groupGrowth in app/later-phases.ts, #1299), so
-  room can be left for what it grows to. The section's id
+  room can be left for what it grows to. Above it, the machines built of the phase shown, "312 /
+  641 machines built" (`data-group-built`, #1300): each line's built-machines counter, a line split
+  over several factories by its share in this one. The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
@@ -38,9 +40,12 @@ import {
 } from '../../session.ts';
 import { FOOTPRINT_NOTE } from '../../footprints.ts';
 import { groupGrowth, groupGrowthText } from '../../later-phases.ts';
+import { groupCountText } from '../../built-lines.ts';
+import { rowPlaces } from '../../group-order.ts';
 import type { FactoryGroups } from '../../../types/index.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { groupBuiltCount } from '../../views/calculated.ts';
 import { openFlowGraph } from '../../factory-detail.ts';
 import { exportGroupToSft } from '../../sft-download.ts';
 import { legacy } from '../bridge.ts';
@@ -82,6 +87,8 @@ const sections = computed(() =>
         // "Phase 3: 41 machines, ≈ 60 foundations · Phase 4: 97, ≈ 140". The whole factory,
         // whatever the search and chips show; outside edit mode only.
         growth: growthOf(group.id, groups),
+        // Its machines built in the phase shown (#1300): "312 / 641 machines built".
+        built: builtOf(group.id, groups),
         // Its owner (#1199), and whether that is the name this device goes by.
         owner: group.owner || '',
         mine: sameOwner(group.owner, meName()),
@@ -96,6 +103,14 @@ const editing = computed(() => legacy(() => factoryEditing));
 function growthOf(groupId: string, groups: FactoryGroups): string {
   if (!calculated || factoryEditing) return '';
   return groupGrowthText(groupGrowth(calculated, stage(), groupId, groups));
+}
+
+// A factory's machines built and needed in the phase shown (#1300, groupBuiltCount), '' while
+// editing or when it has no machine in it.
+function builtOf(groupId: string, groups: FactoryGroups): string {
+  if (!calculated || factoryEditing) return '';
+  const count = groupBuiltCount(groupId, row => rowPlaces(row, groups).get(groupId) ?? 0);
+  return count.needed >= 0.5 ? groupCountText(count) : '';
 }
 
 // The groups' name fields show the saved names, then what the user types, so a redraw while
@@ -214,6 +229,9 @@ async function remove(event: Event, id: string) {
           /></label>
           <p v-else-if="section.owner" class="small muted group-owner" data-group-owner>
             Owner: {{ section.owner }}<template v-if="section.mine"> (you)</template>
+          </p>
+          <p v-if="section.built" class="small group-built" data-group-built>
+            {{ section.built }}
           </p>
           <p v-if="section.growth" class="small muted group-growth" data-group-growth>
             <span data-group-growth-phases>{{ section.growth }}</span>

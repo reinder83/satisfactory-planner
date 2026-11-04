@@ -16,7 +16,7 @@ import { legacy } from '../bridge.ts';
 const handover = computed(() =>
   legacy(() => {
     if (!calculated) return null;
-    const found = phaseHandover(calculated, state.checks, phase());
+    const found = phaseHandover(calculated, state.checks, phase(), state.builtMachines);
     return found ? { text: handoverText(found), phase: phaseLabel(phase()) } : null;
   }),
 );
