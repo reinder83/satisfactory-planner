@@ -6,6 +6,7 @@
 // change the id or lose its checkmark.
 import { batchLine, batchLineText, idleLineNote, idleLines } from './delivered.ts';
 import { placeName } from './group-links.ts';
+import { lineGrowth, lineGrowthText } from './later-phases.ts';
 import { homeGroup, LINK_DUST, rowPlaces } from './group-order.ts';
 import {
   calcStage,
@@ -90,6 +91,9 @@ export interface PlanStepView extends Step {
   // A line that only makes a Space Elevator part (#1211, batchStepNote): how many to make, how
   // long that takes and the power switching the line off then frees, under the step's text.
   batch?: string;
+  // What the same line needs in the later phases of the plan (#1299, laterStepNote): "Phase 4: 89 ·
+  // Phase 5: 225 Refineries", or "Not needed after Phase 3", under the step's text.
+  later?: string;
   // The glossary terms its text marks (#1076): those no step above it on screen marked first.
   terms?: string[];
   // What a production line's own step takes to build (#1073, stepMaterialWords in
@@ -308,6 +312,23 @@ export function lineBatchText(rowId: string): string {
 export function batchStepNote(stepId: string): string {
   const prefix = 'calc-' + stage() + '-';
   return stepId.startsWith(prefix) ? lineBatchText(stepId.slice(prefix.length)) : '';
+}
+
+// What line `rowId` of the phase shown needs in the later phases of the plan (#1299, lineGrowth in
+// later-phases.ts), for its card, its dialog and its build-plan step: "Phase 4: 89 · Phase 5: 225
+// Refineries", or "Not needed after Phase 3"; '' when every later phase builds it the same or the
+// plan plans no later phase. Post Phase 5 reads Phase 5, which has none after it.
+export function lineLaterText(rowId: string): string {
+  if (milestoneOnly()) return '';
+  const growth = lineGrowth(calculated, stage(), rowId);
+  return growth ? lineGrowthText(growth) : '';
+}
+
+// A step's later phases (lineLaterText): only a line's own step (calc-<stage>-<row id>) has them,
+// not a personal task linked to the line.
+export function laterStepNote(stepId: string): string {
+  const prefix = 'calc-' + stage() + '-';
+  return stepId.startsWith(prefix) ? lineLaterText(stepId.slice(prefix.length)) : '';
 }
 
 // The production line (row) a step links to: its saved link, or else the automatic one. A saved

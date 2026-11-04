@@ -19,7 +19,9 @@
   task's step (`step.batch`, #1211), a line that only makes a Space Elevator part, says under its
   text how many to make, how long that takes and the power switching the line off frees. A line's
   own step ends with what it takes to build (`step.materials`, #1073): "To build: 2 Refineries + 1
-  Water Extractor + Mk.2 belts and Mk.1 pipes" and the parts those buildings cost. Its text marks the glossary
+  Water Extractor + Mk.2 belts and Mk.1 pipes" and the parts those buildings cost, after what the
+  same line needs in the plan's later phases (`step.later`, #1299: "Later phases: Phase 4: 89 ·
+  Phase 5: 225 Refineries"). Its text marks the glossary
   terms in `step.terms` (#1076, ui/TermText.vue); the words stay the step's `body`. A step just ticked is
   `held` in place for a few seconds (tick-hold.ts, #1054), and `leaving` as it fades out of it.
 -->
@@ -276,6 +278,9 @@ async function deletePersonal(event: Event) {
       <p v-if="!step.table && !step.list && !step.body">Your own task for this phase.</p>
       <p v-if="step.batch" class="small step-batch" data-step-batch>
         <b>Batch:</b> {{ step.batch }}
+      </p>
+      <p v-if="step.later" class="small step-later" data-step-later>
+        <b>Later phases:</b> {{ step.later }}
       </p>
       <p v-if="step.materials" class="small step-materials" data-step-materials>
         <b>To build:</b> {{ step.materials.build
