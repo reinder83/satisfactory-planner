@@ -10,7 +10,8 @@
   whole-machine plan (ExactClockChoice.vue, #1066), its somersloop pin (SloopPinChoice.vue,
   #1235) and its Power Shard pin (ShardPinChoice.vue, #1239),
   lane advice, the outputs (only where the headline does not already say them), expansion by
-  phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
+  phase (the card's line of what the same line needs later, then per phase its machines, what to
+  add, its clocks and its power, #1299) and the note saved under `factory-<row id>`. The easier rounded setting is left out
   when the profile already runs whole machines. Opened by openCalculatedFactory in
   factory-detail.ts. Headed as the row's build-plan step is titled (buildRowName), so a factory
   group's own line made on site is "Wire for Alpha", as the links that open it say, and the
@@ -31,7 +32,7 @@ import {
   rowIcon,
 } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
-import { lineBatchText } from '../../tasks.ts';
+import { lineBatchText, lineLaterText } from '../../tasks.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { lineLoad } from '../../../power.ts';
@@ -134,6 +135,8 @@ const view = computed(() =>
           ? inputText(row.outputs)
           : '',
       expansion: calcExpansion(row.id),
+      // What the same line needs in the later phases, as its card says it (#1299).
+      later: lineLaterText(row.id),
       // What runs from the phase before and what this phase changes on it (#1069).
       carried: carriedLineText(row),
     };
@@ -200,12 +203,17 @@ const view = computed(() =>
       <p>{{ view.outputs }}</p></template
     >
     <h3>Expansion by phase</h3>
-    <table>
+    <p v-if="view.later" class="small muted later-growth" data-later-growth>
+      Later phases: {{ view.later }}
+    </p>
+    <table class="expansion-table">
       <thead>
         <tr>
           <th>Phase</th>
           <th>Machines</th>
           <th>Add</th>
+          <th>Clock</th>
+          <th>Power</th>
         </tr>
       </thead>
       <tbody>
@@ -224,6 +232,8 @@ const view = computed(() =>
           </td>
           <td>{{ expansionRow.required }}</td>
           <td>{{ expansionRow.add }}</td>
+          <td data-expansion-clock>{{ expansionRow.clock }}</td>
+          <td data-expansion-power>{{ expansionRow.power }}</td>
         </tr>
       </tbody>
     </table>

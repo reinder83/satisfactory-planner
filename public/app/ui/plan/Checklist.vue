@@ -15,6 +15,8 @@
   at exact clocks, or one whose clocks a recalculation would change (#1066), says so there too.
   A line that only makes a Space Elevator part is a batch task (#1211, batchStepNote in tasks.ts):
   its step says how many to make, how long that takes and the power switching it off then frees.
+  A line's own step says what the same line needs in the plan's later phases (#1299,
+  laterStepNote in tasks.ts), so room can be left for it now.
   With every step done, a line says the phase checklist is complete. While editing, the list
   stays flat in the plan's order, since ↑ / ↓ move a step past its neighbour on screen.
   A step's text marks the glossary terms (#1076, ui/TermText.vue) the steps above it on screen have
@@ -54,6 +56,7 @@ import {
   batchStepNote,
   filteredPlanTasks,
   idleStepNotes,
+  laterStepNote,
   planTasks,
   removedPlanTasks,
   taskIcon,
@@ -111,6 +114,7 @@ const list = computed(() =>
         satisfied: satisfied.get(task.id),
         clocks: clockNote(task.id, link?.id),
         batch: batchStepNote(task.id),
+        later: laterStepNote(task.id),
         materials: stepMaterialWords(task.id),
         icon: taskIcon(task),
         link,

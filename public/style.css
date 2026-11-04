@@ -6991,6 +6991,41 @@ button.rail-tile:hover {
   color: var(--bright);
   font-weight: 600;
 }
+/* What the same line needs in the plan's later phases (#1299), in its step: the materials' edge,
+   muted, as on its card. */
+.step-later {
+  margin: 8px 0 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line2);
+  color: var(--muted);
+}
+.step-later b {
+  font-weight: 600;
+}
+/* The same on a line's card under its machines, and in its dialog over the expansion table. */
+.later-growth {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+/* A factory's machines and rough footprint per phase (#1299), under its name; the estimate's
+   wording on a line of its own. */
+.group-growth {
+  margin: 3px 0 0;
+}
+.group-growth > span {
+  display: block;
+}
+/* The production line dialog's expansion table has five columns (#1299): closer cells on a
+   phone, so it fits a 320px screen without scrolling sideways. */
+@media (max-width: 480px) {
+  .expansion-table td,
+  .expansion-table th {
+    padding: 8px 5px;
+  }
+  .expansion-table td:first-child {
+    font-size: 13px;
+  }
+}
 /* Today's session (#1073): the next builds as cards, each with its facts as a two-column list
    (one column on a phone), and the To-Do note in a read-only box above them. */
 .session-toolbar .session-size {

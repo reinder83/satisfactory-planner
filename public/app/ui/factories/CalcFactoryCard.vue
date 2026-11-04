@@ -7,7 +7,8 @@
   measures its group share in MW; a nuclear plant's waste is listed below like any other
   output (#371), and its group share is that waste with the power it stands for (#374). The
   same structure as FactoryCard.vue (SP-14): the main output with its unit as the headline,
-  machines and the adjustable machine's clock on the line below it, then any other outputs.
+  machines and the adjustable machine's clock on the line below it, then, muted, what the same
+  line needs in the plan's later phases (#1299, lineLaterText in tasks.ts), then any other outputs.
   A line at exact clocks in a whole-machine plan says so, and so does one whose clocks a
   recalculation would change (lineClockNote in app/exact-clocks.ts, #1066).
   The chip at the top says whether it runs, runs from the phase before with how many machines
@@ -44,6 +45,7 @@ import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
 import RunningChip from './RunningChip.vue';
+import { lineLaterText } from '../../tasks.ts';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import type { CalcRow } from '../../../types/index.ts';
@@ -101,6 +103,9 @@ const card = computed(() =>
         setup.partial ? setup.clock : setup.full,
         setup.full,
       ),
+      // What the same line needs in the plan's later phases, under its machines (#1299): "Phase
+      // 4: 89 · Phase 5: 225 Refineries", or "Not needed after Phase 3".
+      later: lineLaterText(row.id),
       // The outputs by name, unless the headline already says all of it: one output that
       // gives the row its name. A generator's headline is its power, so its waste is listed.
       outputs:
@@ -176,6 +181,9 @@ const card = computed(() =>
           }}<span>{{ card.headline.unit }}</span>
         </div>
         <div class="small machines">{{ card.machines }}</div>
+        <div v-if="card.later" class="small muted later-growth" data-later-growth>
+          <span class="visually-hidden">Later phases: </span>{{ card.later }}
+        </div>
         <div v-if="card.generator" class="small generates" data-generates>
           <span aria-hidden="true">⚡︎</span> Generates power for the grid
         </div>

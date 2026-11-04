@@ -19,7 +19,10 @@
   phase before (FactoryHandover.vue, #1069). A factory's owner (#1199) is a line under its name,
   "Owner: Anna", with "(you)" when it is the name this device goes by (app/mine.ts); while editing it
   is a field under the name field, saved as the `factoryGroupOwner` update when committed, a blank
-  one meaning nobody. The section's id
+  one meaning nobody. Outside edit mode, a muted line under it gives the factory's machines in the
+  phase shown and each later phase of the plan, with a rough footprint in foundations, labelled
+  as an estimate from machine footprints only (groupGrowth in app/later-phases.ts, #1299), so
+  room can be left for what it grows to. The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
@@ -31,7 +34,11 @@ import {
   factoryEditing,
   flowRoute,
   sectionCollapsed,
+  stage,
 } from '../../session.ts';
+import { FOOTPRINT_NOTE } from '../../footprints.ts';
+import { groupGrowth, groupGrowthText } from '../../later-phases.ts';
+import type { FactoryGroups } from '../../../types/index.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { openFlowGraph } from '../../factory-detail.ts';
@@ -71,6 +78,10 @@ const sections = computed(() =>
         // recalculation); Water (can't be made on site)".
         made: onSiteEntriesText(onSite[group.id]?.made || []),
         marked: onSiteEntriesText(onSite[group.id]?.marked || []),
+        // Its machines in the phase shown and each later one, with a rough footprint (#1299):
+        // "Phase 3: 41 machines, ≈ 60 foundations · Phase 4: 97, ≈ 140". The whole factory,
+        // whatever the search and chips show; outside edit mode only.
+        growth: growthOf(group.id, groups),
         // Its owner (#1199), and whether that is the name this device goes by.
         owner: group.owner || '',
         mine: sameOwner(group.owner, meName()),
@@ -79,6 +90,13 @@ const sections = computed(() =>
   }),
 );
 const editing = computed(() => legacy(() => factoryEditing));
+
+// A factory's size now and in the later phases of the plan (groupGrowth in later-phases.ts,
+// #1299), '' while editing or when it has no machine in any of them.
+function growthOf(groupId: string, groups: FactoryGroups): string {
+  if (!calculated || factoryEditing) return '';
+  return groupGrowthText(groupGrowth(calculated, stage(), groupId, groups));
+}
 
 // The groups' name fields show the saved names, then what the user types, so a redraw while
 // another control saves keeps a name typed but not yet committed (#654, ui/draft.ts).
@@ -196,6 +214,10 @@ async function remove(event: Event, id: string) {
           /></label>
           <p v-else-if="section.owner" class="small muted group-owner" data-group-owner>
             Owner: {{ section.owner }}<template v-if="section.mine"> (you)</template>
+          </p>
+          <p v-if="section.growth" class="small muted group-growth" data-group-growth>
+            <span data-group-growth-phases>{{ section.growth }}</span>
+            <span class="group-growth-note">{{ FOOTPRINT_NOTE }}</span>
           </p>
         </div>
       </div>
