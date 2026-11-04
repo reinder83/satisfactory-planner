@@ -165,10 +165,10 @@ test('the lines of a real plan grow by their own row ids', () => {
 test('machine footprints in foundations', () => {
   // A foundation is 8 m × 8 m.
   assert.equal(FOUNDATION_M2, 64);
-  // A Packager stands on one foundation, a Constructor on 1.25, a Refinery on 3.125.
+  // A Packager stands on one foundation, a Constructor on 1.25, a Refinery on 3.4375.
   assert.equal(machineFoundations('Packager', 1), 1);
   assert.equal(machineFoundations('Constructor', 4), 5);
-  assert.equal(machineFoundations('Refinery', 2), 6.25);
+  assert.equal(machineFoundations('Refinery', 2), 6.875);
   // A building the table does not know takes none, rather than a guess.
   assert.equal(machineFoundations('Space Elevator', 3), 0);
   // Every machine a plan's lines use has a footprint.
@@ -213,7 +213,7 @@ test('a factory counts its share of its lines in each phase, with their foundati
   // Beta: half the rods and the Refineries, which Phase 4 does not build.
   assert.equal(
     groupGrowthText(groupGrowth(plan, '3', 'fg-b', groups)),
-    'Phase 3: 4 machines, ≈\u00a09 foundations · Phase 4: 2, ≈\u00a03 · Phase 5: 10, ≈\u00a032',
+    'Phase 3: 4 machines, ≈\u00a010 foundations · Phase 4: 2, ≈\u00a03 · Phase 5: 10, ≈\u00a035',
   );
   // From Phase 5 only that phase; a factory with no machine anywhere has nothing to say.
   assert.equal(

@@ -6,22 +6,22 @@
 // The repository's data (recipes.json, from SatisfactoryTools) has no building sizes, so this is a
 // small table of the buildings a plan's lines use, width × length in metres. Source: the
 // Satisfactory Wiki's building pages (satisfactory.wiki.gg, Update 1.0 dimensions), written down
-// by hand, not downloaded; to confirm against the game.
+// by hand, not downloaded; checked against the wiki in the #1302 review.
 // A foundation is 8 m × 8 m.
 export const FOUNDATION_M2 = 64;
 
 export const MACHINE_FOOTPRINTS: Readonly<Record<string, readonly [number, number]>> = {
-  Smelter: [6, 9],
+  Smelter: [5, 10],
   Constructor: [8, 10],
-  Assembler: [10, 15],
-  Foundry: [10, 9],
+  Assembler: [9, 16],
+  Foundry: [10, 10],
   Manufacturer: [18, 20],
-  Refinery: [10, 20],
+  Refinery: [10, 22],
   Packager: [8, 8],
   Blender: [18, 16],
   'Particle Accelerator': [24, 38],
   Converter: [16, 16],
-  'Quantum Encoder': [22, 48],
+  'Quantum Encoder': [22, 50],
   'Coal Generator': [10, 26],
   'Fuel Generator': [20, 20],
   'Nuclear Power Plant': [36, 43],
