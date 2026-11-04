@@ -11,10 +11,11 @@ import DetailDialog from './detail/DetailDialog.vue';
 // (by recipe id), a factory group's flow graph (by group id, #1192), a marker on the world map
 // (by marker id, or 'new:<x>:<y>' for one about to be placed there, #1283) or a train station (by
 // station id, or 'new' / 'new:<x>:<y>' for one about to be added, #1284) or a train line (by line
-// id, or 'new', #1284 slice 2). A factory group's build
+// id, or 'new', #1284 slice 2) or the proposal of Create stations from train links (kind 'trains',
+// id 'links', #1301). A factory group's build
 // order is a page of its own, #factories/<group>/flow (#895).
 export interface DetailTarget {
-  kind: 'calc' | 'slot' | 'alt' | 'graph' | 'marker' | 'station' | 'line';
+  kind: 'calc' | 'slot' | 'alt' | 'graph' | 'marker' | 'station' | 'line' | 'trains';
   id: string;
 }
 

@@ -56,7 +56,9 @@ import {
 } from './validate.ts';
 import { ITEM_NAMES } from './items.ts';
 import {
+  addTrains,
   cleanTrainStation,
+  removeTrains,
   setTrainLayout,
   setTrainLine,
   TRAIN_STATION_MAX,
@@ -347,6 +349,28 @@ function setLine(state: SavedState, update: Raw) {
     update,
   );
 }
+// Several new stations and lines in one write, and several removed by id (#1301: Create stations
+// from train links and its Undo; addTrains and removeTrains in trains.ts). Neither replaces an
+// entry with a whole value another tab may have changed (an add refuses a known id, a removal
+// names its own), so neither is base-sensitive.
+function addTrainEntries(state: SavedState, update: Raw) {
+  const groups = validateGroups(state.factoryGroups).groups;
+  const stations = validateTrainStations(state.trainStations, groups) ?? [];
+  const next = addTrains(
+    stations,
+    validateTrainLines(state.trainLines, stations) ?? [],
+    new Set(groups.map(group => group.id)),
+    update,
+  );
+  state.trainStations = next.stations;
+  state.trainLines = next.lines;
+}
+function removeTrainEntries(state: SavedState, update: Raw) {
+  const stations = stationsOf(state);
+  const next = removeTrains(stations, validateTrainLines(state.trainLines, stations) ?? [], update);
+  state.trainStations = next.stations;
+  state.trainLines = next.lines;
+}
 // The network diagram's layout (#1284, slice 4; setTrainLayout in trains.ts). Presentation only,
 // sent whole as the flow graph's is, so it is not base-sensitive either.
 function setLayout(state: SavedState, update: Raw) {
@@ -364,6 +388,8 @@ const recordEdits: Record<string, StateEdit> = {
   trainStation: setTrainStation,
   trainLine: setLine,
   trainLayout: setLayout,
+  trainAdd: addTrainEntries,
+  trainRemove: removeTrainEntries,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,

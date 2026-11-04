@@ -484,6 +484,11 @@ export type UpdateOp =
   | { type: 'trainLine'; id: string; value: Omit<TrainLine, 'id'> | null }
   // The whole network diagram layout (#1284); null or an empty one drops the field.
   | { type: 'trainLayout'; layout: TrainLayout | null }
+  // New train stations and lines in one write (#1301), after the others; an id already taken
+  // refuses all of it, so nothing is replaced.
+  | { type: 'trainAdd'; stations: TrainStation[]; lines: TrainLine[] }
+  // Train stations and lines removed by id in one write (#1301, the Undo of trainAdd).
+  | { type: 'trainRemove'; stations: string[]; lines: string[] }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';

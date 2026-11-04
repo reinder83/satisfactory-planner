@@ -3,8 +3,12 @@
 // open profile's stations and lines with the plan's node survey and the catalog's stack sizes. The
 // line editor (ui/detail/LineDialog.vue) reads its draft through lineView too, so the page and the
 // editor show the same answers.
-import { FLUIDS } from '../flow.ts';
-import { calculated, state, workspace } from '../session.ts';
+import { bestLane, FLUIDS } from '../flow.ts';
+import { groupLinks, placeName } from '../group-links.ts';
+import { carrierTransport, linkCarrier } from '../logistics.ts';
+import { calcStage, calculated, state, workspace } from '../session.ts';
+import type { ProposalWorld, TrainLinkInput } from '../train-proposal.ts';
+import { factoryGroupsState } from './factories.ts';
 import {
   consistText,
   DIRECTION_TEXT,
@@ -129,5 +133,37 @@ export function trainsView() {
     outposts: Object.fromEntries(
       stations.map(station => [station.id, outpostChecks(station, lines, stations, survey, facts)]),
     ),
+  };
+}
+
+// The links of the phase shown that go by train (#1301): mode 'train' saved on the link, as the
+// Between factories tab and the flow page read it (linkCarrier), with the round trip saved there.
+export function phaseTrainLinks(): TrainLinkInput[] {
+  const stage = calcStage();
+  if (!calculated || !stage?.rows?.length) return [];
+  const groups = factoryGroupsState();
+  if (!groups.groups.length) return [];
+  return groupLinks(stage, groups, calculated.settings.onSite).flatMap(link => {
+    const transport = carrierTransport(linkCarrier(groups.links, link.from, link.to));
+    return transport?.mode === 'train'
+      ? [{ from: link.from, to: link.to, items: link.items, roundTripMin: transport.roundTripMin }]
+      : [];
+  });
+}
+// The mark number of a lane: 'Mk.4' is 4.
+const markNumber = (mark: string) => Number(/\d+/.exec(mark)?.[0] ?? 1);
+// What the proposal reads of the open profile and the phase shown.
+export function proposalWorld(): ProposalWorld {
+  const groups = factoryGroupsState().groups;
+  const raw = calcStage()?.raw;
+  return {
+    groups,
+    ...(state.factoryPlaces ? { places: state.factoryPlaces } : {}),
+    stations: state.trainStations ?? [],
+    lines: state.trainLines ?? [],
+    facts: pageItemFacts(),
+    belt: markNumber(bestLane(false).mark),
+    pipe: markNumber(bestLane(true).mark),
+    name: place => placeName(place, groups, raw),
   };
 }

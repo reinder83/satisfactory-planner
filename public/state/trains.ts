@@ -371,6 +371,74 @@ export function setTrainLine(
     fail(`A profile holds at most ${TRAIN_LINE_MAX} train lines. Delete one to add another.`);
   return at < 0 ? [...lines, line] : lines.map((entry, i) => (i === at ? line : entry));
 }
+// Several new stations and lines in one write (#1301, "Create stations from train links"): each
+// station is added after the others and then each line, checked whole as one `trainStation` or
+// `trainLine` update checks it. It only adds: an id that a station or line already has (or that is
+// sent twice) refuses the whole write, so it never replaces anything the player made or edited. A
+// line's stops may be stations of the profile or stations of the same write. Any malformed entry
+// refuses all of it, so a write is never half applied.
+export function addTrains(
+  stations: readonly TrainStation[],
+  lines: readonly TrainLine[],
+  factories: ReadonlySet<string>,
+  update: Raw,
+): { stations: TrainStation[]; lines: TrainLine[] } {
+  const sentStations: unknown = update.stations,
+    sentLines: unknown = update.lines;
+  if (!Array.isArray(sentStations) || !Array.isArray(sentLines))
+    fail('Invalid train stations and lines.');
+  if (!sentStations.length && !sentLines.length) fail('Invalid train stations and lines.');
+  const stationIds = new Set(stations.map(station => station.id));
+  const added: TrainStation[] = [];
+  for (const raw of sentStations) {
+    if (!plain(raw) || !trainStationId(raw.id) || stationIds.has(raw.id))
+      fail('Invalid train station.');
+    const owner = raw.owner;
+    if (plain(owner) && owner.kind === 'factory' && !factories.has(owner.id as string))
+      fail('Unknown factory.');
+    const station = cleanTrainStation(raw, { factories, strict: true });
+    if (!station) fail('Invalid train station.');
+    stationIds.add(station.id);
+    added.push(station);
+  }
+  if (stations.length + added.length > TRAIN_STATION_MAX)
+    fail(`A profile holds at most ${TRAIN_STATION_MAX} train stations. Delete one to add another.`);
+  const lineIds = new Set(lines.map(line => line.id));
+  const addedLines: TrainLine[] = [];
+  for (const raw of sentLines) {
+    if (!plain(raw) || !trainLineId(raw.id) || lineIds.has(raw.id)) fail('Invalid train line.');
+    const stops = raw.stops;
+    if (Array.isArray(stops) && stops.some(stop => trainStationId(stop) && !stationIds.has(stop)))
+      fail('Unknown train station.');
+    const line = cleanTrainLine(raw, { stations: stationIds, strict: true });
+    if (!line) fail('Invalid train line.');
+    lineIds.add(line.id);
+    addedLines.push(line);
+  }
+  if (lines.length + addedLines.length > TRAIN_LINE_MAX)
+    fail(`A profile holds at most ${TRAIN_LINE_MAX} train lines. Delete one to add another.`);
+  return { stations: [...stations, ...added], lines: [...lines, ...addedLines] };
+}
+// Several stations and lines removed by id in one write (#1301: the Undo of Create). An id the
+// profile no longer has is skipped (gone stays gone); a removed station leaves every line, as
+// when it is deleted alone (validateTrainLines drops the stop).
+export function removeTrains(
+  stations: readonly TrainStation[],
+  lines: readonly TrainLine[],
+  update: Raw,
+): { stations: TrainStation[]; lines: TrainLine[] } {
+  const ids = (raw: unknown, valid: (value: unknown) => boolean): Set<string> => {
+    if (!Array.isArray(raw) || raw.length > TRAIN_STATION_MAX || !raw.every(valid))
+      fail('Invalid train stations and lines.');
+    return new Set(raw as string[]);
+  };
+  const goneStations = ids(update.stations, trainStationId),
+    goneLines = ids(update.lines, trainLineId);
+  return {
+    stations: stations.filter(station => !goneStations.has(station.id)),
+    lines: lines.filter(line => !goneLines.has(line.id)),
+  };
+}
 // The whole network diagram layout (#1284, slice 4): null or one that says nothing drops it.
 export function setTrainLayout(
   stations: readonly Pick<TrainStation, 'id'>[],
