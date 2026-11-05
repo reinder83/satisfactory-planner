@@ -1129,6 +1129,22 @@ try {
     openerId,
     'Escape returns focus to the card that opened the first dialog',
   );
+  // The name's overlay covers the whole card, so the counter and the Running box must be what a
+  // click at their centres hits, not the name (#1306).
+  const covered = await page.evaluate(() => {
+    const card = document.querySelector('.factory-card')!;
+    return [
+      ...card.querySelectorAll<HTMLElement>('.built-counter button, .built-input, .check-row'),
+    ]
+      .filter(control => {
+        control.scrollIntoView({ block: 'center' });
+        const box = control.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return !hit || !control.contains(hit);
+      })
+      .map(control => control.className || control.tagName);
+  });
+  assert.deepEqual(covered, [], `the card's name covers its controls: ${covered}`);
   // A factory's flow graph (#1192) on a phone: Enter on "Flow graph ↗" opens it, the drawing
   // scrolls inside its own box while neither the dialog nor the page scrolls sideways, its table
   // lists every arrow, and Escape returns focus to the button.

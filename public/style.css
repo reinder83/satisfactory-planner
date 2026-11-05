@@ -1865,7 +1865,7 @@ p.eyebrow {
   color: var(--accent-hi);
 }
 /* The name opens the card's dialog, and its hit area covers the whole card (SP-19); the Running
-   box and the group editor sit above it and keep working on their own. With the name focused
+   box, the built counter and the group editor sit above it and keep working on their own. With the name focused
    from the keyboard, the card shows the focus ring. */
 .factory-card .name::after {
   content: '';
@@ -1881,6 +1881,7 @@ p.eyebrow {
   outline-offset: 2px;
 }
 .factory-card .check-row,
+.factory-card .built-counter,
 .factory-card .assign-editor {
   position: relative;
   z-index: 1;

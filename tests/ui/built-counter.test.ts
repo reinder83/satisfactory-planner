@@ -244,3 +244,32 @@ test('Escape in the typed number puts the shown count back and saves nothing', a
   assert.equal(input.value, '2');
   assert.deepEqual(sent(calls), []);
 });
+
+// #1306: the name's hit area covers the card, so a click on the counter must not reach it. A hit
+// test is not possible in happy-dom (the stylesheet test in tests/factory-card-hit-area.test.ts
+// holds the CSS that lifts the counter, and browser-check.ts clicks it with a real mouse); this
+// checks that counting from the card never opens the line's dialog.
+test('counting from the card changes the count and opens no dialog (#1306)', async () => {
+  await show({});
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  assert.equal(dialog.open, false);
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  counterIn(card()).querySelector<HTMLButtonElement>('[data-built-step="1"]')!.click();
+  await settle();
+  assert.deepEqual(state.builtMachines, { [KEY]: 1 });
+  const input = counterIn(card()).querySelector<HTMLInputElement>('[data-built-input]')!;
+  input.click();
+  input.focus();
+  input.value = '3';
+  input.dispatchEvent(new Event('input'));
+  input.dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(state.builtMachines, { [KEY]: 3 });
+  counterIn(card()).querySelector<HTMLButtonElement>('[data-built-step="-1"]')!.click();
+  await settle();
+  assert.deepEqual(state.builtMachines, { [KEY]: 2 });
+  assert.equal(dialog.open, false, 'no dialog opened');
+  // The name still opens it.
+  card().querySelector<HTMLButtonElement>('.name')!.click();
+  assert.equal(dialog.open, true);
+});
