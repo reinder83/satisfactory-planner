@@ -37,9 +37,13 @@ export const GRAPH = {
   pad: 16,
   nodeWidth: 216,
   nodeHeight: 48,
-  selfHeight: 64,
+  // A text line under a box's caption (the rates, #1308, and a line's own-output note): each adds
+  // this much to the box. The lines are cut to `captionChars`, a rate never.
+  textLine: 16,
+  // The rates a box shows: at most this many, and "+N more" for the rest.
+  rateLines: 2,
   gap: 196,
-  rowGap: 20,
+  rowGap: 24,
   waypoint: 8,
   port: 14,
   backLane: 14,
@@ -72,11 +76,29 @@ export interface GraphNode {
   shortCaption: string;
   // A line's own output going back into itself (#898): "↻ 30 m³/min Water back in", else ''.
   selfNote: string;
+  // What the box makes (a production line: its outputs, main product first), draws (an input: what
+  // leaves it for the factory) or receives (an output): one entry per item, summed over the box's
+  // edges (#1308); `rateLines` is what the box says of them under its caption, and `rateTitle`
+  // all of them for the hover title and screen readers ('' without any).
+  rates: NodeRate[];
+  rateLines: string[];
+  rateTitle: string;
+  // The height the box had before it showed its rates (#1308), which a layout saved then was
+  // spaced for.
+  baseHeight: number;
   layer: number;
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+// One item a box makes, draws or receives: `rate` is the sum of the rates of its edges for the
+// item, as they are (one rounding, `text`, at display).
+export interface NodeRate {
+  item: string;
+  rate: number;
+  text: string;
 }
 
 export interface GraphEdge {
@@ -128,6 +150,9 @@ export interface FlowGraph {
   layers: number;
   width: number;
   height: number;
+  // Boxes drawn below where they were stored because they grew to show their rates (placedGraph's
+  // `settle`, #1308), by node id at the spot they are drawn; absent when none was moved.
+  nudged?: Record<string, [number, number]>;
 }
 
 // What a graph is drawn with: `tags` draws the storage and sink flows as tags on their lines.
@@ -208,6 +233,7 @@ export function flowGraph(
     ),
   );
   const nodes = graphNodes(flow, rateText, caption).filter(node => !tagOnly.has(node.id));
+  addRates(nodes, edges, flow, rateText);
   const tags = graphTags(edges, rateText);
   const bottom = layOut(
     nodes,
@@ -318,11 +344,15 @@ function graphNodes(flow: GroupFlow, rateText: GraphRate, caption: GraphCaption)
     caption: under,
     shortCaption: shortText(under, GRAPH.captionChars),
     selfNote: self,
+    rates: [] as NodeRate[],
+    rateLines: [] as string[],
+    rateTitle: '',
+    baseHeight: self ? GRAPH.nodeHeight + GRAPH.textLine : GRAPH.nodeHeight,
     layer: 0,
     x: 0,
     y: 0,
     width: GRAPH.nodeWidth,
-    height: self ? GRAPH.selfHeight : GRAPH.nodeHeight,
+    height: self ? GRAPH.nodeHeight + GRAPH.textLine : GRAPH.nodeHeight,
   });
   const places = (ports: GroupFlow['ins'], side: 'in' | 'out') => {
     const seen = new Map<string, GraphNode>();
@@ -352,6 +382,65 @@ function graphNodes(flow: GroupFlow, rateText: GraphRate, caption: GraphCaption)
     ),
     ...places([...flow.outs, ...flow.fold.ports], 'out'),
   ];
+}
+
+// What each box makes, draws or receives (#1308), from the graph's edges themselves: a line the
+// items its edges leave it with (its own output going back into it too), an input what its edges
+// bring in, an output what its edges take; an item's rates added in the edges' order and worded
+// once, by `rateText`, so a box's figure is the sum of its arrows' (a tag's or quiet arrow's
+// too). A line's items come in the order of its outputs, so its main product is first; an input's
+// or an output's by rate, the largest first, ties in the edges' order. Sets each box's rates, the
+// lines it draws (a line at most GRAPH.rateLines of them, an input or an output that many, then
+// "+N more") and its height, a text line (GRAPH.textLine) taller for each.
+function addRates(
+  nodes: GraphNode[],
+  edges: readonly GraphEdge[],
+  flow: GroupFlow,
+  rateText: GraphRate,
+) {
+  const order = new Map(
+    flow.lines.map(line => ['line:' + line.id, line.outputs.map(row => row.item)] as const),
+  );
+  for (const node of nodes) {
+    const own = edges.filter(edge => (node.kind === 'out' ? edge.to : edge.from) === node.id);
+    const sums = new Map<string, number>();
+    for (const edge of own) sums.set(edge.item, (sums.get(edge.item) ?? 0) + edge.rate);
+    const items = [...sums.keys()];
+    const first = order.get(node.id) ?? [];
+    if (node.kind === 'line') items.sort((a, b) => rankOf(first, a) - rankOf(first, b));
+    else items.sort((a, b) => sums.get(b)! - sums.get(a)!);
+    node.rates = items.map(item => ({
+      item,
+      rate: sums.get(item)!,
+      text: rateText(item, sums.get(item)!),
+    }));
+    // A line with more outputs than fit shows its main product and "+ N more".
+    const shown =
+      node.kind === 'line' && node.rates.length > GRAPH.rateLines
+        ? node.rates.slice(0, 1)
+        : node.rates.slice(0, GRAPH.rateLines);
+    const rest = node.rates.length - shown.length;
+    node.rateLines = [
+      ...shown.map(rate => rateLine(node.kind, rate)),
+      ...(rest > 0 ? [`${node.kind === 'line' ? '+ ' : '+'}${rest} more`] : []),
+    ];
+    node.rateTitle = node.rates.map(rate => `${rate.item} ${rate.text}`).join(', ');
+    node.height = node.baseHeight + node.rateLines.length * GRAPH.textLine;
+  }
+}
+// Where `item` stands in a line's outputs; one it does not list (none) goes last.
+const rankOf = (order: readonly string[], item: string): number => {
+  const at = order.indexOf(item);
+  return at < 0 ? order.length : at;
+};
+
+// One rate as a box says it: "→ Concrete 2,395.25/min" for what a line makes, "Limestone ·
+// 3,810.38/min" for what an input draws, "Concrete 2,380.13/min" for what an output receives. Too
+// long for the box, the item's name is cut, never the rate.
+function rateLine(kind: GraphNodeKind, rate: NodeRate): string {
+  const [head, glue] = kind === 'line' ? ['→ ', ' '] : kind === 'in' ? ['', ' · '] : ['', ' '];
+  const room = GRAPH.captionChars - [...(head + glue + rate.text)].length;
+  return head + shortText(rate.item, Math.max(4, room)) + glue + rate.text;
 }
 
 // One place in a layer: a box, or the gap an edge passes through on its way past the layer.
@@ -386,7 +475,9 @@ function fitPorts(nodes: GraphNode[], forward: GraphEdge[]) {
   for (const node of nodes) {
     const ins = forward.filter(edge => edge.to === node.id).length,
       outs = forward.filter(edge => edge.from === node.id).length;
-    node.height = Math.max(node.height, (Math.max(ins, outs) + 1) * GRAPH.port);
+    const ports = (Math.max(ins, outs) + 1) * GRAPH.port;
+    node.height = Math.max(node.height, ports);
+    node.baseHeight = Math.max(node.baseHeight, ports);
   }
 }
 

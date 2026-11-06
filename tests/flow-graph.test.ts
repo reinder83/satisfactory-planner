@@ -214,7 +214,8 @@ test('a recycling loop runs under the boxes, and a line’s own output back into
   assert.equal(self.path, null, 'but not drawn');
   const glass = node(graph, 'line:glass');
   assert.equal(glass.selfNote, '↻ 10/min Water back in');
-  assert.equal(glass.height, GRAPH.selfHeight);
+  assert.equal(glass.baseHeight, GRAPH.nodeHeight + GRAPH.textLine, 'a text line for the note');
+  assert.equal(glass.height, glass.baseHeight + glass.rateLines.length * GRAPH.textLine);
 });
 
 test('a long name is cut in its box and kept whole for the table', () => {

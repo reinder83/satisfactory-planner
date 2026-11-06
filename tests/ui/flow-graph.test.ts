@@ -866,7 +866,11 @@ test('Reset layout puts moved inputs and outputs back too, asking first', async 
   await showFactories(arrangedGroups({ places: { [input]: [15, 400] } }));
   await openGraph();
   sizedBox();
-  assert.deepEqual(drawnAt(input), [15, 400]);
+  // Where it was put, or just below the box it grew to cover since (#1308), nothing stored.
+  const settled = placedGraph(automatic, undefined, { [input]: [15, 400] }, true).nodes.find(
+    node => node.id === input,
+  )!;
+  assert.deepEqual(drawnAt(input), [settled.x, settled.y]);
   const asked = answerConfirms(true);
   $<HTMLButtonElement>('#detail [data-flow-layout-reset]')!.click();
   await settle();
@@ -958,4 +962,129 @@ test('a box the keyboard focuses is scrolled into view', async () => {
   await settle();
   assert.ok(box.scrollLeft > 0, String(box.scrollLeft));
   assert.ok(far.x >= box.scrollLeft && far.x + far.width <= box.scrollLeft + 400);
+});
+
+// What each box says it makes, draws or receives (#1308).
+test('every box says what it makes, draws or receives, with the edge labels’ numbers', async () => {
+  await openGraph();
+  const graph = graphOf();
+  let withRates = 0;
+  for (const node of graph.nodes) {
+    const el = nodeEl(node.id);
+    const lines = [...el.querySelectorAll('[data-node-rate]')].map(text =>
+      text.textContent!.trim(),
+    );
+    assert.deepEqual(lines, node.rateLines, node.id);
+    const title = el.querySelector(':scope > title')?.textContent ?? null;
+    if (!node.rates.length) {
+      assert.equal(title, null, node.id + ' has nothing to say');
+      continue;
+    }
+    withRates++;
+    const verb = node.kind === 'line' ? 'Makes' : node.kind === 'in' ? 'Draws' : 'Receives';
+    assert.equal(title, `${verb}: ${node.rateTitle}`);
+    // Each item's figure is the sum of the box's edges, worded as an edge label is.
+    const own = graph.edges.filter(edge => (node.kind === 'out' ? edge.to : edge.from) === node.id);
+    for (const rate of node.rates) {
+      const sum = own.filter(edge => edge.item === rate.item).reduce((s, e) => s + e.rate, 0);
+      assert.equal(rate.rate, sum, `${node.id} ${rate.item}`);
+      assert.equal(rate.text, itemRate(rate.item, sum));
+      assert.ok(title!.includes(`${rate.item} ${rate.text}`), 'the title lists it whole');
+    }
+    // The box is as tall as its text: a line under the name for each.
+    const height = Number(el.querySelector('rect')!.getAttribute('height'));
+    assert.ok(height >= 48 + node.rateLines.length * 16);
+    if (node.kind === 'line')
+      assert.match(el.getAttribute('aria-label')!, /\. Makes .+\. Enter opens it/);
+  }
+  assert.ok(withRates > 5, 'the iron works’ boxes show rates');
+  // A fluid is in m³/min as on the labels: the oil campus draws crude oil.
+  dialog().close();
+  await settle();
+  await openGraph('fg-oilcp1');
+  const oil = graphOf('fg-oilcp1');
+  const fluid = oil.nodes.find(node => node.rates.some(rate => rate.text.includes('m³/min')))!;
+  assert.ok(fluid, 'a box of the oil campus carries a fluid');
+  assert.match(nodeEl(fluid.id).textContent!, /m³\/min/);
+});
+
+const boxRects = () =>
+  $$('#detail [data-node]').map(el => {
+    const [x, y] = drawnAt(el.dataset.node!);
+    return {
+      id: el.dataset.node!,
+      x,
+      y,
+      width: Number(el.querySelector('rect')!.getAttribute('width')),
+      height: Number(el.querySelector('rect')!.getAttribute('height')),
+    };
+  });
+const overlapping = () => {
+  const boxes = boxRects();
+  return boxes.flatMap(a =>
+    boxes
+      .filter(b => a.id < b.id)
+      .filter(
+        b =>
+          a.x < b.x + b.width &&
+          b.x < a.x + a.width &&
+          a.y < b.y + b.height &&
+          b.y < a.y + a.height,
+      )
+      .map(b => `${a.id} / ${b.id}`),
+  );
+};
+
+test('a layout saved before the boxes showed rates opens with no box on another, nothing stored until a move', async () => {
+  const automatic = graphOf();
+  const lines = lineIds(automatic).map(id => automatic.nodes.find(node => node.id === id)!);
+  // The lines in one column, each a gap under the box above it as that box was before (baseHeight).
+  const nodes: Record<string, [number, number]> = {};
+  let y = 40;
+  for (const line of lines) {
+    nodes[rowOf(line.id)] = [1200, y];
+    y += line.baseHeight + 20;
+  }
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await showFactories(arrangedGroups({ nodes }));
+  await openGraph();
+  sizedBox();
+  assert.deepEqual(overlapping(), [], 'no box covers another');
+  const column = boxRects()
+    .filter(box => box.id.startsWith('line:'))
+    .sort((one, other) => one.y - other.y);
+  column
+    .slice(1)
+    .forEach((box, i) =>
+      assert.ok(box.y >= column[i]!.y + column[i]!.height + 8, box.id + ' keeps its distance'),
+    );
+  // The first line stays where it was put; some below it were moved down, on the grid.
+  assert.deepEqual(drawnAt(lines[0]!.id), nodes[rowOf(lines[0]!.id)]);
+  const moved = lines.filter(line => drawnAt(line.id)[1] !== nodes[rowOf(line.id)]![1]);
+  assert.ok(moved.length, 'a box that grew pushed the one below it down');
+  for (const line of moved) assert.equal(drawnAt(line.id)[1] % 5, 0, line.id);
+  await rest();
+  assert.deepEqual(layoutSaves(calls), [], 'opening it saves nothing');
+  assert.deepEqual(storedLayout()?.nodes, nodes, 'the stored spots are as they were');
+  // Moving one box stores the layout as it is drawn, so nothing jumps back.
+  const before = Object.fromEntries(lines.map(line => [line.id, drawnAt(line.id)]));
+  const first = lines[0]!.id;
+  const el = nodeEl(first);
+  el.dispatchEvent(pointer('pointerdown', 100, 100));
+  el.dispatchEvent(pointer('pointermove', 100, 140));
+  await settle();
+  el.dispatchEvent(pointer('pointerup', 100, 140));
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await settle();
+  await rest();
+  const saves = layoutSaves(calls) as { layout: GroupLayout }[];
+  assert.equal(saves.length, 1);
+  for (const line of lines.slice(1)) {
+    assert.deepEqual(
+      saves[0]!.layout.nodes![rowOf(line.id)],
+      before[line.id],
+      line.id + ' as drawn',
+    );
+    assert.deepEqual(drawnAt(line.id), before[line.id], line.id);
+  }
 });
