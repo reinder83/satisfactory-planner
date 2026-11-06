@@ -114,9 +114,14 @@ const NOTES: Record<GraphEdge['note'], string> = {
   loop: 'loop: seed a starter batch',
   self: 'back into the same line',
 };
+// Until a box is first moved, a stored layout's boxes that grew to show their rates (#1308) are
+// drawn below the ones they would cover; that move stores the layout as drawn (putNode).
+const settling = ref(true);
 // The graph as drawn: the automatic one with the stored and dragged spots of lines and places.
 const placed = computed(
-  () => view.value.graph && placedGraph(view.value.graph, layout.spots.value, layout.places.value),
+  () =>
+    view.value.graph &&
+    placedGraph(view.value.graph, layout.spots.value, layout.places.value, settling.value),
 );
 // The drawn arrows, the quiet ones (into storage and the sink, #1231) first, so every other arrow
 // is drawn over them.
@@ -204,6 +209,9 @@ const tagClass = (tag: GraphTag) => {
   const on = lit.value;
   return ['fgraph-tag', { hl: !!on?.tags.has(tag.id), faded: !!on && !on.tags.has(tag.id) }];
 };
+// A box's hover title: what it makes, draws or receives, every item whole (#1308).
+const rateTitle = (node: GraphNode) =>
+  `${node.kind === 'line' ? 'Makes' : node.kind === 'in' ? 'Draws' : 'Receives'}: ${node.rateTitle}`;
 // "Show storage and sink as tags": redrawn at once and saved with the layout.
 function setTags(on: boolean) {
   layout.tags.value = on;
@@ -223,6 +231,17 @@ const putNode = (node: string, to: [number, number]) => {
   if (!graph) return;
   const row = lineRowOf(node);
   const held = heldSpots(graph, layout.spots.value);
+  // The first move keeps the boxes settled below the ones they grew into where they are drawn.
+  if (settling.value) {
+    settling.value = false;
+    const places = { ...layout.places.value };
+    for (const [id, spot] of Object.entries(graph.nudged ?? {})) {
+      const nudgedRow = lineRowOf(id);
+      if (nudgedRow !== null) held[nudgedRow] = spot;
+      else if (isPlaceNode(id)) places[id] = spot;
+    }
+    layout.places.value = places;
+  }
   layout.spots.value = row === null ? held : { ...held, [row]: to };
   if (row === null && isPlaceNode(node))
     layout.places.value = { ...layout.places.value, [node]: to };
@@ -255,7 +274,7 @@ const openNode = (id: string) => {
 const lineAttrs = (node: GraphNode) => ({
   tabindex: 0,
   role: 'button',
-  'aria-label': `${node.label}, ${node.caption}. Enter opens it, the arrow keys move it.`,
+  'aria-label': `${node.label}, ${node.caption}.${node.rateTitle ? ' Makes ' + node.rateTitle + '.' : ''} Enter opens it, the arrow keys move it.`,
 });
 // A place's box takes focus too (#1231), so the keyboard lights up its arrows: named with what
 // comes in from it or goes out to it.
@@ -479,10 +498,26 @@ async function resetLayout() {
               @focus="onNodeFocus($event, node)"
               @blur="leaveNode(node.id)"
             >
+              <title v-if="node.rateTitle">{{ rateTitle(node) }}</title>
               <rect :width="node.width" :height="node.height" />
               <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
               <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
-              <text v-if="node.selfNote" class="fgraph-caption" x="10" y="54">
+              <text
+                v-for="(text, i) in node.rateLines"
+                :key="i"
+                class="fgraph-caption fgraph-rate"
+                :data-node-rate="i"
+                x="10"
+                :y="37 + (i + 1) * GRAPH.textLine"
+              >
+                {{ text }}
+              </text>
+              <text
+                v-if="node.selfNote"
+                class="fgraph-caption"
+                x="10"
+                :y="37 + (node.rateLines.length + 1) * GRAPH.textLine"
+              >
                 {{ shortText(node.selfNote, GRAPH.captionChars) }}
               </text>
             </g>

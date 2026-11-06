@@ -265,7 +265,7 @@ test('a moved input or output sits at its spot and its arrows follow; every box 
   assert.ok(placed.width >= 1700 + box(placed, STORAGE).width);
   assert.ok(placed.height >= 400 + box(placed, INPUT).height);
   // A place moved alone (no line held) leaves the lines at their automatic spots, on the grid.
-  const alone = placedGraph(graph, undefined, { [INPUT]: [15, 65] });
+  const alone = placedGraph(graph, undefined, { [INPUT]: [15, 75] });
   for (const node of alone.nodes) {
     const automatic = box(graph, node.id);
     assert.ok(Math.abs(node.x - automatic.x) <= 2.5 && Math.abs(node.y - automatic.y) <= 2.5);

@@ -8591,3 +8591,8 @@ th.resource-cell {
     border-radius: 20px;
   }
 }
+/* The rates a box makes, draws or receives (#1308) read a little brighter than its caption. */
+.fgraph-rate {
+  fill: var(--ink);
+  opacity: 0.85;
+}

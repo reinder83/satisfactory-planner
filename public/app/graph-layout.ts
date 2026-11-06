@@ -22,6 +22,10 @@
 //   automatic spots, lines new to it) are drawn on the grid too, and the first move stores the
 //   other lines on it, so every box can be lined up with every other: that moves a box at most
 //   2.5 units. A spot stored before the grid stays where it is until its box is moved.
+// - Boxes show their rates since #1308 and are taller than they were. A layout saved before that
+//   (or one saved with boxes close together) can have a box that now covers the one above it: with
+//   `settle` such a box is drawn below the one it newly covers, on the grid, nothing stored. The
+//   dialog settles until the first move of a box, which stores the spots as drawn (nudged).
 // The boxes stay in the automatic order in the drawing (and so in the tab order) wherever they sit.
 import {
   GRAPH,
@@ -69,6 +73,7 @@ export function placedGraph(
   graph: FlowGraph,
   spots: GraphSpots | undefined,
   places?: GraphSpots,
+  settle = false,
 ): FlowGraph {
   const spotOf = (node: GraphNode) => {
     const row = lineRowOf(node.id);
@@ -86,6 +91,7 @@ export function placedGraph(
   }
   const automatic = new Map(graph.nodes.map(node => [node.id, node]));
   placeFreshLines(fresh, nodes, graph.edges, automatic, spots ?? {});
+  const nudged = settle ? settleBoxes(nodes) : {};
   const { edges, curves } = routeArranged(graph.edges, byId);
   const labelCurves = new Map<GraphEdge, GraphCurve[]>();
   for (const edge of edges) {
@@ -93,7 +99,42 @@ export function placedGraph(
     if (curve) labelCurves.set(edge, [curve]);
   }
   placeEdgeLabels(edges, labelCurves, labelObstacles(nodes, graph.tags));
-  return { ...graph, nodes, edges, ...arrangedSize(graph, nodes, edges, curves) };
+  return {
+    ...graph,
+    nodes,
+    edges,
+    ...arrangedSize(graph, nodes, edges, curves),
+    ...(Object.keys(nudged).length ? { nudged } : {}),
+  };
+}
+
+// The least room kept between a box and the one above it (drawing units).
+const SETTLE_GAP = 8;
+// Each box that now covers a box, or is closer to it than SETTLE_GAP, where it was not with the
+// heights the boxes had before they showed their rates (baseHeight, #1308), moved down below that
+// box (a gap of half a row, on the grid), from the top down; a pair that was as close before is
+// left as the user had it. Returns the boxes it moved, by node id, at their new spots.
+function settleBoxes(nodes: GraphNode[]): Record<string, [number, number]> {
+  const meet = (one: GraphNode, other: GraphNode, heightOf: (box: GraphNode) => number) =>
+    one.x < other.x + other.width &&
+    other.x < one.x + one.width &&
+    one.y < other.y + heightOf(other) + SETTLE_GAP &&
+    other.y < one.y + heightOf(one) + SETTLE_GAP;
+  const was = new Map(nodes.map(node => [node.id, { ...node }]));
+  const before = (one: GraphNode, other: GraphNode) =>
+    meet(was.get(one.id)!, was.get(other.id)!, box => box.baseHeight);
+  const moved: Record<string, [number, number]> = {};
+  const done: GraphNode[] = [];
+  for (const node of [...nodes].sort((a, b) => a.y - b.y || a.x - b.x)) {
+    for (let tries = 0; tries < 100; tries++) {
+      const above = done.find(box => meet(box, node, shown => shown.height) && !before(box, node));
+      if (!above) break;
+      node.y = Math.ceil((above.y + above.height + GRAPH.rowGap / 2) / GRAPH_GRID) * GRAPH_GRID;
+      moved[node.id] = [node.x, node.y];
+    }
+    done.push(node);
+  }
+  return moved;
 }
 
 // Each line without a spot, in order: its automatic spot moved by the mean move of the lines it
