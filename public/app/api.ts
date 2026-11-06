@@ -78,6 +78,19 @@ export function dropToastAction() {
   if (toastAction) hideToast();
 }
 
+// Takes the Undo away when another tab or device changed the profile it was offered on (#1305): its
+// button and Ctrl+Z would put the profile back as this tab left it, over that newer edit. Called
+// wherever this tab learns of such a change (refreshState, the live refresh), also when the page
+// is not redrawn yet. The toast says so instead of leaving the user wondering where the button
+// went. A toast with no button stays as it is.
+export const undoGoneNotice =
+  'Another tab or device changed this profile, so Undo is no longer offered.';
+export function dropUndoOutsideChange() {
+  if (!toastAction) return;
+  hideToast();
+  toast(undoGoneNotice);
+}
+
 function hideToast() {
   clearTimeout(toastTimer);
   toastAction = null;
@@ -307,12 +320,14 @@ export async function refreshState(force = false): Promise<boolean> {
     next = await request<ProgressState>('/api/state', { headers: { ...scope, ...planHeader() } });
   } catch (error) {
     if ((error as { status?: number }).status !== 409 || !same()) throw error;
+    dropUndoOutsideChange();
     await loadContext(scope['X-Save-Id'], scope['X-Profile-Id'], false);
     render();
     if (!force) toast(recalculatedNotice);
     return true;
   }
   if (!same() || next.revision === state.revision || (!force && !quiet())) return false;
+  dropUndoOutsideChange();
   setState(next);
   render();
   return true;

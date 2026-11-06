@@ -34,7 +34,7 @@ export interface CounterHooks {
 import { computed, ref } from 'vue';
 import { save } from '../api.ts';
 import { announce } from '../announce.ts';
-import { countUpdate, countWords } from '../built-lines.ts';
+import { countUpdate, countWords, counterTop } from '../built-lines.ts';
 import { num } from '../format.ts';
 import { stage } from '../session.ts';
 import { render } from '../shell.ts';
@@ -141,7 +141,7 @@ function typed(event: Event) {
       type="number"
       inputmode="numeric"
       :min="count.floor"
-      :max="count.needed"
+      :max="counterTop(count)"
       step="1"
       :data-built-input="count.key"
       :aria-label="'Machines built: ' + name"

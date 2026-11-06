@@ -395,9 +395,12 @@ export function formerTable(lines: readonly FormerLine[], phaseName: string): St
 // (standingLines in public/state/carry.ts). A ticked line has all its machines built; its count
 // stays for an untick. A line the phase before ran, or left partly built, already stands with
 // those machines (carriedLine in handover.ts), so the count starts from them (`floor`) and only
-// a count above them is stored.
+// a count above them is stored. A line with machines to spare (#1175: 60 standing for 58 planned)
+// counts them all, "60 / 58" (#1305): the stored count above the plan is read as it is, − steps
+// it down and + back up to it, never above what stands, and the spare advice stays while it is
+// above the plan.
 export interface LineCount {
-  // The machines that stand now, from 0 to `needed`.
+  // The machines that stand now, from 0 to `needed`, or above it for a line with spare machines.
   built: number;
   // The line's machines in the phase shown.
   needed: number;
@@ -422,7 +425,9 @@ export function countOfLine(
     floor = Math.min(needed, Math.max(0, carried)),
     own = builtMachines?.[key] ?? 0;
   return {
-    built: ticked ? needed : Math.min(needed, Math.max(own >= 1 ? own : 0, floor)),
+    // A count above the plan is the spare machines standing, ticked or not (spareLine).
+    built:
+      own > needed ? own : ticked ? needed : Math.min(needed, Math.max(own >= 1 ? own : 0, floor)),
     needed,
     floor,
     ticked,
@@ -430,8 +435,8 @@ export function countOfLine(
 }
 
 // The update that sets the counter of line `key` to `value` (a typed or stepped number), kept
-// between the counter's floor and the line's machines and made whole; null when it changes
-// nothing. A count at the line's machines also ticks it Running, and a ticked line counted below
+// between the counter's floor and the line's machines (or what stands, for a line with spare
+// machines) and made whole; null when it changes nothing. A count at the line's machines also ticks it Running, and a ticked line counted below
 // them is unticked; a count no higher than what the phase before hands over is not stored (the
 // key is forgotten), since those machines are counted already.
 export function countUpdate(
@@ -440,7 +445,7 @@ export function countUpdate(
   value: number,
 ): Extract<UpdateOp, { type: 'builtCount' }> | null {
   if (!Number.isFinite(value) || count.needed < 1) return null;
-  const next = Math.min(count.needed, Math.max(count.floor, Math.round(value)));
+  const next = Math.min(counterTop(count), Math.max(count.floor, Math.round(value)));
   if (next === count.built) return null;
   const update: Extract<UpdateOp, { type: 'builtCount' }> = {
     type: 'builtCount',
@@ -452,9 +457,16 @@ export function countUpdate(
   return update;
 }
 
-// The counter's words: "41 of 58 Refineries built", for its screen-reader name and its status.
+// The most the counter can show: the line's machines, or the machines standing when that is more.
+export const counterTop = (count: Pick<LineCount, 'built' | 'needed'>): number =>
+  Math.max(count.needed, count.built);
+
+// The counter's words: "41 of 58 Refineries built", for its screen-reader name and its status;
+// "60 Refineries built, 58 needed: 2 spare" for a line with machines to spare.
 export const countWords = (count: LineCount, machine: string): string =>
-  `${formatNumber(count.built)} of ${formatNumber(count.needed)} ${machineWord(count.needed, machine)} built`;
+  count.built > count.needed
+    ? `${formatNumber(count.built)} ${machineWord(count.built, machine)} built, ${formatNumber(count.needed)} needed: ${formatNumber(count.built - count.needed)} spare`
+    : `${formatNumber(count.built)} of ${formatNumber(count.needed)} ${machineWord(count.needed, machine)} built`;
 
 // The share of the line its counted machines make (builtShare for a counted line): built machines
 // against needed ones, for the phase checklist's bar (PlanProgress.vue).
@@ -475,7 +487,8 @@ export function groupCount(
     const share = shareOf(row);
     if (!(share > 0)) continue;
     const count = countOf(row);
-    built += count.built * share;
+    // Spare machines are no progress on the factory's plan.
+    built += Math.min(count.built, count.needed) * share;
     needed += count.needed * share;
   }
   return { built, needed };

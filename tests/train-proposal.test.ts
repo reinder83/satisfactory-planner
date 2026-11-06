@@ -3,8 +3,9 @@
 // - The proposal: a pick-up station at the supplying factory or a mining outpost for a
 //   `supply/<resource>` link, a drop-off station at the receiving factory, their platforms with the
 //   cargo, and a one-way line between them whose train passes its own checks (lineChecks).
-// - The wagon suggestion: the fewest wagons whose belt (or pipe) carries the rate and whose full
-//   belt over a round trip fits 32 stacks (or 1,600 m³).
+// - The wagon suggestion: the wagons the Between-factories card's linkLoad counts (#1305: the round
+//   trip's load, and the rate through a platform's two ports), each on a belt (or pipe) whose full
+//   rate over a round trip fits 32 stacks (or 1,600 m³).
 // - The matching: a link a line already carries is served and proposes nothing; a station is
 //   reused only when it is a stop of no line, has the end's owner and loads exactly the cargo (a
 //   drop-off: unloads and loads nothing); ends that cannot own a station are skipped; a re-run
@@ -17,6 +18,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkBase, mutate, validateState, TRAIN_STATION_MAX } from '../public/state.ts';
 import { lineChecks, type ItemFacts } from '../public/app/train-lines.ts';
+import { linkLoad } from '../public/app/logistics.ts';
+import { BELT_MARKS, PIPE_MARKS } from '../public/preferences.ts';
 import {
   createdEntries,
   freshName,
@@ -178,7 +181,7 @@ test('several items and fluids: a wagon kind and platform per item, locomotives 
   // Crude Oil: 500 m³/min × 5 = 2,500 m³: two fluid wagons of 1,600 on a Mk.1 pipe each (300 ×
   // 5 = 1,500).
   assert.deepEqual(oil!.wagons, [
-    { item: 'Crude Oil', rate: 500, fluid: true, wagons: 2, mark: 1, lane: 'Mk.1 pipe' },
+    { item: 'Crude Oil', rate: 500, fluid: true, wagons: 2, mark: 1, lane: 'Mk.1 pipe', ports: 1 },
   ]);
   assert.deepEqual(oil!.pickup!.station.platforms[0], {
     kind: 'load',
@@ -193,8 +196,8 @@ test('several items and fluids: a wagon kind and platform per item, locomotives 
       proposal.key,
     );
   // Nine wagons take three locomotives in front, with an empty platform for each one behind the
-  // first.
-  const [big] = propose([{ ...ORE, items: [{ item: 'Iron Ore', rate: 9 * 480 }] }]);
+  // first (5,700/min over 5 minutes is 28,500 ore, 8.9 wagons).
+  const [big] = propose([{ ...ORE, items: [{ item: 'Iron Ore', rate: 5700 }] }]);
   assert.equal(big!.locomotives, 3);
   assert.deepEqual(big!.line!.cars.slice(0, 4), ['loco', 'loco', 'loco', 'wagon']);
   assert.deepEqual(
@@ -203,15 +206,16 @@ test('several items and fluids: a wagon kind and platform per item, locomotives 
   );
   const stations = [big!.pickup!.station, big!.dropoff!.station];
   assert.deepEqual(lineChecks(big!.line!, stations, FACTS), []);
+  assert.equal(wagonText(big!.wagons[0]!), '9 freight wagons for Iron Ore on 2 × Mk.4 belts each');
   // More than one train pulls: the line keeps 32 wagons and says how many the rate needs.
   assert.equal(maxWagons(), 32);
-  const [huge] = propose([{ ...ORE, items: [{ item: 'Iron Ore', rate: 40 * 480 }] }]);
+  const [huge] = propose([{ ...ORE, items: [{ item: 'Iron Ore', rate: 40 * 640 }] }]);
   assert.equal(huge!.wanted, 40);
   assert.equal(huge!.line!.cars.length, 40);
   assert.equal(huge!.line!.cars.filter(car => car === 'wagon').length, 32);
 });
 
-test('the wagon suggestion: the fewest wagons whose belt carries the rate and fits a round trip', () => {
+test('the wagon suggestion: the card’s wagons, each on a belt that fits a round trip', () => {
   const best = { belt: 6, pipe: 2 };
   const pick = (item: string, rate: number, trip: number, lanes = best) => {
     const wagon = suggestWagons(item, rate, trip, FACTS, lanes);
@@ -219,11 +223,15 @@ test('the wagon suggestion: the fewest wagons whose belt carries the rate and fi
   };
   assert.deepEqual(pick('Iron Ore', 60, 5), [1, 'Mk.1 belt']);
   assert.deepEqual(pick('Iron Ore', 480, 5), [1, 'Mk.4 belt']);
-  // 640/min fits one wagon per trip (3,200), but the belt that carries 640 (Mk.5) brings 3,900:
-  // two wagons of 320/min each, on Mk.4 belts (2,400 a trip).
-  assert.deepEqual(pick('Iron Ore', 640, 5), [2, 'Mk.4 belt']);
-  // Only Mk.3 belts in the phase: 640/min needs three wagons (213 each).
-  assert.deepEqual(pick('Iron Ore', 640, 5, { belt: 3, pipe: 1 }), [3, 'Mk.3 belt']);
+  // 640/min fills one wagon per trip (3,200), and a wagon loads through two ports (#1305), as the
+  // card counts: one wagon. The belt that carries all 640 (Mk.5) brings 3,900 a trip and overfills
+  // it, so the platform records the fastest belt that fits (Mk.4, 2,400 a trip), the second port
+  // taking the rest.
+  assert.deepEqual(pick('Iron Ore', 640, 5), [1, 'Mk.4 belt']);
+  assert.equal(suggestWagons('Iron Ore', 640, 5, FACTS, best).ports, 2);
+  assert.equal(suggestWagons('Iron Ore', 480, 5, FACTS, best).ports, 1);
+  // Only Mk.3 belts in the phase: 640/min needs two wagons, as the card says (2 × 270 each).
+  assert.deepEqual(pick('Iron Ore', 640, 5, { belt: 3, pipe: 1 }), [2, 'Mk.3 belt']);
   // A bigger stack fits more: Screws (500 a stack) at 1,200/min, 10 minutes: 12,000 of 16,000.
   assert.deepEqual(pick('Screws', 1200, 10), [1, 'Mk.6 belt']);
   assert.deepEqual(pick('Water', 300, 5), [1, 'Mk.1 pipe']);
@@ -231,6 +239,33 @@ test('the wagon suggestion: the fewest wagons whose belt carries the rate and fi
   // A trip so long that even a Mk.1 belt overfills a wagon: the wagons the rate needs (3,600 of
   // 3,200 a wagon) on the slowest belt; the line's checks then say how far it backs up.
   assert.deepEqual(pick('Iron Ore', 60, 60), [2, 'Mk.1 belt']);
+});
+
+// The suggestion is the card's (#1305): for one item, the freight cars (or fluid cars) linkLoad counts
+// for the same link, over rates, round trips and the belts the phase has, so the preview and the
+// Between-factories card never show different counts. The created line still passes its checks.
+test('the wagon suggestion agrees with the Between-factories card', () => {
+  const catalog = { stacks: { 'Iron Ore': 100 }, packaged: {}, vehicleFuels: [] };
+  const fluids = new Set(['Water']);
+  for (const [belt, pipe] of [
+    [3, 1],
+    [6, 2],
+  ] as const)
+    for (const trip of [0.5, 1, 2, 5, 10, 20, 40])
+      for (const rate of [30, 60, 100, 250, 480, 640, 780, 1200, 2000, 3000, 6000, 12000]) {
+        for (const item of ['Iron Ore', 'Water']) {
+          const wagon = suggestWagons(item, rate, trip, FACTS, { belt, pipe });
+          const card = linkLoad(
+            [{ item, rate }],
+            { mode: 'train', roundTripMin: trip },
+            catalog,
+            fluids,
+            { belt: BELT_MARKS[belt - 1]!.cap, pipe: PIPE_MARKS[pipe - 1]!.cap },
+          );
+          const label = `${item} ${rate}/min, ${trip} min, Mk.${belt} belts`;
+          assert.equal(wagon.wagons, card.freightCars + card.fluidCars, label);
+        }
+      }
 });
 
 test('the round trip: the map estimate replaces the default; the link’s own or a typed one wins', () => {

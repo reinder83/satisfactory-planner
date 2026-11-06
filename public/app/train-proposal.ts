@@ -37,7 +37,7 @@ import {
 } from '../state.ts';
 import { listNames, localeNumber } from '../wording.ts';
 import { isSource, OUTSIDE, sourceItem, UNGROUPED } from './group-links.ts';
-import { CARS_PER_LOCOMOTIVE, DEFAULT_TRIP_MIN } from './logistics.ts';
+import { CARS_PER_LOCOMOTIVE, DEFAULT_TRIP_MIN, PLATFORM_PORTS } from './logistics.ts';
 import { FLUID_WAGON_M3, WAGON_SLOTS, wagonPlan, type ItemFacts } from './train-lines.ts';
 import type {
   FactoryGroup,
@@ -140,14 +140,19 @@ export function servingLines(
   );
 }
 
-// The wagons one item of a link needs, and the belt (or pipe) of each wagon's platform. The line
-// checks (wagonFill in train-lines.ts) compare what a platform's belt brings in one round trip
-// with what a wagon holds (32 stacks of the item, or 1,600 m³), so the suggestion is the fewest
-// wagons for which each wagon's share of the rate fits on a belt the phase has and that belt's
-// full rate over the round trip fits in the wagon: then the created line passes its own checks.
-// When no belt is slow enough for that (a round trip so long that even a Mk.1 belt overfills a
-// wagon), the wagons the rate needs are kept with the slowest belt that carries a wagon's share,
-// and the line's checks say how far the belt backs up.
+// The wagons one item of a link needs, and the belt (or pipe) of each wagon's platform (#1305). The
+// count is the Between-factories card's (linkLoad in logistics.ts), so the two agree: the wagons
+// a round trip's load needs (32 stacks of the item, or 1,600 m³ each), and no fewer than the
+// rate needs when a wagon loads through its platform's two ports (PLATFORM_PORTS) at the best
+// belt (or pipe) of the phase. The line checks (wagonFill in train-lines.ts) compare what a
+// platform's belt brings in one round trip with what a wagon holds, and a platform records one
+// belt, so the belt is the slowest one that carries a wagon's whole share and still fits the
+// wagon; when none does, the fastest that fits it (`ports` 2: the wagon's second port takes the
+// rest, so the preview says "2 ×"), and the created line passes its own checks. A wagon's share
+// that no belt fitting the wagon carries in two ports adds a wagon. When no belt fits a wagon at
+// all (a round trip so long that even a Mk.1 belt overfills one), the wagons the rate needs are
+// kept with the slowest belt that carries a wagon's share, and the line's checks say how far the
+// belt backs up.
 export interface WagonSuggestion {
   item: string;
   rate: number;
@@ -156,6 +161,9 @@ export interface WagonSuggestion {
   // The belt or pipe mark of each wagon's platform, 1-based.
   mark: number;
   lane: string;
+  // Belts or pipes a wagon's share needs: 2 when the mark recorded carries only part of it and the
+  // platform's second port takes the rest.
+  ports: 1 | 2;
 }
 export function suggestWagons(
   item: string,
@@ -171,18 +179,24 @@ export function suggestWagons(
   );
   const holds = fluid ? FLUID_WAGON_M3 : WAGON_SLOTS * (facts.stack(item) || 100);
   const lane = (at: number) => `${marks[at]!.mark} ${fluid ? 'pipe' : 'belt'}`;
-  const fewest = Math.max(1, Math.ceil((rate * roundTrip) / holds - 1e-9));
+  const held = Math.ceil((rate * roundTrip) / holds - 1e-9);
+  const ported = Math.ceil(rate / (PLATFORM_PORTS * marks[marks.length - 1]!.cap) - 1e-9);
+  const fewest = Math.max(1, held, ported);
   const carrying = (wagons: number) => marks.findIndex(mark => mark.cap + 1e-9 >= rate / wagons);
+  // The fastest belt whose full rate over the round trip fits a wagon (marks rise with the index).
+  const fitting = marks.findLastIndex(mark => mark.cap * roundTrip <= holds + 1e-9);
   for (let wagons = fewest; wagons <= TRAIN_CAR_MAX; wagons++) {
     const at = carrying(wagons);
-    if (at >= 0 && marks[at]!.cap * roundTrip <= holds + 1e-9)
-      return { item, rate, fluid, wagons, mark: at + 1, lane: lane(at) };
+    if (at >= 0 && at <= fitting)
+      return { item, rate, fluid, wagons, mark: at + 1, lane: lane(at), ports: 1 };
+    if (fitting >= 0 && PLATFORM_PORTS * marks[fitting]!.cap + 1e-9 >= rate / wagons)
+      return { item, rate, fluid, wagons, mark: fitting + 1, lane: lane(fitting), ports: 2 };
   }
   // No belt fits: as many wagons as the rate needs, each on the slowest belt that carries its share.
   let wagons = fewest;
   while (carrying(wagons) < 0 && wagons < TRAIN_CAR_MAX) wagons++;
   const at = Math.max(0, carrying(wagons));
-  return { item, rate, fluid, wagons, mark: at + 1, lane: lane(at) };
+  return { item, rate, fluid, wagons, mark: at + 1, lane: lane(at), ports: 1 };
 }
 
 // The most wagons one train takes: the front locomotives (one per CARS_PER_LOCOMOTIVE wagons,
@@ -479,7 +493,12 @@ const proposalCount = (count: number, one: string, many = one + 's') =>
 // "2 freight wagons on Mk.4 belts" / "1 fluid freight wagon on a Mk.1 pipe".
 export function wagonText(wagon: WagonSuggestion): string {
   const kind = wagon.fluid ? 'fluid freight wagon' : 'freight wagon';
-  const lane = wagon.wagons === 1 ? `a ${wagon.lane}` : `${wagon.lane}s`;
+  const lane =
+    wagon.ports === 2
+      ? `2 × ${wagon.lane}s${wagon.wagons === 1 ? '' : ' each'}`
+      : wagon.wagons === 1
+        ? `a ${wagon.lane}`
+        : `${wagon.lane}s`;
   return `${proposalCount(wagon.wagons, kind)} for ${wagon.item} on ${lane}`;
 }
 // "1 locomotive and 3 wagons".
