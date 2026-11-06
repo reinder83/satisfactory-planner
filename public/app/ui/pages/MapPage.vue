@@ -45,7 +45,9 @@ import {
   FACTORY_ICON,
   factoryAria,
   freePlace,
+  mappableFactories,
   placedFactories,
+  removeFromMapLabel,
   unplacedFactories,
   type PlacedFactory,
 } from '../../map-factories.ts';
@@ -98,7 +100,8 @@ const natural = { width: WORLD_MAP.width, height: WORLD_MAP.height };
 
 const markers = computed(() => legacy(() => state.mapMarkers ?? []));
 const showMarkers = computed(() => legacy(() => mapLayerShown(state.mapLayers, 'markers')));
-const groups = computed(() => legacy(() => state.factoryGroups?.groups ?? []));
+// Only factories with a production line are on the map (#1305); the others keep their saved place.
+const groups = computed(() => legacy(() => mappableFactories(state.factoryGroups)));
 const factories = computed(() => legacy(() => placedFactories(groups.value, state.factoryPlaces)));
 const toPlace = computed(() => legacy(() => unplacedFactories(groups.value, state.factoryPlaces)));
 const showFactories = computed(() => legacy(() => mapLayerShown(state.mapLayers, 'factories')));
@@ -248,6 +251,7 @@ const drawnFactories = computed(() =>
       top: at.y * zoom.value,
       href: '#' + flowRoute(factory.id),
       aria: factoryAria(factory.name),
+      removeAria: removeFromMapLabel(factory.name),
     };
   }),
 );
@@ -343,7 +347,8 @@ function placeAt(spot: WorldPoint | null) {
 // A click on the map (not on a marker or a factory, and not the end of a drag, which
 // onClickCapture swallows) places a marker there while the markers are shown.
 function onMapClick(e: MouseEvent) {
-  if (!showMarkers.value || (e.target as Element).closest('[data-node]')) return;
+  if (!showMarkers.value || (e.target as Element).closest('[data-node], [data-map-factory-remove]'))
+    return;
   placeAt(spotAt(e.clientX, e.clientY));
 }
 // "Add marker": in the middle of the map's view.
@@ -486,6 +491,38 @@ async function removeMarker(id: string) {
 async function takeOff(id: string) {
   if (await removeFactoryPlace(id, forget(FACTORY + id))) box.value?.focus();
 }
+// "Remove from map", the button beside a factory's pin (#1305), is the mouse's way of Delete: it is
+// drawn for the factory the pointer is on or that has focus (hover and focus are kept apart, so
+// the pointer leaving a focused factory leaves the button for Tab), and for every factory on a
+// device that cannot hover. The pointer gets a moment to cross from the pin to the button.
+const hovered = ref('');
+const focused = ref('');
+const cannotHover = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
+const removeShown = (id: string) => cannotHover || hovered.value === id || focused.value === id;
+let unhover: ReturnType<typeof setTimeout> | undefined;
+const hoverOn = (id: string) => {
+  clearTimeout(unhover);
+  hovered.value = id;
+};
+const hoverOff = (id: string) => {
+  clearTimeout(unhover);
+  unhover = setTimeout(() => {
+    if (hovered.value === id) hovered.value = '';
+  }, 400);
+};
+onBeforeUnmount(() => clearTimeout(unhover));
+// Focus moves between a factory's link and its button without hiding the button.
+const sibling = (e: FocusEvent, id: string) =>
+  e.relatedTarget instanceof Element &&
+  !!e.relatedTarget.closest(
+    `[data-map-factory="${CSS.escape(id)}"], [data-map-factory-remove="${CSS.escape(id)}"]`,
+  );
+const focusOn = (id: string) => {
+  focused.value = id;
+};
+function focusOff(e: FocusEvent, id: string) {
+  if (!sibling(e, id) && focused.value === id) focused.value = '';
+}
 async function takeOffStation(id: string) {
   if (await removeStationPlace(id, forget(STATION + id))) box.value?.focus();
 }
@@ -545,7 +582,8 @@ function onKey(e: KeyboardEvent) {
       </template>
       <template v-if="showFactories && factories.length">
         Press a factory to open its build order, or drag it to move it; on a focused factory the
-        arrow keys move it, Enter opens it and Delete takes it off the map.
+        arrow keys move it, Enter opens it and Delete takes it off the map; the Remove from map
+        button beside a factory does the same for the mouse and the keyboard (Tab).
       </template>
       <template v-else-if="!showFactories && factories.length">The factories are hidden.</template>
       <template v-if="showMarkers">
@@ -746,24 +784,45 @@ function onKey(e: KeyboardEvent) {
           </g>
         </svg>
         <template v-if="showFactories">
-          <a
-            v-for="item in drawnFactories"
-            :key="item.factory.id"
-            class="map-factory"
-            :href="item.href"
-            draggable="false"
-            :style="{ left: item.left + 'px', top: item.top + 'px' }"
-            :data-node="'factory:' + item.factory.id"
-            :data-map-factory="item.factory.id"
-            :aria-label="item.aria"
-            @keydown="onFactoryKey($event, item.factory)"
-            @blur="saveSpot('factory:' + item.factory.id)"
-          >
-            <span class="map-factory-pin" aria-hidden="true"
-              ><svg viewBox="0 0 20 20"><path :d="FACTORY_ICON" fill-rule="evenodd" /></svg
-            ></span>
-            <span class="map-factory-label" aria-hidden="true">{{ item.factory.name }}</span>
-          </a>
+          <template v-for="item in drawnFactories" :key="item.factory.id">
+            <a
+              class="map-factory"
+              :href="item.href"
+              draggable="false"
+              :style="{ left: item.left + 'px', top: item.top + 'px' }"
+              :data-node="'factory:' + item.factory.id"
+              :data-map-factory="item.factory.id"
+              :aria-label="item.aria"
+              @keydown="onFactoryKey($event, item.factory)"
+              @mouseenter="hoverOn(item.factory.id)"
+              @mouseleave="hoverOff(item.factory.id)"
+              @focus="focusOn(item.factory.id)"
+              @blur="
+                saveSpot('factory:' + item.factory.id);
+                focusOff($event, item.factory.id);
+              "
+            >
+              <span class="map-factory-pin" aria-hidden="true"
+                ><svg viewBox="0 0 20 20"><path :d="FACTORY_ICON" fill-rule="evenodd" /></svg
+              ></span>
+              <span class="map-factory-label" aria-hidden="true">{{ item.factory.name }}</span>
+            </a>
+            <button
+              v-if="removeShown(item.factory.id)"
+              type="button"
+              class="map-factory-remove"
+              :style="{ left: item.left + 'px', top: item.top + 'px' }"
+              :data-map-factory-remove="item.factory.id"
+              :aria-label="item.removeAria"
+              @click="takeOff(item.factory.id)"
+              @mouseenter="hoverOn(item.factory.id)"
+              @mouseleave="hoverOff(item.factory.id)"
+              @focus="focusOn(item.factory.id)"
+              @blur="focusOff($event, item.factory.id)"
+            >
+              <span aria-hidden="true">× Remove from map</span>
+            </button>
+          </template>
         </template>
         <template v-if="showStations">
           <button

@@ -6,11 +6,25 @@
 // only a factory of the profile can be placed, each at most once.
 import { onMap } from './map-markers.ts';
 import { imageToWorld, worldToImage, type WorldPoint } from './world-map.ts';
-import type { FactoryGroup, FactoryPlace, FactoryPlaces } from '../types/index.ts';
+import type { FactoryGroup, FactoryGroups, FactoryPlace, FactoryPlaces } from '../types/index.ts';
 
 // The factory icon, an SVG path in a 20 × 20 box: a building with a sawtooth roof and a chimney,
 // drawn in the accent colour on the dark round pin.
 export const FACTORY_ICON = 'M2 18V9l4-3v3l4-3v3l4-3V3h3v15ZM5 12v2h2v-2Zm4 0v2h2v-2Zm4 0v2h2v-2Z';
+
+// The factories the map offers and draws (#1305): those with at least one production line, in any
+// phase (an assignment naming the factory). A factory with none has nothing to open: its build
+// order says nothing and the Factories page hides it. It is left off the map and out of "Place
+// factory", and its saved place stays in `factoryPlaces`, untouched, so it is back where it was as
+// soon as the factory gets a line.
+export const mappableFactories = (
+  factoryGroups: Pick<FactoryGroups, 'groups' | 'assignments'> | undefined,
+): FactoryGroup[] => {
+  const withLines = new Set(
+    Object.values(factoryGroups?.assignments ?? {}).flatMap(shares => shares.map(s => s.group)),
+  );
+  return (factoryGroups?.groups ?? []).filter(({ id }) => withLines.has(id));
+};
 
 // One factory as the map draws it: its group's id and name and its place.
 export interface PlacedFactory {
@@ -66,6 +80,9 @@ export function freePlace(
 // the factory's build order (its flow page), as "Build order →" on the Factories page is.
 export const factoryAria = (name: string): string =>
   `${name}, factory. Enter opens its build order, the arrow keys move it, Delete takes it off the map.`;
+
+// The name of a factory's "Remove from map" button: it starts with the button's visible text.
+export const removeFromMapLabel = (name: string): string => `Remove from map: ${name}`;
 
 // The toasts.
 export const factoryRemovedNews = (name: string) => `Took “${name}” off the map.`;

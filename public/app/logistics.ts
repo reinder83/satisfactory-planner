@@ -83,7 +83,7 @@ export const fluidTruckLoads = (rate: number): number => rate / FLUID_TRUCK_M3;
 export const CARS_PER_LOCOMOTIVE = 4;
 // The belt or pipe ports of one Freight Platform or Fluid Freight Platform (#1067): a car is
 // loaded and unloaded through both, so it moves at most two belts (or pipes) of a flow.
-const PLATFORM_PORTS = 2;
+export const PLATFORM_PORTS = 2;
 // The choices a link offers, in menu order; 'belt' is the default belt or pipe.
 // The Fluid Truck is offered only on a link that carries a fluid (linkModeOptions).
 export const LINK_MODES: ['belt' | LinkMode, string][] = [

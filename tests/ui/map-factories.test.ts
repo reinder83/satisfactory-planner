@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
+import { toastShortcut } from '../../public/app/api.ts';
 import { render } from '../../public/app/shell.ts';
 import { flowRoute, state } from '../../public/app/session.ts';
 import { PLACE_STEP } from '../../public/app/map-factories.ts';
@@ -73,7 +74,12 @@ const GROUPS = {
     { id: 'fg-wires1', name: 'Wire' },
     { id: 'fg-power1', name: 'Power' },
   ],
-  assignments: {},
+  // A factory with no production line is not on the map (#1305), so each one has a line.
+  assignments: {
+    plates: [{ group: 'fg-plates1', rate: null }],
+    wires: [{ group: 'fg-wires1', rate: null }],
+    power: [{ group: 'fg-power1', rate: null }],
+  },
 };
 const PLATES = { x: -98000, y: 61250 };
 const WIRE = { x: 12500, y: -40000 };
@@ -376,4 +382,118 @@ test('a profile that hid its factories opens with them hidden; another shows its
     $$('[data-map-factory]').map(el => el.dataset.mapFactory),
     ['fg-wires1'],
   );
+});
+
+// "Remove from map" (#1305): the mouse's way off the map. A button beside the pin of the factory
+// the pointer is on or that has focus, so the keyboard reaches it with Tab; it takes the factory
+// off with the same Undo as Delete, puts focus on the map, and never places a marker.
+const removeButton = (id: string) => $<HTMLButtonElement>(`[data-map-factory-remove="${id}"]`);
+test('Remove from map: shown for the factory under the pointer, one click takes it off with Undo', async () => {
+  await showMap(placed({ 'fg-plates1': PLATES, 'fg-wires1': WIRE }));
+  assert.equal($$('[data-map-factory-remove]').length, 0, 'not drawn until a factory is touched');
+  factory('fg-wires1')!.dispatchEvent(new MouseEvent('mouseenter'));
+  await settle();
+  const button = removeButton('fg-wires1')!;
+  assert.ok(button, 'drawn beside the factory the pointer is on');
+  assert.equal(removeButton('fg-plates1'), null, 'and only there');
+  assert.equal(button.textContent!.replace(/\s+/g, ' ').trim(), '× Remove from map');
+  assert.equal(button.getAttribute('aria-label'), 'Remove from map: Wire');
+  assert.equal(button.type, 'button');
+  assert.deepEqual(drawnAt(button), drawnAt(factory('fg-wires1')!), 'on the pin’s spot');
+  // The pointer crosses to the button and clicks it: no marker dialog, nothing followed.
+  button.dispatchEvent(new MouseEvent('mouseenter'));
+  button.click();
+  await settle();
+  assert.deepEqual(sent, [{ type: 'mapFactory', id: 'fg-wires1', value: null }]);
+  assert.equal(factory('fg-wires1'), null);
+  assert.equal(removeButton('fg-wires1'), null);
+  assert.equal(document.activeElement, box(), 'focus goes to the map');
+  assert.equal($('#detail[open]'), null, 'no marker was placed');
+  assert.deepEqual(clicks, [], 'the link was not followed');
+  assert.match($('#toast')!.textContent!, /^Took “Wire” off the map\./);
+  // Undo brings it back where it stood.
+  $('#toast')!.querySelector<HTMLButtonElement>('button')!.click();
+  await settle();
+  await settle();
+  assert.deepEqual(sent[1], { type: 'mapFactory', id: 'fg-wires1', value: WIRE });
+  assert.deepEqual(state.factoryPlaces, { 'fg-plates1': PLATES, 'fg-wires1': WIRE });
+  assert.ok(factory('fg-wires1'));
+});
+
+test('Remove from map by keyboard: Tab reaches the button after the factory, Enter presses it', async () => {
+  await showMap(placed({ 'fg-wires1': WIRE }));
+  const wire = factory('fg-wires1')!;
+  wire.focus();
+  await settle();
+  const button = removeButton('fg-wires1')!;
+  assert.ok(button, 'drawn while the factory has focus');
+  assert.equal(
+    wire.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    Node.DOCUMENT_POSITION_FOLLOWING,
+    'the next control in the tab order',
+  );
+  // Tab moves focus to it: the factory's blur names the button, which stays.
+  wire.dispatchEvent(new FocusEvent('blur', { relatedTarget: button }));
+  button.focus();
+  await settle();
+  assert.equal(removeButton('fg-wires1'), button, 'still there while it has focus');
+  assert.equal(document.activeElement, button);
+  // Enter or Space on a button is its click.
+  button.click();
+  await settle();
+  assert.deepEqual(sent, [{ type: 'mapFactory', id: 'fg-wires1', value: null }]);
+  assert.equal(document.activeElement, box());
+  // Ctrl+Z presses the toast's Undo, as for Delete.
+  toastShortcut(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true }));
+  await settle();
+  await settle();
+  assert.deepEqual(sent[1], { type: 'mapFactory', id: 'fg-wires1', value: WIRE });
+  assert.equal(document.activeElement, factory('fg-wires1'));
+});
+
+test('Remove from map follows a factory that is being moved and leaves when focus leaves', async () => {
+  await showMap(placed({ 'fg-wires1': WIRE }));
+  const wire = factory('fg-wires1')!;
+  wire.focus();
+  key(wire, 'ArrowRight');
+  await settle();
+  assert.deepEqual(drawnAt(removeButton('fg-wires1')!), drawnAt(factory('fg-wires1')!));
+  wire.blur();
+  await settle();
+  assert.equal(removeButton('fg-wires1'), null, 'gone once focus has left');
+  await new Promise(resolve => setTimeout(resolve, 700));
+});
+
+// A factory with no production line is not on the map (#1305): nothing to open, and the Factories
+// page hides it. Its saved place stays untouched, so it is back where it was with its first line.
+test('a factory without lines is not drawn or offered, keeps its place, and returns with a line', async () => {
+  const places = { 'fg-plates1': PLATES, 'fg-wires1': WIRE };
+  const groups = {
+    groups: GROUPS.groups,
+    assignments: { wires: [{ group: 'fg-wires1', rate: null }] },
+  };
+  await showMap({ version: 28, factoryGroups: groups, factoryPlaces: places });
+  assert.deepEqual(
+    $$('[data-map-factory]').map(el => el.dataset.mapFactory),
+    ['fg-wires1'],
+    'only the factory with a line',
+  );
+  assert.equal($('[data-map-factory-count]')!.textContent, '(1)');
+  assert.equal($('[data-map-place]'), null, 'nothing to place: the others have no line');
+  assert.deepEqual(state.factoryPlaces, places, 'the empty factory’s place is kept');
+  // It gets its first line: it is on the map again, where it was.
+  await showMap({
+    version: 28,
+    factoryGroups: {
+      groups: GROUPS.groups,
+      assignments: { ...groups.assignments, plates: [{ group: 'fg-plates1', rate: 100 }] },
+    },
+    factoryPlaces: places,
+  });
+  assert.deepEqual(
+    $$('[data-map-factory]').map(el => el.dataset.mapFactory),
+    ['fg-plates1', 'fg-wires1'],
+  );
+  const at = worldToImage(PLATES);
+  assert.ok(Math.abs(parseFloat(factory('fg-plates1')!.style.left) - at.x * FITS) < 1);
 });

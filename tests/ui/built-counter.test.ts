@@ -273,3 +273,58 @@ test('counting from the card changes the count and opens no dialog (#1306)', asy
   card().querySelector<HTMLButtonElement>('.name')!.click();
   assert.equal(dialog.open, true);
 });
+
+// A line with machines to spare (#1305): 7 standing for the 5 the plan needs reads "7 / 5", not
+// "5 / 5", and − goes to 6 and keeps the spare advice, instead of storing 4 and dropping it.
+test('a spare line counts all the machines that stand: 7 / 5, − steps to 6', async () => {
+  await show({ version: 19, builtMachines: { [KEY]: 7 } });
+  const counter = () => counterIn(card());
+  const input = () => counter().querySelector<HTMLInputElement>('[data-built-input]')!;
+  const step = (delta: number) =>
+    counter().querySelector<HTMLButtonElement>(`[data-built-step="${delta}"]`)!;
+  assert.equal(input().value, '7');
+  assert.equal(input().max, '7');
+  assert.equal(text($('#' + input().getAttribute('aria-describedby'))), '/ of 5');
+  assert.equal(text(card().querySelector('[data-grown]')), '7 machines built, 5 needed: 2 spare');
+  // Nothing above what stands.
+  assert.equal(step(1).getAttribute('aria-disabled'), 'true');
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  step(-1).click();
+  await settle();
+  assert.deepEqual(sent(calls), [{ type: 'builtCount', key: KEY, value: 6 }]);
+  assert.deepEqual(state.builtMachines, { [KEY]: 6 });
+  assert.equal(input().value, '6');
+  assert.equal(text(card().querySelector('[data-grown]')), '6 machines built, 5 needed: 1 spare');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.match(text($('#announce')), /^6 Refineries built, 5 needed: 1 spare\.$/);
+  // A typed number above what stands is kept to it.
+  input().value = '99';
+  input().dispatchEvent(new Event('input'));
+  input().dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(state.builtMachines, { [KEY]: 6 }, 'no more than stands');
+  // Down to the plan's machines: the line is all built and the spare advice goes.
+  step(-1).click();
+  await settle();
+  assert.equal(input().value, '5');
+  assert.equal(
+    card().querySelector('[data-grown]')?.textContent?.includes('spare') ?? false,
+    false,
+  );
+});
+
+test('a ticked spare line shows its spare machines too, and counting it down below the plan unticks it', async () => {
+  await show({ version: 19, checks: { [KEY]: true }, builtMachines: { [KEY]: 6 } });
+  const input = () => counterIn(card()).querySelector<HTMLInputElement>('[data-built-input]')!;
+  assert.equal(input().value, '6');
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  const minus = () => counterIn(card()).querySelector<HTMLButtonElement>('[data-built-step="-1"]')!;
+  minus().click();
+  await settle();
+  assert.deepEqual(sent(calls), [{ type: 'builtCount', key: KEY, value: 5 }]);
+  assert.equal(state.checks[KEY], true, 'still ticked at the plan’s machines');
+  minus().click();
+  await settle();
+  assert.deepEqual(sent(calls).at(-1), { type: 'builtCount', key: KEY, value: 4, running: false });
+  assert.equal(state.checks[KEY], false);
+});

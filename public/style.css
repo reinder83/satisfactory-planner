@@ -7026,6 +7026,28 @@ button.rail-tile:hover {
   .expansion-table td:first-child {
     font-size: 13px;
   }
+  /* A power figure stays on one line: "13.42 MW", never "13.42" over "MW" (#1305). */
+  .expansion-table td[data-expansion-power],
+  .expansion-table th:last-child {
+    white-space: nowrap;
+  }
+}
+@media (max-width: 360px) {
+  .expansion-table td,
+  .expansion-table th {
+    padding: 8px 3px;
+    letter-spacing: normal;
+  }
+}
+/* On a phone the dialog's title wraps instead of being cut short with an ellipsis (#1305), so a
+   longer line name reads whole at 320px; the stylesheet never clamps lines (#738). */
+@media (max-width: 480px) {
+  .dialog-head h2 {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-overflow: clip;
+  }
 }
 /* Today's session (#1073): the next builds as cards, each with its facts as a two-column list
    (one column on a phone), and the To-Do note in a read-only box above them. */
@@ -8418,6 +8440,7 @@ th.resource-cell {
    its Power Shard pin (#1239, ui/detail/ShardPinChoice.vue). */
 .sloop-pin,
 .shard-pin {
+  min-width: 0;
   margin: 14px 0 0;
   padding: 10px 12px 4px;
   border: 1px solid var(--line);
@@ -8441,6 +8464,7 @@ th.resource-cell {
   width: 6em;
 }
 .shard-pin-row select {
+  min-width: 0;
   max-width: 100%;
 }
 /* A production line's built-machines counter (#1300, ui/BuiltCounter.vue): "Built − 41 / 58 +" on
@@ -8528,5 +8552,42 @@ th.resource-cell {
   }
   .built-counter .built-input {
     width: 52px;
+  }
+}
+/* "Remove from map" (#1305): a small pill under a factory's pin, drawn while the pointer is on the
+   factory or it has focus (every factory where a device cannot hover). It sits where the pin's
+   name is not, so the pointer crosses to it from the pin. */
+.map-factory-remove {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  transform: translate(-17px, 16px);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg2);
+  color: var(--bright);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+}
+.map-factory-remove:hover {
+  border-color: var(--accent);
+}
+.map-factory-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (max-width: 720px) {
+  .map-factory-remove {
+    min-height: 40px;
+    padding: 0 12px;
+    transform: translate(-22px, 21px);
+    border-radius: 20px;
   }
 }

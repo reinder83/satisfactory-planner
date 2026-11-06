@@ -31,6 +31,7 @@ import {
   countShare,
   countUpdate,
   countWords,
+  counterTop,
   groupCount,
   groupCountText,
   countOfLine,
@@ -178,8 +179,33 @@ test('countOfLine and countUpdate: clamped whole counts, the tick at the top and
     value: 4,
     running: false,
   });
-  // A spare count from a carry (more than the line needs) reads as the line's machines.
-  assert.equal(countOfLine({ [KEY]: 8 }, {}, '4', row4).built, 5);
+  // A spare count (more than the line needs, from a carry or a shrunk plan, #1305) is shown as it is,
+  // ticked or not: 8 / 5. The counter goes down to the plan and back up to what stands, never
+  // above it, and counting it down keeps the rest spare.
+  const spare = countOfLine({ [KEY]: 8 }, {}, '4', row4);
+  assert.deepEqual(spare, { built: 8, needed: 5, floor: 0, ticked: false });
+  assert.equal(countOfLine({ [KEY]: 8 }, { [KEY]: true }, '4', row4).built, 8);
+  assert.equal(counterTop(spare), 8);
+  assert.equal(counterTop(three), 5);
+  assert.deepEqual(countUpdate(spare, KEY, 7), { type: 'builtCount', key: KEY, value: 7 });
+  assert.equal(countUpdate(spare, KEY, 99), null, 'no more than stands');
+  assert.deepEqual(countUpdate(spare, KEY, 5), {
+    type: 'builtCount',
+    key: KEY,
+    value: 5,
+    running: true,
+  });
+  assert.equal(countWords(spare, 'Refinery'), '8 Refineries built, 5 needed: 3 spare');
+  assert.equal(countShare(spare), 1);
+  // A spare line adds no more than its plan to a factory's count.
+  assert.deepEqual(
+    groupCount(
+      [row4],
+      () => spare,
+      () => 1,
+    ),
+    { built: 5, needed: 5 },
+  );
   // The machines the phase before hands over are the lowest count, and are not stored again.
   const carried = countOfLine(undefined, {}, '4', row4, 2);
   assert.deepEqual(carried, { built: 2, needed: 5, floor: 2, ticked: false });

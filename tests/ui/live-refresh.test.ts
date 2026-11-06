@@ -13,6 +13,7 @@ import {
   resumeLiveRefresh,
   startLiveRefresh,
 } from '../../public/app/live-refresh.ts';
+import { refreshState, toast, toastShortcut, undoGoneNotice } from '../../public/app/api.ts';
 import { state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, generatedWith, go, open, page } from './setup.ts';
@@ -173,4 +174,57 @@ test('the timer asks only while the tab is visible', async () => {
   visibility.mockReturnValue('hidden');
   resumeLiveRefresh();
   visibility.mockRestore();
+});
+
+// An Undo belongs to the profile as this tab left it (#1305): when another tab or device changed
+// the profile meanwhile, the toast's Undo goes (and says so), so neither its button nor Ctrl+Z
+// puts the profile back over that newer edit. A poll that finds nothing new leaves it.
+test('another tab’s edit takes the toast’s Undo away, held or taken', async () => {
+  await show();
+  await pollProgress();
+  let undone = 0;
+  const offerUndo = () => toast('Ticked a step.', false, { label: 'Undo', run: () => undone++ });
+  const undoButton = () => $<HTMLButtonElement>('#toast [data-toast-action]');
+  offerUndo();
+  assert.ok(undoButton());
+  assert.equal(await pollProgress(), false);
+  assert.ok(undoButton(), 'a poll that finds nothing new keeps Undo');
+  // Another tab ticks a step: the change is taken, and Undo is gone with a word about it.
+  tickElsewhere(IRON);
+  assert.equal(await pollProgress(), true);
+  await settle();
+  assert.equal(undoButton(), null);
+  assert.equal($('#toast')!.textContent, undoGoneNotice);
+  toastShortcut(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+  assert.equal(undone, 0, 'Ctrl+Z has nothing to press');
+  // The same while the change is only held (a dialog is open).
+  offerUndo();
+  document.querySelector<HTMLDialogElement>('#detail')!.showModal();
+  saved = structuredClone(saved);
+  saved.revision++;
+  assert.equal(await pollProgress(), false, 'held');
+  await settle();
+  assert.equal(undoButton(), null, 'Undo is gone while the change waits too');
+  assert.equal($('#toast')!.textContent, undoGoneNotice);
+  // An Undo offered after that, while the change is still held, is for what this tab did next.
+  offerUndo();
+  assert.equal(await pollProgress(), false);
+  assert.ok(undoButton(), 'the held change is not met again');
+  document.querySelector<HTMLDialogElement>('#detail')!.close();
+  assert.equal(undone, 0);
+});
+
+test('coming back to the tab: a change found by the refresh takes Undo away, none leaves it', async () => {
+  await show();
+  let undone = 0;
+  toast('Ticked a step.', false, { label: 'Undo', run: () => undone++ });
+  assert.equal(await refreshState(true), false, 'nothing changed elsewhere');
+  assert.ok($('#toast [data-toast-action]'), 'Undo stays');
+  tickElsewhere(IRON);
+  assert.equal(await refreshState(true), true);
+  await settle();
+  assert.equal($('#toast [data-toast-action]'), null);
+  assert.equal($('#toast')!.textContent, undoGoneNotice);
+  assert.equal(undone, 0);
+  assert.equal(state.checks[IRON], true, 'the page shows the other tab’s edit');
 });

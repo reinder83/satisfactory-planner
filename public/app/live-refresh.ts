@@ -19,6 +19,7 @@ import {
   hasUnsavedNotes,
   pending,
   planHeader,
+  dropUndoOutsideChange,
   recalculatedNotice,
   refreshState,
   requestIfChanged,
@@ -140,12 +141,19 @@ async function pollScope(scope: string): Promise<boolean> {
 
 // Takes a change now, or holds it for the notice while the player is busy.
 async function offerChange(scope: string, next: ProgressState | null): Promise<boolean> {
+  // Whether the page is redrawn now or only told of it, a toast's Undo is for the profile as this
+  // tab left it (#1305). A change already held was met by the poll that found it: an Undo offered
+  // since is for what this tab did after it.
   if (playerBusy()) {
     const shown = liveChangeHeld();
     liveHeld = { scope, state: next };
-    if (!shown) invalidate();
+    if (!shown) {
+      dropUndoOutsideChange();
+      invalidate();
+    }
     return false;
   }
+  dropUndoOutsideChange();
   liveHeld = null;
   // Focus goes to the page's heading if the redraw takes away the control that had it (a step
   // ticked elsewhere moves to "Done"), as after coming back to the tab (#809).
