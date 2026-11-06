@@ -44,12 +44,12 @@ const at320 = (selector: string) =>
     .filter(block => block.width >= 320 && rule(block.body, selector))
     .map(block => rule(block.body, selector)!);
 
-test('the dialog title takes two lines on a phone', () => {
+test('the dialog title wraps on a phone', () => {
   const rules = at320('.dialog-head h2');
   assert.ok(rules.length >= 2, 'the one-line rule and the two-line rule that follows it');
   const last = rules.at(-1);
   assert.equal(decl(last, 'white-space'), 'normal');
-  assert.equal(decl(last, '-webkit-line-clamp'), '2');
+  assert.equal(decl(last, 'overflow'), 'visible');
   assert.equal(decl(last, 'overflow-wrap'), 'anywhere');
 });
 

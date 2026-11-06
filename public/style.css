@@ -7039,16 +7039,14 @@ button.rail-tile:hover {
     letter-spacing: normal;
   }
 }
-/* On a phone the dialog's title may take two lines, so a longer line name is not cut short at 320px
-   (#1305); the header stays compact and a name past two lines still ends in an ellipsis. */
+/* On a phone the dialog's title wraps instead of being cut short with an ellipsis (#1305), so a
+   longer line name reads whole at 320px; the stylesheet never clamps lines (#738). */
 @media (max-width: 480px) {
   .dialog-head h2 {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    overflow: visible;
     overflow-wrap: anywhere;
     white-space: normal;
+    text-overflow: clip;
   }
 }
 /* Today's session (#1073): the next builds as cards, each with its facts as a two-column list
@@ -8566,7 +8564,7 @@ th.resource-cell {
   align-items: center;
   min-height: 26px;
   padding: 0 9px;
-  transform: translate(-17px, 20px);
+  transform: translate(-17px, 16px);
   border: 1px solid var(--line);
   border-radius: 13px;
   background: var(--bg2);
@@ -8589,7 +8587,7 @@ th.resource-cell {
   .map-factory-remove {
     min-height: 40px;
     padding: 0 12px;
-    transform: translate(-22px, 26px);
+    transform: translate(-22px, 21px);
     border-radius: 20px;
   }
 }
