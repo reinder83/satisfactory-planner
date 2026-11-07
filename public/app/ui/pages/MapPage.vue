@@ -23,7 +23,8 @@
   placed at most once, so the picker offers only those not on the map. A drag or the arrow keys
   move a factory as they move a marker, and Delete takes it off the map with Undo
   (ui/map-factory-actions.ts), back where the keys last moved it. A press without a drag follows
-  the link.
+  the link; on a device that cannot hover the first press picks the factory and shows its Remove
+  from map button, the second follows the link (#1310).
 
   Train stations and lines (#1284, slice 4): the profile's train stations with a place on the map
   (`trainStations[].place`, state version 30), each a square pin with the train icon and its name,
@@ -38,7 +39,7 @@
   markers for this profile (`mapLayers`).
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { save, toast } from '../../api.ts';
 import { GRAPH_ZOOM, panGraphBy } from '../../graph-view.ts';
 import {
@@ -83,7 +84,12 @@ import type { MapLayer, MapMarker } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 import { showDetail } from '../detail.ts';
 import { useGraphPanZoom, type GraphLineDrag } from '../detail/graph-pan-zoom.ts';
-import { focusFactory, removeFactoryPlace, saveFactoryPlace } from '../map-factory-actions.ts';
+import {
+  focusFactory,
+  quietFocus,
+  removeFactoryPlace,
+  saveFactoryPlace,
+} from '../map-factory-actions.ts';
 import { deleteMarker, saveMarker } from '../map-marker-actions.ts';
 import { focusStation, removeStationPlace, saveStationPlace } from '../train-station-actions.ts';
 import PageHeader from '../PageHeader.vue';
@@ -206,6 +212,7 @@ const mapHandlers = {
   pointerdown(e: PointerEvent) {
     const el = box.value;
     const target = e.target instanceof Element ? e.target : null;
+    if (!target?.closest('[data-map-factory], [data-map-factory-remove]')) selected.value = '';
     if (el && e.pointerType === 'mouse' && !target?.closest('[data-node], button, a, input')) {
       e.preventDefault();
       el.focus({ preventScroll: true });
@@ -489,16 +496,43 @@ async function removeMarker(id: string) {
   if (await deleteMarker(id, forget(MARKER + id))) box.value?.focus();
 }
 async function takeOff(id: string) {
-  if (await removeFactoryPlace(id, forget(FACTORY + id))) box.value?.focus();
+  if (await removeFactoryPlace(id, forget(FACTORY + id))) {
+    if (hovered.value === id) hovered.value = '';
+    if (focused.value === id) focused.value = '';
+    if (selected.value === id) selected.value = '';
+    box.value?.focus();
+  }
 }
 // "Remove from map", the button beside a factory's pin (#1305), is the mouse's way of Delete: it is
 // drawn for the factory the pointer is on or that has focus (hover and focus are kept apart, so
 // the pointer leaving a focused factory leaves the button for Tab), and for every factory on a
-// device that cannot hover. The pointer gets a moment to cross from the pin to the button.
+// device that cannot hover, only for the one factory a first tap picked (#1310: a pill for every
+// factory covered the pins beside it at Fit zoom); a second tap on it opens it. The pointer gets a
+// moment to cross from the pin to the button.
 const hovered = ref('');
 const focused = ref('');
+const selected = ref('');
 const cannotHover = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
-const removeShown = (id: string) => cannotHover || hovered.value === id || focused.value === id;
+const removeShown = (id: string) =>
+  cannotHover
+    ? selected.value === id || focused.value === id
+    : hovered.value === id || focused.value === id;
+// On a device that cannot hover a tap on an unpicked factory picks it and shows its button; the
+// next tap on it follows the link.
+function onFactoryClick(e: MouseEvent, id: string) {
+  if (!cannotHover || selected.value === id) return;
+  e.preventDefault();
+  selected.value = id;
+}
+// A factory that leaves the map (removed by button, key or Ctrl+Z of its placing) or comes back
+// (Undo) never keeps a button of the hover, focus or tap it had before (#1310).
+watch(
+  () => drawnFactories.value.map(item => item.factory.id).join('\n'),
+  () => {
+    const here = new Set(drawnFactories.value.map(item => item.factory.id));
+    for (const mark of [hovered, focused, selected]) if (!here.has(mark.value)) mark.value = '';
+  },
+);
 let unhover: ReturnType<typeof setTimeout> | undefined;
 const hoverOn = (id: string) => {
   clearTimeout(unhover);
@@ -518,7 +552,7 @@ const sibling = (e: FocusEvent, id: string) =>
     `[data-map-factory="${CSS.escape(id)}"], [data-map-factory-remove="${CSS.escape(id)}"]`,
   );
 const focusOn = (id: string) => {
-  focused.value = id;
+  if (!quietFocus(id)) focused.value = id;
 };
 function focusOff(e: FocusEvent, id: string) {
   if (!sibling(e, id) && focused.value === id) focused.value = '';
@@ -794,6 +828,7 @@ function onKey(e: KeyboardEvent) {
               :data-map-factory="item.factory.id"
               :aria-label="item.aria"
               @keydown="onFactoryKey($event, item.factory)"
+              @click="onFactoryClick($event, item.factory.id)"
               @mouseenter="hoverOn(item.factory.id)"
               @mouseleave="hoverOff(item.factory.id)"
               @focus="focusOn(item.factory.id)"
