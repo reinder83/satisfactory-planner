@@ -531,14 +531,16 @@ test('Remove from map: the button does not come back with the factory after Undo
 // a tap on it again follows the link; a press elsewhere on the map puts the button away.
 test('Remove from map on a touch device: one pill, for the tapped factory', async () => {
   const original = window.matchMedia;
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = (query: string): MediaQueryList => ({
     matches: query.includes('hover: none'),
     media: query,
+    onchange: null,
     addEventListener() {},
     removeEventListener() {},
     addListener() {},
     removeListener() {},
-  })) as unknown as typeof window.matchMedia;
+    dispatchEvent: () => false,
+  });
   try {
     await showMap(placed({ 'fg-plates1': PLATES, 'fg-wires1': WIRE }));
     assert.equal($$('[data-map-factory-remove]').length, 0, 'none until a factory is tapped');
