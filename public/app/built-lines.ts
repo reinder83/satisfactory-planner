@@ -443,9 +443,10 @@ export function countUpdate(
   count: LineCount,
   key: string,
   value: number,
+  reach = 0,
 ): Extract<UpdateOp, { type: 'builtCount' }> | null {
   if (!Number.isFinite(value) || count.needed < 1) return null;
-  const next = Math.min(counterTop(count), Math.max(count.floor, Math.round(value)));
+  const next = Math.min(counterTop(count, reach), Math.max(count.floor, Math.round(value)));
   if (next === count.built) return null;
   const update: Extract<UpdateOp, { type: 'builtCount' }> = {
     type: 'builtCount',
@@ -457,9 +458,12 @@ export function countUpdate(
   return update;
 }
 
-// The most the counter can show: the line's machines, or the machines standing when that is more.
-export const counterTop = (count: Pick<LineCount, 'built' | 'needed'>): number =>
-  Math.max(count.needed, count.built);
+// The most the counter can show: the line's machines, or the machines standing when that is more,
+// or `reach`, the most that stood on the line while this page was open (#1310): − from 60 to 59
+// leaves 59 stored, so + goes back up to the 60 that stood. `reach` is remembered for the page's
+// session only, never saved; after a reload the top is what stands.
+export const counterTop = (count: Pick<LineCount, 'built' | 'needed'>, reach = 0): number =>
+  Math.max(count.needed, count.built, reach);
 
 // The counter's words: "41 of 58 Refineries built", for its screen-reader name and its status;
 // "60 Refineries built, 58 needed: 2 spare" for a line with machines to spare.

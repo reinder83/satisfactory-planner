@@ -9,7 +9,7 @@
   untick reads it again. A line the phase before hands over starts from those machines.
 
   − and + step by one, and the number can be typed (committed on Enter, a spin of the field or
-  leaving it), kept between the lowest count and the line's machines. Each press saves the count it
+  leaving it), kept between the lowest count and the line's machines (or, on a spare line, the most that stood, #1310). Each press saves the count it
   shows, in order, so quick presses all count; the field shows the count pressed meanwhile. At
   either end its button has nothing to do, so it is aria-disabled, never disabled: a focused button
   that becomes disabled loses focus (#299). The group, the field and both buttons are named for
@@ -21,6 +21,9 @@
 <script lang="ts">
 import type { UpdateOp } from '../../types/index.ts';
 
+// The most machines that stood on a line above its plan while this page was open (#1310), per
+// profile and line: − from a spare count stores the lower count, and + goes back up to this.
+const reached = new Map<string, number>();
 type CountUpdate = Extract<UpdateOp, { type: 'builtCount' }>;
 // What the card and the step do around a write that ticks or unticks the line: `control` is the
 // pressed control's selector inside a counter, for focus to go to its counterpart.
@@ -31,12 +34,12 @@ export interface CounterHooks {
 </script>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { save } from '../api.ts';
 import { announce } from '../announce.ts';
 import { countUpdate, countWords, counterTop } from '../built-lines.ts';
 import { num } from '../format.ts';
-import { stage } from '../session.ts';
+import { currentProfile, stage } from '../session.ts';
 import { render } from '../shell.ts';
 import { lineCountOf } from '../views/calculated.ts';
 import { legacy } from './bridge.ts';
@@ -56,13 +59,29 @@ const pending = ref<{ built: number; ticked: boolean } | null>(null);
 let inFlight = 0;
 const count = computed(() => ({ ...saved.value, ...pending.value }));
 
+const reach = ref(0);
+watch(
+  () =>
+    [
+      (currentProfile?.id ?? '') + '|' + saved.value.key,
+      saved.value.built,
+      saved.value.needed,
+    ] as const,
+  ([key, built, needed]) => {
+    const top = Math.max(reached.get(key) ?? 0, built > needed ? built : 0);
+    if (top) reached.set(key, top);
+    reach.value = top;
+  },
+  { immediate: true },
+);
+
 const id = computed(() => `built-${props.place}-${saved.value.key}`);
 const draft = useDraft(() => String(count.value.built));
 const left = (event: FocusEvent) => leave(draft, event);
 
 async function commit(value: number, trigger: EventTarget | null, control: string) {
   const now = count.value,
-    update = countUpdate(now, now.key, value);
+    update = countUpdate(now, now.key, value, reach.value);
   if (!update) {
     reset(draft, String(now.built));
     if (trigger instanceof HTMLInputElement) trigger.value = draft.value;
@@ -92,7 +111,7 @@ async function commit(value: number, trigger: EventTarget | null, control: strin
 }
 
 const atFloor = computed(() => count.value.built <= count.value.floor);
-const atTop = computed(() => count.value.built >= count.value.needed);
+const atTop = computed(() => count.value.built >= counterTop(count.value, reach.value));
 
 function step(event: Event, delta: number) {
   if (delta < 0 ? atFloor.value : atTop.value) return;
@@ -141,7 +160,7 @@ function typed(event: Event) {
       type="number"
       inputmode="numeric"
       :min="count.floor"
-      :max="counterTop(count)"
+      :max="counterTop(count, reach)"
       step="1"
       :data-built-input="count.key"
       :aria-label="'Machines built: ' + name"

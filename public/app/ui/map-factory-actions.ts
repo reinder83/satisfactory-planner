@@ -28,10 +28,22 @@ export async function saveFactoryPlace(id: string, place: FactoryPlace): Promise
 const mapFactoryLink = (id: string) =>
   document.querySelector<HTMLElement>(`#main [data-map-factory="${CSS.escape(id)}"]`);
 
-// Focuses factory `id` on the map once the page has drawn it.
-export async function focusFactory(id: string) {
+// The factory whose focus is being put back by Undo (#1310): the map page keeps its "Remove from
+// map" button away for that focus, as a restored pin shows none until it is hovered, tapped or
+// focused again.
+let quiet = '';
+export const quietFocus = (id: string) => quiet === id;
+
+// Focuses factory `id` on the map once the page has drawn it, `calm` for a focus that should not
+// show its "Remove from map" button.
+export async function focusFactory(id: string, calm = false) {
   await nextTick();
-  mapFactoryLink(id)?.focus();
+  if (calm) quiet = id;
+  try {
+    mapFactoryLink(id)?.focus();
+  } finally {
+    quiet = '';
+  }
 }
 
 // Takes factory `id` off the map with an Undo in the toast, which puts it back at `moved` when
@@ -63,5 +75,5 @@ async function undoRemove(id: string, name: string, place: FactoryPlace, profile
   if (!state.factoryGroups?.groups.some(group => group.id === id)) return;
   if (!(await saveFactoryPlace(id, place))) return;
   toast(factoryRestoredNews(name));
-  await focusFactory(id);
+  await focusFactory(id, true);
 }

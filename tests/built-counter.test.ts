@@ -189,6 +189,13 @@ test('countOfLine and countUpdate: clamped whole counts, the tick at the top and
   assert.equal(counterTop(three), 5);
   assert.deepEqual(countUpdate(spare, KEY, 7), { type: 'builtCount', key: KEY, value: 7 });
   assert.equal(countUpdate(spare, KEY, 99), null, 'no more than stands');
+  // After a − the lower count is stored; the most that stood (#1310) is the top again.
+  const lowered = countOfLine({ [KEY]: 7 }, {}, '4', row4);
+  assert.equal(counterTop(lowered, 8), 8);
+  assert.equal(counterTop(three, 0), 5, 'no reach: the plan');
+  assert.deepEqual(countUpdate(lowered, KEY, 8, 8), { type: 'builtCount', key: KEY, value: 8 });
+  assert.equal(countUpdate(lowered, KEY, 99, 8)?.value, 8, 'kept to the reach');
+  assert.equal(countUpdate(lowered, KEY, 8), null, 'without a reach, no more than stands');
   assert.deepEqual(countUpdate(spare, KEY, 5), {
     type: 'builtCount',
     key: KEY,

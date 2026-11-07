@@ -302,7 +302,9 @@ test('a spare line counts all the machines that stand: 7 / 5, − steps to 6', a
   input().dispatchEvent(new Event('input'));
   input().dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(state.builtMachines, { [KEY]: 6 }, 'no more than stands');
+  assert.deepEqual(state.builtMachines, { [KEY]: 7 }, 'no more than stood (#1310)');
+  step(-1).click();
+  await settle();
   // Down to the plan's machines: the line is all built and the spare advice goes.
   step(-1).click();
   await settle();
@@ -327,4 +329,40 @@ test('a ticked spare line shows its spare machines too, and counting it down bel
   await settle();
   assert.deepEqual(sent(calls).at(-1), { type: 'builtCount', key: KEY, value: 4, running: false });
   assert.equal(state.checks[KEY], false);
+});
+
+// #1310: - from a spare count stores the lower count, so + goes back up to the count that stood
+// (60 standing for 58 planned: - to 59, + to 60), never above it.
+test('a spare line can be counted back up after the minus: plus restores what stood', async () => {
+  await show({ version: 19, builtMachines: { [KEY]: 7 } });
+  const counter = () => counterIn(card());
+  const input = () => counter().querySelector<HTMLInputElement>('[data-built-input]')!;
+  const step = (delta: number) =>
+    counter().querySelector<HTMLButtonElement>(`[data-built-step="${delta}"]`)!;
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  step(-1).click();
+  await settle();
+  assert.equal(input().value, '6');
+  assert.equal(step(1).getAttribute('aria-disabled'), null, '+ has something to do');
+  assert.equal(input().max, '7');
+  step(1).click();
+  await settle();
+  assert.deepEqual(sent(calls), [
+    { type: 'builtCount', key: KEY, value: 6 },
+    { type: 'builtCount', key: KEY, value: 7 },
+  ]);
+  assert.deepEqual(state.builtMachines, { [KEY]: 7 });
+  assert.equal(step(1).getAttribute('aria-disabled'), 'true', 'not above what stood');
+  // Down below the plan, then back up through the spare to 7 and no further.
+  for (let i = 0; i < 4; i++) {
+    step(-1).click();
+    await settle();
+  }
+  assert.equal(input().value, '3');
+  for (let i = 0; i < 6; i++) {
+    step(1).click();
+    await settle();
+  }
+  assert.equal(input().value, '7');
+  assert.equal(step(1).getAttribute('aria-disabled'), 'true');
 });

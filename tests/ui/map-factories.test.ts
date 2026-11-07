@@ -497,3 +497,84 @@ test('a factory without lines is not drawn or offered, keeps its place, and retu
   const at = worldToImage(PLATES);
   assert.ok(Math.abs(parseFloat(factory('fg-plates1')!.style.left) - at.x * FITS) < 1);
 });
+
+// #1310: a pin that was hovered or focused when it was taken off the map comes back from Undo or
+// Ctrl+Z without a "Remove from map" button, until it is hovered or focused again.
+test('Remove from map: the button does not come back with the factory after Undo or Ctrl+Z', async () => {
+  await showMap(placed({ 'fg-wires1': WIRE }));
+  factory('fg-wires1')!.dispatchEvent(new MouseEvent('mouseenter'));
+  await settle();
+  removeButton('fg-wires1')!.click();
+  await settle();
+  $('#toast')!.querySelector<HTMLButtonElement>('button')!.click();
+  await settle();
+  await settle();
+  assert.ok(factory('fg-wires1'), 'Undo brought the factory back');
+  assert.equal(removeButton('fg-wires1'), null, 'no button for a pointer that is elsewhere');
+  // Removed by Delete while focused, restored by Ctrl+Z.
+  const wire = factory('fg-wires1')!;
+  wire.focus();
+  wire.dispatchEvent(new MouseEvent('mouseenter'));
+  key(wire, 'Delete');
+  await settle();
+  assert.equal(factory('fg-wires1'), null);
+  toastShortcut(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true }));
+  await settle();
+  await settle();
+  assert.ok(factory('fg-wires1'));
+  assert.equal(removeButton('fg-wires1'), null, 'nor after Ctrl+Z');
+  await new Promise(resolve => setTimeout(resolve, 700));
+});
+
+// #1310: where a device cannot hover, a pill for every factory covered the pins beside them at Fit
+// zoom. The first tap on a factory picks it and shows only its button (the link is not followed);
+// a tap on it again follows the link; a press elsewhere on the map puts the button away.
+test('Remove from map on a touch device: one pill, for the tapped factory', async () => {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('hover: none'),
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  })) as unknown as typeof window.matchMedia;
+  try {
+    await showMap(placed({ 'fg-plates1': PLATES, 'fg-wires1': WIRE }));
+    assert.equal($$('[data-map-factory-remove]').length, 0, 'none until a factory is tapped');
+    factory('fg-wires1')!.click();
+    await settle();
+    assert.deepEqual(clicks, [true], 'the first tap picked it: the link was not followed');
+    assert.deepEqual(
+      $$('[data-map-factory-remove]').map(el => el.dataset.mapFactoryRemove),
+      ['fg-wires1'],
+      'a button for the tapped factory only',
+    );
+    factory('fg-plates1')!.click();
+    await settle();
+    assert.deepEqual(
+      $$('[data-map-factory-remove]').map(el => el.dataset.mapFactoryRemove),
+      ['fg-plates1'],
+      'tapping another moves the button',
+    );
+    factory('fg-plates1')!.click();
+    assert.deepEqual(clicks.slice(2), [false], 'the second tap follows the link');
+    $('[data-map-image]')!.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }),
+    );
+    await settle();
+    assert.equal($$('[data-map-factory-remove]').length, 0, 'a press on the map puts it away');
+    // Pick, remove, Undo: no button comes back.
+    factory('fg-wires1')!.click();
+    await settle();
+    removeButton('fg-wires1')!.click();
+    await settle();
+    $('#toast')!.querySelector<HTMLButtonElement>('button')!.click();
+    await settle();
+    await settle();
+    assert.ok(factory('fg-wires1'));
+    assert.equal($$('[data-map-factory-remove]').length, 0);
+  } finally {
+    window.matchMedia = original;
+  }
+});
