@@ -22,6 +22,7 @@ import { solve, type LpModel, type LpSolution } from '../optimizer.ts';
 import type { PoolRecipe, Solved } from './types.ts';
 import { RAW, exactBalance } from './data.ts';
 import { generators, recipePool } from './recipes.ts';
+import { STOCK_SUFFIX, siteCopies, siteRoutes } from './on-site.ts';
 import {
   phaseBudget,
   phaseContext,
@@ -34,9 +35,9 @@ import {
 } from './model.ts';
 import { buildOrder, stagePower, stageRows, stageSurplus } from './stage.ts';
 
-// The id suffix of a storage-only line: '<recipe>:stock' (safeKey allows ':', as for a group's
-// own line, '<recipe>:<group>'; group ids start with 'fg-', so they cannot clash).
-const STOCK_SUFFIX = ':stock';
+// STOCK_SUFFIX (on-site.ts) is the id suffix of a storage-only line: '<recipe>:stock' (safeKey
+// allows ':', as for a group's own line, '<recipe>:<group>'; group ids start with 'fg-', so they
+// cannot clash).
 // What filling a container completely is worth against the machines its lines cost: far more, so
 // storage is filled whenever the budgets and the spare power allow.
 const FILL_WORTH = 1000;
@@ -131,11 +132,16 @@ function stockLines(
     supplied: {} as ItemRates,
   };
   if (!Object.keys(missing).length) return none;
-  const recipes: PoolRecipe[] = pool.map(recipe => ({
-    ...recipe,
-    id: recipe.id + STOCK_SUFFIX,
-    stock: { recipe: recipe.id },
-  }));
+  // A group that marks an item and holds a share of a storage-only line that uses it gets its own
+  // line of the item here too (#1314), which that storage-only line draws from.
+  const recipes: PoolRecipe[] = [
+    ...pool.map(recipe => ({
+      ...recipe,
+      id: recipe.id + STOCK_SUFFIX,
+      stock: { recipe: recipe.id },
+    })),
+    ...siteCopies(config, phase, pool, true),
+  ];
   const solveWith = (creditMW: number) => {
     const model = stockModel(config, phase, stage, recipes, fromSurplus, missing, creditMW);
     const result = solve(model);
@@ -239,8 +245,10 @@ function stockModel(
   };
   const context = phaseContext(config, phase, {});
   const { boost, utilityFactor } = context.power;
-  const balance = (item: string) =>
-    (model.constraints['item:' + item] ??= exactBalance(item) ? { equal: 0 } : { min: 0 });
+  const balance = (item: string, name = 'item:' + item) =>
+    (model.constraints[name] ??= exactBalance(item) ? { equal: 0 } : { min: 0 });
+  // The groups' own balances of what they make on site (#1314), as in the phase's model.
+  const routes = siteRoutes(config, phase, recipes).routes;
   if (phase >= 2) addStockPower(model, stage, boost, creditMW, balance);
   for (const recipe of recipes) {
     const coefficients: Record<string, number> = {
@@ -250,14 +258,16 @@ function stockModel(
           ? recipe.power * (1 + boost)
           : recipe.power * config.powerFactor * utilityFactor,
     };
-    for (const [item, rate] of Object.entries(recipe.outputs)) {
-      balance(item);
-      coefficients['item:' + item] = (coefficients['item:' + item] || 0) + rate;
-    }
-    for (const [item, rate] of Object.entries(recipe.inputs)) {
-      balance(item);
-      coefficients['item:' + item] = (coefficients['item:' + item] || 0) - rate;
-    }
+    for (const [item, rate] of Object.entries(recipe.outputs))
+      for (const [name, part] of routes(recipe, item, 'out')) {
+        balance(item, name);
+        coefficients[name] = (coefficients[name] || 0) + rate * part;
+      }
+    for (const [item, rate] of Object.entries(recipe.inputs))
+      for (const [name, part] of routes(recipe, item, 'in')) {
+        balance(item, name);
+        coefficients[name] = (coefficients[name] || 0) - rate * part;
+      }
     model.variables[recipe.id] = coefficients;
   }
   addStockSources(model, context, stage, fromSurplus);
