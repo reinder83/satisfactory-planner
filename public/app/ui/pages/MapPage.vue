@@ -353,8 +353,14 @@ function placeAt(spot: WorldPoint | null) {
 }
 // A click on the map (not on a marker or a factory, and not the end of a drag, which
 // onClickCapture swallows) places a marker there while the markers are shown.
+// A device that cannot hover places nothing with a tap on the map (#1313): a tap that dismisses a
+// picked factory or ends a pan would open the dialog by accident; "Add marker" is the way there.
 function onMapClick(e: MouseEvent) {
-  if (!showMarkers.value || (e.target as Element).closest('[data-node], [data-map-factory-remove]'))
+  if (
+    cannotHover ||
+    !showMarkers.value ||
+    (e.target as Element).closest('[data-node], [data-map-factory-remove]')
+  )
     return;
   placeAt(spotAt(e.clientX, e.clientY));
 }
@@ -513,6 +519,35 @@ const hovered = ref('');
 const focused = ref('');
 const selected = ref('');
 const cannotHover = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
+// Keeps a "Remove from map" pill inside the visible map frame (#1313): shifted left or right
+// when it would cross a side edge, and flipped above its pin when it would cross the bottom (the
+// top edge is kept by staying below the pin otherwise). The shift is two custom properties the CSS
+// adds to the pill's own offset.
+function fitRemove(el: unknown) {
+  const pill = el instanceof HTMLElement ? el : null;
+  const frame = box.value;
+  if (!pill || !frame) return;
+  pill.style.removeProperty('--remove-dx');
+  pill.style.removeProperty('--remove-dy');
+  const f = frame.getBoundingClientRect();
+  const left = f.left + frame.clientLeft;
+  const right = left + frame.clientWidth;
+  const top = f.top + frame.clientTop;
+  const bottom = top + frame.clientHeight;
+  const r = pill.getBoundingClientRect();
+  let dx = 0;
+  if (r.right > right) dx = right - r.right;
+  if (r.left + dx < left) dx = left - r.left;
+  let dy = 0;
+  if (r.bottom > bottom) {
+    const above = -(r.height + 32);
+    if (r.top + above >= top) dy = above;
+  }
+  if (dx) pill.style.setProperty('--remove-dx', dx + 'px');
+  if (dy) pill.style.setProperty('--remove-dy', dy + 'px');
+}
+const fitRemoves = () =>
+  box.value?.querySelectorAll('[data-map-factory-remove]').forEach(pill => fitRemove(pill));
 const removeShown = (id: string) =>
   cannotHover
     ? selected.value === id || focused.value === id
@@ -621,8 +656,11 @@ function onKey(e: KeyboardEvent) {
       </template>
       <template v-else-if="!showFactories && factories.length">The factories are hidden.</template>
       <template v-if="showMarkers">
-        Click the map to place a marker there, or press Add marker. Drag a marker to move it; on a
-        focused marker the arrow keys move it, Enter edits it and Delete removes it.
+        <template v-if="cannotHover"
+          >Press Add marker to place a marker in the middle of the view.</template
+        ><template v-else>Click the map to place a marker there, or press Add marker.</template>
+        Drag a marker to move it; on a focused marker the arrow keys move it, Enter edits it and
+        Delete removes it.
       </template>
       <template v-else-if="markers.length">The markers are hidden.</template>
       <template v-if="showStations">
@@ -767,6 +805,7 @@ function onKey(e: KeyboardEvent) {
       v-on="mapHandlers"
       @click.capture="onClickCapture"
       @keydown="onKey"
+      @scroll.passive="fitRemoves"
     >
       <div
         class="map-room"
@@ -847,6 +886,7 @@ function onKey(e: KeyboardEvent) {
               type="button"
               class="map-factory-remove"
               :style="{ left: item.left + 'px', top: item.top + 'px' }"
+              :ref="fitRemove"
               :data-map-factory-remove="item.factory.id"
               :aria-label="item.removeAria"
               @click="takeOff(item.factory.id)"

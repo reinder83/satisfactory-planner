@@ -8564,7 +8564,7 @@ th.resource-cell {
   align-items: center;
   min-height: 26px;
   padding: 0 9px;
-  transform: translate(-17px, 16px);
+  transform: translate(calc(-17px + var(--remove-dx, 0px)), calc(16px + var(--remove-dy, 0px)));
   border: 1px solid var(--line);
   border-radius: 13px;
   background: var(--bg2);
@@ -8587,7 +8587,7 @@ th.resource-cell {
   .map-factory-remove {
     min-height: 40px;
     padding: 0 12px;
-    transform: translate(-22px, 21px);
+    transform: translate(calc(-22px + var(--remove-dx, 0px)), calc(21px + var(--remove-dy, 0px)));
     border-radius: 20px;
   }
 }
