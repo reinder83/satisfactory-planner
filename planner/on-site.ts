@@ -20,6 +20,8 @@ import { recipePool, generators, primaryOutput } from './recipes.ts';
 // A per-group line's row id: the recipe id, a colon and the group id. A check key
 // `calc-<phase>-<rowId>` must pass safeKey (public/state/validate.ts), which allows ':' but not
 // '@', so released versions keep accepting a save that ticks one (#876).
+// The id suffix of a storage-only line: '<recipe>:stock' (planner/stock.ts).
+export const STOCK_SUFFIX = ':stock';
 const siteRowId = (recipeId: string, group: string) => `${recipeId}:${group}`;
 // The name of a group's own balance of an item in the model, `item:<item>@<group>`. Internal to
 // the solve: rows and stages always name the plain item.
@@ -77,7 +79,15 @@ export const totalPerMachine = (recipe: PoolRecipe) =>
 // (Rocket Fuel, copied for its Compacted Coal) and so drop and re-add the group's lines at every
 // recalculation. A copy is the recipe as it is, whole machines like it and never amplified, with
 // the id `<recipe>:<group>` and `onSite`.
-export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRecipe[]) {
+// With `stock`, the copies for the storage-only lines instead (#1314): their consumers are the
+// `<recipe>:stock` rows a group holds a share of, which planner/stock.ts adds after the solve, so
+// the pool never has them.
+export function siteCopies(
+  config: CurrentSettings,
+  phase: number,
+  pool: PoolRecipe[],
+  stock = false,
+) {
   const copies: PoolRecipe[] = [];
   for (const [group, entry] of Object.entries(config.onSite || {})) {
     const shares = phaseShares(entry, phase);
@@ -85,7 +95,7 @@ export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRec
     const consumed = new Set<string>();
     const held = (rowId: string) => shareOf(shares, rowId) > 0 || !!phaseRate(entry, phase, rowId);
     for (const recipe of pool)
-      if (held(recipe.id) || held('amp:' + recipe.id))
+      if (stock ? held(recipe.id + STOCK_SUFFIX) : held(recipe.id) || held('amp:' + recipe.id))
         for (const item of Object.keys(recipe.inputs)) if (marked.has(item)) consumed.add(item);
     const copied = new Set<string>();
     // Each pass copies the makers of the items consumed so far; their inputs may add more.
