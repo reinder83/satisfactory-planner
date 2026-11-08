@@ -580,3 +580,106 @@ test('Remove from map on a touch device: one pill, for the tapped factory', asyn
     window.matchMedia = original;
   }
 });
+
+// A full typed MediaQueryList for a device that cannot hover (a phone) or can (a mouse).
+const media = (query: string, hover: boolean): MediaQueryList => ({
+  matches: query.includes('hover: none') ? !hover : false,
+  media: query,
+  onchange: null,
+  addEventListener() {},
+  removeEventListener() {},
+  addListener() {},
+  removeListener() {},
+  dispatchEvent: () => false,
+});
+
+// #1313: on a device that cannot hover a tap on an empty part of the map opens no marker dialog
+// (it fired when a tap dismissed a picked factory or ended a pan); "Add marker" still places one,
+// in the middle of the view. A click with a mouse opens it as before.
+test('on a touch device a tap on the empty map places no marker; Add marker does', async () => {
+  const original = window.matchMedia;
+  window.matchMedia = (query: string) => media(query, false);
+  try {
+    await showMap(placed({ 'fg-wires1': WIRE }));
+    const dialog = () => $<HTMLDialogElement>('#detail')!;
+    const tap = () =>
+      layer().dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 200, clientY: 150 }),
+      );
+    tap();
+    await settle();
+    assert.equal(dialog().open, false, 'a tap on the empty map opens nothing');
+    factory('fg-wires1')!.click();
+    await settle();
+    assert.ok(removeButton('fg-wires1'), 'the factory is picked');
+    $('[data-map-image]')!.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }),
+    );
+    tap();
+    await settle();
+    assert.equal(removeButton('fg-wires1'), null, 'the tap dismissed the pick');
+    assert.equal(dialog().open, false, 'and opened no Add marker');
+    $<HTMLButtonElement>('[data-map-add-marker]')!.click();
+    await settle();
+    assert.equal(dialog().open, true, 'Add marker opens the dialog for a new marker');
+  } finally {
+    window.matchMedia = original;
+  }
+});
+
+test('with a mouse a click on the empty map still opens Add marker', async () => {
+  const original = window.matchMedia;
+  window.matchMedia = (query: string) => media(query, true);
+  try {
+    await showMap(placed({ 'fg-wires1': WIRE }));
+    layer().dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 200, clientY: 150 }),
+    );
+    await settle();
+    assert.equal($<HTMLDialogElement>('#detail')!.open, true);
+  } finally {
+    window.matchMedia = original;
+  }
+});
+
+// #1313: the "Remove from map" pill stays in the map's frame: shifted left at the right edge,
+// right at the left edge, flipped above its pin at the bottom edge. happy-dom lays out nothing,
+// so the pill is given the rectangle a browser would draw it at (the frame is 0..400 by 0..300).
+test('the Remove from map pill is kept inside the map frame', async () => {
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  let at = new DOMRect(0, 0, 0, 0);
+  HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+    if (this.hasAttribute('data-world-map')) return new DOMRect(0, 0, BOX.width, BOX.height);
+    if (this.hasAttribute('data-map-factory-remove')) {
+      const dx = parseFloat(this.style.getPropertyValue('--remove-dx') || '0');
+      const dy = parseFloat(this.style.getPropertyValue('--remove-dy') || '0');
+      return new DOMRect(at.x + dx, at.y + dy, at.width, at.height);
+    }
+    return original.call(this);
+  };
+  try {
+    await showMap(placed({ 'fg-wires1': WIRE }));
+    const shown = async (rect: DOMRect) => {
+      at = rect;
+      factory('fg-wires1')!.dispatchEvent(new MouseEvent('mouseenter'));
+      await settle();
+      const pill = removeButton('fg-wires1')!;
+      box().dispatchEvent(new Event('scroll'));
+      await settle();
+      return pill.style;
+    };
+    const inside = await shown(new DOMRect(100, 100, 120, 26));
+    assert.equal(inside.getPropertyValue('--remove-dx'), '', 'inside: not moved');
+    assert.equal(inside.getPropertyValue('--remove-dy'), '');
+    const right = await shown(new DOMRect(340, 100, 120, 26));
+    assert.equal(right.getPropertyValue('--remove-dx'), '-60px', 'right edge: shifted left');
+    const left = await shown(new DOMRect(-30, 100, 120, 26));
+    assert.equal(left.getPropertyValue('--remove-dx'), '30px', 'left edge: shifted right');
+    const bottom = await shown(new DOMRect(100, 285, 120, 26));
+    assert.equal(bottom.getPropertyValue('--remove-dy'), '-58px', 'bottom edge: above the pin');
+    const top = await shown(new DOMRect(100, -10, 120, 26));
+    assert.equal(top.getPropertyValue('--remove-dy'), '', 'top edge: stays below the pin');
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = original;
+  }
+});
