@@ -26,7 +26,7 @@
 import { computed, ref } from 'vue';
 import { replaceShownRoute } from '../../api.ts';
 import { openTab, phaseTabs, tabId } from '../../phase-tabs.ts';
-import { shownGroupFlow, stageOf } from '../../shown-group-flow.ts';
+import { shownGroupFlow, storedStageOf } from '../../shown-group-flow.ts';
 import {
   calculated,
   checked,
@@ -75,7 +75,7 @@ const page = computed(() =>
       shown,
       readonly: !current,
       milestones: current && milestoneOnly(),
-      snapshot: current ? undefined : stageOf(shown),
+      snapshot: current ? undefined : storedStageOf(shown),
       flow,
       running: (lineId: string) => checked(`calc-${shown}-${lineId}`),
     };
