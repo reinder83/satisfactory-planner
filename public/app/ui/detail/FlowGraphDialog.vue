@@ -70,7 +70,7 @@ import { factoryGroupsState, machineLine } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
 import DialogFrame from './DialogFrame.vue';
-import { GRAPH_ZOOM, type GraphPoint } from '../../graph-view.ts';
+import { GRAPH_ZOOM, type GraphPoint, type GraphView } from '../../graph-view.ts';
 import {
   heldSpots,
   isPlaceNode,
@@ -105,12 +105,23 @@ const tabs = computed(() => legacy(() => phaseTabs(props.id)));
 const shown = computed<StageKey>(() => openTab(tabs.value, picked.value));
 // Another phase's graph is only looked at: nothing of it moves or is saved.
 const readonly = computed(() => shown.value !== legacy(() => stage()));
+// The view of the phase on screen's tab while another phase's tab is open (#1019): a zoom or a
+// scroll made on a read-only tab is only looked at, so coming back puts this one back.
+let home: GraphView | null = null;
 // Saves what the phase on screen's tab was waiting to save, then shows the tab.
 function pickTab(key: StageKey) {
   layout.now();
   activeNode.value = null;
   hoveredEdge.value = null;
+  const leaving = !readonly.value;
+  if (leaving && box.value)
+    home = { zoom: zoom.value, left: box.value.scrollLeft, top: box.value.scrollTop };
   picked.value = key;
+  if (!leaving && home && key === legacy(() => stage())) {
+    const back = home;
+    home = null;
+    void nextTick().then(() => show(back));
+  }
 }
 
 const view = computed(() =>
