@@ -15,11 +15,11 @@ import { factoryGroupsState } from './views/factories.ts';
 
 // The stored stage of phase `key`: none for a milestone-only phase (calcStage in session.ts is
 // the phase on screen's).
-export const stageOf = (key: StageKey): StoredStage | undefined =>
+export const storedStageOf = (key: StageKey): StoredStage | undefined =>
   !calculated || milestoneOnly(key) ? undefined : calculated.stages[key];
 
 export function shownGroupFlow(groupId: string, stageKey: StageKey = stage()): GroupFlow | null {
-  const storedStage = stageOf(stageKey);
+  const storedStage = storedStageOf(stageKey);
   if (!calculated || !storedStage) return null;
   const groups = factoryGroupsState();
   const belts = (item: string, rate: number) => itemBelts(item, rate, stageKey);

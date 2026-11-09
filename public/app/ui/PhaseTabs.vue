@@ -31,7 +31,7 @@ const emit = defineEmits<{ pick: [key: StageKey] }>();
 
 // A tab is unavailable while it is empty, unless it is the open one or the current phase's (the
 // way back to the phase on screen, whose page says what it lacks).
-const unavailable = (tab: PhaseTab) => tab.empty && tab.key !== props.open && !tab.current;
+const tabOff = (tab: PhaseTab) => tab.empty && tab.key !== props.open && !tab.current;
 
 // The tab an arrow key, Home or End reaches from the open one, skipping unavailable ones.
 function target(key: string): number | null {
@@ -43,7 +43,7 @@ function target(key: string): number | null {
   // Home and End start from outside the list, so the first or last available tab is the answer.
   let next = first;
   for (let tried = 0; tried < count; tried++) {
-    if (!unavailable(props.tabs[next]!)) return next; // tabKeyTarget stays inside the list
+    if (!tabOff(props.tabs[next]!)) return next; // tabKeyTarget stays inside the list
     next = (next + step + count) % count;
   }
   return null;
@@ -64,7 +64,7 @@ function onKey(event: KeyboardEvent) {
   );
 }
 const pick = (tab: PhaseTab) => {
-  if (!unavailable(tab) && tab.key !== props.open) emit('pick', tab.key);
+  if (!tabOff(tab) && tab.key !== props.open) emit('pick', tab.key);
 };
 </script>
 
@@ -82,18 +82,18 @@ const pick = (tab: PhaseTab) => {
       :key="tab.key"
       type="button"
       role="tab"
-      :class="['tab', tab.key === open ? 'active' : '', unavailable(tab) ? 'empty' : '']"
+      :class="['tab', tab.key === open ? 'active' : '', tabOff(tab) ? 'empty' : '']"
       :aria-selected="tab.key === open ? 'true' : 'false'"
       :aria-controls="panel"
-      :aria-disabled="unavailable(tab) ? 'true' : undefined"
+      :aria-disabled="tabOff(tab) ? 'true' : undefined"
       :tabindex="tab.key === open ? 0 : -1"
-      :title="unavailable(tab) ? `No lines in ${tab.label}` : undefined"
+      :title="tabOff(tab) ? `No lines in ${tab.label}` : undefined"
       :data-phase-tab="tab.key"
       :data-current="tab.current ? 'true' : undefined"
       @click="pick(tab)"
     >
       {{ tab.label }}<template v-if="tab.current"> · current</template
-      ><span v-if="unavailable(tab)" class="visually-hidden">, no lines in {{ tab.label }}</span>
+      ><span v-if="tabOff(tab)" class="visually-hidden">, no lines in {{ tab.label }}</span>
     </button>
   </div>
 </template>
