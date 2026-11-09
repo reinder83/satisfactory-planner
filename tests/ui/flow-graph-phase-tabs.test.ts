@@ -291,3 +291,38 @@ test('arrow keys, Home and End move between the tabs, skipping Phases 1 and 2', 
   await settle();
   assert.equal(openKey(), '3');
 });
+
+test('back on the phase on screen its own zoom and scroll are shown, and a scroll saves those (#1019)', async () => {
+  await showFactories(arranged());
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  await openGraph();
+  const zoomText = () => $('#detail [data-flow-zoom-level]')!.textContent;
+  // The phase on screen's own view, stored.
+  $<HTMLButtonElement>('#detail [data-flow-zoom="in"]')!.click();
+  await settle();
+  await rest();
+  const own = zoomText();
+  const storedZoom = storedLayout()?.zoom;
+  assert.ok(storedZoom && storedZoom !== 1, 'a zoom of its own is stored');
+  const saves = layoutSaves(calls).length;
+  // Another phase's tab is zoomed and scrolled, which only looks.
+  await pick('5');
+  const box = sizedBox();
+  $<HTMLButtonElement>('#detail [data-flow-zoom="in"]')!.click();
+  $<HTMLButtonElement>('#detail [data-flow-zoom="in"]')!.click();
+  await settle();
+  box.scrollLeft = 40;
+  box.dispatchEvent(new Event('scroll'));
+  await settle();
+  assert.notEqual(zoomText(), own, 'the read-only tab is zoomed on');
+  // Back: the stored view is what is on screen.
+  await pick('3');
+  await settle();
+  assert.equal(zoomText(), own, 'the zoom of the phase on screen is back');
+  // The next scroll saves the restored view, not the read-only one.
+  box.dispatchEvent(new Event('scroll'));
+  await settle();
+  await rest();
+  assert.equal(storedLayout()?.zoom, storedZoom, 'the stored zoom is unchanged');
+  assert.equal(layoutSaves(calls).length, saves, 'nothing new was saved');
+});
