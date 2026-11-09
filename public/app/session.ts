@@ -69,13 +69,30 @@ export function flowPhaseOf(hash: string): string | null {
   const query = FLOW_ROUTE.exec(hash)?.[2];
   return query === undefined ? null : new URLSearchParams(query).get('phase');
 }
+// The phase tab a flow page's hash opens (?view=5, #1317): the phase whose lines, flows and build
+// order the page draws while the profile's phase stays as it is. Null when it names none; whether
+// the page offers that tab is the page's question (it falls back to the phase on screen).
+export function flowViewOf(hash: string): string | null {
+  const query = FLOW_ROUTE.exec(hash)?.[2];
+  return query === undefined ? null : new URLSearchParams(query).get('view');
+}
 // The hash (without its #) of group `groupId`'s flow page in phase `shown`, the phase on screen
 // unless given, so the page opened in a new tab, bookmarked or reloaded shows that phase's build
 // order (#926). Before a profile's state is loaded no phase is on screen, so the address names
-// none: that is still a flow page's address, which leaves the phase shown as it is.
-export function flowRoute(groupId: string, shown: Phase | null = stateLoaded ? phase() : null) {
+// none: that is still a flow page's address, which leaves the phase shown as it is. `view` (#1317)
+// is the phase tab the page has open when it is not the phase shown, so Back and a reload return
+// to it.
+export function flowRoute(
+  groupId: string,
+  shown: Phase | null = stateLoaded ? phase() : null,
+  view: string | null = null,
+) {
   const route = `factories/${encodeURIComponent(groupId)}/flow`;
-  return shown === null ? route : `${route}?phase=${encodeURIComponent(shown)}`;
+  const query = [
+    ...(shown === null ? [] : [`phase=${encodeURIComponent(shown)}`]),
+    ...(view === null ? [] : [`view=${encodeURIComponent(view)}`]),
+  ].join('&');
+  return query ? `${route}?${query}` : route;
 }
 // The route a hash names: an unknown one shows the plan. A group's flow page belongs to the
 // factories page, so the sidebar marks Factories.

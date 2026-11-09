@@ -8596,3 +8596,50 @@ th.resource-cell {
   fill: var(--ink);
   opacity: 0.85;
 }
+
+/* The phase tabs of a factory's build order page and flow graph (#1317, PhaseTabs.vue): the
+   build plan's .tabs, in one row that scrolls sideways inside its own box when the phases do not
+   fit (320px), never the page. A phase with no lines of the factory is dimmed. The focus ring is
+   drawn inside the tab, since the row's overflow would clip one outside. */
+.phase-tabs {
+  flex-wrap: nowrap;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 16px;
+  overflow-x: auto;
+}
+.phase-tabs .tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.phase-tabs .tab.empty {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.phase-tabs .tab:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: -2px;
+}
+.gf-panel:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 4px;
+}
+.gf-line-name {
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 600;
+}
+@media (max-width: 720px) {
+  .phase-tabs {
+    width: 100%;
+  }
+  .phase-tabs .tab {
+    padding: 10px 12px;
+  }
+}
+@media print {
+  .phase-tabs {
+    display: none;
+  }
+}

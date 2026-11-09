@@ -423,9 +423,13 @@ export interface FlowAdvice {
 // The ♻ lines of line `rowId` on group `place`'s flow page, in the phase shown: its card's lines
 // under the rows (ui/group-flow/FlowCard.vue) and the table's (FlowTable.vue). A row split over
 // several places gets its part in the group, not the whole line's advice.
-export function flowAdvice(rowId: string, place: string): FlowAdvice[] {
-  const row = calcStage()?.rows?.find(candidate => candidate.id === rowId);
-  return (row ? rowAdvice(row, calcStage(), place) : []).map(line => ({
+export function flowAdvice(
+  rowId: string,
+  place: string,
+  snapshot: StoredStage | undefined = calcStage(),
+): FlowAdvice[] {
+  const row = snapshot?.rows?.find(candidate => candidate.id === rowId);
+  return (row ? rowAdvice(row, snapshot, place) : []).map(line => ({
     side: line.kind === 'byproduct' ? 'out' : 'in',
     item: line.item,
     lead: line.lead,
@@ -827,8 +831,11 @@ export const stepRowName = (row: CalcRow): string =>
 // A row of the open phase by its id, named as its build-plan step is (stepRowName); the id
 // itself for a row the phase lacks. The build status (BuildStatusPanel.vue) and ADA name rows
 // by it.
-export function buildRowName(rowId: string): string {
-  const row = calcStage()?.rows?.find(candidate => candidate.id === rowId);
+export function buildRowName(
+  rowId: string,
+  snapshot: StoredStage | undefined = calcStage(),
+): string {
+  const row = snapshot?.rows?.find(candidate => candidate.id === rowId);
   return row ? stepRowName(row) : rowId;
 }
 

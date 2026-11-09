@@ -13,10 +13,16 @@
   whole line's advice, and the table (FlowTable.vue) lists the same lines. Under an input row of
   extracted Water, the line's Water Extractors end that line (#1024), which has no ♻ when no
   byproduct covers any of it ("No byproduct covers it: extract all of it. Water Extractors …").
+
+  Read-only (#1317): a card of a phase tab other than the phase on screen (`readonly`, with that
+  phase's stage as `snapshot`) names its line as plain text, with no link to a dialog that would
+  open the phase on screen's line, and says nothing of whether it runs, which is the phase on
+  screen's to tick.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { itemRate } from '../../flow.ts';
+import type { StoredStage } from '../../../types/index.ts';
 import type { FlowLine, FlowRow } from '../../group-flow.ts';
 import { num } from '../../format.ts';
 import {
@@ -38,6 +44,8 @@ const props = defineProps<{
   names: FlowNames;
   running: boolean;
   hot: boolean;
+  readonly?: boolean;
+  snapshot?: StoredStage | undefined;
 }>();
 
 const machines = computed(() => {
@@ -56,7 +64,7 @@ const loops = (row: FlowRow) => row.links.some(link => link.loop);
 const advice = computed(() =>
   legacy(() => {
     const byItem = { in: new Map<string, FlowAdvice>(), out: new Map<string, FlowAdvice>() };
-    for (const line of flowAdvice(props.line.id, props.group))
+    for (const line of flowAdvice(props.line.id, props.group, props.snapshot))
       byItem[line.side].set(line.item, line);
     return byItem;
   }),
@@ -67,9 +75,15 @@ const advice = computed(() =>
   <article :class="['gf-card', hot ? 'hot' : '']" :data-line="line.id">
     <div class="gf-head">
       <span class="chain-no">{{ lineNumber(line.no) }}</span
-      ><button type="button" class="rail-link" v-bind="factoryLink({ calcFactory: line.id })">
+      ><span v-if="readonly" class="gf-line-name" data-gf-name>{{ line.name }}</span
+      ><button
+        v-else
+        type="button"
+        class="rail-link"
+        v-bind="factoryLink({ calcFactory: line.id })"
+      >
         {{ line.name }} ↗</button
-      ><span :class="['gf-run', running ? 'on' : '']">{{
+      ><span v-if="!readonly" :class="['gf-run', running ? 'on' : '']">{{
         running ? '● Running' : '○ Not built'
       }}</span>
     </div>

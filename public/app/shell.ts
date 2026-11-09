@@ -6,6 +6,7 @@ import {
   flowGroupOf,
   flowPhaseOf,
   flowRoute,
+  flowViewOf,
   phase,
   showRoutePhase,
   view,
@@ -71,7 +72,7 @@ function routeToDraw(): string {
   if (route !== drawnRoute) showRoutePhase(route);
   const group = flowGroupOf(route);
   if (group === null || !currentSave.id || flowPhaseOf(route) === phase()) return route;
-  const shown = flowRoute(group, phase());
+  const shown = flowRoute(group, phase(), flowViewOf(route));
   replaceShownRoute(shown);
   return shown;
 }
