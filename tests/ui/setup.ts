@@ -106,6 +106,27 @@ export const $$ = <E extends Element = HTMLElement>(selector: string) => [
   ...document.querySelectorAll<E>(selector),
 ];
 
+// A mouse press on `target` as a browser runs it: mousedown first; unless that is prevented, the
+// press takes focus off the focused field (its `change` event when the text was edited, then
+// focusout) and onto the target. The click only lands when the target is still on the page after
+// that, since mouseup then hits whatever is under the pointer. Returns whether the click landed
+// (#1318: a suggestion whose list was closed by the field's change was never picked).
+export async function mouseClick(target: HTMLElement) {
+  const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+  target.dispatchEvent(down);
+  const field = document.activeElement;
+  if (!down.defaultPrevented) {
+    if (field instanceof HTMLInputElement)
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    target.focus();
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  if (!target.isConnected) return false;
+  target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  target.click();
+  return true;
+}
+
 export function page() {
   unmountShell();
   confirms?.disconnect();

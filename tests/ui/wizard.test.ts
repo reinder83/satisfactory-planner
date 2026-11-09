@@ -53,6 +53,7 @@ import {
   generated,
   generatedWith,
   go,
+  mouseClick,
   open,
   page,
   stubFetch,
@@ -1335,6 +1336,22 @@ test('Enter on a name that is already an item keeps that item', async () => {
   );
   await settle();
   assert.equal(wizard!.supplyRows![0]!.name, 'Iron Plate', 'spelled as the list spells it');
+});
+
+// A mouse press on a suggestion takes focus off the field, whose change event used to close the
+// list before the click arrived, so the item was never picked (#1318, form/ItemSearch.vue).
+test('a mouse click on a suggestion picks it', async () => {
+  supplyAt();
+  const input = $<HTMLInputElement>('input[name=supplyItem]')!;
+  input.focus();
+  input.value = 'iron pla';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+  const option = $<HTMLButtonElement>('[data-item-pick="Iron Plate"]')!;
+  assert.equal(await mouseClick(option), true, 'the suggestion is still there for the click');
+  await settle();
+  assert.equal(wizard!.supplyRows![0]!.name, 'Iron Plate');
+  assert.equal($<HTMLInputElement>('input[name=supplyItem]')!.value, 'Iron Plate');
 });
 
 test('signing out drops an unfinished wizard draft, so the next user never sees it', async () => {
