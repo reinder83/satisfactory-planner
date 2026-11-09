@@ -33,6 +33,16 @@
   table. At rest a label with no free spot on its curve is left out too (`crowded`, #1019), until
   its arrow is pointed at or its box lit. Every box and tag takes focus and is named; a box the
   keyboard focuses is scrolled into view, as one it moves is.
+  Phase tabs (#1317, PhaseTabs.vue, phase-tabs.ts): one per phase of the plan above the graph, on
+  the phase on screen ("Phase 4 · current") when it opens, to look at the factory's graph in
+  another phase without switching the profile's phase. The tab is in this component's state only.
+  Another phase's graph is the stored layout applied to the boxes it has in common with the phase
+  on screen (the spots are by row id and node id) and the automatic layout for the rest
+  (placedGraph), and is read-only: a drag of a box pans the drawing, the arrow keys do not move a
+  box, a press on a line opens nothing (it would open the phase on screen's line), "Reset layout"
+  and the tags switch are left out, and the layout is never saved while such a tab is open
+  (useGraphLayout's `readonly`: not the spots, the tags, the zoom or the scroll). Switching tab
+  first saves what a zoom or scroll of the phase on screen's tab was still waiting to save.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -51,8 +61,11 @@ import {
 import { spreadLabels, type PlacedLabel } from '../../graph-labels.ts';
 import type { FlowLine } from '../../group-flow.ts';
 import { num } from '../../format.ts';
-import { phase, phaseLabel } from '../../session.ts';
+import { openTab, phaseTabs, tabId } from '../../phase-tabs.ts';
+import { phase, phaseLabel, stage } from '../../session.ts';
 import { shownGroupFlow } from '../../shown-group-flow.ts';
+import type { StageKey } from '../../../types/index.ts';
+import PhaseTabs from '../PhaseTabs.vue';
 import { factoryGroupsState, machineLine } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
@@ -79,20 +92,43 @@ const machines = (line: FlowLine) =>
 // The scrolling box. The stored layout and the lines' spots while the dialog is open; the view
 // on screen is the zoom and the box's scroll offsets.
 const box = ref<HTMLElement | null>(null);
-const layout = useGraphLayout(props.id, () =>
-  box.value ? { zoom: zoom.value, left: box.value.scrollLeft, top: box.value.scrollTop } : null,
+const layout = useGraphLayout(
+  props.id,
+  () =>
+    box.value ? { zoom: zoom.value, left: box.value.scrollLeft, top: box.value.scrollTop } : null,
+  () => readonly.value,
 );
+
+// The phase tab open (#1317), null for the phase on screen's. Component state only.
+const picked = ref<StageKey | null>(null);
+const tabs = computed(() => legacy(() => phaseTabs(props.id)));
+const shown = computed<StageKey>(() => openTab(tabs.value, picked.value));
+// Another phase's graph is only looked at: nothing of it moves or is saved.
+const readonly = computed(() => shown.value !== legacy(() => stage()));
+// Saves what the phase on screen's tab was waiting to save, then shows the tab.
+function pickTab(key: StageKey) {
+  layout.now();
+  activeNode.value = null;
+  hoveredEdge.value = null;
+  picked.value = key;
+}
 
 const view = computed(() =>
   legacy(() => {
     const name = factoryGroupsState().groups.find(group => group.id === props.id)?.name ?? null;
-    const flow = name === null ? null : shownGroupFlow(props.id);
+    const flow = name === null ? null : shownGroupFlow(props.id, shown.value);
     const graph = flow?.lines.length
       ? flowGraph(flow, itemRate, machines, { tags: layout.tags.value })
       : null;
     // The tags switch is offered while something goes to storage or the sink.
     const quiet = !!graph?.edges.some(edge => edge.quiet);
-    return { name, phase: phaseLabel(phase()), graph, quiet };
+    return {
+      name,
+      phase: phaseLabel(readonly.value ? shown.value : phase()),
+      working: phaseLabel(phase()),
+      graph,
+      quiet,
+    };
   }),
 );
 
@@ -214,15 +250,18 @@ const rateTitle = (node: GraphNode) =>
   `${node.kind === 'line' ? 'Makes' : node.kind === 'in' ? 'Draws' : 'Receives'}: ${node.rateTitle}`;
 // "Show storage and sink as tags": redrawn at once and saved with the layout.
 function setTags(on: boolean) {
+  if (readonly.value) return;
   layout.tags.value = on;
   activeNode.value = null;
   hoveredEdge.value = null;
   layout.now();
 }
 
+// Where a box is, for a drag to move it; none on another phase's tab, where a drag pans.
 const nodeAt = (node: string): GraphPoint | null => {
-  const shown = placed.value?.nodes.find(known => known.id === node);
-  return shown ? { x: shown.x, y: shown.y } : null;
+  if (readonly.value) return null;
+  const spot = placed.value?.nodes.find(known => known.id === node);
+  return spot ? { x: spot.x, y: spot.y } : null;
 };
 // The box of `node` (a line's or, since #1240, an input's or an output's) put at `to`, every line
 // of the graph kept where it is drawn now (so none takes a new spot round a moved place).
@@ -268,13 +307,13 @@ watch(zoom, () => layout.later());
 // A press on a line's box without a drag (a drag or pinch swallows its click, onClickCapture).
 const openNode = (id: string) => {
   const row = lineRowOf(id);
-  if (row !== null) openCalculatedFactory(row);
+  if (row !== null && !readonly.value) openCalculatedFactory(row);
 };
 // A line's box takes focus: its name, and what Enter and the arrow keys do.
 const lineAttrs = (node: GraphNode) => ({
   tabindex: 0,
-  role: 'button',
-  'aria-label': `${node.label}, ${node.caption}.${node.rateTitle ? ' Makes ' + node.rateTitle + '.' : ''} Enter opens it, the arrow keys move it.`,
+  role: readonly.value ? 'img' : 'button',
+  'aria-label': `${node.label}, ${node.caption}.${node.rateTitle ? ' Makes ' + node.rateTitle + '.' : ''}${readonly.value ? '' : ' Enter opens it, the arrow keys move it.'}`,
 });
 // A place's box takes focus too (#1231), so the keyboard lights up its arrows: named with what
 // comes in from it or goes out to it.
@@ -292,7 +331,8 @@ function placeAttrs(node: GraphNode) {
     tabindex: 0,
     role: 'img',
     'aria-label':
-      [`${node.label}, ${node.caption}`, ...parts].join('. ') + '. The arrow keys move it.',
+      [`${node.label}, ${node.caption}`, ...parts].join('. ') +
+      (readonly.value ? '.' : '. The arrow keys move it.'),
   };
 }
 // Brings the box of `node` into view inside the scrolling box, as far as it is out of it.
@@ -327,6 +367,7 @@ function onNodeFocus(e: FocusEvent, node: GraphNode) {
 // Enter or Space opens a focused line; an arrow key moves a focused box (a line's, an input's or an
 // output's, #1240) a grid step, Shift by a bigger one.
 function onNodeKey(e: KeyboardEvent, node: GraphNode) {
+  if (readonly.value) return;
   if (lineRowOf(node.id) !== null && (e.key === 'Enter' || e.key === ' ')) {
     e.preventDefault();
     return openNode(node.id);
@@ -347,6 +388,7 @@ const roomy = globalThis.matchMedia?.('(max-width: 720px)').matches !== true;
 // Back to the automatic layout at natural size, from the top-left corner; asked first when a box
 // was moved, since that is work to redo.
 async function resetLayout() {
+  if (readonly.value) return;
   if (
     (Object.keys(layout.spots.value).length || Object.keys(layout.places.value).length) &&
     !(await confirmAction({
@@ -365,224 +407,251 @@ async function resetLayout() {
 
 <template>
   <DialogFrame :title="view.name ?? 'Factory'" subtitle="FACTORY · FLOW GRAPH" :summary="summary">
-    <p v-if="view.name === null" class="notice warn" data-flow-graph-missing>
-      This profile has no such factory any more. It may have been removed on the Factories page.
-    </p>
-    <p v-else-if="!placed" class="small muted" data-flow-graph-empty>
-      No production lines of this factory produce anything in {{ view.phase }}.
-    </p>
-    <template v-else>
-      <details class="fgraph-help small muted" :open="roomy" data-flow-graph-help>
-        <summary>How to use</summary>
-        <p>
-          What comes in on the left, this factory's production lines from left to right in the order
-          they feed each other, and what leaves on the right. Each arrow is one item, per minute.
-          Drag the background to move the graph, drag a production line, an input or an output to
-          move it (or the arrow keys on a focused box), zoom with the mouse wheel, a pinch or the
-          buttons, and press a production line to open it. Moved boxes snap to a 5 px grid, so they
-          line up. The graph opens as you left it, until you reset the layout.
-          <template v-if="view.quiet && !layout.tags.value">
-            What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
-          </template>
-          <template v-else-if="view.quiet">
-            What goes to Protected storage (▣) and the AWESOME Sink (♻) is shown as tags on each
-            production line.
-          </template>
-          Point at a box or focus it to light up its arrows.
+    <PhaseTabs
+      v-if="view.name !== null"
+      :tabs="tabs"
+      :open="shown"
+      prefix="fg"
+      panel="fg-panel"
+      label="Phase"
+      @pick="pickTab"
+    />
+    <div
+      id="fg-panel"
+      :role="view.name !== null ? 'tabpanel' : undefined"
+      :aria-labelledby="view.name !== null ? tabId('fg', shown) : undefined"
+      data-flow-graph-panel
+    >
+      <p v-if="view.name === null" class="notice warn" data-flow-graph-missing>
+        This profile has no such factory any more. It may have been removed on the Factories page.
+      </p>
+      <p v-else-if="!placed" class="small muted" data-flow-graph-empty>
+        No production lines of this factory produce anything in {{ view.phase }}.
+      </p>
+      <template v-else>
+        <p v-if="readonly" class="notice info" data-flow-graph-readonly>
+          Viewing {{ view.phase }} — switch phase to tick or edit. Your phase is {{ view.working }};
+          the layout can only be changed there.
         </p>
-      </details>
-      <div class="fgraph-tools" data-flow-graph-tools>
-        <button
-          class="btn"
-          type="button"
-          aria-label="Zoom out"
-          data-flow-zoom="out"
-          :disabled="zoom <= GRAPH_ZOOM.min"
-          @click="zoomOut"
-        >
-          −
-        </button>
-        <span class="fgraph-zoom" data-flow-zoom-level>{{ zoomText }}</span>
-        <button
-          class="btn"
-          type="button"
-          aria-label="Zoom in"
-          data-flow-zoom="in"
-          :disabled="zoom >= GRAPH_ZOOM.max"
-          @click="zoomIn"
-        >
-          +
-        </button>
-        <button
-          class="btn"
-          type="button"
-          aria-label="Fit the whole graph"
-          data-flow-zoom="fit"
-          @click="fit"
-        >
-          Fit
-        </button>
-        <button class="btn" type="button" data-flow-layout-reset @click="resetLayout">
-          Reset layout
-        </button>
-        <label v-if="view.quiet" class="fgraph-switch">
-          <input
-            type="checkbox"
-            data-flow-tags
-            :checked="layout.tags.value"
-            @change="setTags(($event.target as HTMLInputElement).checked)"
-          />
-          Show storage and sink as tags
-        </label>
-      </div>
-      <div
-        ref="box"
-        :class="['fgraph-scroll', { panning, moving }]"
-        tabindex="0"
-        role="group"
-        :aria-label="graphName"
-        data-flow-graph
-        v-on="handlers"
-        @click.capture="onClickCapture"
-        @scroll="layout.later()"
-      >
-        <svg
-          class="fgraph"
-          :width="placed.width * zoom"
-          :height="placed.height * zoom"
-          :viewBox="`0 0 ${placed.width} ${placed.height}`"
-          role="none"
-        >
-          <defs aria-hidden="true">
-            <marker
-              id="fgraph-arrow"
-              viewBox="0 0 8 8"
-              refX="7"
-              refY="4"
-              markerWidth="8"
-              markerHeight="8"
-              orient="auto"
-            >
-              <path d="M0,0 L8,4 L0,8 Z" />
-            </marker>
-          </defs>
-          <template v-for="edge in drawn" :key="edge.id">
-            <path
-              :class="edgeClass(edge)"
-              :d="edge.path!"
-              :data-edge="edge.id"
-              :marker-end="arrowOf(edge)"
-              aria-hidden="true"
-            />
-            <path
-              class="fgraph-hit"
-              :d="edge.path!"
-              :data-edge-hit="edge.id"
-              aria-hidden="true"
-              @pointerenter="hoveredEdge = edge.id"
-              @pointerleave="leaveEdge(edge.id)"
-            >
-              <title>{{ edgeTitle(edge) }}</title>
-            </path>
-          </template>
-          <template v-for="node in placed.nodes" :key="node.id">
-            <g
-              :class="['fgraph-node', node.kind, { on: lit?.node === node.id }]"
-              :data-node="node.id"
-              :transform="`translate(${node.x},${node.y})`"
-              v-bind="node.kind === 'line' ? lineAttrs(node) : placeAttrs(node)"
-              @click="openNode(node.id)"
-              @keydown="onNodeKey($event, node)"
-              @pointerenter="activeNode = node.id"
-              @pointerleave="leaveNode(node.id)"
-              @focus="onNodeFocus($event, node)"
-              @blur="leaveNode(node.id)"
-            >
-              <title v-if="node.rateTitle">{{ rateTitle(node) }}</title>
-              <rect :width="node.width" :height="node.height" />
-              <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
-              <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
-              <text
-                v-for="(text, i) in node.rateLines"
-                :key="i"
-                class="fgraph-caption fgraph-rate"
-                :data-node-rate="i"
-                x="10"
-                :y="37 + (i + 1) * GRAPH.textLine"
-              >
-                {{ text }}
-              </text>
-              <text
-                v-if="node.selfNote"
-                class="fgraph-caption"
-                x="10"
-                :y="37 + (node.rateLines.length + 1) * GRAPH.textLine"
-              >
-                {{ shortText(node.selfNote, GRAPH.captionChars) }}
-              </text>
-            </g>
-            <g
-              v-for="tag in tagsOf(node)"
-              :key="tag.id"
-              :class="tagClass(tag)"
-              :data-tag="tag.id"
-              :transform="`translate(${tag.left},${tag.top})`"
-              tabindex="0"
-              role="img"
-              :aria-label="tag.name"
-            >
-              <title>{{ tag.name }}</title>
-              <rect :width="tag.width" :height="GRAPH.tagHeight" rx="2" />
-              <text x="6" y="12.5">{{ tag.text }}</text>
-            </g>
-          </template>
-          <g
-            v-for="edge in drawn"
-            :key="'label-' + edge.id"
-            :class="['fgraph-label', labelOf(edge).state, { quiet: edge.quiet }]"
-            :data-edge-label="edge.id"
-            :transform="`translate(${labelOf(edge).x},${labelOf(edge).y})`"
-            aria-hidden="true"
+        <details class="fgraph-help small muted" :open="roomy" data-flow-graph-help>
+          <summary>How to use</summary>
+          <p>
+            What comes in on the left, this factory's production lines from left to right in the
+            order they feed each other, and what leaves on the right. Each arrow is one item, per
+            minute. Drag the background to move the graph, drag a production line, an input or an
+            output to move it (or the arrow keys on a focused box; not on another phase's tab), zoom
+            with the mouse wheel, a pinch or the buttons, and press a production line to open it.
+            Moved boxes snap to a 5 px grid, so they line up. The graph opens as you left it, until
+            you reset the layout.
+            <template v-if="view.quiet && !layout.tags.value">
+              What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
+            </template>
+            <template v-else-if="view.quiet">
+              What goes to Protected storage (▣) and the AWESOME Sink (♻) is shown as tags on each
+              production line.
+            </template>
+            Point at a box or focus it to light up its arrows.
+          </p>
+        </details>
+        <div class="fgraph-tools" data-flow-graph-tools>
+          <button
+            class="btn"
+            type="button"
+            aria-label="Zoom out"
+            data-flow-zoom="out"
+            :disabled="zoom <= GRAPH_ZOOM.min"
+            @click="zoomOut"
           >
-            <rect
-              :x="-edge.label!.width / 2"
-              :y="-GRAPH.labelHeight / 2"
-              :width="edge.label!.width"
-              :height="GRAPH.labelHeight"
+            −
+          </button>
+          <span class="fgraph-zoom" data-flow-zoom-level>{{ zoomText }}</span>
+          <button
+            class="btn"
+            type="button"
+            aria-label="Zoom in"
+            data-flow-zoom="in"
+            :disabled="zoom >= GRAPH_ZOOM.max"
+            @click="zoomIn"
+          >
+            +
+          </button>
+          <button
+            class="btn"
+            type="button"
+            aria-label="Fit the whole graph"
+            data-flow-zoom="fit"
+            @click="fit"
+          >
+            Fit
+          </button>
+          <button
+            v-if="!readonly"
+            class="btn"
+            type="button"
+            data-flow-layout-reset
+            @click="resetLayout"
+          >
+            Reset layout
+          </button>
+          <label v-if="view.quiet && !readonly" class="fgraph-switch">
+            <input
+              type="checkbox"
+              data-flow-tags
+              :checked="layout.tags.value"
+              @change="setTags(($event.target as HTMLInputElement).checked)"
             />
-            <text text-anchor="middle" y="-2">{{ edge.item }}</text>
-            <text text-anchor="middle" y="11">{{ edge.rateText }}</text>
-          </g>
-        </svg>
-      </div>
-      <details class="gf-text" data-flow-graph-table>
-        <summary>The graph as a table</summary>
-        <div class="table-wrap">
-          <table>
-            <caption class="small muted">
-              Every flow of the graph, per minute
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">From</th>
-                <th scope="col">Item</th>
-                <th scope="col">Rate</th>
-                <th scope="col">To</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="edge in placed.edges" :key="edge.id" :data-flow-edge="edge.id">
-                <td class="gf-cell-name">{{ edge.fromText }}</td>
-                <td>
-                  {{ edge.item }}<template v-if="edge.note"> · {{ NOTES[edge.note] }}</template>
-                </td>
-                <td class="number">{{ edge.rateText }}</td>
-                <td class="gf-cell-name">{{ edge.toText }}</td>
-              </tr>
-            </tbody>
-          </table>
+            Show storage and sink as tags
+          </label>
         </div>
-      </details>
-    </template>
+        <div
+          ref="box"
+          :class="['fgraph-scroll', { panning, moving }]"
+          tabindex="0"
+          role="group"
+          :aria-label="graphName"
+          data-flow-graph
+          v-on="handlers"
+          @click.capture="onClickCapture"
+          @scroll="layout.later()"
+        >
+          <svg
+            class="fgraph"
+            :width="placed.width * zoom"
+            :height="placed.height * zoom"
+            :viewBox="`0 0 ${placed.width} ${placed.height}`"
+            role="none"
+          >
+            <defs aria-hidden="true">
+              <marker
+                id="fgraph-arrow"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="8"
+                markerHeight="8"
+                orient="auto"
+              >
+                <path d="M0,0 L8,4 L0,8 Z" />
+              </marker>
+            </defs>
+            <template v-for="edge in drawn" :key="edge.id">
+              <path
+                :class="edgeClass(edge)"
+                :d="edge.path!"
+                :data-edge="edge.id"
+                :marker-end="arrowOf(edge)"
+                aria-hidden="true"
+              />
+              <path
+                class="fgraph-hit"
+                :d="edge.path!"
+                :data-edge-hit="edge.id"
+                aria-hidden="true"
+                @pointerenter="hoveredEdge = edge.id"
+                @pointerleave="leaveEdge(edge.id)"
+              >
+                <title>{{ edgeTitle(edge) }}</title>
+              </path>
+            </template>
+            <template v-for="node in placed.nodes" :key="node.id">
+              <g
+                :class="['fgraph-node', node.kind, { on: lit?.node === node.id }]"
+                :data-node="node.id"
+                :transform="`translate(${node.x},${node.y})`"
+                v-bind="node.kind === 'line' ? lineAttrs(node) : placeAttrs(node)"
+                @click="openNode(node.id)"
+                @keydown="onNodeKey($event, node)"
+                @pointerenter="activeNode = node.id"
+                @pointerleave="leaveNode(node.id)"
+                @focus="onNodeFocus($event, node)"
+                @blur="leaveNode(node.id)"
+              >
+                <title v-if="node.rateTitle">{{ rateTitle(node) }}</title>
+                <rect :width="node.width" :height="node.height" />
+                <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
+                <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
+                <text
+                  v-for="(text, i) in node.rateLines"
+                  :key="i"
+                  class="fgraph-caption fgraph-rate"
+                  :data-node-rate="i"
+                  x="10"
+                  :y="37 + (i + 1) * GRAPH.textLine"
+                >
+                  {{ text }}
+                </text>
+                <text
+                  v-if="node.selfNote"
+                  class="fgraph-caption"
+                  x="10"
+                  :y="37 + (node.rateLines.length + 1) * GRAPH.textLine"
+                >
+                  {{ shortText(node.selfNote, GRAPH.captionChars) }}
+                </text>
+              </g>
+              <g
+                v-for="tag in tagsOf(node)"
+                :key="tag.id"
+                :class="tagClass(tag)"
+                :data-tag="tag.id"
+                :transform="`translate(${tag.left},${tag.top})`"
+                tabindex="0"
+                role="img"
+                :aria-label="tag.name"
+              >
+                <title>{{ tag.name }}</title>
+                <rect :width="tag.width" :height="GRAPH.tagHeight" rx="2" />
+                <text x="6" y="12.5">{{ tag.text }}</text>
+              </g>
+            </template>
+            <g
+              v-for="edge in drawn"
+              :key="'label-' + edge.id"
+              :class="['fgraph-label', labelOf(edge).state, { quiet: edge.quiet }]"
+              :data-edge-label="edge.id"
+              :transform="`translate(${labelOf(edge).x},${labelOf(edge).y})`"
+              aria-hidden="true"
+            >
+              <rect
+                :x="-edge.label!.width / 2"
+                :y="-GRAPH.labelHeight / 2"
+                :width="edge.label!.width"
+                :height="GRAPH.labelHeight"
+              />
+              <text text-anchor="middle" y="-2">{{ edge.item }}</text>
+              <text text-anchor="middle" y="11">{{ edge.rateText }}</text>
+            </g>
+          </svg>
+        </div>
+        <details class="gf-text" data-flow-graph-table>
+          <summary>The graph as a table</summary>
+          <div class="table-wrap">
+            <table>
+              <caption class="small muted">
+                Every flow of the graph, per minute
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">From</th>
+                  <th scope="col">Item</th>
+                  <th scope="col">Rate</th>
+                  <th scope="col">To</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="edge in placed.edges" :key="edge.id" :data-flow-edge="edge.id">
+                  <td class="gf-cell-name">{{ edge.fromText }}</td>
+                  <td>
+                    {{ edge.item }}<template v-if="edge.note"> · {{ NOTES[edge.note] }}</template>
+                  </td>
+                  <td class="number">{{ edge.rateText }}</td>
+                  <td class="gf-cell-name">{{ edge.toText }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </template>
+    </div>
   </DialogFrame>
 </template>
