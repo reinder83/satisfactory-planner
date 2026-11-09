@@ -27,8 +27,14 @@ export const LAYOUT_SAVE_DELAY = 600;
 const storedGroupLayout = (groupId: string): GroupLayout | undefined =>
   factoryGroupsState().groups.find(group => group.id === groupId)?.layout;
 
-// `view` gives the view on screen (null while the graph is not drawn).
-export function useGraphLayout(groupId: string, view: () => GraphView | null) {
+// `view` gives the view on screen (null while the graph is not drawn). While `readonly` says so
+// (a phase tab other than the phase on screen, #1317) nothing is saved: the spots, the zoom and
+// the scroll of such a tab are only looked at, so the stored layout can never be written from it.
+export function useGraphLayout(
+  groupId: string,
+  view: () => GraphView | null,
+  readonly: () => boolean = () => false,
+) {
   const stored = storedGroupLayout(groupId);
   const spots = ref<Record<string, [number, number]>>(
     Object.fromEntries(
@@ -70,6 +76,7 @@ export function useGraphLayout(groupId: string, view: () => GraphView | null) {
   function now() {
     clearTimeout(timer);
     timer = undefined;
+    if (readonly()) return;
     // A factory removed meanwhile (another tab) has nothing to keep.
     if (!factoryGroupsState().groups.some(group => group.id === groupId)) return;
     const layout = current();
@@ -80,6 +87,7 @@ export function useGraphLayout(groupId: string, view: () => GraphView | null) {
     });
   }
   function later() {
+    if (readonly()) return;
     clearTimeout(timer);
     timer = setTimeout(now, LAYOUT_SAVE_DELAY);
   }
