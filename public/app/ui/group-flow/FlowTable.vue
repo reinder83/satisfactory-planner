@@ -23,9 +23,14 @@ import {
 import { machineLine } from '../../views/factories.ts';
 import { flowAdvice } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
+import type { StoredStage } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 
-const props = defineProps<{ flow: GroupFlow; names: FlowNames }>();
+const props = defineProps<{
+  flow: GroupFlow;
+  names: FlowNames;
+  snapshot?: StoredStage | undefined;
+}>();
 
 const machines = (line: FlowLine) =>
   (line.share < 1 - 1e-6 ? `≈ ${num(line.machinesHere)} of ` : '') +
@@ -44,7 +49,7 @@ const connections = computed(() =>
 const advice = computed(() =>
   legacy(() =>
     props.flow.lines.flatMap(line =>
-      flowAdvice(line.id, props.flow.group).map(entry => ({ line, ...entry })),
+      flowAdvice(line.id, props.flow.group, props.snapshot).map(entry => ({ line, ...entry })),
     ),
   ),
 );
