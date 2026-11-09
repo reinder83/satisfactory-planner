@@ -795,6 +795,15 @@ try {
     '2',
     'the guided answer carried into All settings',
   );
+  // A mouse click on an item suggestion picks it (#1318): the press takes focus off the field,
+  // whose change event used to close the list before the click arrived.
+  const supply = page.locator('input[name=supplyItem]').first();
+  await supply.click();
+  await supply.pressSequentially('Iron Pla');
+  await page.locator('[data-item-pick="Iron Plate"]').click();
+  assert.equal(await supply.inputValue(), 'Iron Plate', 'a mouse click on a supply suggestion');
+  await supply.fill('');
+  await supply.blur();
   await page.locator('[name=phase]').selectOption('1');
   await page.locator('[data-wizard-step="2"]').click();
   await page.locator('[name=storage]').selectOption('construction');
@@ -1243,6 +1252,35 @@ try {
       assert.ok(await page.locator('[data-complete-slot="' + id + '"]').isChecked());
   };
   await checkStorage();
+  // A mouse click on an item suggestion picks it (#1318), in the station dialog's cargo field and
+  // in a bay's Add container field: the press takes focus off the field, whose change event used
+  // to close the list before the click arrived. Keyboard picking has its own unit tests.
+  await page.goto(base + '#logistics');
+  await page.getByRole('tab', { name: 'Trains' }).click();
+  await page.locator('[data-station-add]').click();
+  await page.locator('#detail [data-platform-add]').click();
+  const cargo = page.locator('#detail [data-cargo-add] input').first();
+  await cargo.click();
+  await cargo.pressSequentially('Iron Pla');
+  await page.locator('#detail [data-item-pick="Iron Plate"]').click();
+  await page.locator('#detail [data-cargo="Iron Plate"]').waitFor();
+  assert.equal(await cargo.inputValue(), '', 'a fresh cargo field');
+  assert.ok(await cargo.evaluate(field => field === document.activeElement), 'with focus in it');
+  await page.locator('#detail [data-station-cancel]').click();
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  await page.goto(base + '#storage');
+  await page.locator('[data-toggle-layout]').click();
+  const bayField = page.locator('.add-container input[name=name]').first();
+  await bayField.click();
+  await bayField.pressSequentially('Iron Pla');
+  await page.locator('.add-container [data-item-pick="Iron Plate"]').click();
+  assert.equal(
+    await bayField.inputValue(),
+    'Iron Plate',
+    'a mouse click on a container suggestion',
+  );
+  await bayField.fill('');
+  await page.locator('[data-toggle-layout]').click();
   // Drag and drop in the storage room (#208, #292): a container dropped on the position past the
   // end of its bay moves there with its checks, and the bay is drawn again in full. A save as quick
   // as this edition's used to redraw the bay in the middle of dnd-kit's drop, which left it half

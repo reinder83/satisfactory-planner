@@ -31,6 +31,7 @@ import {
   evil,
   generated,
   go,
+  mouseClick,
   handbook,
   open,
   openMigrated,
@@ -1535,6 +1536,22 @@ const editWithCatalog = (slots: Record<string, string> = {}) => {
   setLayoutEditing(true);
   render();
 };
+
+// A mouse press on a suggestion takes focus off the field, whose change event used to close the
+// list before the click arrived, so the item was never picked (#1318, form/ItemSearch.vue).
+test('a mouse click on a suggestion fills the field and keeps its focus', async () => {
+  stubFetch({ '/api/update': () => state });
+  editWithCatalog();
+  addField().focus();
+  await typeAdd('iron pla');
+  const option = $<HTMLButtonElement>(
+    '.add-container[data-bay="A"] [data-item-pick="Iron Plate"]',
+  )!;
+  assert.equal(await mouseClick(option), true, 'the suggestion is still there for the click');
+  await settle();
+  assert.equal(addField().value, 'Iron Plate');
+  assert.equal(document.activeElement, addField());
+});
 
 // The equipment and the coupon have their bundled icons (#455), in the suggestions and in their
 // bay; a container named after no item, saved before #295, gets the placeholder glyph (#448).

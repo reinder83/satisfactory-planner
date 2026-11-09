@@ -140,7 +140,10 @@ function committed(event: Event) {
   emit('commit', event);
 }
 
-// A click on a suggestion took focus to it, so focus goes back to the field first.
+// A suggestion's mousedown is prevented (in the template), so a press on it, a tap too, leaves
+// focus in the field. Otherwise the field lost focus first: its `change` ran committed(), which
+// closed the list before the click arrived, and the suggestion was never picked (#1318).
+// Keyboard picking has the field focused already; focus is put back for any other caller.
 function pick(name: string) {
   const field = input.value;
   if (!field) return;
@@ -192,6 +195,7 @@ function pick(name: string) {
           :aria-selected="i === active ? 'true' : 'false'"
           class="supply-option"
           :data-item-pick="match"
+          @mousedown.prevent
           @click="pick(match)"
         >
           <ItemIcon :name="match" /><span>{{ match }}</span>

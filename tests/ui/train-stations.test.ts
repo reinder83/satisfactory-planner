@@ -9,7 +9,7 @@ import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
 import { state } from '../../public/app/session.ts';
-import { $, $$, applyUpdate, evil, go, open, page, stubFetch } from './setup.ts';
+import { $, $$, applyUpdate, evil, go, mouseClick, open, page, stubFetch } from './setup.ts';
 import type { ProgressState, TrainStation, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
@@ -319,6 +319,27 @@ test('a station without an owner, or of storage, says so', async () => {
     card('ts-store03')!.querySelector('[data-station-count]')!.textContent,
     'No platforms yet',
   );
+});
+
+// A mouse press on a suggestion takes focus off the field, whose change event used to close the
+// list before the click arrived, so the item was never added (#1318, form/ItemSearch.vue).
+test('a mouse click on a cargo suggestion adds the item and focuses the next field', async () => {
+  await showLogistics({ trainStations: [MINE] });
+  $<HTMLButtonElement>('[data-station-edit="ts-mine01"]')!.click();
+  await settle();
+  const cargo = () => inRow<HTMLInputElement>(1, '[data-cargo-add] input');
+  cargo().focus();
+  type(cargo(), 'Iron Pla');
+  await settle();
+  const option = inRow<HTMLButtonElement>(1, '[data-item-pick="Iron Plate"]');
+  assert.equal(await mouseClick(option), true, 'the suggestion is still there for the click');
+  await settle();
+  assert.deepEqual(
+    $$('[data-cargo]').map(item => item.dataset.cargo),
+    ['Iron Ore', 'Iron Plate'],
+  );
+  assert.equal(cargo().value, '', 'a fresh field for the next item');
+  assert.equal(document.activeElement, cargo(), 'with focus in it');
 });
 
 test('Enter in the cargo field adds the item it names and never saves the station', async () => {
