@@ -3674,6 +3674,20 @@ dialog::before {
 dialog::backdrop {
   background: rgba(6, 8, 9, 0.78);
 }
+/* A modal dialog is fixed to the window and centred in it, wherever the page behind it is
+   scrolled to (#1325): the browser's own rule for the top layer, stated here so no later
+   position or margin on dialog can move it down the page. The page behind does not scroll while
+   one is open (its scrollbar goes, and ui/scroll-lock.ts notes the scrollbar's width in
+   --scrollbar-width first, so nothing shifts sideways). */
+dialog:modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+}
+html:has(dialog[open]) {
+  overflow: hidden;
+  padding-right: var(--scrollbar-width, 0);
+}
 .dialog-head {
   display: flex;
   justify-content: space-between;

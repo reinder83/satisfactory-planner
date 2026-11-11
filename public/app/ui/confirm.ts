@@ -9,6 +9,7 @@ import { createApp, type App } from 'vue';
 import { onBackdropClick } from '../backdrop.ts';
 import { required } from '../format.ts';
 import ConfirmDialog from './ConfirmDialog.vue';
+import { reserveScrollbar } from './scroll-lock.ts';
 
 export interface ConfirmOptions {
   // The dialog's heading, a short question ("Remove this step?").
@@ -72,6 +73,7 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
     const app = createApp(ConfirmDialog, { ...options, answer: settle });
     app.mount(dialog);
     open = { app, trigger, resolve };
+    reserveScrollbar();
     dialog.showModal();
     dialog
       .querySelector<HTMLElement>(options.danger ? '[data-confirm-cancel]' : '[data-confirm-ok]')

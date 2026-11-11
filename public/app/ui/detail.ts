@@ -6,6 +6,7 @@ import { createApp, type App } from 'vue';
 import { allowSwitch } from '../api.ts';
 import { required } from '../format.ts';
 import DetailDialog from './detail/DetailDialog.vue';
+import { reserveScrollbar } from './scroll-lock.ts';
 
 // What #detail shows: a calculated row, a storage container (by address), an alternate recipe
 // (by recipe id), a factory group's flow graph (by group id, #1192), a marker on the world map
@@ -59,6 +60,7 @@ function replaceDetail(dialog: HTMLDialogElement, target: DetailTarget) {
   app.mount(dialog);
   if (!dialog.open) {
     opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    reserveScrollbar();
     dialog.showModal();
   } else if (!dialog.contains(document.activeElement)) {
     // Replaced while open (a link inside it, #319): emptying the dialog took the focused link
