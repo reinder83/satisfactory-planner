@@ -417,8 +417,8 @@ test('storage follows the selected contract and small power displays in MW', () 
   );
   assert.deepEqual(named(), [], 'nothing selected leaves no containers');
   assert.equal(vm.runInContext('power(500)', context), '500 MW');
-  assert.equal(vm.runInContext('power(1000)', context), (1000).toLocaleString() + ' MW');
-  assert.equal(vm.runInContext('power(1500)', context), (1.5).toLocaleString() + ' GW');
+  assert.equal(vm.runInContext('power(1000)', context), (1000).toLocaleString('en-US') + ' MW');
+  assert.equal(vm.runInContext('power(1500)', context), (1.5).toLocaleString('en-US') + ' GW');
 });
 test('wizard tabs retain edits and recalculate Review', async () => {
   const context = ui();

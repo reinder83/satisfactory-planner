@@ -6070,7 +6070,7 @@ button.rail-tile:hover {
   min-width: 0;
   max-width: 100%;
 }
-.compare-pickers input[type='number'] {
+.compare-pickers input[data-number] {
   width: 6em;
 }
 .compare-table {

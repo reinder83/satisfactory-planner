@@ -35,6 +35,7 @@
   (laneUnlockNote in flow.ts).
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, reactive } from 'vue';
 import { save, toast } from '../../api.ts';
 import { num, plural } from '../../format.ts';
@@ -542,7 +543,8 @@ function recalculate(event: Event) {
                     <label v-if="link.transport"
                       >Round trip
                       <input
-                        type="number"
+                        type="text"
+                        v-number
                         min="0.1"
                         max="1440"
                         step="0.1"

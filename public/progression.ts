@@ -6,6 +6,7 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
+import { formatNumber as format } from './numbers.ts';
 import { listNames, slug } from './wording.ts';
 import { AMPLIFIER_RESEARCH, handFedPhase } from './somersloops.ts';
 import {
@@ -106,11 +107,10 @@ const COLLECTIBLES = [
   'Somersloop',
 ];
 
-// Locale-formatted with at most 2 decimals, exactly as Number(value).toLocaleString(undefined,
-// { maximumFractionDigits: 2 }) would, but with one shared formatter: toLocaleString with options
-// builds a new Intl.NumberFormat on every call, which was most of phaseSteps' time (#772).
-const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
-export const formatNumber = (value: unknown): string => numberFormat.format(Number(value));
+// Formatted with at most 2 decimals in the app's one number format (public/numbers.ts, #1331), with
+// one shared formatter: toLocaleString with options builds a new Intl.NumberFormat on every call,
+// which was most of phaseSteps' time (#772).
+export const formatNumber = (value: unknown): string => format(Number(value), 2);
 
 // What phaseSteps may keep between its calls for several phases of one plan and progress, when
 // neither changes in between (profilePhases in state/summary.ts, #804): the milestones every

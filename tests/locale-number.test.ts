@@ -8,7 +8,7 @@ import { localeNumber } from '../public/wording.ts';
 
 // What the pages called before: a new formatter on every call.
 const before = (value: number | null | undefined, digits: number) =>
-  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
+  Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
 
 // Fixed edge cases, then a seeded spread of magnitudes, signs and fractions.
 const EDGES = [

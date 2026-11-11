@@ -12,6 +12,7 @@
   Cancel, × and Escape save nothing. Focus then goes back to the button that opened it.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, nextTick, ref } from 'vue';
 import { ROUND_TRIP_MAX, roundTripOf } from '../../../state.ts';
 import { whileBusy } from '../../busy.ts';
@@ -229,7 +230,8 @@ async function create(event: Event) {
             </div>
             <label class="field proposal-trip"
               >Round trip (minutes)<input
-                type="number"
+                type="text"
+                v-number
                 inputmode="decimal"
                 min="0.1"
                 :max="ROUND_TRIP_MAX"

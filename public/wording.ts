@@ -4,6 +4,8 @@
 // public/app/ with the shared modules' exports supplied by hand (tests/helpers/app-source.ts),
 // and this one is followed and loaded with the app instead.
 
+import { formatNumber } from './numbers.ts';
+
 // "Heavy Modular Frame" -> "heavy-modular-frame". Used for icon file names and for some
 // saved keys (calculated delivery ids, deliveryKey in progression.ts), so its output must stay
 // the same. public/app/format.ts passes it on to the app.
@@ -30,20 +32,14 @@ export const listNames = (names: readonly string[]): string =>
   names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0] || '';
 
 // A number as the pages show one, locale-formatted with at most `digits` decimals (2 unless
-// given), a missing value as 0: exactly what Number(value || 0).toLocaleString(undefined,
-// { maximumFractionDigits: digits }) gives, but with one Intl.NumberFormat per digit count.
+// given), a missing value as 0, in the app's one format (public/numbers.ts, #1331): a comma for
+// thousands and a dot for decimals in every browser language, with one Intl.NumberFormat per
+// digit count.
 // toLocaleString with options builds a new formatter on every call, which made the build plan's
 // step texts most of a tick's time on a phone (#1060, as in phaseSteps, #772). num in
 // public/app/format.ts and the shared modules' numbers go through it.
-const formatters = new Map<number, Intl.NumberFormat>();
-export function localeNumber(value: number | null | undefined, digits = 2): string {
-  let formatter = formatters.get(digits);
-  if (!formatter) {
-    formatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: digits });
-    formatters.set(digits, formatter);
-  }
-  return formatter.format(Number(value || 0));
-}
+export const localeNumber = (value: number | null | undefined, digits = 2): string =>
+  formatNumber(Number(value || 0), digits);
 
 // A whole count as the pages show numbers (num in public/app/format.ts): locale-formatted.
 const count = (value: number) => localeNumber(value);

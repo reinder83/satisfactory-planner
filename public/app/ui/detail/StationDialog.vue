@@ -15,6 +15,7 @@
   station" removes it with Undo in the toast (ui/train-station-actions.ts).
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, nextTick, ref } from 'vue';
 import {
   OUTPOST_NODE_MAX,
@@ -335,7 +336,8 @@ function typed() {
           <label v-for="[purity, label] in PURITIES" :key="purity" class="field"
             >{{ label }} nodes<input
               v-model.number="nodes[purity]"
-              type="number"
+              type="text"
+              v-number
               inputmode="numeric"
               min="0"
               :max="OUTPOST_NODE_MAX"

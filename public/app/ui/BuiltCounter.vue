@@ -34,6 +34,7 @@ export interface CounterHooks {
 </script>
 
 <script setup lang="ts">
+import { vNumber } from './form/number-input.ts';
 import { computed, ref, watch } from 'vue';
 import { save } from '../api.ts';
 import { announce } from '../announce.ts';
@@ -157,7 +158,8 @@ function typed(event: Event) {
     ><input
       :id="id"
       class="built-input"
-      type="number"
+      type="text"
+      v-number
       inputmode="numeric"
       :min="count.floor"
       :max="counterTop(count, reach)"

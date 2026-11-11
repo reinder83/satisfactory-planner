@@ -18,6 +18,7 @@ let editors = 0;
 </script>
 
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, ref } from 'vue';
 import { save, toast } from '../../api.ts';
 import { render } from '../../shell.ts';
@@ -228,7 +229,8 @@ async function add(event: Event) {
     <div v-for="row in editor.rows" :key="row.group" class="assign-row">
       <span>{{ row.name || '' }}</span
       ><input
-        type="number"
+        type="text"
+        v-number
         min="0"
         step="any"
         :data-assign-rate="factoryKey"

@@ -12,6 +12,7 @@
   leaves its kind out, and none leaves the setting out.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed } from 'vue';
 import { OWNED_GENERATORS, OWNED_GENERATORS_MAX } from '../../../preferences.ts';
 import { num } from '../../format.ts';
@@ -51,7 +52,8 @@ const view = computed(() =>
       <label v-for="kind in view" :key="kind.machine" class="field"
         >{{ kind.label }} <small>{{ kind.each }}</small
         ><input
-          type="number"
+          type="text"
+          v-number
           :name="'ownedGenerator:' + kind.machine"
           :data-owned-generator="kind.machine"
           :value="kind.value"

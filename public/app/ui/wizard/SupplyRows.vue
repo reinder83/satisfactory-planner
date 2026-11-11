@@ -8,6 +8,7 @@
   its icon. Committing an item or a rate reads the screen and redraws.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, nextTick, ref } from 'vue';
 import { wizard, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -92,7 +93,8 @@ function remove(index: number, event: Event) {
         <label class="field"
           >Per minute<input
             name="supplyRate"
-            type="number"
+            type="text"
+            v-number
             min="0"
             max="1000000"
             step="any"
