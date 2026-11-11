@@ -822,6 +822,8 @@ try {
   await supply.blur();
   await page.locator('[name=phase]').selectOption('1');
   await page.locator('[data-wizard-step="2"]').click();
+  // The settings above the recipe picker are folded until opened (ONB-1, #1328).
+  await page.locator('[data-settings-toggle]').click();
   await page.locator('[name=storage]').selectOption('construction');
   await page.locator('[data-wizard-step="3"]').click();
   await page.locator('[name=profileName]').fill('First profile');
