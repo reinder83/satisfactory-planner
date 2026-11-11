@@ -460,3 +460,21 @@ test('a long profile name breaks inside the sidebar’s profile switcher and its
   const mark = css.find(r => r.selector === '.action-menu-mark')!;
   assert.deepEqual(decls(mark.body, 'flex'), ['none']);
 });
+
+// #1326: a page's heading takes focus on a route change (ui/refocus.ts) but shows no ring, also
+// after a key press, where the orange box looked like a stuck focus ring. Controls keep theirs.
+test('a focused page heading has no outline, and controls keep theirs (#1326)', () => {
+  const all = rules(screenCss());
+  const withSelector = (selector: string) =>
+    all.filter(r => r.selector.split(/\s*,\s*/).includes(selector));
+  for (const heading of ["h1[tabindex='-1']:focus", "h2[tabindex='-1']:focus"]) {
+    const found = withSelector(heading);
+    assert.ok(found.length, heading + ' has a rule');
+    assert.match(found.map(r => r.body).join(';'), /outline:\s*none/);
+  }
+  for (const heading of ["h1[tabindex='-1']:focus-visible", "h2[tabindex='-1']:focus-visible"])
+    assert.equal(withSelector(heading).length, 0, heading + ' draws no ring');
+  const control = withSelector('button:focus-visible');
+  assert.ok(control.length, 'buttons have a focus ring');
+  assert.match(control[0]!.body, /outline:\s*2px solid/);
+});

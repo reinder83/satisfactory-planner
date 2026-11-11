@@ -165,12 +165,13 @@ textarea:focus-visible {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
-/* A page's heading takes focus when an action opens that page (ui/refocus.ts, #304); it shows the
-   same ring as a control, after a key press only (:focus-visible), never after a click. */
-h1[tabindex='-1']:focus-visible,
-h2[tabindex='-1']:focus-visible {
-  outline: 2px solid var(--accent-hi);
-  outline-offset: 4px;
+/* A page's heading takes focus when an action opens that page (ui/refocus.ts, #304), so a screen
+   reader reads it out and the next Tab starts below it. It is not a control, and Tab never lands
+   on a tabindex="-1" heading, so it shows no ring (#1326): after a key press it showed the
+   orange box that looked like a stuck focus ring. Controls keep theirs (above). */
+h1[tabindex='-1']:focus,
+h2[tabindex='-1']:focus {
+  outline: none;
 }
 input[type='checkbox'],
 input[type='radio'] {
@@ -3673,6 +3674,20 @@ dialog::before {
 }
 dialog::backdrop {
   background: rgba(6, 8, 9, 0.78);
+}
+/* A modal dialog is fixed to the window and centred in it, wherever the page behind it is
+   scrolled to (#1325): the browser's own rule for the top layer, stated here so no later
+   position or margin on dialog can move it down the page. The page behind does not scroll while
+   one is open (its scrollbar goes, and ui/scroll-lock.ts notes the scrollbar's width in
+   --scrollbar-width first, so nothing shifts sideways). */
+dialog:modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+}
+html:has(dialog[open]) {
+  overflow: hidden;
+  padding-right: var(--scrollbar-width, 0);
 }
 .dialog-head {
   display: flex;
