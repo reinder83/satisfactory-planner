@@ -12,6 +12,7 @@
   toast (ui/train-line-actions.ts).
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, nextTick, ref } from 'vue';
 import {
   ROUND_TRIP_MAX,
@@ -329,7 +330,8 @@ function typed() {
       <label class="field line-trip"
         >Round trip (minutes)<input
           v-model.number="trip"
-          type="number"
+          type="text"
+          v-number
           inputmode="decimal"
           min="0.1"
           :max="ROUND_TRIP_MAX"

@@ -10,6 +10,7 @@
   #wizard-form id, so moveExtraction reads it.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
@@ -286,7 +287,8 @@ function submit() {
                     ><input
                       class="used-input"
                       :name="'used:' + budget.name"
-                      type="number"
+                      type="text"
+                      v-number
                       min="0"
                       max="10000000"
                       step="any"

@@ -8,6 +8,7 @@
   hides the weights at once; nothing is read until the step is left.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { nextTick, ref } from 'vue';
 import {
   OBJECTIVE_WEIGHT_MAX,
@@ -83,7 +84,8 @@ function typed(e: Event) {
         }}<input
           v-value="initial[name]"
           :name="'objectiveWeight:' + name"
-          type="number"
+          type="text"
+          v-number
           min="0"
           :max="OBJECTIVE_WEIGHT_MAX"
           step="1"

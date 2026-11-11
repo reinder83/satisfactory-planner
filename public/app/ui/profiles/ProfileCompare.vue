@@ -12,6 +12,7 @@
   (ui/scroll-box.ts), with the profile column kept in view.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, ref } from 'vue';
 import { compareView, type ComparedProfile } from '../../profile-compare.ts';
 import { BUILD_MINUTES_MAX, buildMinutes, setBuildMinutes } from '../../session.ts';
@@ -142,7 +143,8 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
       <label
         >Minutes per building (estimate)
         <input
-          type="number"
+          type="text"
+          v-number
           min="0"
           :max="BUILD_MINUTES_MAX"
           step="0.5"

@@ -12,6 +12,7 @@
   the reason, before anything is saved.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed, ref } from 'vue';
 import { save } from '../../api.ts';
 import { beginnerMode } from '../../beginner.ts';
@@ -122,7 +123,8 @@ const unpin = (event: Event) => savePin(event.currentTarget as HTMLButtonElement
       >
       <input
         :id="view.inputId"
-        type="number"
+        type="text"
+        v-number
         inputmode="numeric"
         min="0"
         :max="view.max"

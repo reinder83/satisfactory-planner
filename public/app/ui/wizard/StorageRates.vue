@@ -8,6 +8,7 @@
   type; a half-typed rate leaves the last usable placeholder in place.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import {
   computed,
   getCurrentInstance,
@@ -124,7 +125,8 @@ const shown = (row: { name: string }) =>
           ></span
         ><input
           :name="'rate:' + row.name"
-          type="number"
+          type="text"
+          v-number
           min="0"
           max="300"
           step="0.1"

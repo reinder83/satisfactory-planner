@@ -169,10 +169,10 @@ test('a setup whose build cost does not fit is a draft whose reason names it', (
     ([name, number]) => buildingName(name, number) === building,
   )!;
   assert.ok(named, building);
-  assert.equal(count, named[1].toLocaleString());
+  assert.equal(count, named[1].toLocaleString('en-US'));
   for (const [item, amount] of Object.entries(BUILD_COSTS[named[0]]!.cost))
     if (buildCost!.parts[item] !== undefined)
-      assert.ok(reason!.includes(`${(amount * named[1]).toLocaleString()} × ${item}`), item);
+      assert.ok(reason!.includes(`${(amount * named[1]).toLocaleString('en-US')} × ${item}`), item);
   // The draft is the plan the goal would need with its parts, so the plan is never shown as done.
   assert.ok(counted.stages['4'].rows!.length > 0);
 });

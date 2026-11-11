@@ -6,6 +6,7 @@
   an invalid one, or a failed write, puts the saved count back.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
 import { duration, num } from '../../format.ts';
@@ -81,7 +82,8 @@ async function change(event: Event) {
       <input
         :id="'delivery-' + delivery.id"
         :data-delivery="delivery.id"
-        type="number"
+        type="text"
+        v-number
         min="0"
         :max="delivery.target"
         step="1"

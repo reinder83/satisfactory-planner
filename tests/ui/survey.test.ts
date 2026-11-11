@@ -561,7 +561,8 @@ test('the budgets screen writes each rate with its own unit, and a unit beside e
     input('Iron Ore').getAttribute('aria-label'),
     'Iron Ore already committed per minute',
   );
-  assert.equal(input('Crude Oil').type, 'number');
+  assert.equal(input('Crude Oil').type, 'text', 'a number field, formatted by v-number (#1331)');
+  assert.equal(input('Crude Oil').getAttribute('inputmode'), 'decimal');
   // What is saved is unchanged: the typed numbers, and the budgets as pool less committed.
   await change('input[name="used:Crude Oil"]', '150');
   await change('input[name="used:Iron Ore"]', '480');
