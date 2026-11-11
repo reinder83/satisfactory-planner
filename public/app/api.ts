@@ -26,6 +26,7 @@ import { tickStamped } from './ticked-by.ts';
 import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
+import { askAfterSave } from './storage-persistence.ts';
 import { listNames } from '../wording.ts';
 import type { ProgressState, Progression, UpdateOp, WorkspaceSummary } from '../types/index.ts';
 
@@ -251,6 +252,9 @@ export function save(operation: UpdateOp): Promise<ProgressState> {
 // only replaces `state` if that profile is still open. Rejects with the request's error.
 export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressState> {
   const scope = { ...scopeHeaders() };
+  // The first save in the browser edition asks the browser to keep the saves (#1368): from
+  // here, while the user's action is still being handled, which Firefox's prompt wants.
+  askAfterSave(!!currentSave.id);
   pending++;
   saveIndicator();
   const stillOpen = () =>
@@ -391,7 +395,7 @@ export async function post<T = unknown>(
   scope: boolean | { save: string; profile: string } = true,
   extra: RequestOptions = {},
 ): Promise<T> {
-  return request<T>(endpoint, {
+  const reply = await request<T>(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -405,6 +409,10 @@ export async function post<T = unknown>(
     body: JSON.stringify(data),
     ...extra,
   });
+  // A write that made the first save (a new profile, an import) is the moment to ask the
+  // browser to keep the saves (#1368); askAfterSave asks at most once and only once there is one.
+  askAfterSave(true);
+  return reply;
 }
 
 // The address hash and history place (history-place.ts) of the page on screen, which
