@@ -120,6 +120,10 @@ User-provided names, notes, tasks and imported values are untrusted text. Contin
 
 Show MW below 1,000 MW and GW where appropriate above that. For machine instructions distinguish total machines, full-speed machines and any adjustable machine, with output rate alongside clock percentage. Honor calculated whole-machine/surplus settings instead of changing the math for visual neatness.
 
+## Undo or confirm (X-4, #1334)
+
+A restorable action gets an undo toast, not a confirm dialog; only an irreversible one keeps `confirmAction`. Restorable means one more write puts back everything the action took: the item, its place in its list, what hangs on it and what it cost the user. Build the toast the way the other Undo toasts do (`toast(message, false, { label: 'Undo', run })`, Ctrl+Z or ⌘Z through `toastShortcut`, `#toast` is `role="status"`), and send the Undo only on the profile the action was made on (`profileScope`/`onProfile`) and only while the thing is not already back. Keep the removal's own write as it was; the inverse is an existing update or, when none is exact, a new update type that takes a snapshot the page made before the removal, validates it like the matching updates and changes no stored shape. After the removal, focus goes to the next item's name (else the previous one's, else the list's "Add" field) through `refocusAfterRemoval`, never to a neighbour's Remove; after Undo, to the restored item unless the user moved focus. Applied so far: removing a build-plan step (`taskRemove`, Undo `taskRestore`) and removing a factory (`factoryGroupRemove`, Undo `factoryGroupRestore`, `app/factory-restore.ts`). Still confirmed because they cannot be put back: deleting a personal task (its text goes), a profile, a save, an import that overwrites, a storage bay with its slot records. Move other actions over one at a time when they are touched; do not sweep the app.
+
 ## Redesign verification
 
 1. Read the existing UI and capture its functional inventory before replacing large sections.

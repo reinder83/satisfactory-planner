@@ -528,11 +528,8 @@ test('the group editor saves groups and memberships', async () => {
   $('[data-remove-group="fg-plates1"]')!.click();
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'factoryGroupRemove', id: 'fg-plates1' });
-  answerConfirms(false);
-  const before = calls.length;
-  $('[data-remove-group="fg-cable01"]')!.click();
-  await settle();
-  assert.equal(calls.length, before, 'a declined confirmation removes nothing');
+  // Removing a factory asks nothing; Undo is tested in undo-remove.test.ts (#1334).
+  assert.equal($('#confirm[open]'), null, 'removing a factory asked nothing');
 });
 
 test('"+ Add to group…" only picks a group; Add joins it, once, and a failed add keeps the pick (#856)', async () => {

@@ -483,7 +483,7 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   assert.equal(calls.length, before);
 });
 
-test('a declined confirmation removes nothing', async () => {
+test('a declined confirmation deletes no personal task (removing a plan step asks nothing, #1334)', async () => {
   const calls = stubFetch({ '/api/update': () => state });
   answerConfirms(false);
   openMigrated({
@@ -493,7 +493,7 @@ test('a declined confirmation removes nothing', async () => {
   $('[data-remove="custom-1"]')!.click();
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();
-  $('[data-remove-step="phase-3-iron"]')!.click();
+  $('[data-remove-step="custom-1"]')!.click();
   await settle();
   assert.equal(calls.length, 0);
 });
