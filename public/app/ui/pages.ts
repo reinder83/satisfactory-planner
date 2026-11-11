@@ -11,6 +11,7 @@ import GroupFlowPage from './pages/GroupFlowPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
 import LogisticsPage from './pages/LogisticsPage.vue';
 import MapPage from './pages/MapPage.vue';
+import NotFoundPage from './pages/NotFoundPage.vue';
 import NoSavePage from './pages/NoSavePage.vue';
 import NotesPage from './pages/NotesPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
@@ -32,7 +33,7 @@ const NEEDS_SAVE: View[] = [
   'session',
 ];
 
-// The component for `view`, or null for an unknown one. #wizard depends on the draft
+// The component for `view`, or null for none. #wizard depends on the draft
 // (`draft`, the wizard object): the node survey, the guided start (its questions and, once they
 // are answered, its own Review, #1072), and otherwise the five steps.
 // #factories depends on the address (`route`, the hash without its #): a group's flow page,
@@ -56,6 +57,7 @@ export function vuePage(
   if (view === 'session') return SessionPage;
   if (view === 'backup') return BackupPage;
   if (view === 'resources') return CalculatedResourcesPage;
+  if (view === 'notfound') return NotFoundPage;
   if (view === 'wizard') {
     if (draft?.mode === 'extraction') return SurveyPage;
     if (draft?.mode === 'guided') return GuidedPage;

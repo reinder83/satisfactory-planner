@@ -8758,3 +8758,13 @@ th.resource-cell {
     display: none;
   }
 }
+/* The not-found page (#1330): ADA's line, then the two ways back. */
+.not-found-ada {
+  font-family: var(--head);
+  font-size: 18px;
+}
+.not-found-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

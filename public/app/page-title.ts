@@ -22,6 +22,7 @@ export const PAGE_NAMES: Record<View, string> = {
   profiles: 'Saves & profiles',
   wizard: '',
   account: 'Account',
+  notfound: 'Not found',
 };
 
 // The title for a page whose heading is `heading` on route `view`; a heading that is the page's

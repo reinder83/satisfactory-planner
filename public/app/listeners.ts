@@ -41,7 +41,7 @@ document.addEventListener(
 );
 
 // The address hash is the page: sidebar links and navigate() in api.ts both land here.
-// An unknown hash shows the plan. Clears the search and scrolls to the top; before the
+// An unknown hash shows the not-found page (#1330). Clears the search and scrolls to the top; before the
 // first load (no state) nothing is drawn. Unsaved notes are asked about first (acceptRoute),
 // and when the user keeps them the page stays as it is. The scroll comes before the redraw, so
 // the new page starts at its top unless render() brings something else into view: a group's
