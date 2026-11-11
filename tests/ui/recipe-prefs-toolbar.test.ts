@@ -3,11 +3,29 @@
 // per-group bulk actions with their Undo. The picker's states are tested in wizard.test.ts.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
-import { beforeEach, test } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 import { carryOptions } from '../../public/state.ts';
 import { setWizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, $$, catalog, generated, go, open, page } from './setup.ts';
+
+// jsdom has no layout: a ResizeObserver that hands its callbacks to the test, and a toolbar that
+// is 184.2px tall (four wrapped rows on a phone), stand in for the browser.
+const observers: (() => void)[] = [];
+class FakeResizeObserver {
+  constructor(callback: () => void) {
+    observers.push(callback);
+  }
+  observe() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+  configurable: true,
+  get(this: HTMLElement) {
+    return this.classList.contains('alt-toolbar') ? 184.2 : 0;
+  },
+});
 
 const RIP = 'Recipe_Alternate_ReinforcedIronPlate_2_C',
   CAST = 'Recipe_Alternate_Screw_C',
@@ -207,4 +225,16 @@ test('the search and filters are labelled', () => {
     const control = $<HTMLElement>(selector)!;
     assert.ok(control.closest('label')?.textContent?.trim(), selector + ' has a visible label');
   }
+});
+
+test('the toolbar height is measured and handed to the rows below it (#1358)', () => {
+  const picker = $<HTMLElement>('.alt-picker')!;
+  assert.ok(observers.length > 0, 'the toolbar is watched');
+  for (const callback of observers) callback();
+  assert.equal(
+    picker.style.getPropertyValue('--alt-toolbar-h'),
+    '185px',
+    'the measured height, rounded up, on the element that holds the list',
+  );
+  assert.ok(picker.contains($('.alt-toolbar')) && picker.contains($('.alt-list')));
 });

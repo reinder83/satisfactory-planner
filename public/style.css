@@ -8678,7 +8678,7 @@ th.resource-cell {
 .alt-toolbar input[type='search'] {
   flex: 1;
   min-width: 0;
-  background: #0f1214;
+  background: var(--bg2);
   border: 1px solid var(--dim);
   padding: 7px 10px;
 }
@@ -8693,7 +8693,8 @@ th.resource-cell {
   overflow: visible;
 }
 .alt-group-head,
-.alt-row {
+.alt-row,
+.alt-list :is(a, button, input, select, textarea, [tabindex]) {
   scroll-margin-top: calc(var(--alt-toolbar-h) + 12px);
 }
 .alt-group-head {

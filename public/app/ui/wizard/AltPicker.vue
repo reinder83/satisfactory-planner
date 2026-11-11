@@ -257,9 +257,23 @@ function bulk(group: { product: string; rows: AltRow[] }, to: 'owned' | 'off') {
     },
   );
 }
+// The sticky toolbar wraps to more lines on a narrow screen, so its real height is measured and
+// handed to the scroll-margin of everything focusable below it: Shift+Tab never lands under it.
+const toolbar = ref<HTMLElement | null>(null);
+let toolbarObserver: ResizeObserver | undefined;
+watch(toolbar, el => {
+  toolbarObserver?.disconnect();
+  toolbarObserver = undefined;
+  if (!el || typeof ResizeObserver !== 'function') return;
+  toolbarObserver = new ResizeObserver(() =>
+    el.parentElement?.style.setProperty('--alt-toolbar-h', `${Math.ceil(el.offsetHeight)}px`),
+  );
+  toolbarObserver.observe(el);
+});
 // Leaving the step takes the Undo away: the picker it would change is gone.
 onBeforeUnmount(() => {
   if (undoLive) dropToastAction();
+  toolbarObserver?.disconnect();
 });
 
 const counts = computed(() => {
@@ -409,7 +423,7 @@ async function best() {
         <b>no other recipe</b> for that product once the starred one is available.</span
       >
     </p>
-    <div class="alt-toolbar" role="search">
+    <div ref="toolbar" class="alt-toolbar" role="search">
       <label class="alt-search"
         >Search recipes
         <input

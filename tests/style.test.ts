@@ -383,6 +383,24 @@ test('a focused control is scrolled clear of the estimate bar (#412)', () => {
   assert.ok(pad.line < bar.line + 20, 'in the same phone block as the bar');
 });
 
+// Shift+Tab scrolls a focused control to the top, under the sticky toolbar of the recipe picker,
+// unless the control itself keeps clear of it: the browser reads the focused element's own
+// scroll-margin, and the toolbar is taller than any fixed guess on a phone (#1358).
+test('a focused control in the recipe list clears the measured toolbar (#1358)', () => {
+  const rule = rules(screenCss()).find(
+    r =>
+      r.selector.startsWith('.alt-group-head') &&
+      r.selector.includes('.alt-list :is(') &&
+      decls(r.body, 'scroll-margin-top').some(d => d.includes('var(--alt-toolbar-h)')),
+  );
+  assert.ok(rule, 'focusable descendants of .alt-list get a scroll-margin from --alt-toolbar-h');
+  for (const tag of ['a', 'button', 'input', 'select', 'textarea', '[tabindex]'])
+    assert.ok(
+      rule.selector.split(/[(,)]/).some(t => t.trim() === tag),
+      tag + ' is covered',
+    );
+});
+
 // On a phone a dialog's title is one line, cut short (#318). The one dialog whose title wrapped,
 // a group's Build order (#435, #454), became the group's flow page (#895), headed like any page.
 test('dialog titles stay one line on a phone (#318)', () => {
