@@ -938,7 +938,9 @@ test('the Build sequence intro follows whether the plan has a guide', async () =
   go('plan');
   render();
   await nextTick();
-  assert.ok(intro().some(t => t.startsWith('Start with construction stock')));
+  // The paragraph is the "?" beside the heading now (X-3), and its text is all still there.
+  assert.ok(!intro().some(t => t.startsWith('Start with construction stock')));
+  assert.ok($('#main .section-head [data-help=buildIntro]'));
   assert.equal($('#main [data-guided-intro]'), null);
   open({
     calculated: {
@@ -954,6 +956,7 @@ test('the Build sequence intro follows whether the plan has a guide', async () =
     'Work through the steps in order and tick each one as it is done.',
   );
   assert.ok(!intro().some(t => /HUB|MAM|Milestone|startup/.test(t)), JSON.stringify(intro()));
+  assert.equal($('#main [data-help=buildIntro]'), null, 'a guided plan has no such help');
 });
 
 // Ranking alternates solves a transcribed handbook afresh, once per alternate, so the payoff

@@ -43,7 +43,7 @@ import { extractionOf } from '../../public/app/wizard/extraction.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { num } from '../../public/app/format.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
-import { presetSurvey } from '../../public/preferences.ts';
+import { helpText, presetSurvey } from '../../public/preferences.ts';
 import {
   answerConfirms,
   $,
@@ -225,17 +225,25 @@ test('power typed in MW is kept in GW, as the settings store it', async () => {
   assert.equal(wizard!.step, 2);
 });
 
-test('a help tip opens without a mouse and has no native tooltip', () => {
+test('a help tip opens without a mouse and has no native tooltip', async () => {
   wizardAt(1);
-  const tip = $('.setting-help');
+  const tip = $<HTMLButtonElement>('.help-btn');
   assert.ok(tip, 'the settings carry help');
-  assert.equal(tip.getAttribute('tabindex'), '0');
-  assert.ok(tip.getAttribute('aria-label'));
-  assert.equal(tip.querySelector('[role=tooltip]')!.textContent, tip.getAttribute('aria-label'));
+  assert.equal(tip.type, 'button', 'a button, so Tab and Enter reach it');
+  assert.match(tip.getAttribute('aria-label')!, /^Help: ./);
   assert.equal(tip.getAttribute('title'), null);
+  tip.click();
+  await nextTick();
+  assert.equal(document.querySelector('[role=tooltip]')!.textContent, helpText[tip.dataset.help!]);
+  tip.click();
+  await nextTick();
   wizardAt(3, {}, { goal: 'timed' });
-  const phaseTime = $('select[name=phaseTime]')!.closest('label')!.querySelector('[role=tooltip]')!;
-  assert.match(phaseTime.textContent, /final phase/, 'the target-time choice is explained');
+  const phaseTime = $('select[name=phaseTime]')!.closest('label')!.querySelector('[data-help]')!;
+  assert.match(
+    helpText[phaseTime.getAttribute('data-help')!]!,
+    /final phase/,
+    'the target-time choice is explained',
+  );
 });
 
 test('a new purity on step 1 refills a survey whose world is known, as the survey does', async () => {
@@ -1017,13 +1025,14 @@ test('an answer redraws the question, and All settings keeps it', async () => {
   );
   assert.ok($('input[name=hours]'), 'a timed goal asks for its hours');
   // With its help tip, keyed guidedHours (#1021).
-  assert.match(
+  assert.equal(
     $('input[name=hours]')!
       .closest('label')!
-      .querySelector('.setting-help')!
-      .getAttribute('aria-label')!,
-    /^Hours per phase. The planner sizes the factory/,
+      .querySelector('[data-help]')!
+      .getAttribute('data-help'),
+    'guidedHours',
   );
+  assert.match(helpText.guidedHours!, /^Hours per phase. The planner sizes the factory/);
   await click('[data-guided-advanced]');
   assert.equal(wizard!.mode, 'advanced');
   assert.equal(wizard!.step, 3, 'lands on the step that owns the question');

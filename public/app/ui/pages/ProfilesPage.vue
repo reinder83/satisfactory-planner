@@ -51,6 +51,7 @@ import { refocusAfterRemoval } from '../refocus.ts';
 import ActionMenu from '../ActionMenu.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import InlineName from '../InlineName.vue';
+import HelpPopover from '../HelpPopover.vue';
 import PageHeader from '../PageHeader.vue';
 import ProfileCompare from '../profiles/ProfileCompare.vue';
 import { newSave, openProfile } from '../actions.ts';
@@ -445,6 +446,9 @@ async function rename(
     <a v-else class="btn" href="#account">{{
       page.accountsEnabled ? 'Your account' : 'Set up user accounts'
     }}</a>
+    <!-- What the page's actions do, as a "?" (X-3, helpText.profilesHelp) rather than a paragraph
+         at the bottom (PRO-4). -->
+    <HelpPopover name="profilesHelp" topic="saves and profiles" />
   </div>
   <div v-if="page.imported.length" class="notice info import-notice" data-import-notice>
     <p>
@@ -632,14 +636,4 @@ async function rename(
       :phase="save.compare.phase"
     />
   </section>
-  <p class="small muted">
-    Edit settings recalculates a profile in place, keeps its progress and keeps the current version
-    as a separate profile; that version's ⋯ menu has Restore this version, which swaps it back.
-    Duplicate copies a profile with its progress so you can try changes without touching the
-    original. Share downloads a file with the plan, storage layout, factories and step edits —
-    without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a
-    save or profile with ✎ beside its name; renaming does not change progress. A profile still named
-    after its goal alone offers a name that says what it is; ✕ keeps its name. Profiles keep a
-    frozen calculation so later planner updates cannot silently change your targets.
-  </p>
 </template>

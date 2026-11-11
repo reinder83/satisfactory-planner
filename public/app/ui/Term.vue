@@ -11,125 +11,27 @@
   word onto the tooltip without closing it.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { computed, useId } from 'vue';
 import { glossary } from '../../preferences.ts';
+import { useTipPopup } from './tip-popup.ts';
 
 const props = defineProps<{ term: string; text?: string }>();
 const entry = computed(() => glossary[props.term]);
 const tipId = 'term-' + useId();
-
-const root = ref<HTMLElement | null>(null);
-const button = ref<HTMLButtonElement | null>(null);
-const tip = ref<HTMLElement | null>(null);
-const hovered = ref(false),
-  focused = ref(false),
-  pinned = ref(false);
-const open = computed(() => pinned.value || hovered.value || focused.value);
-// A press focuses the button before its click: that focus is the click's, not the keyboard's,
-// so the click alone decides (a tap opens it, the next tap closes it).
-let pressing = false;
-function press() {
-  pressing = true;
-}
-
-// Whether a node is the term or its tooltip, which is elsewhere in the page.
-const ours = (node: EventTarget | null) =>
-  !!node && (!!root.value?.contains(node as Node) || !!tip.value?.contains(node as Node));
-
-// The mouse leaving the word closes the tooltip a moment later, so it can cross the gap onto
-// the tooltip, which keeps it open.
-const LEAVE_DELAY = 100;
-let leaving: ReturnType<typeof setTimeout> | undefined;
-function pointerEnter(event: PointerEvent) {
-  if (event.pointerType !== 'mouse') return;
-  clearTimeout(leaving);
-  hovered.value = true;
-}
-function pointerLeave(event: PointerEvent) {
-  if (event.pointerType !== 'mouse') return;
-  clearTimeout(leaving);
-  leaving = setTimeout(() => (hovered.value = false), LEAVE_DELAY);
-}
-function focus() {
-  if (!pressing) focused.value = true;
-}
-function blur(event: FocusEvent) {
-  if (ours(event.relatedTarget)) return;
-  pressing = false;
-  focused.value = false;
-  pinned.value = false;
-}
-function click() {
-  pressing = false;
-  pinned.value = !pinned.value;
-  if (!pinned.value) hovered.value = focused.value = false;
-}
-function close(event: KeyboardEvent) {
-  if (!open.value) return;
-  event.stopPropagation();
-  clearTimeout(leaving);
-  pinned.value = hovered.value = focused.value = false;
-}
-// A tap or click anywhere else closes a pinned definition (a phone's tap does not always move
-// focus, so blur alone would leave it open).
-function outside(event: PointerEvent) {
-  if (!ours(event.target)) pinned.value = hovered.value = false;
-}
-
-// Place the open tooltip under the word (above it when it does not fit below but does above),
-// shifted sideways by what would stick out of the window.
-const MARGIN = 8,
-  GAP = 4;
-function place() {
-  const box = tip.value,
-    word = button.value;
-  if (!box || !word) return;
-  const anchor = word.getBoundingClientRect(),
-    width = document.documentElement.clientWidth || window.innerWidth,
-    height = document.documentElement.clientHeight || window.innerHeight,
-    size = box.getBoundingClientRect();
-  const left = Math.max(MARGIN, Math.min(anchor.left, width - MARGIN - size.width));
-  const below = anchor.bottom + GAP,
-    above = anchor.top - GAP - size.height;
-  const top = below + size.height > height - MARGIN && above >= MARGIN ? above : below;
-  box.style.left = `${Math.round(left)}px`;
-  box.style.top = `${Math.round(top)}px`;
-}
-
-// While open: follow the word on any scroll (the page's or a box's, caught on the way down) and
-// on a resize, and listen for a tap elsewhere.
-function listen(on: boolean) {
-  if (on) {
-    document.addEventListener('pointerdown', outside, true);
-    window.addEventListener('scroll', place, true);
-    window.addEventListener('resize', place);
-  } else {
-    document.removeEventListener('pointerdown', outside, true);
-    window.removeEventListener('scroll', place, true);
-    window.removeEventListener('resize', place);
-  }
-}
-watch(open, async value => {
-  listen(value);
-  if (!value) return;
-  await nextTick();
-  place();
-});
-onBeforeUnmount(() => {
-  clearTimeout(leaving);
-  listen(false);
-});
+// The popup behaviour is shared with the "?" help button (ui/tip-popup.ts, ui/HelpPopover.vue).
+const popup = useTipPopup();
+const { open, press, pointerEnter, pointerLeave, focus, blur, click, close } = popup;
 </script>
 
 <template>
   <span
     v-if="entry"
-    ref="root"
+    :ref="popup.root"
     class="term"
     @pointerenter="pointerEnter"
     @pointerleave="pointerLeave"
     ><button
-      ref="button"
+      :ref="popup.button"
       type="button"
       class="term-word"
       :data-term="term"
@@ -146,7 +48,7 @@ onBeforeUnmount(() => {
       ><span
         v-if="open"
         :id="tipId"
-        ref="tip"
+        :ref="popup.tip"
         role="tooltip"
         class="term-tip"
         data-term-tip
