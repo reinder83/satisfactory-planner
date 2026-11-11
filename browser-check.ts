@@ -984,8 +984,8 @@ try {
     await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor();
   };
   await renameStep(longTitle);
+  // Removing a plan step asks nothing and offers Undo instead (X-4, #1334).
   await page.locator(`#main [data-remove-step="${builtInId}"]`).click();
-  await page.locator('#confirm [data-confirm-ok]').click();
   const restoreButton = page.locator(`#main [data-restore-task="${builtInId}"]`);
   await page.setViewportSize({ width: 320, height: 720 });
   await page.locator('#main .removed-steps').evaluate(panel => {

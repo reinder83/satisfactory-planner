@@ -30,9 +30,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { holdUnsavedChoices, save, toast } from '../../api.ts';
-import { checked, flowRoute, phase, setEditingTask } from '../../session.ts';
+import {
+  checked,
+  flowRoute,
+  onProfile,
+  phase,
+  profileScope,
+  setEditingTask,
+  type ProfileScope,
+} from '../../session.ts';
 import { render } from '../../shell.ts';
-import { removeStepBody } from '../../shared-steps.ts';
+import { removedStepNews, restoredStepNews } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import { listNames } from '../../../wording.ts';
 import TermText from '../TermText.vue';
@@ -209,28 +217,39 @@ const stepList = {
   fallback: ['#add-task [name=title]'],
 };
 
-// "Remove", after a confirmation. A personal task (id custom-…) is deleted; a plan step is
-// only hidden (taskRemove) and keeps its checkmark, so it can be put back from "Removed
-// steps in this phase". A step other phases list too goes from them too, and the
-// confirmation names them (shared-steps.ts, #744).
+// "Remove". A personal task (id custom-…) is deleted, after a confirmation, since its text goes
+// with it. A plan step is only hidden (taskRemove) and keeps its checkmark and its place, so it
+// asks nothing (#1334, X-4): the toast offers Undo (Ctrl+Z or ⌘Z too, toastShortcut in api.ts),
+// which sends taskRestore, and it can be put back from "Removed steps in this phase" too. A step
+// other phases list too goes from them too, and the toast names them (shared-steps.ts, #744).
 async function remove(event: Event) {
-  const id = props.step.id;
+  const { id, title } = props.step;
   if (id.startsWith('custom-')) return deletePersonal(event);
   const refocus = refocusAfterRemoval(event.currentTarget, stepList);
-  if (
-    !(await confirmAction({
-      title: 'Remove this step?',
-      body: removeStepBody(id),
-      confirmLabel: 'Remove step',
-      danger: true,
-    }))
-  )
-    return;
+  const profile = profileScope();
+  const news = removedStepNews(id, title);
   try {
     await save({ type: 'taskRemove', id });
-    render();
-    await refocus();
-  } catch {}
+  } catch {
+    return;
+  }
+  render();
+  toast(news, false, { label: 'Undo', run: () => void undoRemove(id, title, profile) });
+  await refocus();
+}
+
+// Undo, from the toast: the step shows again where it was, with its checkmark. Only on the profile
+// it was removed from (profiles of a save share step ids). Focus goes to the step's summary.
+async function undoRemove(id: string, title: string, profile: ProfileScope) {
+  if (!onProfile(profile)) return;
+  try {
+    await save({ type: 'taskRestore', id });
+  } catch {
+    return;
+  }
+  render();
+  toast(restoredStepNews(title));
+  await focusStep(id, 'summary');
 }
 
 // "Delete personal task" (inside a personal task's details outside edit mode, or Remove on

@@ -452,6 +452,19 @@ export type UpdateOp =
   | { type: 'factoryGroupAdd'; id: string; name: string }
   | { type: 'factoryGroupRename'; id: string; name: string }
   | { type: 'factoryGroupRemove'; id: string }
+  // The Undo of factoryGroupRemove (#1334): the factory at its place in the list, with its share of
+  // each line's assignment (the member's place in the line's list), links, items made on site, map
+  // pin and the stations it owned, all put back in one write.
+  | {
+      type: 'factoryGroupRestore';
+      group: FactoryGroup;
+      index: number;
+      assignments: { key: string; index: number; rate: number | null }[];
+      links?: Record<string, LinkTransport>;
+      local?: string[];
+      place?: FactoryPlace;
+      stations?: string[];
+    }
   // The player who builds group `id` (#1199); a blank owner means nobody and drops the field.
   | { type: 'factoryGroupOwner'; id: string; owner: string }
   // The whole flow graph layout of group `id` (#1224); null or an empty one drops the field.

@@ -28,15 +28,25 @@
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
-import { computed } from 'vue';
-import { save } from '../../api.ts';
+import { computed, nextTick } from 'vue';
+import { save, toast } from '../../api.ts';
+import {
+  factoryBackNews,
+  factoryGoneNews,
+  restoreUpdate,
+  type FactoryRestore,
+} from '../../factory-restore.ts';
 import {
   calcStage,
   calculated,
   factoryEditing,
   flowRoute,
+  onProfile,
+  profileScope,
   sectionCollapsed,
   stage,
+  state,
+  type ProfileScope,
 } from '../../session.ts';
 import { FOOTPRINT_NOTE } from '../../footprints.ts';
 import { groupGrowth, groupGrowthText } from '../../later-phases.ts';
@@ -51,7 +61,6 @@ import { exportGroupToSft } from '../../sft-download.ts';
 import { legacy } from '../bridge.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
-import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
 import FactoryHandover from './FactoryHandover.vue';
@@ -163,29 +172,54 @@ function setOwner(event: Event, id: string) {
   });
 }
 
-// "Remove group", after a confirmation: only the group goes; its factories and their
-// progress stay. Focus then goes to the next group's name field, else the previous one's, else
-// the new group field (ui/refocus.ts, #286); never to a Remove factory (#1255).
+// "Remove factory", with no question: only the factory goes; its production lines stay in the list
+// and keep their progress, and the toast offers Undo (Ctrl+Z or ⌘Z too, toastShortcut in api.ts),
+// which puts the factory back in the same place with its lines' shares, links, items made on site,
+// map pin and train stations in one factoryGroupRestore write (app/factory-restore.ts, #1334).
+// Focus then goes to the next factory's name, else the previous one's, else the new factory field
+// (ui/refocus.ts, #286); never to a Remove factory (#1255). Undo focuses the factory's name again.
 async function remove(event: Event, id: string) {
+  const name = state.factoryGroups?.groups.find(group => group.id === id)?.name;
+  const undoUpdate = restoreUpdate(state, id);
+  if (name === undefined || !undoUpdate) return;
+  const profile = profileScope();
   const refocus = refocusAfterRemoval(event.currentTarget, {
     row: '#main .user-group',
     control: '[data-section-heading]',
     fallback: ['#new-group-name'],
   });
-  if (
-    !(await confirmAction({
-      title: 'Remove this factory?',
-      body: 'Remove this factory? Its production lines stay in the list and keep their progress.',
-      confirmLabel: 'Remove factory',
-      danger: true,
-    }))
-  )
-    return;
   try {
     await save({ type: 'factoryGroupRemove', id });
+  } catch {
+    return;
+  }
+  render();
+  toast(factoryGoneNews(name), false, {
+    label: 'Undo',
+    run: () => void undoRemove(undoUpdate, name, profile),
+  });
+  await refocus();
+}
+
+// Undo, from the toast: only on the profile the factory was removed from, and only while no
+// factory has its id again.
+async function undoRemove(update: FactoryRestore, name: string, profile: ProfileScope) {
+  if (!onProfile(profile)) return;
+  const id = update.group.id;
+  if (state.factoryGroups?.groups.some(group => group.id === id)) return;
+  try {
+    await save(update);
+  } catch {
     render();
-    await refocus();
-  } catch {}
+    return;
+  }
+  render();
+  toast(factoryBackNews(name));
+  await nextTick();
+  const current = document.activeElement;
+  if (current && current !== document.body && current.isConnected && !current.closest('#toast'))
+    return;
+  document.querySelector<HTMLElement>(`#section-${CSS.escape(id)} [data-section-heading]`)?.focus();
 }
 </script>
 

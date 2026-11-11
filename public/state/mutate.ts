@@ -385,6 +385,7 @@ const recordEdits: Record<string, StateEdit> = {
   mapMarker: setMapMarker,
   mapLayer: setMapLayer,
   mapFactory: setMapFactory,
+  factoryGroupRestore: restoreGroup,
   trainStation: setTrainStation,
   trainLine: setLine,
   trainLayout: setLayout,
@@ -524,6 +525,74 @@ function removeGroup(factory: FactoryGroups, update: Raw) {
     delete factory.local[update.id as string];
     if (!Object.keys(factory.local).length) delete factory.local;
   }
+}
+// The Undo of removing a factory (#1334, X-4): puts back what factoryGroupRemove took with it, in
+// one write so a failure leaves nothing half restored. The update carries what the tab saw before
+// the removal: the factory itself (`group`, with its owner and graph layout) at its place in the
+// list (`index`), its share in each production line's assignment (`assignments`: the line, the
+// member's place in that line's list and its rate), its links, the items it made on site, its pin
+// on the world map and the train stations it owned. Nothing is stored in a new shape; every part
+// goes through the check its own update has. A part that no longer fits (a line already assigned
+// to the factory again, a link that exists) is left as it is, and the factory itself is refused
+// when its id is taken.
+function restoreGroup(state: SavedState, update: Raw) {
+  const factory = (state.factoryGroups = validateGroups(state.factoryGroups));
+  const sent = update.group;
+  if (!plain(sent) || !groupId(sent.id) || !label(sent.name)) fail('Invalid factory.');
+  const id = sent.id as string;
+  if (factory.groups.some(group => group.id === id)) fail('Invalid factory.');
+  if (factory.groups.length >= 60) fail('You can keep up to 60 factories.');
+  const group: FactoryGroups['groups'][number] = { id, name: (sent.name as string).trim() };
+  if (sent.owner !== undefined) {
+    const owner = groupOwner(sent.owner);
+    if (owner) group.owner = owner;
+  }
+  if (sent.layout !== undefined) {
+    const layout = groupLayout(sent.layout);
+    if (layout) group.layout = layout;
+  }
+  const at = update.index;
+  if (typeof at !== 'number' || !Number.isInteger(at) || at < 0) fail('Invalid factory.');
+  factory.groups.splice(Math.min(at, factory.groups.length), 0, group);
+  const members: unknown = update.assignments ?? [];
+  if (!Array.isArray(members) || members.length > 5000) fail('Invalid factory assignment.');
+  for (const member of members) {
+    if (!plain(member) || !safeKey(member.key)) fail('Invalid factory assignment.');
+    const list = [...(factory.assignments[member.key] ?? [])];
+    if (list.some(known => known.group === id) || list.length >= 12) continue;
+    const rate = member.rate ?? null;
+    if (
+      rate !== null &&
+      (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate > 10000000)
+    )
+      fail('Enter a production rate above 0.');
+    const place =
+      typeof member.index === 'number' && member.index >= 0 ? member.index : list.length;
+    list.splice(Math.min(Math.floor(place), list.length), 0, { group: id, rate });
+    factory.assignments[member.key] = list;
+  }
+  const sentLinks: unknown = update.links ?? {};
+  if (!plain(sentLinks)) fail('Invalid link between factories.');
+  const links = { ...factory.links };
+  const known = new Set(factory.groups.map(each => each.id));
+  for (const [key, transport] of Object.entries(sentLinks)) {
+    const [from, to, ...rest] = key.split(':');
+    if (rest.length || !linkKey(from, to, known)) fail('Unknown link between factories.');
+    links[key] ??= linkTransport(transport);
+  }
+  if (Object.keys(links).length > 500) fail('You can set up to 500 links between factories.');
+  if (Object.keys(links).length) factory.links = links;
+  if (update.local !== undefined) setLocalItems(factory, { id, items: update.local });
+  if (update.place !== undefined) setMapFactory(state, { id, value: update.place });
+  const owned: unknown = update.stations ?? [];
+  if (!Array.isArray(owned) || owned.some(station => typeof station !== 'string'))
+    fail('Invalid train station.');
+  if (owned.length)
+    state.trainStations = stationsOf(state).map(station =>
+      owned.includes(station.id) && !station.owner
+        ? { ...station, owner: { kind: 'factory' as const, id } }
+        : station,
+    );
 }
 // The first choice for one item of a mines link saved before #231 splits that link: the other
 // items on it (`siblings`, the sources the page shows going the same way) keep the old choice as
