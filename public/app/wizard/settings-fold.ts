@@ -4,12 +4,11 @@
 // "Hide completed" (session.ts), never in a saved profile: it changes what one page shows, not
 // the plan, so it needs no state version. Nothing stored, or anything unreadable, means folded.
 // Kept in memory as well, so the toggle still works where the browser refuses storage.
-import { ref } from 'vue';
 import { droneFuels, powerOptions, storageOptions } from '../../preferences.ts';
 
 export const SETTINGS_FOLD_KEY = 'planner-recipe-settings-open';
 
-function stored(): boolean {
+function foldStored(): boolean {
   try {
     return localStorage.getItem(SETTINGS_FOLD_KEY) === 'on';
   } catch {
@@ -17,32 +16,32 @@ function stored(): boolean {
   }
 }
 
-// Reactive, so the step redraws when it changes.
-export const settingsOpen = ref(stored());
+let open = foldStored();
+export const settingsOpen = (): boolean => open;
 
 export function setSettingsOpen(value: boolean) {
-  settingsOpen.value = value;
+  open = value;
   try {
     localStorage.setItem(SETTINGS_FOLD_KEY, value ? 'on' : 'off');
   } catch {}
 }
 
-const RECIPES: Record<string, string> = {
+const FOLD_RECIPES: Record<string, string> = {
   standard: 'Standard',
   all: 'All alternates',
   custom: 'Pick specific alternates',
 };
-const SAM: Record<string, string> = {
+const FOLD_SAM: Record<string, string> = {
   avoid: 'avoid',
   needed: 'only when needed',
   allow: 'allow',
 };
-const NUCLEAR: Record<string, string> = {
+const FOLD_NUCLEAR: Record<string, string> = {
   none: 'none',
   sink: 'sink plutonium rods',
   recycle: 'full recycling',
 };
-const labelOf = (options: readonly (readonly string[])[], value: string): string =>
+const foldLabelOf = (options: readonly (readonly string[])[], value: string): string =>
   (options.find(([key]) => key === value)?.[1] ?? value).toLowerCase();
 
 // The folded form's one line: the choices that shape the plan, in the order of the form. `get`
@@ -50,17 +49,17 @@ const labelOf = (options: readonly (readonly string[])[], value: string): string
 export function settingsSummary(get: (name: string) => string | undefined): string {
   const fuel = get('droneFuel') || 'none';
   const parts = [
-    ['Recipe access', RECIPES[get('recipes') ?? ''] ?? get('recipes') ?? ''],
+    ['Recipe access', FOLD_RECIPES[get('recipes') ?? ''] ?? get('recipes') ?? ''],
     ['Ingot lines', get('pureIngots') === 'true' ? 'pure required' : 'planner chooses'],
-    ['SAM', SAM[get('sam') ?? ''] ?? get('sam') ?? ''],
+    ['SAM', FOLD_SAM[get('sam') ?? ''] ?? get('sam') ?? ''],
     [
       'Power',
       get('mainPower') && get('mainPower') !== 'auto'
-        ? labelOf(powerOptions, get('mainPower')!)
+        ? foldLabelOf(powerOptions, get('mainPower')!)
         : 'planner chooses',
     ],
-    ['Nuclear', NUCLEAR[get('nuclear') ?? ''] ?? get('nuclear') ?? ''],
-    ['Storage', labelOf(storageOptions, get('storage') ?? 'none')],
+    ['Nuclear', FOLD_NUCLEAR[get('nuclear') ?? ''] ?? get('nuclear') ?? ''],
+    ['Storage', foldLabelOf(storageOptions, get('storage') ?? 'none')],
   ];
   if ((droneFuels as readonly string[]).includes(fuel) && fuel !== 'none')
     parts.push(['Drone fuel', fuel]);

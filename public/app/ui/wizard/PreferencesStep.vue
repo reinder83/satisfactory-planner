@@ -65,7 +65,9 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
 // and the region is shown at once for that.
 const region = ref<HTMLElement>();
 const forced = ref(false);
-const shown = computed(() => settingsOpen.value || forced.value);
+// The viewer's choice, read from wizard/settings-fold.ts when the step is drawn.
+const chosen = ref(settingsOpen());
+const shown = computed(() => chosen.value || forced.value);
 // The summary reads the form's values from when it was last folded, or the draft's.
 const live = ref<Record<string, string> | null>(null);
 const summary = computed(() =>
@@ -83,8 +85,12 @@ function toggle() {
       live.value = Object.fromEntries([...data].map(([key, value]) => [key, String(value)]));
     }
     forced.value = false;
+    chosen.value = false;
     setSettingsOpen(false);
-  } else setSettingsOpen(true);
+  } else {
+    chosen.value = true;
+    setSettingsOpen(true);
+  }
 }
 function reveal() {
   if (shown.value) return;

@@ -98,7 +98,7 @@ test('the choice is remembered in this browser and not in the profile', async ()
   assert.equal(JSON.stringify(wizard!.settings), before, 'no setting is written');
   // A new page load reads it back, still open.
   vi.resetModules();
-  assert.equal((await import('../../public/app/wizard/settings-fold.ts')).settingsOpen.value, true);
+  assert.equal((await import('../../public/app/wizard/settings-fold.ts')).settingsOpen(), true);
   setSettingsOpen(true);
   start();
   assert.equal(toggle().getAttribute('aria-expanded'), 'true', 'open on return');
@@ -108,10 +108,7 @@ test('the choice is remembered in this browser and not in the profile', async ()
   start();
   assert.equal(toggle().getAttribute('aria-expanded'), 'false', 'closed stays closed');
   vi.resetModules();
-  assert.equal(
-    (await import('../../public/app/wizard/settings-fold.ts')).settingsOpen.value,
-    false,
-  );
+  assert.equal((await import('../../public/app/wizard/settings-fold.ts')).settingsOpen(), false);
 });
 
 test('storage that refuses means folded, and the toggle still works', async () => {
@@ -125,9 +122,9 @@ test('storage that refuses means folded, and the toggle still works', async () =
   try {
     vi.resetModules();
     const fold = await import('../../public/app/wizard/settings-fold.ts');
-    assert.equal(fold.settingsOpen.value, false);
+    assert.equal(fold.settingsOpen(), false);
     fold.setSettingsOpen(true);
-    assert.equal(fold.settingsOpen.value, true, 'kept in memory');
+    assert.equal(fold.settingsOpen(), true, 'kept in memory');
   } finally {
     Storage.prototype.getItem = getItem;
     Storage.prototype.setItem = setItem;
