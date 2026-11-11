@@ -2,6 +2,7 @@
 // current hard-drive payoff ranking. Re-exported by ../state.ts.
 import { milestoneOnlyPhases, phaseSteps, type StepsMemo } from '../progression.ts';
 import type {
+  AlternateRanking,
   CustomTask,
   PhaseProgress,
   Progression,
@@ -165,6 +166,20 @@ export const currentPayoff = (
   profile: Pick<StoredProfile, 'plan' | 'payoff'>,
 ): StoredPayoff | null =>
   profile.plan && profile.payoff?.planCreatedAt === profile.plan.createdAt ? profile.payoff : null;
+// A ranking the user cancelled (#1332) does not replace a complete one: the stored ranking for
+// this plan, when it is whole (not `stopped`) and covers the same phases as the cancelled one,
+// otherwise null (a partial stored ranking, one for another plan or phases, or a ranking that was
+// not cut short are replaced as usual). Both editions' rank routes ask it before they store.
+export function keptRanking(
+  profile: Pick<StoredProfile, 'plan' | 'payoff'>,
+  ranking: AlternateRanking,
+  cancelled: boolean,
+): StoredPayoff | null {
+  const kept = currentPayoff(profile);
+  if (!cancelled || !ranking.stopped || !kept || kept.ranking.stopped) return null;
+  const phases = (r: AlternateRanking) => (r.phases?.length ? r.phases : [r.phase]).join();
+  return phases(kept.ranking) === phases(ranking) ? kept : null;
+}
 // How long one hard-drive payoff ranking may run before it stops and reports `stopped`, in both
 // editions (#1257): the browser edition ranks on its calculator worker, the server on a worker
 // thread of its own (server/ranking.ts, #1156), so neither holds anything else up meanwhile. An

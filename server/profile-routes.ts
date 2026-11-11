@@ -9,6 +9,7 @@ import {
   checkRestore,
   checkRoundUp,
   currentPayoff,
+  keptRanking,
   rankScope,
   recalculatedProfile,
   restoredVersions,
@@ -231,6 +232,8 @@ export function profileRoutes({
     // Cancelled before a single alternate was checked: nothing to keep, and the ranking the
     // profile had stays (the reply is the empty one, for the page to say so).
     if (ranking.stopped && !ranking.candidates.length) return response(payoff);
+    // A cancelled ranking does not replace a complete one the profile already has (keptRanking).
+    let kept: StoredPayoff | null = null;
     await commit(draft => {
       const draftProfile = draft.saves
         .find(s => s.id === save.id && s.userId === user.id)
@@ -238,9 +241,11 @@ export function profileRoutes({
       if (!draftProfile) fail('Profile not found.', 404);
       if (draftProfile.plan?.createdAt !== plan.createdAt)
         fail('The profile changed while ranking. Rank again.', 409);
-      draftProfile.payoff = payoff;
+      kept = keptRanking(draftProfile, ranking, handle.cancelled);
+      if (!kept) draftProfile.payoff = payoff;
     });
-    const reply: RankReply = known.stale.length ? { ...payoff, leftOut: known.stale } : payoff;
+    const stored: RankReply = kept ? { ...(kept as StoredPayoff), kept: true } : payoff;
+    const reply: RankReply = known.stale.length ? { ...stored, leftOut: known.stale } : stored;
     return response(reply);
   }
   // Where the scoped profile's ranking is while one runs (#1332), which the page polls for its

@@ -15,9 +15,9 @@
 // reload forgets that a ranking was cancelled (the stored ranking still says it stopped).
 import { browserMode } from '../browser-api.ts';
 import { announce } from './announce.ts';
-import { navigate, post, request, scopeHeaders, toast } from './api.ts';
+import { navigate, post, request, toast } from './api.ts';
 import { rankedMessage } from './payoff.ts';
-import { currentProfile, setPayoff, stage, view } from './session.ts';
+import { currentProfile, currentSave, setPayoff, stage, view } from './session.ts';
 import { render } from './shell.ts';
 import { rankLeftOut, rankLive, rankRun } from './ui/plan/rank-state.ts';
 import type { RankRun } from './ui/plan/rank-state.ts';
@@ -46,6 +46,10 @@ const cancelledRankings = new WeakSet<AlternateRanking>();
 export const wasCancelled = (ranking: AlternateRanking) => cancelledRankings.has(ranking);
 
 const POLL_MS = 1500;
+const NONE_MESSAGE = 'Ranking cancelled before any alternate was checked.';
+export const KEPT_MESSAGE = 'Cancelled: your previous complete ranking is kept.';
+// The scope headers of the run's own profile.
+const runScope = (run: RankRun) => ({ 'X-Save-Id': run.saveId, 'X-Profile-Id': run.profileId });
 let rankAbort: AbortController | null = null;
 
 // "Checking 12 of 58 alternates…", the words the bar and the live text share.
@@ -83,8 +87,18 @@ export function showRanking() {
   let tries = 0;
   const open = () => {
     const tab = document.querySelector<HTMLButtonElement>('[data-plan-tab="hard-drives"]');
-    if (tab) tab.click();
-    else if (tries++ < 20) setTimeout(open, 50);
+    if (!tab) {
+      if (tries++ < 20) setTimeout(open, 50);
+      return;
+    }
+    tab.click();
+    // Focus goes to the ranking's heading, not to <body> where the toast's button left it.
+    const focus = () => {
+      const heading = document.querySelector<HTMLElement>('[data-payoff-heading]');
+      if (heading) heading.focus();
+      else if (tries++ < 20) setTimeout(focus, 50);
+    };
+    setTimeout(focus, 0);
   };
   setTimeout(open, 0);
 }
@@ -95,7 +109,16 @@ export async function startRank(): Promise<void> {
   if (rankRun.current) return;
   const profileId = currentProfile.id;
   const phase = stage();
-  rankRun.current = { profileId, phase, done: 0, total: 0, queued: false, cancelling: false };
+  rankRun.current = {
+    saveId: currentSave.id,
+    profileId,
+    profileName: currentProfile.name,
+    phase,
+    done: 0,
+    total: 0,
+    queued: false,
+    cancelling: false,
+  };
   const run = rankRun.current;
   clearRankDone();
   say(run, Date.now(), true);
@@ -109,14 +132,18 @@ export async function startRank(): Promise<void> {
             queued?: boolean;
             done?: number;
             total?: number;
-          }>('/api/rank-progress', { headers: scopeHeaders() });
+          }>('/api/rank-progress', { headers: runScope(run) });
           if (now.running) progress(run, now.done ?? 0, now.total ?? 0, !!now.queued);
         } catch {
           // The next poll tries again; the ranking itself reports a real failure.
         }
       }, POLL_MS);
   try {
-    const { leftOut: notes, ...result } = await post<RankReply>(
+    const {
+      leftOut: notes,
+      kept,
+      ...result
+    } = await post<RankReply>(
       '/api/rank-alternates',
       { phase, remaining: true, hunting: true },
       true,
@@ -129,33 +156,48 @@ export async function startRank(): Promise<void> {
     clearInterval(poll);
     rankRun.current = null;
     rankLive.value = '';
-    if (currentProfile.id !== profileId) return;
+    if (currentProfile.id !== profileId) {
+      // Finished while another profile is open: stored with its own, and said so here.
+      const what = kept
+        ? KEPT_MESSAGE
+        : result.ranking.stopped && !result.ranking.candidates.length
+          ? NONE_MESSAGE
+          : rankedMessage(result.ranking, cancelled);
+      const message = `Ranking for ${run.profileName} finished. ${what}`;
+      announce(message);
+      toast(message);
+      return;
+    }
     // Cancelled before a single alternate was checked: nothing was stored, and the ranking the
     // profile had is still the one shown.
     if (result.ranking.stopped && !result.ranking.candidates.length) {
       render();
-      const message = 'Ranking cancelled before any alternate was checked.';
+      const message = NONE_MESSAGE;
       announce(message);
       toast(message);
       return;
     }
     setPayoff(result);
-    if (cancelled) cancelledRankings.add(result.ranking);
+    if (cancelled && !kept) cancelledRankings.add(result.ranking);
     rankLeftOut.value = notes?.length ? { payoff: result, notes } : null;
-    const message = rankedMessage(result.ranking, cancelled);
+    const message = kept ? KEPT_MESSAGE : rankedMessage(result.ranking, cancelled);
     const elsewhere = !panelShown();
     // ADA speaks of it when the user is not already looking at it.
     rankDone = elsewhere
       ? {
           profileId,
-          partial: !!result.ranking.stopped,
+          partial: !kept && !!result.ranking.stopped,
           checked: result.ranking.candidates.length,
           total: result.ranking.total,
         }
       : null;
     render();
     announce([message, ...(notes ?? [])].join(' '));
-    toast(message, false, elsewhere ? { label: 'View ranking', run: showRanking } : null);
+    toast(
+      message,
+      false,
+      elsewhere ? { label: 'View ranking', run: showRanking, shortcut: false } : null,
+    );
   } catch (error) {
     clearInterval(poll);
     rankRun.current = null;
@@ -177,7 +219,17 @@ export async function cancelRank(): Promise<void> {
   rankAbort?.abort();
   if (!browserMode) {
     try {
-      await post('/api/rank-cancel', {});
+      // To the ranking's own profile, which may not be the one open now.
+      const reply = await post<{ cancelled: boolean }>(
+        '/api/rank-cancel',
+        {},
+        { save: run.saveId, profile: run.profileId },
+      );
+      // Nothing was running there (it just finished): the reply to the ranking is on its way.
+      if (!reply.cancelled && rankRun.current === run) {
+        run.cancelling = false;
+        say(run, Date.now(), true);
+      }
     } catch {
       // The ranking carries on and finishes in full; nothing was lost.
       run.cancelling = false;

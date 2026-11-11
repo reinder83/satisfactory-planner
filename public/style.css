@@ -2829,6 +2829,14 @@ p.eyebrow {
 .payoff-run .btn {
   min-height: 36px;
 }
+@media (pointer: coarse) {
+  .payoff-run .btn {
+    min-height: 44px;
+  }
+}
+.payoff h2:focus {
+  outline: none;
+}
 .payoff-run p.small {
   margin: 8px 0 0;
 }

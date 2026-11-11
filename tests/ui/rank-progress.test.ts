@@ -2,8 +2,10 @@
 // #1332): ui/plan/PayoffPanel.vue on the Docker edition's requests (the server's progress poll
 // and cancel route), over app/rank-job.ts, which outlives the panel.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test, vi } from 'vitest';
+import { toastShortcut } from '../../public/app/api.ts';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { rankRun } from '../../public/app/ui/plan/rank-state.ts';
 import { setPayoff } from '../../public/app/session.ts';
@@ -47,21 +49,35 @@ const ranked = (checked: number, stopped: boolean): StoredPayoff => ({
 function server() {
   const state = {
     calls: [] as string[],
+    requests: [] as { path: string; profile: string; save: string }[],
+    // What Cancel answers: the partial ranking by default; null for "nothing was running".
+    cancelReply: undefined as StoredPayoff | null | undefined,
     progress: { running: true, queued: false, done: 0, total: 58 } as Record<string, unknown>,
     finish: (_reply: StoredPayoff) => {},
     partial: ranked(3, true),
   };
-  globalThis.fetch = async (input: RequestInfo | URL) => {
+  // The ranking runs for profile p of save s, as on the server, whose routes answer for the
+  // profile the request's headers name.
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     state.calls.push(path);
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    const mine = headers['X-Profile-Id'] === 'p';
+    state.requests.push({
+      path,
+      profile: headers['X-Profile-Id'] ?? '',
+      save: headers['X-Save-Id'] ?? '',
+    });
     const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
     if (path.startsWith('/api/rank-alternates'))
       return new Promise<Response>(resolve => {
         state.finish = result => resolve(reply(result));
       });
-    if (path.startsWith('/api/rank-progress')) return reply(state.progress);
+    if (path.startsWith('/api/rank-progress'))
+      return reply(mine ? state.progress : { running: false });
     if (path.startsWith('/api/rank-cancel')) {
-      state.finish(state.partial);
+      if (!mine || state.cancelReply === null) return reply({ cancelled: false });
+      state.finish(state.cancelReply ?? state.partial);
       return reply({ cancelled: true });
     }
     return new Response(JSON.stringify({ error: 'unexpected ' + path }), { status: 500 });
@@ -242,4 +258,110 @@ test('leaving the page keeps the ranking going; coming back shows it, and finish
   await nextTick();
   assert.equal($$('[data-payoff-row]').length, 58);
   assert.notEqual(adaCurrent()?.id, 'rank-done');
+});
+
+// The review of #1363.
+const scopes = (state: ReturnType<typeof server>, path: string) =>
+  state.requests.filter(r => r.path.startsWith(path)).map(r => r.profile);
+
+test('Cancel after a complete ranking keeps it, and the toast says so', async () => {
+  const state = server();
+  const complete = ranked(58, false);
+  state.cancelReply = { ...complete, kept: true } as StoredPayoff;
+  setPayoff(complete);
+  render();
+  await nextTick();
+  $('[data-rank-alternates]')!.click();
+  await settle();
+  state.progress = { running: true, queued: false, done: 4, total: 58 };
+  await poll();
+  $<HTMLButtonElement>('[data-rank-cancel]')!.click();
+  await settle();
+  assert.equal($$('[data-payoff-row]').length, 58, 'the complete ranking is shown');
+  assert.ok(!$('[data-payoff-partial]'), 'not marked partial');
+  assert.ok(!$('[data-payoff-stopped]'));
+  assert.match($('#toast')!.textContent!, /^Cancelled: your previous complete ranking is kept./);
+});
+
+test('the progress poll and Cancel go to the profile the ranking runs for, after another is opened', async () => {
+  const state = server();
+  open({
+    name: 'Alpha',
+    calculated: structuredClone(generated) as StoredCalculatedPlan,
+    workspace: { catalog: catalog() },
+  });
+  render();
+  $('[data-rank-alternates]')!.click();
+  await settle();
+  // Another profile is opened in the middle of it.
+  open({
+    name: 'Beta',
+    profileId: 'q',
+    calculated: structuredClone(generated) as StoredCalculatedPlan,
+    workspace: { catalog: catalog() },
+  });
+  render();
+  await nextTick();
+  state.progress = { running: true, queued: false, done: 20, total: 58 };
+  await poll();
+  assert.equal(label(), 'Checking 20 of 58 alternates…', 'progress still moves');
+  assert.deepEqual([...new Set(scopes(state, '/api/rank-progress'))], ['p']);
+  $<HTMLButtonElement>('[data-rank-cancel]')!.click();
+  await settle();
+  assert.deepEqual(scopes(state, '/api/rank-cancel'), ['p'], 'Cancel names the ranking’s profile');
+  assert.equal(state.requests.find(r => r.path === '/api/rank-cancel')!.save, 's');
+  assert.equal(rankRun.current, null, 'the ranking was stopped');
+  // The user is told it finished, for the profile it was for.
+  assert.match($('#toast')!.textContent!, /^Ranking for Alpha finished\. Ranking cancelled/);
+  assert.ok(!$('#toast .toast-action'));
+});
+
+test('Cancel with nothing left to cancel drops the "Cancelling" label', async () => {
+  const state = server();
+  state.cancelReply = null;
+  $('[data-rank-alternates]')!.click();
+  await settle();
+  state.progress = { running: true, queued: false, done: 5, total: 58 };
+  await poll();
+  $<HTMLButtonElement>('[data-rank-cancel]')!.click();
+  await settle();
+  assert.equal(label(), 'Checking 5 of 58 alternates…');
+  assert.equal($('[data-rank-cancel]')!.getAttribute('aria-disabled'), null);
+  // Let it end, so the next test starts a ranking of its own.
+  state.finish(ranked(58, false));
+  await settle();
+});
+
+test('the finished-ranking toast leaves Ctrl+Z to an Undo, and View ranking moves focus to the ranking', async () => {
+  const state = server();
+  $('[data-rank-alternates]')!.click();
+  await settle();
+  go('factories');
+  render();
+  await nextTick();
+  state.finish(ranked(58, false));
+  await settle();
+  const action = $<HTMLButtonElement>('#toast .toast-action')!;
+  assert.ok(action);
+  assert.equal(action.getAttribute('aria-keyshortcuts'), null);
+  assert.ok(!$('#toast .toast-key'), 'no key is promised');
+  const key = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true });
+  toastShortcut(key);
+  assert.equal(key.defaultPrevented, false, 'Ctrl+Z is left alone');
+  assert.ok($('#toast')!.classList.contains('show'));
+  action.click();
+  // The router is not running here, so the page is opened by hand, as navigate('plan') would.
+  go('plan');
+  render();
+  await vi.advanceTimersByTimeAsync(300);
+  await nextTick();
+  assert.equal(document.activeElement, $('[data-payoff-heading]'));
+});
+
+test('Cancel is at least 44 px tall on a touch screen', () => {
+  const css = readFileSync('public/style.css', 'utf8').replaceAll('\r\n', '\n');
+  assert.match(
+    css,
+    /@media \(pointer: coarse\) \{\n  \.payoff-run \.btn \{\n    min-height: 44px;/,
+  );
 });

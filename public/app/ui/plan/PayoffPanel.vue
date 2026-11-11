@@ -160,7 +160,7 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
 <template>
   <section v-if="view" class="panel payoff" data-payoff>
     <div class="section-head">
-      <h2>Best next hard drive</h2>
+      <h2 tabindex="-1" data-payoff-heading>Best next hard drive</h2>
       <button
         class="btn"
         data-rank-alternates

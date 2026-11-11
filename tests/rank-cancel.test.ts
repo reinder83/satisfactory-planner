@@ -10,13 +10,18 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
 import { calculate, rankAlternates, rankAlternatesSteps } from '../planner.ts';
+import { keptRanking } from '../public/state.ts';
 import { createBrowserApi, workerJobs, type CalculatorWorker } from '../public/browser-api.ts';
 import { seedLegacy } from './helpers/seed.ts';
 import type {
+  AlternatePayoff,
   AlternateRanking,
   BrowserWorkspace,
   Catalog,
   ContextReply,
+  RankReply,
+  StageKey,
+  StoredCalculatedPlan,
   StoredPayoff,
 } from '../public/types/index.ts';
 
@@ -218,4 +223,167 @@ test('the server ranking thread reports progress to its handle and honours a can
   const ranking = await running;
   assert.equal(ranking.stopped, true);
   assert.ok(ranking.candidates.length < ranking.total);
+});
+
+// A cancelled ranking does not replace a complete one (#1363 review).
+const stored = (stopped: boolean, checked: number, phases?: StageKey[]): StoredPayoff => ({
+  planCreatedAt: 'plan-1',
+  rankedAt: '2026-11-11T12:00:00Z',
+  ranking: {
+    phase: '3',
+    ...(phases ? { phases } : {}),
+    base: { buildings: 1, rawTotal: 1, requiredMW: 1, hours: 1 },
+    candidates: Array.from({ length: checked }, () => ({}) as AlternatePayoff),
+    total: 9,
+    stopped,
+    elapsedMs: 1,
+  },
+});
+
+test('keptRanking keeps a complete ranking of the same plan and phases against a cancelled one only', () => {
+  const plan = { createdAt: 'plan-1' } as StoredCalculatedPlan;
+  const profile = (payoff?: StoredPayoff) => ({ plan, payoff });
+  const complete = profile(stored(false, 9));
+  const cancelled = stored(true, 2).ranking;
+  assert.equal(keptRanking(complete, cancelled, true), complete.payoff);
+  // Not cancelled (the time limit), or not cut short: replaced as before.
+  assert.equal(keptRanking(complete, cancelled, false), null);
+  assert.equal(keptRanking(complete, stored(false, 9).ranking, true), null);
+  // A partial one stored before is replaced by the new partial one.
+  assert.equal(keptRanking(profile(stored(true, 5)), cancelled, true), null);
+  // None, one for another plan, or one over other phases is replaced.
+  assert.equal(keptRanking(profile(), cancelled, true), null);
+  assert.equal(
+    keptRanking({ plan, payoff: { ...stored(false, 9), planCreatedAt: 'old' } }, cancelled, true),
+    null,
+  );
+  assert.equal(keptRanking(profile(stored(false, 9, ['3', '4'])), cancelled, true), null);
+  const same = profile(stored(false, 9, ['3']));
+  assert.equal(keptRanking(same, cancelled, true), same.payoff);
+});
+
+test('the browser edition keeps a complete ranking when a re-rank is cancelled, and replaces a partial one', async () => {
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
+  const store = {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      const copy = structuredClone(data);
+      if (!change) return copy as T;
+      const result = change(copy);
+      data = copy;
+      return structuredClone(result);
+    },
+  };
+  let checked = Infinity;
+  const api = createBrowserApi(
+    store,
+    calculate,
+    {} as Catalog,
+    (planSettings, phase, _progress, scope) => {
+      let asked = 0;
+      return rankAlternates(planSettings, { phase, ...scope, shouldStop: () => ++asked > checked });
+    },
+  );
+  const post = (stop?: AbortSignal) =>
+    api('/api/rank-alternates', { body: JSON.stringify(RANK), stop }) as Promise<RankReply>;
+  const context = async () => ((await api('/api/context')) as ContextReply).payoff;
+  await api('/api/profiles', {
+    body: JSON.stringify({ saveName: 'Keep', name: 'All', settings: SETTINGS }),
+  });
+  const complete = await post();
+  assert.equal(complete.ranking.stopped, false);
+  // Re-rank, cancelled after 2 alternates: the reply is the complete ranking, which stays stored.
+  checked = 2;
+  const controller = new AbortController();
+  controller.abort();
+  const again = await post(controller.signal);
+  assert.equal(again.kept, true);
+  assert.equal(again.ranking.stopped, false);
+  assert.equal(again.rankedAt, complete.rankedAt);
+  assert.deepEqual(await context(), complete);
+  // The time limit (no cancel) still replaces it, as before.
+  const limited = await post();
+  assert.equal(limited.kept, undefined);
+  assert.equal(limited.ranking.stopped, true);
+  // A partial ranking stored before is replaced by a cancelled one.
+  checked = 3;
+  const next = await post(controller.signal);
+  assert.equal(next.kept, undefined);
+  assert.equal(next.ranking.candidates.length, 3);
+  assert.deepEqual(await context(), next);
+});
+
+// A server on a temporary directory, with a POST helper that sends the CSRF header.
+async function withServer(run: (url: string, post: Poster) => Promise<void>) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-rank-extra-'));
+  await seedLegacy(dir);
+  const server = await createApp({ dataDir: dir, password: '' });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+  const post: Poster = (endpoint, body, headers = {}) =>
+    fetch(url + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
+      body: JSON.stringify(body),
+    });
+  try {
+    await run(url, post);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+type Poster = (
+  endpoint: string,
+  body: unknown,
+  headers?: Record<string, string>,
+) => Promise<Response>;
+const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+test('the server keeps a complete ranking when a re-rank is cancelled', async () => {
+  await withServer(async (url, post) => {
+    const created = await (
+      await post('/api/profiles', { saveName: 'Keep', name: 'All', settings: SETTINGS })
+    ).json();
+    const headers = { 'X-Save-Id': created.saveId, 'X-Profile-Id': created.profileId };
+    const complete = (await (
+      await post('/api/rank-alternates', RANK, headers)
+    ).json()) as RankReply;
+    assert.equal(complete.ranking.stopped, false);
+    const again = post('/api/rank-alternates', RANK, headers);
+    for (let i = 0; i < 200; i++) {
+      const seen = await (await fetch(url + '/api/rank-progress', { headers })).json();
+      if (seen.running && seen.done >= 1) break;
+      await pause(50);
+    }
+    await post('/api/rank-cancel', {}, headers);
+    const reply = (await (await again).json()) as RankReply;
+    assert.equal(reply.kept, true);
+    assert.equal(reply.ranking.stopped, false);
+    assert.equal(reply.rankedAt, complete.rankedAt);
+    const context = (await (await fetch(url + '/api/context', { headers })).json()) as ContextReply;
+    assert.deepEqual(context.payoff, complete, 'the complete ranking is still stored');
+  });
+});
+
+test('the progress and cancel routes answer for the profile they name, not for another', async () => {
+  await withServer(async (url, post) => {
+    const first = await (
+      await post('/api/profiles', { saveName: 'Scope', name: 'One', settings: SETTINGS })
+    ).json();
+    const second = await (
+      await post('/api/profiles', { saveId: first.saveId, name: 'Two', settings: SETTINGS })
+    ).json();
+    const one = { 'X-Save-Id': first.saveId, 'X-Profile-Id': first.profileId };
+    const two = { 'X-Save-Id': first.saveId, 'X-Profile-Id': second.profileId };
+    const ranking = post('/api/rank-alternates', RANK, one);
+    const progress = async (headers: Record<string, string>) =>
+      (await fetch(url + '/api/rank-progress', { headers })).json();
+    for (let i = 0; i < 200 && !(await progress(one)).running; i++) await pause(50);
+    assert.equal((await progress(one)).running, true);
+    assert.deepEqual(await progress(two), { running: false });
+    assert.deepEqual(await (await post('/api/rank-cancel', {}, two)).json(), { cancelled: false });
+    assert.equal((await progress(one)).running, true, 'the other profile cancelled nothing');
+    assert.deepEqual(await (await post('/api/rank-cancel', {}, one)).json(), { cancelled: true });
+    await ranking;
+  });
 });

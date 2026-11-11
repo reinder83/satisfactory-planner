@@ -37,6 +37,7 @@ import {
   restoreFields,
   renameOfferFields,
   currentPayoff,
+  keptRanking,
   phaseProgress,
   rankScope,
   RANK_BUDGET_MS,
@@ -417,10 +418,17 @@ export function createBrowserApi(
         rankedAt: new Date().toISOString(),
         ranking,
       } satisfies RankReply;
+    const cancelled = !!options.stop?.aborted;
     return store.transaction((data): RankReply => {
       const { profile } = scope(data, url, headers);
       if (profile.plan?.createdAt !== plan.createdAt)
         throw Error('The profile changed while ranking. Rank again.');
+      // A cancelled ranking does not replace a complete one the profile already has (#1332).
+      const kept = keptRanking(profile, ranking, cancelled);
+      if (kept) {
+        const reply = { ...kept, kept: true };
+        return known.stale.length ? { ...reply, leftOut: known.stale } : reply;
+      }
       profile.payoff = {
         planCreatedAt: plan.createdAt,
         rankedAt: new Date().toISOString(),

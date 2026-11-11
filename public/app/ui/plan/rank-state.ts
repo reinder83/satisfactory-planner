@@ -12,7 +12,12 @@ export const RANK_LIMIT = `${RANK_BUDGET_MS / 60000} minutes`;
 
 // A ranking on its way: the profile and phase it was started for, and how far it is.
 export interface RankRun {
+  // The save and profile it was started for (and the profile's name, for the toast that says it
+  // finished elsewhere): its progress poll and its Cancel name them, so they reach this ranking
+  // after the user opens another profile (#1363).
+  saveId: string;
   profileId: string;
+  profileName: string;
   phase: StageKey;
   done: number;
   total: number;
