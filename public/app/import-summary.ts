@@ -143,7 +143,7 @@ export function savesImportQuestion(
     ? `the save “${ownName(0)}” with ${plural(profiles.length, 'profile')}`
     : `${plural(saves.length, 'save')} with ${plural(profiles.length, 'profile')}`;
   const own = workspace.saves.reduce((sum, save) => sum + save.profiles.length, 0);
-  const copies = one ? `a new copy, “${saves[0]!.name}”,` : 'new copies named after the file,';
+  const copies = one ? `a new copy, “${saves[0]!.name}”,` : 'new copies,';
   return {
     title: one ? 'Import this save?' : 'Import these saves?',
     body: `${context.fileName} holds ${holds}${exported ? ', exported ' + exported : ''}:`,

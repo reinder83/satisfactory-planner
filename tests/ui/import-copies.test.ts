@@ -1,5 +1,6 @@
-// #1052: Backup → Import saves keeps the open profile open, names each copy after the file and
-// its export date, and Saves & profiles then says what was imported and offers to open each copy.
+// #1052, #1324: Backup → Import saves keeps the open profile open, names each copy after the
+// save (numbered only where the name is taken), shows the file and its export date as secondary
+// text, and Saves & profiles then says what was imported and offers to open each copy.
 // The stand-in server below moves the active save to the import, as releases before #1052 did,
 // so the test shows the page stays on its profile whatever the server remembers.
 import assert from 'node:assert/strict';
@@ -68,10 +69,12 @@ const friendsExport = (exportedAt = '2026-10-04T12:05:00.000Z') => ({
 // The requests the page sent, and the names each import carried.
 let sent: string[];
 let importedNames: string[][];
+let importedFroms: unknown[];
 let summary: WorkspaceSummary;
 function server() {
   sent = [];
   importedNames = [];
+  importedFroms = [];
   summary = structuredClone(workspace);
   let next = 0;
   globalThis.fetch = async (path: RequestInfo | URL, options: RequestInit = {}) => {
@@ -81,14 +84,18 @@ function server() {
     if (route === '/progression.json')
       return new Response(fs.readFileSync('public/progression.json', 'utf8'));
     if (route === '/api/import-saves') {
-      const body = JSON.parse(String(options.body)) as { saves: { name: string }[] };
+      const body = JSON.parse(String(options.body)) as {
+        saves: { name: string; importedFrom?: { file?: string; exportedAt?: string } }[];
+      };
       importedNames.push(body.saves.map(save => save.name));
+      importedFroms.push(...body.saves.map(save => save.importedFrom));
       for (const save of body.saves) {
         const id = 'imported-' + ++next;
         summary.saves.push({
           id,
           name: save.name,
           activeProfile: id + '-p',
+          ...(save.importedFrom ? { importedFrom: save.importedFrom } : {}),
           profiles: [{ id: id + '-p', name: 'Main', kind: 'calculated', completed: 9, phase: '2' }],
         });
         // As before #1052: the server remembers the import as the active save.
@@ -150,12 +157,9 @@ test('an import keeps the open profile and says so, with a way to open the copy'
   assert.equal(currentProfile.id, 'p');
   assert.ok(!sent.some(route => route.startsWith('/api/context')), 'nothing else was opened');
   assert.ok(!sent.includes('/api/select'), 'nothing else was made active');
-  // The copy is named after the file and its export date.
-  assert.equal(importedNames.length, 1);
-  assert.match(
-    importedNames[0]![0]!,
-    /^<x-evil.* \(from anna\.json, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$/,
-  );
+  // The copy is named after the save, not the file; the file and date are kept beside it.
+  assert.deepEqual(importedNames, [[evil]]);
+  assert.deepEqual(importedFroms, [{ file: 'anna.json', exportedAt: '2026-10-04T12:05:00.000Z' }]);
   // Saves & profiles says what happened.
   assert.equal(view, 'profiles');
   assert.match($('#toast')!.textContent!, /^Imported a copy\. You are still on “Mine”\./);
@@ -175,6 +179,7 @@ test('an import keeps the open profile and says so, with a way to open the copy'
   // Open takes the user there, through the usual open path.
   const openButton = $<HTMLButtonElement>('[data-open-imported="imported-1"]')!;
   assert.match(openButton.textContent!, /^\s*Open “<x-evil/);
+  assert.doesNotMatch(openButton.textContent!, /anna\.json/, 'the file is not the title');
   openButton.click();
   await settle();
   setView(view);
@@ -185,19 +190,31 @@ test('an import keeps the open profile and says so, with a way to open the copy'
   assert.deepEqual(importedSaves, [], 'the notice is said once');
 });
 
-test('two imports of saves with the same name read differently', async () => {
+test('two imports of saves with the same name are numbered, and the page shows where each came from', async () => {
   await importFile(friendsExport(), 'satisfactory-full-saves.json');
   await importFile(friendsExport('2026-10-05T18:30:00.000Z'), 'satisfactory-full-saves.json');
   await importFile(friendsExport('2026-10-05T18:30:00.000Z'), 'satisfactory-full-saves.json');
   const names = importedNames.map(names => names[0]!);
-  assert.equal(new Set(names).size, 3, names.join(' | '));
-  assert.ok(names[2]!.endsWith(' · 2'), 'the same file twice is numbered');
+  assert.deepEqual(names, [evil, evil + ' (2)', evil + ' (3)']);
   // The page lists each one under its own name.
   go('profiles');
   render();
   await settle();
   const headings = $$('#main .save-panel h2').map(h2 => h2.textContent!.trim());
   for (const name of names) assert.ok(headings.some(heading => heading.includes(name.slice(-20))));
+  for (const heading of headings) assert.doesNotMatch(heading, /satisfactory-full-saves/);
+  // The file and export date are secondary text under the title (data-imported-from).
+  const where = $$('[data-imported-from]').map(p => p.textContent!.trim());
+  assert.equal(where.length, 3);
+  assert.match(
+    where[0]!,
+    /^Imported from satisfactory-full-saves\.json, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/,
+  );
+  assert.equal(
+    document.querySelector('[data-imported-from="s"]'),
+    null,
+    'a save made here has none',
+  );
   assert.equal(currentSave.id, 's');
 });
 
@@ -237,7 +254,7 @@ test('the import asks with what the file holds, and Cancel changes nothing', asy
   assert.match(shown.list, /^Main: Phase 2, \d+ of \d+ steps done in all phases \+ 1 other tick$/);
   assert.match(
     shown.note,
-    /^Importing adds it as a new copy, “<x-evil.* \(from anna\.json, exported .*\)”, next to your 2 profiles\. Nothing you have is replaced, and you stay on the profile you have open\.$/,
+    /^Importing adds it as a new copy, “<x-evil[^”]*”, next to your 2 profiles\. Nothing you have is replaced, and you stay on the profile you have open\.$/,
   );
   assert.equal(document.querySelector('x-evil'), null, 'the names in the question are text');
   assert.deepEqual(sent, [], 'nothing was sent');

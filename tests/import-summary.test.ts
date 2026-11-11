@@ -114,7 +114,7 @@ test('a save export with one save lists its profiles, their phase and steps done
   ]);
   assert.equal(
     question.note,
-    `Importing adds it as a new copy, “Coop world (from anna.json, exported ${localStamp(data.exportedAt)})”, next to your 4 profiles. Nothing you have is replaced, and you stay on the profile you have open.`,
+    `Importing adds it as a new copy, “Coop world”, next to your 4 profiles. Nothing you have is replaced, and you stay on the profile you have open.`,
   );
   assert.equal(question.confirmLabel, 'Import saves');
   assert.equal(question.danger, undefined, 'adding copies is not destructive');
@@ -133,17 +133,14 @@ test('a save export with several saves names each profile with its save', () => 
     `North · Main: Phase 3, 1 of ${total} steps done in all phases`,
     `South · Main: Phase 3, 0 of ${total} steps done in all phases`,
   ]);
-  assert.match(
-    question.note!,
-    /^Importing adds them as new copies named after the file, next to your 1 profile\./,
-  );
+  assert.match(question.note!, /^Importing adds them as new copies, next to your 1 profile\./);
 });
 
 test('into an empty workspace the question says the copy opens', () => {
   const question = savesImportQuestion(oneSave(), workspaceOf(), context());
   assert.match(
     question.note!,
-    /^Importing adds it as a new copy, “Coop world \(from anna\.json, exported .*\)”, and opens it, since you have no saves yet\.$/,
+    /^Importing adds it as a new copy, “Coop world”, and opens it, since you have no saves yet\.$/,
   );
 });
 

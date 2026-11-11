@@ -1,5 +1,6 @@
-// #1052: importing a full-save file (a friend's export or share) adds copies named after the file
-// and its export date (labelImport, which the Backup page runs before either edition imports),
+// #1052, #1324: importing a full-save file (a friend's export or share) adds copies under the
+// saves' own names, numbered only where a name is taken, with the file and its export date kept
+// as `importedFrom` (labelImport, which the Backup page runs before either edition imports),
 // and leaves the user on the save they had open (activeAfterImport, in both editions), so their
 // next ticks never land in someone else's copy. Old exports still import, labelled the same way.
 import { test } from 'node:test';
@@ -21,12 +22,6 @@ const read = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf
 const firstExport = () => JSON.parse(read('./fixtures/export-2026-09-13.json'));
 const recipes: Recipe[] = JSON.parse(read('../recipes.json')).recipes;
 const migration = { recipes, pureLimits: catalog().pureLimits };
-// The local time as labelImport writes it, so the test holds in any time zone.
-const local = (iso: string) => {
-  const date = new Date(iso);
-  const two = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
-};
 const exportOf = (names: string[], exportedAt = '2026-10-04T12:05:00.000Z') => ({
   format: 'satisfactory-planner-saves',
   version: 1,
@@ -35,48 +30,69 @@ const exportOf = (names: string[], exportedAt = '2026-10-04T12:05:00.000Z') => (
 });
 const namesOf = (data: unknown) => (data as { saves: { name: string }[] }).saves.map(s => s.name);
 
-test('labelImport names each copy after its file and export date', () => {
-  const at = local('2026-10-04T12:05:00.000Z');
+const fromOf = (data: unknown) =>
+  (data as { saves: { importedFrom?: unknown }[] }).saves.map(s => s.importedFrom);
+const AT = '2026-10-04T12:05:00.000Z';
+
+test('labelImport keeps each save its own name and records the file and export date', () => {
   assert.deepEqual(namesOf(labelImport(exportOf(['Coop world', '  Spaced  ']), 'anna.json')), [
-    `Coop world (from anna.json, exported ${at})`,
-    `Spaced (from anna.json, exported ${at})`,
+    'Coop world',
+    'Spaced',
   ]);
-  // Without a usable date or file name, what is known.
-  assert.deepEqual(namesOf(labelImport(exportOf(['W'], 'not a date'), 'anna.json')), [
-    'W (from anna.json)',
+  assert.deepEqual(fromOf(labelImport(exportOf(['W']), 'anna.json')), [
+    { file: 'anna.json', exportedAt: AT },
   ]);
-  assert.deepEqual(namesOf(labelImport(exportOf(['W'], 'not a date'), '  ')), ['W (imported)']);
+  // Without a usable date or file name, what is known; with neither, nothing.
+  assert.deepEqual(fromOf(labelImport(exportOf(['W'], 'not a date'), 'anna.json')), [
+    { file: 'anna.json' },
+  ]);
+  assert.deepEqual(fromOf(labelImport(exportOf(['W']), '  ')), [{ exportedAt: AT }]);
+  assert.deepEqual(fromOf(labelImport(exportOf(['W'], 'not a date'), '  ')), [undefined]);
+  // A source the file itself carries (it was an import there) is replaced by this file.
+  const twice = exportOf(['W']);
+  (twice.saves[0] as Record<string, unknown>).importedFrom = { file: 'older.json' };
+  assert.deepEqual(fromOf(labelImport(twice, 'anna.json')), [
+    { file: 'anna.json', exportedAt: AT },
+  ]);
 });
 
-test('two imports of saves with the same name read differently', () => {
+test('validateTransfer keeps only the usable parts of importedFrom', () => {
+  const keep = (importedFrom: unknown) =>
+    (
+      validateTransfer({
+        ...firstExport(),
+        saves: [{ ...firstExport().saves[0], importedFrom }],
+      }).saves[0] as { importedFrom?: unknown }
+    ).importedFrom;
+  assert.deepEqual(keep({ file: ' a.json ', exportedAt: AT, x: 1 }), {
+    file: 'a.json',
+    exportedAt: AT,
+  });
+  assert.deepEqual(keep({ file: 'a.json', exportedAt: 'soon' }), { file: 'a.json' });
+  assert.deepEqual(keep({ file: 'f'.repeat(300) }), { file: 'f'.repeat(120) });
+  for (const bad of [undefined, null, 'a.json', [], {}, { file: 7 }])
+    assert.equal(keep(bad), undefined);
+});
+
+test('a name a save already has gets a number, a free one is left alone', () => {
   const mine = 'Coop world';
   const first = namesOf(labelImport(exportOf([mine]), 'satisfactory-full-saves.json', [mine]));
+  assert.deepEqual(first, [mine + ' (2)']);
   const later = namesOf(
-    labelImport(exportOf([mine], '2026-10-05T18:30:00.000Z'), 'satisfactory-full-saves.json', [
-      mine,
-      ...first,
-    ]),
-  );
-  assert.notEqual(first[0], mine);
-  assert.notEqual(later[0], first[0], 'another export date');
-  // The same file twice, or two saves of one file with one name, are numbered.
-  const again = namesOf(
     labelImport(exportOf([mine]), 'satisfactory-full-saves.json', [mine, ...first]),
   );
-  assert.equal(again[0], first[0] + ' · 2');
-  const twins = namesOf(labelImport(exportOf([mine, mine]), 'f.json'));
-  assert.equal(twins[1], twins[0] + ' · 2');
+  assert.deepEqual(later, [mine + ' (3)']);
+  // Two saves of one file with one name are numbered too.
+  assert.deepEqual(namesOf(labelImport(exportOf([mine, mine]), 'f.json')), [mine, mine + ' (2)']);
+  assert.deepEqual(namesOf(labelImport(exportOf(['Other']), 'f.json', [mine])), ['Other']);
 });
 
-test('a label never makes a name longer than 80 characters, and keeps the file and date', () => {
+test('a number never makes a name longer than 80 characters', () => {
   const long = 'L'.repeat(80);
-  const file = 'a-very-long-file-name-somebody-sent-over-chat.json';
-  const [name] = namesOf(labelImport(exportOf([long]), file));
-  assert.ok(name!.length <= 80, name);
-  assert.match(name!, /^L+… \(from a-very-long-file-name-somebo/);
-  assert.match(name!, /…, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$/);
-  const [numbered] = namesOf(labelImport(exportOf([long]), file, [name!]));
-  assert.ok(numbered!.length <= 80 && numbered!.endsWith(' · 2'), numbered);
+  const [name] = namesOf(labelImport(exportOf([long]), 'f.json'));
+  assert.equal(name, long, 'a name of 80 characters stays whole when it is free');
+  const [numbered] = namesOf(labelImport(exportOf([long]), 'f.json', [name!]));
+  assert.ok(numbered!.length <= 80 && numbered!.endsWith('… (2)'), numbered);
   // Each label passes the import's own name rule.
   for (const label of [name!, numbered!]) {
     const checked = validateTransfer({
@@ -147,7 +163,9 @@ test('Docker edition: an import keeps the open save, and an old export round-tri
     let ws = await workspace();
     const own = ws.saves[0]!;
     assert.equal(ws.activeSave, own.id);
-    assert.match(own.name, /^My Satisfactory save \(from export-2026-09-13\.json, exported /);
+    assert.equal(own.name, 'My Satisfactory save', 'named by the save, not the file');
+    assert.equal(own.importedFrom?.file, 'export-2026-09-13.json');
+    assert.ok(own.importedFrom?.exportedAt, 'the export date is kept');
     // With a save open, a friend's copy of the same save arrives without moving anyone.
     const exported = await (await fetch(url + '/api/export-saves')).json();
     const friend = labelImport(
@@ -161,8 +179,8 @@ test('Docker edition: an import keeps the open save, and an old export round-tri
     assert.equal(ws.saves.length, 2);
     assert.equal(ws.activeSave, own.id, 'the open save stays the active one');
     const copy = ws.saves[1]!;
-    assert.notEqual(copy.name, own.name, 'the copy reads differently');
-    assert.match(copy.name, /\(from friend\.json, exported \d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$/);
+    assert.equal(copy.name, own.name + ' (2)', 'a clash gets a number');
+    assert.equal(copy.importedFrom?.file, 'friend.json');
     assert.equal(copy.profiles[0]!.name, own.profiles[0]!.name, 'its profiles keep their names');
     assert.equal(copy.profiles[0]!.completed, own.profiles[0]!.completed, 'with their progress');
   } finally {
@@ -199,8 +217,12 @@ test('Pages edition: an import keeps the open save, and an old export round-trip
   assert.equal(ws.saves.length, 2);
   assert.equal(data.activeSave, own.id, 'the open save stays the active one');
   assert.equal(ws.activeSave, own.id);
-  assert.notEqual(ws.saves[1]!.name, own.name);
-  assert.match(ws.saves[1]!.name, /\(from friend\.json, exported /);
+  assert.equal(own.name, 'My Satisfactory save', 'named by the save, not the file');
+  assert.equal(own.importedFrom?.file, 'export-2026-09-13.json');
+  assert.ok(own.importedFrom?.exportedAt, 'the export date is kept');
+  assert.equal(ws.saves[1]!.name, own.name + ' (2)', 'a clash gets a number');
+  assert.equal(ws.saves[1]!.importedFrom?.file, 'friend.json');
+  assert.equal(data.saves[1]!.importedFrom?.file, 'friend.json', 'stored on the save');
   assert.deepEqual(
     data.saves[1]!.profiles[0]!.state.checks,
     data.saves[0]!.profiles[0]!.state.checks,
