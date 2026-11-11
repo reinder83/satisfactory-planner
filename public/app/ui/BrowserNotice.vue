@@ -3,14 +3,15 @@
      the saves (#1368) it says they may be cleared and how long ago the last full export was, in
      the same calm notice; with persistence kept or not yet known it is the plain reminder. -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount } from 'vue';
 import { workspace } from '../session.ts';
-import { persistence } from '../storage-persistence.ts';
+import { onPersistenceChange, persistence } from '../storage-persistence.ts';
 import { backupDays } from '../views/backup.ts';
-import { legacy } from './bridge.ts';
+import { invalidate, legacy } from './bridge.ts';
 
-const atRisk = computed(
-  () => persistence.value === 'not-kept' || persistence.value === 'unsupported',
+onBeforeUnmount(onPersistenceChange(invalidate));
+const atRisk = computed(() =>
+  legacy(() => persistence.value === 'not-kept' || persistence.value === 'unsupported'),
 );
 // "The last full export was 15 days ago", or that there is none, when the browser may clear.
 const exported = computed(() =>

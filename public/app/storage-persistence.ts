@@ -13,14 +13,35 @@
 //   - Every call is feature-checked and wrapped: a browser without navigator.storage, or with
 //     a persist()/persisted() that throws, leaves the state 'unsupported' and nothing else
 //     changes. The Docker edition never calls any of it (its saves live on the server).
-import { ref } from 'vue';
 import { browserMode } from '../browser-api.ts';
 
 // 'unknown' until persisted() answers, 'kept' when the browser will not clear the saves on its
 // own, 'not-kept' when it may, 'unsupported' when there is no API to ask (or it threw).
 export type Persistence = 'unknown' | 'kept' | 'not-kept' | 'unsupported';
 
-export const persistence = ref<Persistence>('unknown');
+// Plain state, not a Vue ref: this module is also loaded by the legacy test bundle, which has
+// no Vue. A change tells the listeners (BackupPage and BrowserNotice register the bridge's
+// invalidate), and they read the state inside legacy() so they redraw.
+let persistenceState: Persistence = 'unknown';
+const persistenceListeners = new Set<() => void>();
+export const persistence = {
+  get value(): Persistence {
+    return persistenceState;
+  },
+  set value(next: Persistence) {
+    if (next === persistenceState) return;
+    persistenceState = next;
+    for (const listener of persistenceListeners) listener();
+  },
+};
+
+// Calls listener whenever the state changes; returns the function that stops it.
+export function onPersistenceChange(listener: () => void): () => void {
+  persistenceListeners.add(listener);
+  return () => {
+    persistenceListeners.delete(listener);
+  };
+}
 
 export const ASKED_KEY = 'planner-persist-asked';
 

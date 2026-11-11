@@ -6,7 +6,7 @@
   #243); the server version points there where it used to be.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   labelImport,
@@ -41,7 +41,7 @@ import { backupAge, restoreMessage } from '../../views/backup.ts';
 import { backupQuestion, savesImportQuestion, WRONG_BACKUP_FORMAT } from '../../import-summary.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import ProgressMerge from '../backup/ProgressMerge.vue';
-import { keepSaves, persistence } from '../../storage-persistence.ts';
+import { keepSaves, onPersistenceChange, persistence } from '../../storage-persistence.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -233,10 +233,13 @@ async function persistStorage() {
     !granted,
   );
 }
-const kept = computed(() => persistence.value === 'kept');
+onBeforeUnmount(onPersistenceChange(invalidate));
+const kept = computed(() => legacy(() => persistence.value === 'kept'));
+// The browser said no: the button can ask again. With no API there is nothing to ask.
+const canAsk = computed(() => legacy(() => persistence.value === 'not-kept'));
 // The browser may clear the saves: it said no, or there is nothing to ask.
-const mayClear = computed(
-  () => persistence.value === 'not-kept' || persistence.value === 'unsupported',
+const mayClear = computed(() =>
+  legacy(() => persistence.value === 'not-kept' || persistence.value === 'unsupported'),
 );
 </script>
 
@@ -341,7 +344,7 @@ const mayClear = computed(
     <div v-else-if="mayClear" class="notice warn" data-persistence-status="may-clear">
       <b>Your browser may clear these saves.</b> Export a backup to be safe.
     </div>
-    <p v-if="persistence === 'not-kept'">
+    <p v-if="canAsk">
       <button type="button" class="btn" data-persist-storage @click="persistStorage">
         Keep my saves
       </button>
