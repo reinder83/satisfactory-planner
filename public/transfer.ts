@@ -9,6 +9,7 @@ import { listNames } from './wording.ts';
 import type {
   Handbook,
   ImportableSaveExport,
+  ImportedFrom,
   PlanGuide,
   Recipe,
   SavedState,
@@ -44,6 +45,7 @@ interface IncomingSave {
   name: unknown;
   activeProfile: unknown;
   profiles: unknown;
+  importedFrom?: unknown;
 }
 // Full-save export: a user's saves with their profiles, plans and progress, never accounts,
 // passwords or sessions. Written by /api/export-saves in server/save-routes.ts and
@@ -323,6 +325,7 @@ export function validateTransfer(data: unknown): Omit<ImportableSaveExport, 'exp
       name: title(save.name),
       activeProfile: save.activeProfile as string,
       profiles,
+      ...importedFromFields(save),
     };
   });
   return { format: transferFormat, version: 1, saves };
@@ -577,33 +580,28 @@ export function localStamp(iso: unknown) {
 // Shortens text to `max` characters with an ellipsis.
 const clip = (text: string, max: number) =>
   text.length <= max ? text : text.slice(0, Math.max(0, max - 1)).trimEnd() + '…';
-// The longest file name the label keeps whole.
-const LABEL_FILE_MAX = 32;
-
-// Names each save of a full-save file as a copy from that file (#1052), before the Backup page
-// imports it in either edition: "Coop world (from friend.json, exported 2026-10-04 14:05)", from
-// the file's name and its own `exportedAt`, so a copy is never mistaken for the user's own save
-// and two imports of saves with the same name read differently. A name the user's saves (`taken`)
-// or an earlier save of the file already has gets " · 2", " · 3" and so on. Every name stays
-// within the 80 characters a name may have: the save's own name is shortened first, then the
-// file's. Only the names change, and only where they are text: validateTransfer still checks
-// the rest, so a damaged file is refused exactly as before. Returns the data, changed in place.
+// Names each save of a full-save file for the copy it becomes, before the Backup page imports it
+// in either edition. A copy keeps the save's own name (#1324; #1052 first named it "Coop world
+// (from friend.json, exported 2026-10-04 14:05)", a title that truncated everywhere). Only a name
+// the user's saves (`taken`) or an earlier save of the file already has gets " (2)", " (3)" and
+// so on, within the 80 characters a name may have: the name is shortened first. The file's name
+// and its own `exportedAt` are kept as `importedFrom` on each save (the Saves & profiles card
+// shows it as secondary text), so a copy is still told apart from the user's own save. Only the
+// names and that field change, and only where they are text: validateTransfer still checks the
+// rest, so a damaged file is refused exactly as before. Returns the data, changed in place.
 export function labelImport(data: unknown, file: string, taken: string[] = []): unknown {
   if (!fields(data) || !Array.isArray(data.saves)) return data;
-  const exported = localStamp(data.exportedAt);
-  const source = clip(file.trim(), LABEL_FILE_MAX);
-  const detail = [source && 'from ' + source, exported && 'exported ' + exported]
-    .filter(Boolean)
-    .join(', ');
-  const suffix = ` (${detail || 'imported'})`;
+  const origin = importedFromOf(file, data.exportedAt);
   const used = new Set(taken);
   for (const save of data.saves as unknown[]) {
     if (!fields(save) || typeof save.name !== 'string' || !save.name.trim()) continue;
+    // A file's own record of an earlier import is not this copy's source.
+    delete save.importedFrom;
+    if (origin) save.importedFrom = { ...origin };
     const name = save.name.trim();
     let label = '';
     for (let copy = 1; !label || used.has(label); copy++) {
-      const end = suffix + (copy > 1 ? ' · ' + copy : '');
-      // The suffix is at most 72 characters (a file name of 32, a date, ' · 99').
+      const end = copy > 1 ? ` (${copy})` : '';
       label = clip(name, 80 - end.length) + end;
     }
     used.add(label);
@@ -611,3 +609,26 @@ export function labelImport(data: unknown, file: string, taken: string[] = []): 
   }
   return data;
 }
+
+// Where an imported save came from (#1324; ImportedFrom in types/workspace.ts): the file's name (up
+// to 120 characters) and its export time, each only when usable. Optional on a save, absent from
+// every save made another way and from every one stored before, so it needs no state version
+// (like renameOfferDismissed).
+const FILE_MAX = 120;
+function importedFromOf(file: unknown, exportedAt: unknown): ImportedFrom | undefined {
+  const name = typeof file === 'string' ? file.trim().slice(0, FILE_MAX) : '';
+  const at =
+    typeof exportedAt === 'string' && exportedAt.length <= 40 && localStamp(exportedAt)
+      ? exportedAt
+      : '';
+  return name || at
+    ? { ...(name ? { file: name } : {}), ...(at ? { exportedAt: at } : {}) }
+    : undefined;
+}
+// The `importedFrom` a save of a file carries, as validateTransfer keeps it: only usable parts.
+export const importedFromFields = (save: { importedFrom?: unknown }) => {
+  const from = save.importedFrom;
+  if (!fields(from)) return {};
+  const clean = importedFromOf(from.file, from.exportedAt);
+  return clean ? { importedFrom: clean } : {};
+};

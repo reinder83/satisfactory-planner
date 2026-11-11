@@ -20,6 +20,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
+import { localStamp } from '../../../transfer.ts';
 import {
   allowSwitch,
   downloadJson,
@@ -60,7 +61,7 @@ import {
   restoreQuestion,
   restoredText,
 } from '../../restore-version.ts';
-import type { ProfileSummary, WorkspaceSummary } from '../../../types/index.ts';
+import type { ProfileSummary, SaveSummary, WorkspaceSummary } from '../../../types/index.ts';
 
 onMounted(async () => {
   try {
@@ -73,6 +74,15 @@ onMounted(async () => {
 });
 // The notice about the last import is said once: leaving the page ends it.
 onBeforeUnmount(() => setImportedSaves([]));
+
+// "Imported from anna.json, exported 2026-10-04 14:05", or '' for a save made here (#1324).
+function importedFromText(from: SaveSummary['importedFrom']): string {
+  if (!from) return '';
+  const exported = localStamp(from.exportedAt);
+  return [from.file && `Imported from ${from.file}`, exported && `exported ${exported}`]
+    .filter(Boolean)
+    .join(', ');
+}
 
 const page = computed(() =>
   legacy(() => ({
@@ -96,6 +106,8 @@ const page = computed(() =>
       return {
         id: save.id,
         name: save.name,
+        // Where an imported copy came from (#1324), as secondary text: the file and its export date.
+        importedFrom: importedFromText(save.importedFrom),
         compare: {
           profiles: save.profiles.map(({ id, name, figures }) => ({ id, name, figures })),
           baseline: baseline?.id ?? '',
@@ -473,6 +485,9 @@ async function rename(
         Try another profile
       </button>
     </div>
+    <p v-if="save.importedFrom" class="small muted" :data-imported-from="save.id">
+      {{ save.importedFrom }}
+    </p>
     <div class="profile-cards">
       <article
         v-for="profile in save.profiles"

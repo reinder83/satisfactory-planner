@@ -132,8 +132,8 @@ async function parsedFile(file: File, refusal: string): Promise<unknown> {
 // confirmation that says what the file holds and that it adds copies (savesImportQuestion,
 // #1217), so existing saves are never replaced. The file is checked as the import checks it
 // before the question, so a damaged or newer file is refused with the import's own message and
-// nothing is asked. Each copy is named after the file and
-// its export date (labelImport, #1052). It waits for queued saves, then shows the profiles
+// nothing is asked. Each copy keeps the save's own name,
+// numbered only where it is taken, and records the file and export date (labelImport, #1324). It waits for queued saves, then shows the profiles
 // page, where a notice names the copies and offers to open each: the open profile stays open,
 // so nothing ticked next lands in someone else's copy. With no save open (an empty workspace)
 // boot() opens the imported one, as before. The success toast only follows a successful

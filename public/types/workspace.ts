@@ -6,6 +6,14 @@ import type { AlternateRanking, StoredCalculatedPlan, StoredSettings } from './c
 import type { Handbook } from './legacy-handbook.ts';
 import type { ProgressState, SavedState } from './state.ts';
 
+// Where an imported save came from (#1324): the file's name and its export time (ISO), each when
+// the file gave a usable one. Optional, so every save made another way or stored before is valid
+// as it is; transfer.ts reads it (importedFromFields).
+export interface ImportedFrom {
+  file?: string;
+  exportedAt?: string;
+}
+
 // Every profile the planner makes, keeps after its migrations and exports is calculated.
 export type ProfileKind = 'calculated';
 // What a stored or imported profile may say. 'original', the retired handbook profile (#387,
@@ -61,6 +69,7 @@ export interface StoredSave {
   userId: string;
   activeProfile: string;
   profiles: StoredProfile[];
+  importedFrom?: ImportedFrom;
 }
 
 export interface StoredUser {
@@ -78,6 +87,7 @@ export interface BrowserSave {
   name: string;
   activeProfile: string;
   profiles: StoredProfile[];
+  importedFrom?: ImportedFrom;
 }
 
 // The browser edition's IndexedDB record (browser-store.ts, store 'workspace', key 'main').
@@ -222,6 +232,7 @@ export interface SaveSummary {
   name: string;
   activeProfile: string;
   profiles: ProfileSummary[];
+  importedFrom?: ImportedFrom;
 }
 
 // GET /api/workspace: the signed-in user's saves. user is null when signed out. The browser
@@ -269,6 +280,8 @@ export interface SaveExport {
     id: string;
     name: string;
     activeProfile: string;
+    // Where an imported copy came from (StoredSave.importedFrom, #1324).
+    importedFrom?: ImportedFrom;
     profiles: {
       id: string;
       name: string;

@@ -53,6 +53,7 @@ export const summary = (
       id: save.id,
       name: save.name,
       activeProfile: save.activeProfile,
+      ...(save.importedFrom ? { importedFrom: save.importedFrom } : {}),
       profiles: save.profiles.map(profile => ({
         id: profile.id,
         name: profile.name,
