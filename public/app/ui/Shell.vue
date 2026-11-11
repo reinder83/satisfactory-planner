@@ -79,6 +79,7 @@ import LiveChangeNotice from './LiveChangeNotice.vue';
 import { legacy } from './bridge.ts';
 import ActionMenu from './ActionMenu.vue';
 import { openProfile, signOut } from './actions.ts';
+import { reserveScrollbar } from './scroll-lock.ts';
 
 // The sidebar's navigation: route, icon, label (the page's name, as its tab title has it, #1254).
 const NAV: [id: View, icon: string, label: string][] = (
@@ -192,6 +193,7 @@ const focusable = () =>
     ) ?? []),
   ].filter(el => el.getClientRects().length > 0);
 async function openMenu() {
+  reserveScrollbar();
   menuOpen.value = true;
   await nextTick();
   focusable()[0]?.focus();

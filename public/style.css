@@ -3778,8 +3778,9 @@ dialog::backdrop {
 /* A modal dialog is fixed to the window and centred in it, wherever the page behind it is
    scrolled to (#1325): the browser's own rule for the top layer, stated here so no later
    position or margin on dialog can move it down the page. The page behind does not scroll while
-   one is open (its scrollbar goes, and ui/scroll-lock.ts notes the scrollbar's width in
-   --scrollbar-width first, so nothing shifts sideways). */
+   one is open: its scrollbar goes, but its width stays (scrollbar-gutter), so nothing shifts
+   sideways and the page keeps its scroll position when the dialog closes (#1330). A page with no
+   scrollbar keeps none: ui/scroll-lock.ts notes whether there is one, in --scroll-gutter. */
 dialog:modal {
   position: fixed;
   inset: 0;
@@ -3787,7 +3788,7 @@ dialog:modal {
 }
 html:has(dialog[open]) {
   overflow: hidden;
-  padding-right: var(--scrollbar-width, 0);
+  scrollbar-gutter: var(--scroll-gutter, auto);
 }
 .dialog-head {
   display: flex;
@@ -6629,6 +6630,13 @@ button.rail-tile:hover {
     visibility: visible;
     transition: transform 0.18s ease-out;
   }
+  /* The page behind the open drawer does not scroll either (#1330): the drawer is no <dialog>, so
+     the rule below for dialogs does not reach it. Shell.vue notes whether the page has a
+     scrollbar (ui/scroll-lock.ts) before it opens. */
+  html:has(.layout.menu-open) {
+    overflow: hidden;
+    scrollbar-gutter: var(--scroll-gutter, auto);
+  }
   .drawer-backdrop {
     display: block;
     position: fixed;
@@ -8757,6 +8765,16 @@ th.resource-cell {
   .phase-tabs {
     display: none;
   }
+}
+/* The not-found page (#1330): ADA's line, then the two ways back. */
+.not-found-ada {
+  font-family: var(--head);
+  font-size: 18px;
+}
+.not-found-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ── Recipe preferences: toolbar and collapsed groups (ONB-1) ───────────────────────────────

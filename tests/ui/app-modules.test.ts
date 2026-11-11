@@ -41,6 +41,7 @@ test('the app entry point loads as ES modules and registers its listeners in ord
   // its error screen because the stub fetch fails.
   assert.deepEqual(registered, [
     'document error',
+    'document click',
     'window hashchange',
     '#detail mousedown',
     '#detail click',
