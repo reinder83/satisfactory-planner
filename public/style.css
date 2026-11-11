@@ -2511,6 +2511,106 @@ p.eyebrow {
   margin: 4px 0 0;
   color: var(--accent-hi);
 }
+/* Between factories, grouped by sender and collapsed (LOG-1, #1329): the on-site extraction line,
+   and a card header that is one disclosure button with its summary beside it. */
+.on-site-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  background: var(--panel2);
+}
+.on-site-text {
+  margin: 0;
+  flex: 1 1 18rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.on-site-list {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 13px;
+}
+.on-site-list[hidden] {
+  display: none;
+}
+.group-tools {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.group-cards {
+  align-items: start;
+}
+.group-card-head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.group-card-head h3 {
+  margin: 0;
+  min-width: 0;
+}
+.group-toggle {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+/* The whole header opens the card, the summary included. */
+.group-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -4px -6px;
+}
+.group-toggle:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.group-toggle::before {
+  content: '▸';
+  display: inline-block;
+  width: 1.2em;
+  color: var(--accent-hi);
+}
+.group-toggle[aria-expanded='true']::before {
+  content: '▾';
+}
+.group-summary {
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+.group-body {
+  margin-top: 8px;
+}
+.group-body[hidden] {
+  display: none;
+}
+@media (max-width: 720px) {
+  .group-card-head {
+    min-height: 44px;
+    align-content: center;
+  }
+  .group-cards {
+    gap: 6px;
+  }
+  .group-card {
+    padding: 4px 12px;
+  }
+  .on-site-line .btn,
+  .group-tools .btn {
+    min-height: 44px;
+  }
+}
 
 /* "Choose saves to export" on the Backup page (BackupPage.vue). */
 .choose-saves {

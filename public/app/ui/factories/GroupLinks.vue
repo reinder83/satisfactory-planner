@@ -9,6 +9,11 @@
   sends anything gets a card of its own with only an Out part (#222, #231, #339), before the
   groups: mined resources first, then existing supply, the largest flow first within each. The destinations that are not groups (storage,
   fuel, the Space Elevator, the sink) only show as the other end of a row.
+  Grouped and collapsed (LOG-1, #1329): every card starts collapsed behind a disclosure button
+  (aria-expanded) in its heading, with a summary beside it ("→ 3 factories · 4 items"); the rows
+  inside are unchanged. Water Extractors at the site (linkCarrier "extract") are no transfer: one
+  line per resource says "Water: extracted on site at 5 factories · 4,023 m³/min total", with
+  the factories and their amounts one disclosure away, and no card or row lists them.
   Each link can instead go by truck, tractor, explorer, train or drone (#205): the user gives the
   round trip in minutes and, for a road vehicle, its fuel; linkLoad (logistics.ts) works out the
   vehicles and fuel. The controls sit on the sender's Out row only, so each link is edited in one
@@ -30,7 +35,7 @@
   (laneUnlockNote in flow.ts).
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, reactive } from 'vue';
 import { save, toast } from '../../api.ts';
 import { num, plural } from '../../format.ts';
 import { bestLane, FLUIDS, laneUnlockNote, lanePlan, rateOfItem } from '../../flow.ts';
@@ -81,7 +86,7 @@ const view = computed(() =>
     const name = (id: string) => placeName(id, groupsState.groups, stage.raw);
     // The parts delivered in full (#1062): their links to the Space Elevator say so.
     const delivered = deliveredParts(stage, stageKey(), state.deliveries);
-    const links = groupLinks(stage, groupsState, calculated.settings.onSite).map(link => {
+    const everyLink = groupLinks(stage, groupsState, calculated.settings.onSite).map(link => {
       // The one transport choice the flow page shares (linkCarrier, #1067): extracted Water
       // needs none, a saved vehicle, or belts and pipes.
       const key = link.from + ':' + link.to,
@@ -144,6 +149,26 @@ const view = computed(() =>
           : (vehicle?.badge ?? linkBeltBadge(link.items, FLUIDS, lanePlan)),
       };
     });
+    // Water pumped at the site that uses it is no link between factories (LOG-1, #1329): it
+    // collapses to one line per resource, and only the real transfers are listed.
+    const links = everyLink.filter(link => !link.extract);
+    const onSite = [...new Set(everyLink.filter(l => l.extract).map(l => sourceItem(l.from)))].map(
+      item => {
+        const rows = everyLink.filter(l => l.extract && sourceItem(l.from) === item);
+        const sites = [...new Set(rows.map(row => row.to))];
+        return {
+          item,
+          count: sites.length,
+          words: sites.length === 1 ? 'factory' : 'factories',
+          total: linkTotal(rows.flatMap(row => row.items)),
+          sites: rows.map(row => ({
+            key: row.key,
+            name: row.toName,
+            text: linkTotal(row.items),
+          })),
+        };
+      },
+    );
     type Row = (typeof links)[number];
     const part = (dir: 'in' | 'out', rows: Row[]) => ({
       dir,
@@ -154,10 +179,12 @@ const view = computed(() =>
     const places = groupsState.groups.map(group => group.id);
     if (links.some(l => l.from === UNGROUPED || l.to === UNGROUPED)) places.push(UNGROUPED);
     // Groups nothing reaches or leaves (yet, in this phase) share one line instead of empty cards.
-    const used = (id: string) => links.some(l => l.from === id || l.to === id);
-    const cards = places.filter(used).map(id => ({
+    const used = (id: string) => everyLink.some(l => l.from === id || l.to === id);
+    const hasCard = (id: string) => links.some(l => l.from === id || l.to === id);
+    const cards = places.filter(hasCard).map(id => ({
       id,
       name: name(id),
+      summary: cardSummary(id, links, groupsState.groups),
       parts: [
         part(
           'in',
@@ -185,6 +212,7 @@ const view = computed(() =>
       .map(({ id, rows }) => ({
         id,
         name: name(id),
+        summary: cardSummary(id, links, groupsState.groups),
         parts: [part('out', rows)],
         mining: nodes.get(sourceItem(id)) ?? '',
       }));
@@ -194,9 +222,44 @@ const view = computed(() =>
     const unlock = [laneUnlockNote(bestLane(false)), laneUnlockNote(bestLane(true))]
       .filter(Boolean)
       .join(' ');
-    return { links, cards, idle, unlock };
+    return { links, cards, idle, unlock, onSite };
   }),
 );
+// What a collapsed card says of its transfers (LOG-1): where its Out links go and how many items
+// they carry, "→ 3 factories · 4 items"; a place that only receives says where from.
+function cardSummary(
+  id: string,
+  links: { from: string; to: string; items: { item: string }[] }[],
+  groups: { id: string }[],
+): string {
+  const out = links.filter(l => l.from === id),
+    rows = out.length ? out : links.filter(l => l.to === id),
+    ends = new Set(rows.map(l => (out.length ? l.to : l.from))),
+    items = new Set(rows.flatMap(l => l.items.map(i => i.item)));
+  const factories = [...ends].every(end => end === UNGROUPED || groups.some(g => g.id === end));
+  const noun = factories
+    ? ends.size === 1
+      ? 'factory'
+      : 'factories'
+    : ends.size === 1
+      ? 'place'
+      : 'places';
+  return `${out.length ? '→' : '←'} ${ends.size} ${noun} · ${plural(items.size, 'item')}`;
+}
+// The cards the user opened, kept while the page redraws after a save and across tab changes;
+// every card starts collapsed. Not saved.
+const opened = reactive(new Set<string>());
+const toggle = (id: string) => (opened.has(id) ? opened.delete(id) : opened.add(id));
+const setAll = (open: boolean) => {
+  opened.clear();
+  if (open) for (const card of view.value?.cards ?? []) opened.add(card.id);
+};
+const slug = (id: string) => id.replace(/[^\w-]/g, '_');
+// The on-site extraction lists the user opened.
+const sitesOpen = reactive(new Set<string>());
+const toggleSites = (item: string) =>
+  sitesOpen.has(item) ? sitesOpen.delete(item) : sitesOpen.add(item);
+
 const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []));
 const TRANSPORT_LABEL = 'Recalculate in place with transport fuel';
 
@@ -337,8 +400,41 @@ function recalculate(event: Event) {
       The counts below use the marks this phase's milestones give; a flow within the lower mark's
       capacity fits it until you tick them.
     </p>
+    <div v-for="site in view.onSite" :key="site.item" class="on-site-line" data-on-site>
+      <p class="on-site-text" data-on-site-text>
+        <b>{{ site.item }}</b
+        >: extracted on site at {{ site.count }} {{ site.words
+        }}<template v-if="site.total"> · {{ site.total }} total</template>
+      </p>
+      <button
+        type="button"
+        class="btn quiet"
+        data-on-site-toggle
+        :aria-expanded="sitesOpen.has(site.item) ? 'true' : 'false'"
+        :aria-controls="'on-site-' + slug(site.item)"
+        @click="toggleSites(site.item)"
+      >
+        {{ sitesOpen.has(site.item) ? 'Hide' : 'Show' }} the {{ site.words }}
+      </button>
+      <ul
+        :id="'on-site-' + slug(site.item)"
+        class="on-site-list"
+        data-on-site-list
+        :hidden="!sitesOpen.has(site.item) || undefined"
+      >
+        <li v-for="entry in site.sites" :key="entry.key">{{ entry.name }}: {{ entry.text }}</li>
+      </ul>
+    </div>
     <p v-if="!view.links.length" class="small">Nothing moves between factories yet.</p>
-    <div v-else class="group-cards">
+    <div v-else class="group-tools">
+      <button type="button" class="btn quiet" data-groups-expand @click="setAll(true)">
+        Expand all
+      </button>
+      <button type="button" class="btn quiet" data-groups-collapse @click="setAll(false)">
+        Collapse all
+      </button>
+    </div>
+    <div v-if="view.links.length" class="group-cards">
       <article
         v-for="card in view.cards"
         :key="card.id"
@@ -346,149 +442,164 @@ function recalculate(event: Event) {
         data-group-card
         :data-group="card.id"
       >
-        <h3>{{ card.name }}</h3>
-        <p v-if="'mining' in card && card.mining" class="small muted" data-mining-source>
-          {{ card.mining }}
-        </p>
-        <div class="group-flow">
-          <section
-            v-for="part in card.parts"
-            :key="part.dir"
-            :class="['flow-part', part.dir]"
-            :data-flow="part.dir"
-          >
-            <h4>
-              {{ part.dir === 'in' ? 'In' : 'Out' }}
-              <span class="flow-sum" data-flow-sum
-                >{{ part.count }}<template v-if="part.total"> · {{ part.total }}</template></span
-              >
-            </h4>
-            <p v-if="!part.rows.length" class="small muted">
-              {{ part.dir === 'in' ? 'Nothing comes in.' : 'Nothing goes out.' }}
-            </p>
-            <div
-              v-for="link in part.rows"
-              :key="link.key"
-              class="flow-row"
-              v-bind="
-                part.dir === 'in' ? { 'data-link-in': link.key } : { 'data-link-out': link.key }
-              "
+        <div class="group-card-head">
+          <h3>
+            <button
+              type="button"
+              class="group-toggle"
+              data-group-toggle
+              :aria-expanded="opened.has(card.id) ? 'true' : 'false'"
+              :aria-controls="'group-body-' + slug(card.id)"
+              @click="toggle(card.id)"
             >
-              <div class="flow-end">
-                <template v-if="part.dir === 'in'"
-                  >← from <b>{{ link.fromName }}</b></template
+              {{ card.name }}
+            </button>
+          </h3>
+          <span class="group-summary" data-group-summary>{{ card.summary }}</span>
+        </div>
+        <div
+          :id="'group-body-' + slug(card.id)"
+          class="group-body"
+          data-group-body
+          :hidden="!opened.has(card.id) || undefined"
+        >
+          <p v-if="'mining' in card && card.mining" class="small muted" data-mining-source>
+            {{ card.mining }}
+          </p>
+          <div class="group-flow">
+            <section
+              v-for="part in card.parts"
+              :key="part.dir"
+              :class="['flow-part', part.dir]"
+              :data-flow="part.dir"
+            >
+              <h4>
+                {{ part.dir === 'in' ? 'In' : 'Out' }}
+                <span class="flow-sum" data-flow-sum
+                  >{{ part.count }}<template v-if="part.total"> · {{ part.total }}</template></span
                 >
-                <template v-else
-                  >→ to <b>{{ link.toName }}</b></template
-                >
-              </div>
-              <ul class="flow-items">
-                <li
-                  v-for="item in link.items"
-                  :key="item.item"
-                  :title="item.title"
-                  :class="{ delivered: item.delivered }"
-                >
-                  <ItemIcon :name="item.item" /><span class="flow-item-name">{{ item.item }}: </span
-                  >{{ item.text
-                  }}<span v-if="item.delivered" data-delivered-link> · delivered</span>
-                </li>
-              </ul>
-              <p v-if="part.dir === 'out' && link.overflow" class="small muted" data-link-storage>
-                Surplus first: end each item's belt in its container through a Priority Merger or an
-                overflow splitter, so a full container overflows to the AWESOME Sink.
+              </h4>
+              <p v-if="!part.rows.length" class="small muted">
+                {{ part.dir === 'in' ? 'Nothing comes in.' : 'Nothing goes out.' }}
               </p>
-              <template v-if="part.dir === 'out' && link.extract">
-                <p class="small" data-link-extract>
-                  Build the Water Extractors at {{ link.toName }}: no pipe or vehicle between
-                  places. Each production line's dialog says how many.
-                </p>
-                <p class="flow-badge" data-link-badge>{{ link.badge }}</p>
-              </template>
-              <template v-else-if="part.dir === 'out'">
-                <div class="link-transport">
-                  <label
-                    >By
-                    <select
-                      :data-link-mode="link.key"
-                      :aria-label="`By: ${link.between}`"
-                      :value="link.mode"
-                      @change="
-                        setTransport($event.target as HTMLSelectElement, link, {
-                          mode: ($event.target as HTMLSelectElement).value as LinkMode,
-                        })
-                      "
-                    >
-                      <option
-                        v-for="option in link.modes"
-                        :key="option.mode"
-                        :value="option.mode"
-                        :disabled="option.disabled"
-                      >
-                        {{ option.label }}
-                      </option>
-                    </select></label
+              <div
+                v-for="link in part.rows"
+                :key="link.key"
+                class="flow-row"
+                v-bind="
+                  part.dir === 'in' ? { 'data-link-in': link.key } : { 'data-link-out': link.key }
+                "
+              >
+                <div class="flow-end">
+                  <template v-if="part.dir === 'in'"
+                    >← from <b>{{ link.fromName }}</b></template
                   >
-                  <label v-if="link.transport"
-                    >Round trip
-                    <input
-                      type="number"
-                      min="0.1"
-                      max="1440"
-                      step="0.1"
-                      :data-link-trip="link.key"
-                      :aria-label="`Round trip in minutes: ${link.between}`"
-                      :value="trips[link.key]"
-                      @input="trips[link.key] = ($event.target as HTMLInputElement).value"
-                      @change="setTrip($event, link)"
-                      @blur="leaveDraft(trips, link.key, $event)"
-                    />
-                    min</label
-                  >
-                  <label v-if="link.fuelled"
-                    >Fuel
-                    <select
-                      :data-link-fuel="link.key"
-                      :aria-label="`Fuel: ${link.between}`"
-                      :value="link.transport!.fuel"
-                      @change="
-                        setTransport($event.target as HTMLSelectElement, link, {
-                          fuel: ($event.target as HTMLSelectElement).value,
-                        })
-                      "
-                    >
-                      <option
-                        v-for="vehicleFuel in fuels"
-                        :key="vehicleFuel.name"
-                        :value="vehicleFuel.name"
-                      >
-                        {{ vehicleFuel.name }}
-                      </option>
-                    </select></label
+                  <template v-else
+                    >→ to <b>{{ link.toName }}</b></template
                   >
                 </div>
-                <template v-if="link.transport">
-                  <p v-for="(line, i) in link.load" :key="i" class="small" data-link-load>
-                    {{ line }}
-                  </p>
-                  <p v-if="link.later" class="small muted" data-fluid-truck-later>
-                    {{ link.later }}
-                  </p>
-                  <p v-if="link.packed.length" class="small muted">
-                    Packaged for the trip:
-                    {{ link.packed.map(item => `${item.item} as ${item.pack}`).join(', ') }}.
-                  </p>
+                <ul class="flow-items">
+                  <li
+                    v-for="item in link.items"
+                    :key="item.item"
+                    :title="item.title"
+                    :class="{ delivered: item.delivered }"
+                  >
+                    <ItemIcon :name="item.item" /><span class="flow-item-name"
+                      >{{ item.item }}: </span
+                    >{{ item.text
+                    }}<span v-if="item.delivered" data-delivered-link> · delivered</span>
+                  </li>
+                </ul>
+                <p v-if="part.dir === 'out' && link.overflow" class="small muted" data-link-storage>
+                  Surplus first: end each item's belt in its container through a Priority Merger or
+                  an overflow splitter, so a full container overflows to the AWESOME Sink.
+                </p>
+                <template v-if="part.dir === 'out'">
+                  <div class="link-transport">
+                    <label
+                      >By
+                      <select
+                        :data-link-mode="link.key"
+                        :aria-label="`By: ${link.between}`"
+                        :value="link.mode"
+                        @change="
+                          setTransport($event.target as HTMLSelectElement, link, {
+                            mode: ($event.target as HTMLSelectElement).value as LinkMode,
+                          })
+                        "
+                      >
+                        <option
+                          v-for="option in link.modes"
+                          :key="option.mode"
+                          :value="option.mode"
+                          :disabled="option.disabled"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </select></label
+                    >
+                    <label v-if="link.transport"
+                      >Round trip
+                      <input
+                        type="number"
+                        min="0.1"
+                        max="1440"
+                        step="0.1"
+                        :data-link-trip="link.key"
+                        :aria-label="`Round trip in minutes: ${link.between}`"
+                        :value="trips[link.key]"
+                        @input="trips[link.key] = ($event.target as HTMLInputElement).value"
+                        @change="setTrip($event, link)"
+                        @blur="leaveDraft(trips, link.key, $event)"
+                      />
+                      min</label
+                    >
+                    <label v-if="link.fuelled"
+                      >Fuel
+                      <select
+                        :data-link-fuel="link.key"
+                        :aria-label="`Fuel: ${link.between}`"
+                        :value="link.transport!.fuel"
+                        @change="
+                          setTransport($event.target as HTMLSelectElement, link, {
+                            fuel: ($event.target as HTMLSelectElement).value,
+                          })
+                        "
+                      >
+                        <option
+                          v-for="vehicleFuel in fuels"
+                          :key="vehicleFuel.name"
+                          :value="vehicleFuel.name"
+                        >
+                          {{ vehicleFuel.name }}
+                        </option>
+                      </select></label
+                    >
+                  </div>
+                  <template v-if="link.transport">
+                    <p v-for="(line, i) in link.load" :key="i" class="small" data-link-load>
+                      {{ line }}
+                    </p>
+                    <p v-if="link.later" class="small muted" data-fluid-truck-later>
+                      {{ link.later }}
+                    </p>
+                    <p v-if="link.packed.length" class="small muted">
+                      Packaged for the trip:
+                      {{ link.packed.map(item => `${item.item} as ${item.pack}`).join(', ') }}.
+                    </p>
+                  </template>
+                  <template v-else>
+                    <p v-if="link.mixed" class="small muted" data-link-mixed>{{ link.mixed }}</p>
+                    <p class="flow-badge" data-link-badge>{{ link.badge }}</p>
+                  </template>
                 </template>
-                <template v-else>
-                  <p v-if="link.mixed" class="small muted" data-link-mixed>{{ link.mixed }}</p>
-                  <p class="flow-badge" data-link-badge>{{ link.badge }}</p>
-                </template>
-              </template>
-              <p v-else :class="['flow-badge', { vehicle: link.transport }]" data-link-badge>
-                {{ link.badge }}
-              </p>
-            </div>
-          </section>
+                <p v-else :class="['flow-badge', { vehicle: link.transport }]" data-link-badge>
+                  {{ link.badge }}
+                </p>
+              </div>
+            </section>
+          </div>
         </div>
       </article>
     </div>

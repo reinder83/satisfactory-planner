@@ -159,12 +159,17 @@ const OLD_WORDS =
   /\bgroups?\b|\bgroup's\b|\bfactory groups?\b|\b\d+ factor(y|ies)\b|factory targets/i;
 // The step text the user wrote in `saved`, which stays as written (the first test).
 const OWN_WORDS = /factory group style|Belt from the factory group/;
+// Between factories (LOG-1) counts real factories: where a sender's links go, and where Water is
+// pumped on site, "→ 3 factories · 4 items", "extracted on site at 5 factories".
+const FACTORY_COUNTS =
+  /^[→←] \d+ factor(y|ies) · \d+ items?$|: extracted on site at \d+ factor(y|ies)/;
 
 test('no page, panel or dialog says "group" for a factory or counts lines as factories', async () => {
   const found = new Set<string>();
   const scan = (where: string) => {
     for (const text of readable())
-      if (OLD_WORDS.test(text) && !OWN_WORDS.test(text)) found.add(`${where}: ${text}`);
+      if (OLD_WORDS.test(text) && !OWN_WORDS.test(text) && !FACTORY_COUNTS.test(text))
+        found.add(`${where}: ${text}`);
   };
   const draw = async (route: string, editing = false) => {
     page();
