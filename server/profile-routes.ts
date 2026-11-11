@@ -9,6 +9,7 @@ import {
   checkRestore,
   checkRoundUp,
   currentPayoff,
+  keptRanking,
   rankScope,
   recalculatedProfile,
   restoredVersions,
@@ -24,12 +25,14 @@ import { reviewedReplacement } from '../public/reviewed-plans.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { frozenMapping } from './persistence.ts';
-import { rankOffThread } from './ranking.ts';
+import { rankHandle, rankOffThread } from './ranking.ts';
+import type { RankHandle } from './ranking.ts';
 import { response } from './routing.ts';
 import { progressionData, recipeBookData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
 import type { RecountedLine } from '../public/state.ts';
 import type {
+  AlternateRanking,
   ProgressState,
   RankReply,
   StageKey,
@@ -64,6 +67,10 @@ export function profileRoutes({
   rankBudgetMs,
   reviewed,
 }: WorkspaceContext) {
+  // The rankings running now, one per profile (#1332): what the progress route reads and the
+  // cancel route stops. In memory only: a ranking cannot outlive the server.
+  const rankJobs = new Map<string, RankHandle>();
+  const rankKey = (user: { id: string }, profile: { id: string }) => user.id + '/' + profile.id;
   // Adds a whole-machine version of a calculated profile as a new profile in the same
   // save; the original profile is untouched. Its progress is copied, and a ticked
   // 'calc-' row is unticked for review where the rounded plan needs more machines or more
@@ -199,16 +206,34 @@ export function profileRoutes({
     const input = await body();
     const phase = String(input.phase) as StageKey;
     if (!['1', '2', '3', '4', '5'].includes(phase)) fail('Choose a phase from 1 to 5.');
+    const key = rankKey(user, profile);
+    if (rankJobs.has(key)) fail('A ranking is already running for this profile.', 409);
     limits.throttle(req, 5);
     const known = knownPlanSettings(plan, recipeBookData(), staleRankNote);
+    const handle = rankHandle();
+    rankJobs.set(key, handle);
+    let ranking: AlternateRanking;
+    try {
+      ranking = await rankOffThread(
+        {
+          settings: known.settings,
+          options: { phase, budgetMs: rankBudgetMs, ...rankScope(input) },
+        },
+        handle,
+      );
+    } finally {
+      rankJobs.delete(key);
+    }
     const payoff: StoredPayoff = {
       planCreatedAt: plan.createdAt,
       rankedAt: new Date().toISOString(),
-      ranking: await rankOffThread({
-        settings: known.settings,
-        options: { phase, budgetMs: rankBudgetMs, ...rankScope(input) },
-      }),
+      ranking,
     };
+    // Cancelled before a single alternate was checked: nothing to keep, and the ranking the
+    // profile had stays (the reply is the empty one, for the page to say so).
+    if (ranking.stopped && !ranking.candidates.length) return response(payoff);
+    // A cancelled ranking does not replace a complete one the profile already has (keptRanking).
+    let kept: StoredPayoff | null = null;
     await commit(draft => {
       const draftProfile = draft.saves
         .find(s => s.id === save.id && s.userId === user.id)
@@ -216,10 +241,30 @@ export function profileRoutes({
       if (!draftProfile) fail('Profile not found.', 404);
       if (draftProfile.plan?.createdAt !== plan.createdAt)
         fail('The profile changed while ranking. Rank again.', 409);
-      draftProfile.payoff = payoff;
+      kept = keptRanking(draftProfile, ranking, handle.cancelled);
+      if (!kept) draftProfile.payoff = payoff;
     });
-    const reply: RankReply = known.stale.length ? { ...payoff, leftOut: known.stale } : payoff;
+    const stored: RankReply = kept ? { ...(kept as StoredPayoff), kept: true } : payoff;
+    const reply: RankReply = known.stale.length ? { ...stored, leftOut: known.stale } : stored;
     return response(reply);
+  }
+  // Where the scoped profile's ranking is while one runs (#1332), which the page polls for its
+  // "Checking 12 of 58 alternates…": `running` is false without one, `queued` while it waits for
+  // a thread (two rank at once, ranking.ts).
+  function rankProgress({ user, profile }: ScopedRequest) {
+    const handle = rankJobs.get(rankKey(user, profile));
+    return response(
+      handle
+        ? { running: true, queued: handle.queued, done: handle.done, total: handle.total }
+        : { running: false },
+    );
+  }
+  // Cancels the scoped profile's running ranking: it stops before its next alternate and the
+  // request that started it replies with the alternates checked so far, which it stores.
+  function rankCancel({ user, profile }: ScopedRequest) {
+    const handle = rankJobs.get(rankKey(user, profile));
+    handle?.cancel();
+    return response({ cancelled: !!handle });
   }
   // Everything the interface needs to open the scoped profile. A stored payoff ranking is
   // only sent while it belongs to the profile's plan. A profile's own handbook is never sent
@@ -318,6 +363,8 @@ export function profileRoutes({
     recalculate,
     restoreVersion,
     rankPayoff,
+    rankProgress,
+    rankCancel,
     profileContext,
     progressState,
     exportProgress,

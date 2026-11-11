@@ -50,6 +50,7 @@ import { droppedClockNames, lineClocksChange } from './shard-pins.ts';
 import { catalogRecipeBook } from './built-capacity.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort, rankedPhases } from './payoff.ts';
+import { rankDone } from './rank-job.ts';
 import { fastestProfiles } from './profile-compare.ts';
 import { render } from './shell.ts';
 import {
@@ -674,6 +675,10 @@ function adaFacts(): AdaFacts {
     assumptions: calculated ? (calculated.warnings || []).length : 0,
     build: buildFacts(),
     payoff: payoffFacts(),
+    rankDone:
+      rankDone && rankDone.profileId === currentProfile?.id
+        ? { partial: rankDone.partial, checked: rankDone.checked, total: rankDone.total }
+        : null,
   };
 }
 

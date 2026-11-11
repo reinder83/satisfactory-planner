@@ -169,9 +169,9 @@ test('a new plan opens on All settings in three screens without the explanations
   const explained = $$('#wizard-form [data-explain]');
   assert.ok(explained.length >= 3, 'the explanations are marked');
   for (const el of explained) assert.equal(getComputedStyle(el).display, 'none');
-  const tip = $('#wizard-form .setting-help')!;
+  const tip = $('#wizard-form .help-btn')!;
   assert.notEqual(getComputedStyle(tip).display, 'none', 'help tips stay');
-  assert.equal(tip.getAttribute('tabindex'), '0');
+  assert.equal(tip.tagName, 'BUTTON', 'a real button, reached with Tab');
   assert.ok($('#wizard-form [data-guided-start]'), 'the guided start stays one click away');
   $('#wizard-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await settle();

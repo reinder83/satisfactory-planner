@@ -22,6 +22,7 @@ test('planner.ts re-exports the names it exported before the split', () => {
     'nuclearPeriod',
     'powerNeedsTurbofuel',
     'rankAlternates',
+    'rankAlternatesSteps',
     'recipePool',
     'run',
     'settings',

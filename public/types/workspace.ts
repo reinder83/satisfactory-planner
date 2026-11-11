@@ -57,9 +57,11 @@ export interface StoredPayoff {
 // The reply of POST /api/rank-alternates in both editions: the payoff it stored, and `leftOut`,
 // a sentence per kind of pin the ranking left out because the game data no longer takes it
 // (#1273, knownPlanSettings in state/stale-pins.ts). `leftOut` is never stored; absent when no
-// pin was left out.
+// pin was left out. `kept` (#1332): the ranking was cancelled and this reply is the complete
+// ranking the profile already had, which stays stored; never stored itself.
 export interface RankReply extends StoredPayoff {
   leftOut?: string[];
+  kept?: boolean;
 }
 
 export interface StoredSave {

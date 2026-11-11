@@ -257,6 +257,10 @@ export interface AdaFacts {
   // what the profile's goal optimises (app/payoff.ts), with that gain in words and the phases it
   // covers ("Phases 2–5" for a ranking over the remaining phases, #1075); null without one.
   payoff: { name: string; gain: string; where?: string } | null;
+  // A hard-drive ranking that finished while the user was away from its tab (#1332, BUG-7): how
+  // many alternates it checked of the total, and whether it was cut short (cancelled or out of
+  // time). Absent once the user has looked at it, started another or opened another profile.
+  rankDone?: { partial: boolean; checked: number; total: number } | null;
 }
 
 // A line ADA says: a remark, an encore, or a fault line (which also has a name).
@@ -360,6 +364,18 @@ const RULES: AdaRule[] = [
     when: facts => facts.kind === 'none',
     text: () =>
       `No save is open, so there is nothing for me to be disappointed about. Create one and I will find something.`,
+  },
+  // A hard-drive ranking finished while the user was elsewhere (#1332): an event, so it leads
+  // until the ranking has been looked at.
+  {
+    id: 'rank-done',
+    lead: true,
+    tone: 'praise',
+    when: facts => facts.rankDone,
+    text: facts =>
+      facts.rankDone!.partial
+        ? `Partial priorities logged: ${facts.rankDone!.checked} of ${facts.rankDone!.total} alternates, as instructed. Re-rank in the build plan's Hard drives tab when you want the rest.`
+        : `Alternate recipe priorities logged: ${facts.rankDone!.total} checked. I would have picked the same, had I been asked, which I was not. The ranking is in the build plan's Hard drives tab.`,
   },
   {
     id: 'empty-phase',

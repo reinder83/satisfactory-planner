@@ -53,6 +53,6 @@ export { run } from './planner/model.ts';
 export { calculate } from './planner/calculate.ts';
 export { warningDuration } from './planner/warnings.ts';
 export { catalog } from './planner/catalog.ts';
-export { rankAlternates } from './planner/alternates.ts';
+export { rankAlternates, rankAlternatesSteps } from './planner/alternates.ts';
 // "A", "A and B", "A, B and C" (public/wording.ts), exported for tests/phase-list-wording.test.ts.
 export { listNames } from './public/wording.ts';

@@ -37,6 +37,7 @@ import {
   restoreFields,
   renameOfferFields,
   currentPayoff,
+  keptRanking,
   phaseProgress,
   rankScope,
   RANK_BUDGET_MS,
@@ -80,6 +81,9 @@ export interface BrowserRequestOptions {
   onProgress?: (phase: number) => void;
   // A payoff ranking's progress: candidates done out of the total.
   onRankProgress?: (done: number, total: number) => void;
+  // Aborting it stops a payoff ranking before its next alternate; the request still resolves,
+  // with the alternates checked so far (`stopped`), so Cancel keeps a partial ranking (#1332).
+  stop?: AbortSignal;
 }
 export type BrowserRequest = (route: string, options?: BrowserRequestOptions) => Promise<unknown>;
 // Calculates a plan for the settings: the worker wrapper, or planner.ts's calculate in tests.
@@ -94,6 +98,7 @@ export type Ranker = (
   phase: StageKey,
   onProgress?: (done: number, total: number) => void,
   scope?: RankScope,
+  stop?: AbortSignal,
 ) => Promise<AlternateRanking> | AlternateRanking;
 
 // What every route handler in createBrowserApi gets: the route as a URL, app/api.ts's plain
@@ -398,11 +403,32 @@ export function createBrowserApi(
     const phase = String(body.phase) as StageKey;
     if (!['1', '2', '3', '4', '5'].includes(phase)) throw Error('Choose a phase from 1 to 5.');
     const known = knownPlanSettings(plan, book, staleRankNote);
-    const ranking = await ranker(known.settings, phase, options.onRankProgress, rankScope(body));
+    const ranking = await ranker(
+      known.settings,
+      phase,
+      options.onRankProgress,
+      rankScope(body),
+      options.stop,
+    );
+    // Cancelled before a single alternate was checked: nothing to keep, and the ranking the
+    // profile had stays (as on the server, the reply is the empty one).
+    if (ranking.stopped && !ranking.candidates.length)
+      return {
+        planCreatedAt: plan.createdAt,
+        rankedAt: new Date().toISOString(),
+        ranking,
+      } satisfies RankReply;
+    const cancelled = !!options.stop?.aborted;
     return store.transaction((data): RankReply => {
       const { profile } = scope(data, url, headers);
       if (profile.plan?.createdAt !== plan.createdAt)
         throw Error('The profile changed while ranking. Rank again.');
+      // A cancelled ranking does not replace a complete one the profile already has (#1332).
+      const kept = keptRanking(profile, ranking, cancelled);
+      if (kept) {
+        const reply = { ...kept, kept: true };
+        return known.stale.length ? { ...reply, leftOut: known.stale } : reply;
+      }
       profile.payoff = {
         planCreatedAt: plan.createdAt,
         rankedAt: new Date().toISOString(),
@@ -681,10 +707,15 @@ export function workerJobs(
     };
     return created;
   };
-  const run = <T>(job: Job, onProgress?: (data: Progress) => void) =>
+  const run = <T>(job: Job, onProgress?: (data: Progress) => void, stop?: AbortSignal) =>
     new Promise<T>((resolve, reject) => {
       const target = worker || start();
       const id = ++serial;
+      // The worker handles a { cancel: id } message between two alternates of a ranking (#1332).
+      // A request that is no longer pending, or an old worker replaced meanwhile, ignores it.
+      const cancel = () => pending.has(id) && worker?.postMessage({ cancel: id });
+      if (stop?.aborted) queueMicrotask(cancel);
+      else stop?.addEventListener('abort', cancel, { once: true });
       pending.set(id, {
         id,
         job,
@@ -701,12 +732,13 @@ export function workerJobs(
         { settings },
         onProgress && (progress => progress.phase !== undefined && onProgress(progress.phase)),
       ),
-    rank: (settings, phase, onProgress, scope) =>
+    rank: (settings, phase, onProgress, scope, stop) =>
       run<AlternateRanking>(
         { settings, rank: { phase, budgetMs: RANK_BUDGET_MS, ...scope } },
         onProgress &&
           (progress =>
             progress.done !== undefined && onProgress(progress.done, progress.total ?? 0)),
+        stop,
       ),
   };
 }

@@ -6,6 +6,7 @@ import { beforeEach, test } from 'vitest';
 import {
   blankExtraction,
   distributions,
+  helpText,
   matchingPreset,
   minedResources,
   nodeCounts,
@@ -108,12 +109,12 @@ test('the survey has four screens as tabs and links to the map', async () => {
   // Their help is keyed by what they are, not by the field names (#1021): the clock's text is the
   // one that explains the 250% default.
   const helpOf = (name: string) =>
-    $(`select[name=${name}]`)!.closest('label')!.querySelector('.setting-help');
-  assert.match(helpOf('mark')!.getAttribute('aria-label')!, /^The miner you will have running/);
-  assert.match(
-    helpOf('clock')!.getAttribute('aria-label')!,
-    /^Overclocking multiplies extraction. 250%/,
-  );
+    $(`select[name=${name}]`)!
+      .closest('label')!
+      .querySelector('[data-help]')!
+      .getAttribute('data-help')!;
+  assert.match(helpText[helpOf('mark')!]!, /^The miner you will have running/);
+  assert.match(helpText[helpOf('clock')!]!, /^Overclocking multiplies extraction. 250%/);
   assert.equal($('[data-extraction-back]')!.textContent.trim(), 'Cancel');
   assert.equal($('[data-extraction-cancel]'), null, 'nothing to leave alone yet');
   // Ten ores, three purities each, with their icons.

@@ -971,6 +971,13 @@ p {
 .section-head h2 {
   margin: 0;
 }
+/* A heading with its "?" beside it (X-3, ui/HelpPopover.vue). */
+.head-with-help {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 /* The build plan's lead step (SP-42, ui/plan/Checklist.vue): the first unfinished step at the
    top of the checklist, unfolded, with Mark done and its factory. Completed steps fold into
    "Done (n)" under the list. */
@@ -2799,6 +2806,57 @@ p.eyebrow {
   margin-top: 4px;
   padding: 2px 0;
   font-size: 10.5px;
+}
+/* A ranking in progress (#1332, ui/plan/PayoffPanel.vue): its label, a progress bar with Cancel
+   beside it (under the bar on a phone), and the "Partial" tag of a ranking cut short. */
+.payoff-run {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+}
+.payoff-run-label {
+  margin: 0 0 8px;
+  font-family: var(--mono, inherit);
+  font-size: 13px;
+  font-weight: 600;
+}
+.payoff-run-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.payoff-run progress {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 10px;
+  accent-color: var(--accent);
+}
+.payoff-run .btn {
+  min-height: 36px;
+}
+@media (pointer: coarse) {
+  .payoff-run .btn {
+    min-height: 44px;
+  }
+}
+.payoff h2:focus {
+  outline: none;
+}
+.payoff-run p.small {
+  margin: 8px 0 0;
+}
+.payoff-partial {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 /* The payoff threshold (#1075) above the table. */
 .payoff-threshold {
@@ -6316,40 +6374,55 @@ button.rail-tile:hover {
   overflow-wrap: anywhere;
 }
 
-/* ── Help tooltips ─────────────────────────────────────── */
-.setting-help {
-  position: relative;
+/* ── Help button ───────────────────────────────────────── */
+/* The "?" (and a setting's ⓘ) that opens the glossary's popup (X-3, #1333, ui/HelpPopover.vue).
+   At least 24 px square; 44 px on a touch screen, with a negative margin so the bigger target does
+   not grow the line it sits in. Its text is the .term-tip popup below, with .help-tip on top. */
+.help-pop {
   display: inline-block;
-  cursor: help;
-  color: var(--accent);
-  font-size: 13px;
+  vertical-align: middle;
   letter-spacing: normal;
-}
-.setting-help [role='tooltip'] {
-  display: none;
-  position: absolute;
-  z-index: 20;
-  top: 1.5em;
-  left: 0;
-  width: min(290px, 65vw);
-  padding: 12px;
-  background: #22272b;
-  border: 1px solid #343b41;
-  color: var(--ink);
-  font-size: 11.5px;
-  font-weight: 400;
-  line-height: 1.55;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   text-transform: none;
-  letter-spacing: normal;
 }
-.setting-help:hover [role='tooltip'],
-.setting-help:focus [role='tooltip'] {
-  display: block;
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
 }
-.setting-help:focus {
+.help-btn.help-btn-info {
+  border-color: transparent;
+  border-radius: 0;
+  font-weight: 400;
+}
+.help-btn:hover {
+  background: rgba(247, 162, 27, 0.15);
+}
+.help-btn:focus-visible {
   outline: 2px solid currentColor;
-  outline-offset: 3px;
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .help-btn {
+    min-width: 44px;
+    min-height: 44px;
+    margin: -10px;
+  }
+}
+.help-tip {
+  width: min(360px, calc(100vw - 32px));
+  font-size: 12.5px;
 }
 /* A glossary term (#1076, ui/Term.vue): the word as written, underlined with dots, and its
    definition in a tooltip under it. The tooltip is at the end of <body>, fixed where the component
@@ -7835,7 +7908,6 @@ button.rail-tile:hover {
   .assign-row input,
   .assign-editor select,
   .used-input,
-  .setting-help [role='tooltip'],
   .term-tip,
   .alt-picker-head input,
   .alt-filters input[type='search'],
