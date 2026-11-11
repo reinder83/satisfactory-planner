@@ -116,9 +116,12 @@ export const payoffSaving = (figure: PayoffFigure, where = true): string =>
 
 // What "Rank alternates" announces once its ranking is shown (#1255, app/announce.ts): the
 // button kept focus while it ran, so a screen reader hears that it is done and what it found.
-export function rankedMessage(ranking: AlternateRanking): string {
+// `cancelled`: the user pressed Cancel (BUG-7, #1332), so the partial ranking is theirs, not a
+// time limit's.
+export function rankedMessage(ranking: AlternateRanking, cancelled = false): string {
   if (!ranking.total) return 'Ranking done: every alternate available is already allowed.';
   const checked = `${ranking.candidates.length} of ${ranking.total} alternates checked for ${rankedPhases(ranking)}.`;
+  if (ranking.stopped && cancelled) return `Ranking cancelled, partial results kept: ${checked}`;
   return ranking.stopped
     ? `Ranking stopped at its time limit: ${checked}`
     : `Ranking done: ${checked}`;

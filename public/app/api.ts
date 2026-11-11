@@ -35,6 +35,8 @@ import type { ProgressState, Progression, UpdateOp, WorkspaceSummary } from '../
 export type RequestOptions = RequestInit & {
   onProgress?: (phase: number) => void;
   onRankProgress?: (done: number, total: number) => void;
+  // Aborting it makes a payoff ranking stop and reply with what it has (browser-api.ts, #1332).
+  stop?: AbortSignal;
 };
 
 // Number of queued writes still in flight (queuedWrite: save() and restoring a progress
@@ -44,7 +46,8 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 // A button a toast offers after its message, such as Undo after ticking a build-plan step
 // (#1054): `run` is called once, after the toast hides.
-export type ToastAction = { label: string; run: () => void };
+// `shortcut: false`: it does not take Ctrl+Z (⌘Z), which is for an Undo (#1363).
+export type ToastAction = { label: string; run: () => void; shortcut?: false };
 let toastAction: ToastAction | null = null;
 
 // How long a toast stays up: errors longer than confirmations, and one with a button longer
@@ -111,7 +114,7 @@ function toastButton(action: ToastAction) {
   button.className = 'btn toast-action';
   button.dataset.toastAction = '';
   button.textContent = action.label;
-  button.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
+  if (action.shortcut !== false) button.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
   button.addEventListener('click', () => runToastAction(action));
   const key = document.createElement('span');
   key.className = 'toast-key';
@@ -119,7 +122,8 @@ function toastButton(action: ToastAction) {
   key.textContent = `(${toastKey()})`;
   const group = document.createElement('span');
   group.className = 'toast-actions';
-  group.append(button, ' ', key);
+  if (action.shortcut === false) group.append(button);
+  else group.append(button, ' ', key);
   return group;
 }
 
@@ -133,7 +137,8 @@ function runToastAction(action: ToastAction) {
 // focus is (#1054); left alone while typing in a field, where it undoes the typing, and while a
 // dialog is open.
 export function toastShortcut(event: KeyboardEvent) {
-  if (!toastAction || event.defaultPrevented || event.shiftKey || event.altKey) return;
+  if (!toastAction || toastAction.shortcut === false) return;
+  if (event.defaultPrevented || event.shiftKey || event.altKey) return;
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
   const target = event.target as Element | null;
   if (

@@ -2800,6 +2800,57 @@ p.eyebrow {
   padding: 2px 0;
   font-size: 10.5px;
 }
+/* A ranking in progress (#1332, ui/plan/PayoffPanel.vue): its label, a progress bar with Cancel
+   beside it (under the bar on a phone), and the "Partial" tag of a ranking cut short. */
+.payoff-run {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+}
+.payoff-run-label {
+  margin: 0 0 8px;
+  font-family: var(--mono, inherit);
+  font-size: 13px;
+  font-weight: 600;
+}
+.payoff-run-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.payoff-run progress {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 10px;
+  accent-color: var(--accent);
+}
+.payoff-run .btn {
+  min-height: 36px;
+}
+@media (pointer: coarse) {
+  .payoff-run .btn {
+    min-height: 44px;
+  }
+}
+.payoff h2:focus {
+  outline: none;
+}
+.payoff-run p.small {
+  margin: 8px 0 0;
+}
+.payoff-partial {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 /* The payoff threshold (#1075) above the table. */
 .payoff-threshold {
   display: flex;

@@ -125,6 +125,8 @@ export async function openWorkspace({
     'POST /api/recalculate': profiles.recalculate,
     'POST /api/restore-version': profiles.restoreVersion,
     'POST /api/rank-alternates': profiles.rankPayoff,
+    'GET /api/rank-progress': profiles.rankProgress,
+    'POST /api/rank-cancel': profiles.rankCancel,
     'GET /api/context': profiles.profileContext,
     'GET /api/state': profiles.progressState,
     'GET /api/export': profiles.exportProgress,
