@@ -2,6 +2,11 @@
 // which app/ui/form/HelpTip.vue looks up for each field. After the wizard's settings come the
 // fields of the other modules of this folder, one group each.
 export const helpText: Record<string, string> = {
+  // The "?" buttons beside a heading (X-3, ui/HelpPopover.vue): what a page's paragraph said.
+  buildIntro:
+    'Start with construction stock and currently available power. Mark HUB, MAM and recipe unlocks as you complete them; these carry across phases. Milestone cost guidance updates from production lines marked running. Full-phase production lines follow the startup and unlock steps.',
+  profilesHelp:
+    "Edit settings recalculates a profile in place, keeps its progress and keeps the current version as a separate profile; that version's ⋯ menu has Restore this version, which swaps it back. Duplicate copies a profile with its progress so you can try changes without touching the original. Share downloads a file with the plan, storage layout, factories and step edits — without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a save or profile with ✎ beside its name; renaming does not change progress. A profile still named after its goal alone offers a name that says what it is; ✕ keeps its name. Profiles keep a frozen calculation so later planner updates cannot silently change your targets.",
   worldSeed:
     'Record the signed world seed from your game. Seed simulation is not built in: use the linked seed lookup and transfer extraction totals in Resources.',
   collectables:

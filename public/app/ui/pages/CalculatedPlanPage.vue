@@ -74,6 +74,7 @@ import PlanSummary from '../plan/PlanSummary.vue';
 import PayoffPanel from '../plan/PayoffPanel.vue';
 import SloopPayoffPanel from '../plan/SloopPayoffPanel.vue';
 import { powerView } from '../../../power.ts';
+import HelpPopover from '../HelpPopover.vue';
 import RoundingCost from '../plan/RoundingCost.vue';
 import {
   PLAN_TABS,
@@ -313,7 +314,13 @@ function tabKey(event: KeyboardEvent) {
       <div :class="page.milestones ? undefined : 'split'">
         <section>
           <div class="section-head">
-            <h2>Build sequence</h2>
+            <span class="head-with-help"
+              ><h2>Build sequence</h2>
+              <HelpPopover
+                v-if="!page.guided && !page.milestones"
+                name="buildIntro"
+                topic="the build sequence"
+            /></span>
             <EditStepsToggle />
           </div>
           <PlanProgress />
@@ -327,12 +334,8 @@ function tabKey(event: KeyboardEvent) {
             Production starts in {{ page.start }}, so gather, handcraft or build a starter supply of
             what each one costs.
           </p>
-          <p v-else class="small muted">
-            Start with construction stock and currently available power. Mark HUB, MAM and recipe
-            unlocks as you complete them; these carry across phases. Milestone cost guidance updates
-            from production lines marked running. Full-phase production lines follow the startup and
-            unlock steps.
-          </p>
+          <!-- Its text is the "?" beside the heading (X-3, helpText.buildIntro), not a paragraph
+               repeated on every phase (BP-13). -->
           <p v-if="!page.milestones && !page.guided" class="small" data-session-link-row>
             <a href="#session" data-session-link>Today's session: the next builds, printable →</a>
           </p>
