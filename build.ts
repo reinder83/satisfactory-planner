@@ -50,6 +50,7 @@ const SHARED = [
   'step-table.ts',
   'storage-room.ts',
   'transfer.ts',
+  'numbers.ts',
   'wording.ts',
   'preferences/build-costs.ts',
   'preferences/extraction.ts',

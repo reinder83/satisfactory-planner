@@ -378,8 +378,8 @@ test('the phase table shows the buildings to add and their build materials', () 
   assert.deepEqual(view.columns.slice(0, 3), ['Buildings', 'Buildings to add', 'Build materials']);
   const own = profiles[1]!.figures!.phases.find(phase => phase.phase === '3')!;
   const cells = view.rows.find(row => row.id === 'p1')!.cells;
-  assert.equal(cells[1]!.text, own.newBuildings!.toLocaleString(undefined));
-  assert.equal(cells[2]!.text, own.buildParts!.toLocaleString(undefined) + ' parts');
+  assert.equal(cells[1]!.text, own.newBuildings!.toLocaleString('en-US'));
+  assert.equal(cells[2]!.text, own.buildParts!.toLocaleString('en-US') + ' parts');
 });
 
 test('build parts are counted once per building, and a building without a cost is named', () => {

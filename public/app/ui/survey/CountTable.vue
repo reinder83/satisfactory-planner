@@ -9,6 +9,7 @@
   rate the left-out ones give.
 -->
 <script setup lang="ts">
+import { vNumber } from '../form/number-input.ts';
 import { computed } from 'vue';
 import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.ts';
 import { itemRate } from '../../flow.ts';
@@ -69,7 +70,8 @@ const noun = computed(() => (props.kind === 'well' ? 'well satellites' : 'nodes'
         ><span>{{ cell.label }}</span
         ><input
           :name="prefix + ':' + row.name + ':' + cell.key"
-          type="number"
+          type="text"
+          v-number
           min="0"
           :max="cell.max"
           step="1"

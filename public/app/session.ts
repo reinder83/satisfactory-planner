@@ -47,7 +47,8 @@ const VIEWS = [
   'wizard',
   'account',
 ] as const;
-export type View = (typeof VIEWS)[number];
+// 'notfound' is no route of its own: the page an address that names none opens (viewOf).
+export type View = (typeof VIEWS)[number] | 'notfound';
 // #factories/<group>/flow?phase=<phase>, the flow page of one factory group (#883, #894) in a
 // phase (#926). An address from before #926 has no ?phase=.
 const FLOW_ROUTE = /^factories\/([^/?]+)\/flow(?:\?(.*))?$/;
@@ -94,14 +95,20 @@ export function flowRoute(
   ].join('&');
   return query ? `${route}?${query}` : route;
 }
-// The route a hash names: an unknown one shows the plan. A group's flow page belongs to the
-// factories page, so the sidebar marks Factories.
+// The route a hash names: no hash at all (the bare address) opens the plan, and an unknown one
+// the not-found page (#1330), not the plan it used to open without a word. A group's flow page
+// belongs to the factories page, so the sidebar marks Factories.
+// The skip link's target (#main in index.html): no page of its own. The link itself keeps the
+// page (listeners.ts); an address opened with it still shows the plan, as before #1330.
+export const SKIP_TARGET = 'main';
 export const viewOf = (hash: string): View =>
   flowGroupOf(hash) !== null
     ? 'factories'
-    : (VIEWS as readonly string[]).includes(hash)
-      ? (hash as View)
-      : 'plan';
+    : hash === '' || hash === SKIP_TARGET
+      ? 'plan'
+      : (VIEWS as readonly string[]).includes(hash)
+        ? (hash as View)
+        : 'notfound';
 
 // The open save and profile. A profile opened is 'calculated': the retired handbook kind
 // ('original') is migrated before it reaches the interface (#387). The empty workspace's

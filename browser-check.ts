@@ -305,6 +305,22 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
 }
+// An address that names no page opens the not-found page (#1330), also under the Pages
+// edition's subpath, and its Build plan link leads on. The browser edition's #account, which has
+// no accounts, says it is the Backup page.
+async function checkNotFound(page: Page) {
+  await page.goto(base + '#nowhere');
+  await page.locator('[data-not-found]').waitFor();
+  assert.equal(await page.locator('h1').innerText(), 'Page not found');
+  assert.ok(await page.getByText('That sector is not on any FICSIT map.').count());
+  assert.equal(await page.locator('[data-not-found-profiles]').getAttribute('href'), '#profiles');
+  await page.locator('[data-not-found-plan]').click();
+  await page.waitForFunction(() => location.hash === '#plan');
+  await page.locator('[data-not-found]').waitFor({ state: 'detached' });
+  await page.goto(base + '#account');
+  await page.locator('[data-account-alias]').waitFor();
+  assert.equal(await page.locator('h1').innerText(), 'Backup');
+}
 // The world map (#1283) in the Pages edition: the image loads from the build under its subpath,
 // the map opens fitted to its box, the wheel over it zooms it without scrolling the page, and at
 // 390 px the page has no sideways scroll and the zoom buttons are 44 px touch targets.
@@ -806,6 +822,8 @@ try {
   await supply.blur();
   await page.locator('[name=phase]').selectOption('1');
   await page.locator('[data-wizard-step="2"]').click();
+  // The settings above the recipe picker are folded until opened (ONB-1, #1328).
+  await page.locator('[data-settings-toggle]').click();
   await page.locator('[name=storage]').selectOption('construction');
   await page.locator('[data-wizard-step="3"]').click();
   await page.locator('[name=profileName]').fill('First profile');
@@ -1438,6 +1456,7 @@ try {
     await page.locator('[data-toggle-layout]').click();
   };
   await checkScrollFollow();
+  await checkNotFound(page);
   // The browser workspace has the save the wizard just created.
   const first = (await api<WorkspaceSummary>('/api/workspace')).saves[0]!;
   await api('/api/profiles', {

@@ -1,7 +1,8 @@
 <!--
   #account. On the server: the signed-in user and "Sign out" (signOut in ui/actions.ts, which the
   sidebar's profile switcher uses too), or the setup form while
-  accounts are still off. The browser edition has no accounts, so it shows the backup page.
+  accounts are still off. The browser edition has no accounts, so #account is an alias of the backup
+  page there, said so in a line above it (#1330).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -22,7 +23,13 @@ const account = computed(() =>
 </script>
 
 <template>
-  <BackupPage v-if="browserMode" />
+  <template v-if="browserMode">
+    <p class="notice info" data-account-alias>
+      The browser edition has no user accounts: your saves live in this browser. This is the Backup
+      page, where you can export them.
+    </p>
+    <BackupPage />
+  </template>
   <template v-else>
     <PageHeader
       eyebrow="YOUR ACCOUNT"

@@ -79,7 +79,7 @@ test('#factories/<group>/flow is the factories view and draws the group’s flow
   assert.equal(flowGroupOf('factories/%E0%A4%A/flow'), null, 'a broken escape is no group');
   // A reload reads the view from the hash (boot in session.ts), so it lands here again.
   assert.equal(viewOf('factories/fg-iron01/flow'), 'factories');
-  assert.equal(viewOf('factories/x/flow/more'), 'plan');
+  assert.equal(viewOf('factories/x/flow/more'), 'notfound', 'no such address');
   assert.equal(vuePage('factories', null, true, 'factories/fg-iron01/flow'), GroupFlowPage);
   assert.equal(vuePage('factories', null, true, 'factories'), CalculatedFactoriesPage);
   assert.equal(vuePage('factories', null), CalculatedFactoriesPage);

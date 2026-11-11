@@ -26,6 +26,7 @@ const limits = computed(() =>
       :label="limit.name"
       :name="'limit:' + limit.name"
       :value="limit.value"
+      data-grouped
       min="0"
       max="10000000"
       step="any"

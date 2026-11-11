@@ -10,8 +10,7 @@ import type { Progression, StoredCalculatedPlan } from '../public/types/index.ts
 
 // #772: formatNumber shares one Intl.NumberFormat instead of calling toLocaleString with
 // options, which built a new formatter per call. The text must not change at all.
-const old = (value: unknown) =>
-  Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const old = (value: unknown) => Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 test('formatNumber matches toLocaleString with at most 2 decimals for every kind of value', () => {
   const values: unknown[] = [
@@ -58,19 +57,20 @@ test('phaseSteps text is byte-identical to the per-call toLocaleString version',
   // imports wording.ts (#871), which is copied beside it, and power.ts (#1064), which the copy
   // imports from where it is.
   const source = fs.readFileSync(new URL('../public/progression.ts', import.meta.url), 'utf8');
-  const shared = /const numberFormat = [^\n]*\n(export const formatNumber = [^\n]*)\n/;
+  const shared = /export const formatNumber = [^\n]*\n/;
   assert.match(source, shared);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'number-format-'));
   try {
     const file = path.join(dir, 'progression-old.ts');
     fs.copyFileSync(new URL('../public/wording.ts', import.meta.url), path.join(dir, 'wording.ts'));
+    fs.copyFileSync(new URL('../public/numbers.ts', import.meta.url), path.join(dir, 'numbers.ts'));
     fs.writeFileSync(
       file,
       source
         .replace(
           shared,
           'export const formatNumber = (value: unknown): string =>\n' +
-            '  Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });\n',
+            "  Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });\n",
         )
         .replace(
           "from './power.ts'",
