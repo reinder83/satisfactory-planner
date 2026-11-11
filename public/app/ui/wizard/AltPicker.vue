@@ -13,18 +13,18 @@
   it. Ticked stars (name="altpref") are settings.preferredRecipes. A recipe the ingot preference
   already requires has no states; a pick the user gave it keeps its hidden "alt" field (#1058).
 
-  The rows are grouped by product, each group with a one-line verdict: what its best alternate
+  The rows are grouped by product, each group a disclosure button folded by default (ONB-1) that reads "Iron Ingot · 3 alternates · 1 owned", with "All owned" and "All not allowed" beside it (the toast's Undo puts the rows back), and, opened, a one-line verdict: what its best alternate
   skips from the standard recipe and, when this profile's stored hard-drive ranking (#203) has
   them, the buildings it saves. A hunting row says what it saves if found and what the plan's
-  product is made with until then. Filters by text, phase and state hide rows in place; "Hunt all
+  product is made with until then. A sticky toolbar's search (recipe or product), state (All, Owned, Hunting, Not allowed, Changed: not the default, which is not allowed and not forced) and phase hide rows in place and open the groups with a match; "Hunt all
   shown" and "Clear shown" apply to the rows shown. "Planner's choice" calculates with every
   alternate allowed and marks the ones that plan uses from its start phase on as hunting, then
   calculates with just those and keeps the ones that plan uses too (#1058). Only the draft
   changes, nothing is saved.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { post, toast } from '../../api.ts';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { dropToastAction, post, toast } from '../../api.ts';
 import { $, required } from '../../format.ts';
 import {
   compared,
@@ -48,6 +48,9 @@ import type { StoredCalculatedPlan } from '../../../types/index.ts';
 
 // A stable empty list, so a draft without picks does not look replaced on every redraw.
 const NONE: string[] = [];
+
+// The filter's "Changed" is not a state: a row that differs from the default (see `changed`).
+type Only = RecipeState | 'changed' | '';
 
 const STATE_LABELS: [RecipeState, string][] = [
   ['owned', 'Owned'],
@@ -125,11 +128,48 @@ function choose(row: AltRow, next: RecipeState) {
 
 const filter = ref('');
 const phase = ref('');
-const only = ref<RecipeState | ''>('');
+const only = ref<Only>('');
+// A recipe's default is what a new profile starts with: Recipe access standard, so nothing
+// owned, hunting or forced (freshSettings in wizard.ts), i.e. not allowed
+// without a star. "Changed" is every row that differs from that.
+const changed = (row: AltRow) =>
+  !row.why && (state(row) !== 'off' || sets.value.starred.has(row.id));
 const shown = (row: AltRow) =>
   (filter.value.trim() === '' || row.text.includes(filter.value.trim().toLowerCase())) &&
   (phase.value === '' || row.phase <= Number(phase.value)) &&
-  (only.value === '' || (!row.why && state(row) === only.value));
+  (only.value === '' ||
+    (only.value === 'changed' ? changed(row) : !row.why && state(row) === only.value));
+// Searching or filtering opens the groups that have a match; a group the user opened or closed
+// by hand stays as they left it until the search or a filter changes again.
+const filtering = computed(
+  () => filter.value.trim() !== '' || phase.value !== '' || only.value !== '',
+);
+const toggled = ref(new Map<string, boolean>());
+watch([filter, phase, only], () => (toggled.value = new Map()));
+const isOpen = (group: { product: string }) => toggled.value.get(group.product) ?? filtering.value;
+function toggle(group: { product: string }) {
+  const next = new Map(toggled.value);
+  next.set(group.product, !isOpen(group));
+  toggled.value = next;
+}
+const groupId = (group: { product: string }) =>
+  'alt-group-' + group.product.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+// "Iron Ingot · 3 alternates · 1 owned", with the hunting ones when there are some.
+function summary(group: { product: string; rows: AltRow[] }): string {
+  const rows = group.rows;
+  const owned = rows.filter(row => !row.why && state(row) === 'owned').length;
+  const hunting = rows.filter(row => !row.why && state(row) === 'hunting').length;
+  return [
+    group.product,
+    `${rows.length} ${rows.length === 1 ? 'alternate' : 'alternates'}`,
+    `${owned} owned`,
+    ...(hunting ? [`${hunting} hunting`] : []),
+  ].join(' · ');
+}
+const matches = computed(() => {
+  const rows = (view.value?.rows || []).filter(shown);
+  return { rows: rows.length, groups: new Set(rows.map(row => row.product)).size };
+});
 
 // The rows grouped by product, in the order the rows are sorted, with each group's verdict.
 const groups = computed(() => {
@@ -172,6 +212,69 @@ function payoffLine(row: AltRow): string {
     return `Worth a hard drive: ${payoffSaving(row.figure)}`;
   return '';
 }
+
+// "All owned" / "All not allowed" on a group: the rows the filters show in it, never the ones the
+// ingot preference requires. The toast's Undo puts those rows' states and stars back as they were,
+// each only while it still has the state the action gave it. Only the picker's draft changes.
+const BULK_WORDS = { owned: 'owned', off: 'not allowed' } as const;
+let undoLive = false;
+function bulk(group: { product: string; rows: AltRow[] }, to: 'owned' | 'off') {
+  const rows = group.rows.filter(row => !row.why && shown(row) && state(row) !== to);
+  if (!rows.length) {
+    toast(`Every recipe shown for ${group.product} is already ${BULK_WORDS[to]}.`);
+    return;
+  }
+  const before = sets.value;
+  let next = before;
+  for (const row of rows) next = withState(next, row.id, to);
+  sets.value = next;
+  undoLive = true;
+  toast(
+    `Marked ${rows.length} ${group.product} ${rows.length === 1 ? 'recipe' : 'recipes'} ${BULK_WORDS[to]}.`,
+    false,
+    {
+      label: 'Undo',
+      run: () => {
+        undoLive = false;
+        const back: RecipeSets = {
+          picked: new Set(sets.value.picked),
+          owned: new Set(sets.value.owned),
+          planner: new Set(sets.value.planner),
+          starred: new Set(sets.value.starred),
+        };
+        const put = (set: Set<string>, id: string, was: boolean) =>
+          was ? set.add(id) : set.delete(id);
+        for (const row of rows) {
+          if (stateIn(back, row.id) !== to) continue;
+          put(back.picked, row.id, before.picked.has(row.id));
+          put(back.owned, row.id, before.owned.has(row.id));
+          put(back.planner, row.id, before.planner.has(row.id));
+          put(back.starred, row.id, before.starred.has(row.id));
+        }
+        sets.value = back;
+        toast(`Undone: ${rows.length} ${group.product} recipes are back as they were.`);
+      },
+    },
+  );
+}
+// The sticky toolbar wraps to more lines on a narrow screen, so its real height is measured and
+// handed to the scroll-margin of everything focusable below it: Shift+Tab never lands under it.
+const toolbar = ref<HTMLElement | null>(null);
+let toolbarObserver: ResizeObserver | undefined;
+watch(toolbar, el => {
+  toolbarObserver?.disconnect();
+  toolbarObserver = undefined;
+  if (!el || typeof ResizeObserver !== 'function') return;
+  toolbarObserver = new ResizeObserver(() =>
+    el.parentElement?.style.setProperty('--alt-toolbar-h', `${Math.ceil(el.offsetHeight)}px`),
+  );
+  toolbarObserver.observe(el);
+});
+// Leaving the step takes the Undo away: the picker it would change is gone.
+onBeforeUnmount(() => {
+  if (undoLive) dropToastAction();
+  toolbarObserver?.disconnect();
+});
 
 const counts = computed(() => {
   const rows = (view.value?.rows || []).filter(row => !row.why);
@@ -294,44 +397,25 @@ async function best() {
         </button></span
       >
     </div>
-    <div class="alt-filters">
-      <input
-        id="alt-filter"
-        v-model="filter"
-        type="search"
-        placeholder="Filter by recipe or product…"
-        aria-label="Filter alternate recipes"
-      /><label
-        >Phase
-        <select v-model="phase" data-alt-phase aria-label="Show the recipes available by">
-          <option value="">Any phase</option>
-          <option v-for="n in 5" :key="n" :value="String(n)">By Phase {{ n }}</option>
-        </select></label
-      ><label
-        >Show
-        <select v-model="only" data-alt-only aria-label="Show the recipes in this state">
-          <option value="">All states</option>
-          <option v-for="[value, text] in STATE_LABELS" :key="value" :value="value">
-            {{ text }}
-          </option>
-        </select></label
-      >
-    </div>
-    <p class="small muted">
-      <b>Owned</b>: you have unlocked it; the plan uses it freely and its unlock step starts ticked.
-      <b>Hunting</b>: the plan counts on it, and its hard-drive step stays on the build plan’s hunt
-      until you mark it unlocked. <b>Not allowed</b>: the plan never uses it. With nothing hunting
-      or owned it is the same plan as with Standard recipes. The MAM recipes follow their own box
-      above, and Distilled Silica comes with the Tier 7 milestone Control System Development in
-      every plan. Requiring pure ingots locks the pure recipes; one you picked yourself stays picked
-      when you turn that off again. Raw-resource conversion recipes are not alternates — they follow
-      the SAM conversion setting and Tier 9 unlocks. <b>Planner’s choice</b> recalculates with every
-      alternate allowed and marks only the recipes the plan uses from your start phase on as hunting
-      — each costs one hard drive.
-      <template v-if="view.ranked"
-        >Buildings saved are from this profile’s hard-drive ranking for {{ view.ranked }}.</template
-      >
-    </p>
+    <details class="alt-help">
+      <summary>What owned, hunting and not allowed mean</summary>
+      <p class="small muted">
+        <b>Owned</b>: you have unlocked it; the plan uses it freely and its unlock step starts
+        ticked. <b>Hunting</b>: the plan counts on it, and its hard-drive step stays on the build
+        plan’s hunt until you mark it unlocked. <b>Not allowed</b>: the plan never uses it. With
+        nothing hunting or owned it is the same plan as with Standard recipes. The MAM recipes
+        follow their own box above, and Distilled Silica comes with the Tier 7 milestone Control
+        System Development in every plan. Requiring pure ingots locks the pure recipes; one you
+        picked yourself stays picked when you turn that off again. Raw-resource conversion recipes
+        are not alternates — they follow the SAM conversion setting and Tier 9 unlocks.
+        <b>Planner’s choice</b> recalculates with every alternate allowed and marks only the recipes
+        the plan uses from your start phase on as hunting — each costs one hard drive.
+        <template v-if="view.ranked"
+          >Buildings saved are from this profile’s hard-drive ranking for
+          {{ view.ranked }}.</template
+        >
+      </p>
+    </details>
     <p class="alt-force-hint">
       <span class="alt-force-star">★</span
       ><span
@@ -339,6 +423,36 @@ async function best() {
         <b>no other recipe</b> for that product once the starred one is available.</span
       >
     </p>
+    <div ref="toolbar" class="alt-toolbar" role="search">
+      <label class="alt-search"
+        >Search recipes
+        <input
+          id="alt-filter"
+          v-model="filter"
+          type="search"
+          placeholder="Recipe or part, e.g. Pure Iron Ingot"
+        />
+      </label>
+      <label
+        >State
+        <select v-model="only" data-alt-only>
+          <option value="">All</option>
+          <option v-for="[value, text] in STATE_LABELS" :key="value" :value="value">
+            {{ text }}
+          </option>
+          <option value="changed">Changed</option>
+        </select></label
+      ><label
+        >Phase
+        <select v-model="phase" data-alt-phase>
+          <option value="">Any phase</option>
+          <option v-for="n in 5" :key="n" :value="String(n)">By Phase {{ n }}</option>
+        </select></label
+      ><span class="alt-matches small muted" role="status" data-alt-matches
+        >{{ matches.rows }} {{ matches.rows === 1 ? 'recipe' : 'recipes' }} in {{ matches.groups }}
+        {{ matches.groups === 1 ? 'group' : 'groups' }}</span
+      >
+    </div>
     <div class="alt-list">
       <section
         v-for="group in groups"
@@ -347,87 +461,122 @@ async function best() {
         :data-alt-group="group.product"
         :hidden="!group.rows.some(shown)"
       >
-        <h4>{{ group.product }}</h4>
-        <p v-if="group.verdict" class="alt-verdict" data-alt-verdict>{{ group.verdict }}</p>
-        <div
-          v-for="row in group.rows"
-          :key="row.id"
-          class="alt-row"
-          :data-alt-row="row.id"
-          :data-alt-state="row.why ? 'required' : state(row)"
-          :data-alt-text="row.text"
-          :hidden="!shown(row)"
-        >
-          <span class="alt-name"
-            >{{ row.name
-            }}<small class="muted">
-              · Phase {{ row.phase
-              }}{{ row.outs.length > 1 ? ' · also ' + row.outs.slice(1).join(', ') : '' }}</small
-            ></span
+        <div class="alt-group-head">
+          <h4>
+            <button
+              type="button"
+              class="alt-toggle"
+              data-alt-toggle
+              :aria-expanded="isOpen(group)"
+              :aria-controls="groupId(group)"
+              @click="toggle(group)"
+            >
+              <span class="alt-caret" aria-hidden="true">{{ isOpen(group) ? '▾' : '▸' }}</span
+              >{{ summary(group) }}
+            </button>
+          </h4>
+        </div>
+        <div :id="groupId(group)" class="alt-group-body" :hidden="!isOpen(group)">
+          <span class="alt-bulk"
+            ><button
+              type="button"
+              class="btn quiet"
+              data-alt-bulk="owned"
+              :aria-label="`Mark all ${group.product} alternates owned`"
+              @click="bulk(group, 'owned')"
+            >
+              All owned</button
+            ><button
+              type="button"
+              class="btn quiet"
+              data-alt-bulk="off"
+              :aria-label="`Mark all ${group.product} alternates not allowed`"
+              @click="bulk(group, 'off')"
+            >
+              All not allowed
+            </button></span
           >
-          <span v-if="row.why" class="alt-required small muted"
-            >Required by your {{ row.why }}</span
+          <p v-if="group.verdict" class="alt-verdict" data-alt-verdict>{{ group.verdict }}</p>
+          <div
+            v-for="row in group.rows"
+            :key="row.id"
+            class="alt-row"
+            :data-alt-row="row.id"
+            :data-alt-state="row.why ? 'required' : state(row)"
+            :data-alt-text="row.text"
+            :hidden="!shown(row)"
           >
-          <span
-            v-else
-            class="alt-states"
-            role="radiogroup"
-            :aria-label="`${row.name}: owned, hunting or not allowed`"
-            ><label
-              v-for="[value, text] in STATE_LABELS"
-              :key="value"
-              :class="['alt-state', 'alt-state-' + value]"
-              ><input
-                type="radio"
-                :name="'altstate:' + row.id"
-                :value="value"
-                :data-alt-set="value"
-                :checked="state(row) === value"
-                @change="choose(row, value)"
-              /><span>{{ text }}</span></label
-            ></span
-          >
-          <input v-if="sets.picked.has(row.id)" type="hidden" name="alt" :value="row.id" /><input
-            v-if="state(row) === 'owned'"
-            type="hidden"
-            name="ownedAlt"
-            :value="row.id"
-          /><input
-            v-if="sets.picked.has(row.id) && sets.planner.has(row.id)"
-            type="hidden"
-            name="altplanner"
-            :value="row.id"
-            data-alt-planner
-          /><input
-            v-if="row.why && sets.picked.has(row.id) && sets.starred.has(row.id)"
-            type="hidden"
-            name="altpref"
-            :value="row.id"
-          /><label
-            v-if="!row.why"
-            class="alt-pref"
-            :title="`Force this recipe: the plan will not use any other recipe for ${row.product} once this one is available`"
-            ><input
-              type="checkbox"
+            <span class="alt-name"
+              >{{ row.name
+              }}<small class="muted">
+                · Phase {{ row.phase
+                }}{{ row.outs.length > 1 ? ' · also ' + row.outs.slice(1).join(', ') : '' }}</small
+              ></span
+            >
+            <span v-if="row.why" class="alt-required small muted"
+              >Required by your {{ row.why }}</span
+            >
+            <span
+              v-else
+              class="alt-states"
+              role="radiogroup"
+              :aria-label="`${row.name}: owned, hunting or not allowed`"
+              ><label
+                v-for="[value, text] in STATE_LABELS"
+                :key="value"
+                :class="['alt-state', 'alt-state-' + value]"
+                ><input
+                  type="radio"
+                  :name="'altstate:' + row.id"
+                  :value="value"
+                  :data-alt-set="value"
+                  :checked="state(row) === value"
+                  @change="choose(row, value)"
+                /><span>{{ text }}</span></label
+              ></span
+            >
+            <input v-if="sets.picked.has(row.id)" type="hidden" name="alt" :value="row.id" /><input
+              v-if="state(row) === 'owned'"
+              type="hidden"
+              name="ownedAlt"
+              :value="row.id"
+            /><input
+              v-if="sets.picked.has(row.id) && sets.planner.has(row.id)"
+              type="hidden"
+              name="altplanner"
+              :value="row.id"
+              data-alt-planner
+            /><input
+              v-if="row.why && sets.picked.has(row.id) && sets.starred.has(row.id)"
+              type="hidden"
               name="altpref"
               :value="row.id"
-              :checked="sets.starred.has(row.id)"
-              :disabled="state(row) === 'off'"
-              :aria-label="`Force ${row.name} as the only ${row.product} recipe`"
-              @change="star(row, ($event.target as HTMLInputElement).checked)"
-            /><span>★</span></label
-          ><button
-            type="button"
-            class="btn quiet alt-info"
-            :data-alt-info="row.id"
-            :aria-label="`Show the ${row.name} recipe`"
-            @click="openAltRecipe(row.id)"
-          >
-            recipe ↗
-          </button>
-          <small v-if="!row.why && payoffLine(row)" class="alt-payoff" data-alt-payoff>{{
-            payoffLine(row)
-          }}</small>
+            /><label
+              v-if="!row.why"
+              class="alt-pref"
+              :title="`Force this recipe: the plan will not use any other recipe for ${row.product} once this one is available`"
+              ><input
+                type="checkbox"
+                name="altpref"
+                :value="row.id"
+                :checked="sets.starred.has(row.id)"
+                :disabled="state(row) === 'off'"
+                :aria-label="`Force ${row.name} as the only ${row.product} recipe`"
+                @change="star(row, ($event.target as HTMLInputElement).checked)"
+              /><span>★</span></label
+            ><button
+              type="button"
+              class="btn quiet alt-info"
+              :data-alt-info="row.id"
+              :aria-label="`Show the ${row.name} recipe`"
+              @click="openAltRecipe(row.id)"
+            >
+              recipe ↗
+            </button>
+            <small v-if="!row.why && payoffLine(row)" class="alt-payoff" data-alt-payoff>{{
+              payoffLine(row)
+            }}</small>
+          </div>
         </div>
       </section>
     </div>
