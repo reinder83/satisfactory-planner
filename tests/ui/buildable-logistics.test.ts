@@ -80,15 +80,14 @@ test('every line’s machines per delivery add up to its machines, on every prof
   assert.ok(over > 0, 'some line’s deliveries rounded up came to more than its machines');
 });
 
-// The transport each link has on the Logistics page, from its Out row: the vehicle picked, "belt",
-// or "extract" for Water pumped at the site, keyed `<from>:<to>`.
+// The transport each link has on the Logistics page, from its Out row: the vehicle picked or
+// "belt", keyed `<from>:<to>`. Water pumped at the site has no row (LOG-1, #1329).
 function logisticsChoices(): Map<string, string> {
   const choices = new Map<string, string>();
   for (const row of $$('[data-link-out]')) {
-    const select = row.querySelector<HTMLSelectElement>('[data-link-mode]');
     choices.set(
       row.dataset.linkOut!,
-      row.querySelector('[data-link-extract]') ? 'extract' : select!.value,
+      row.querySelector<HTMLSelectElement>('[data-link-mode]')!.value,
     );
   }
   return choices;
@@ -168,6 +167,13 @@ test('the flow page and Logistics name the same transport for every link, on eve
           ),
       )!;
       const check = (key: string, words: string, where: string) => {
+        if (flowChoice(words) === 'extract') {
+          // Pumped at the site: one summary line on the page, no link row.
+          assert.ok(!choices.has(key), `${label}: ${key} is no link on the Logistics page`);
+          assert.ok($('[data-on-site]'), `${label}: the on-site line`);
+          seen.add('extract');
+          return;
+        }
         assert.ok(choices.has(key), `${label}: ${key} is on the Logistics page`);
         assert.equal(
           flowChoice(words),
