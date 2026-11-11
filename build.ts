@@ -289,25 +289,42 @@ async function buildPages() {
   await fs.writeFile(
     path.join(out, 'calculator-worker.js'),
     await minifyJs(`const ready = import('./planner.mjs');
-self.onmessage = async ({ data }) => {
+// A ranking hands control back after each alternate (rankAlternatesSteps), which is when a
+// { cancel: id } message is heard; jobs still run one at a time, in the order posted (#1332).
+const cancelled = new Set();
+let queue = Promise.resolve();
+const run = async data => {
   try {
-    const { calculate, rankAlternates } = await ready;
-    self.postMessage({
-      id: data.id,
-      result: data.rank
-        ? rankAlternates(data.settings, {
-            phase: data.rank.phase,
-            budgetMs: data.rank.budgetMs,
-            remaining: data.rank.remaining === true,
-            hunting: data.rank.hunting === true,
-            onProgress: (done, total) => self.postMessage({ id: data.id, done, total }),
-            onPhase: phase => self.postMessage({ id: data.id, phase }),
-          })
-        : calculate(data.settings, phase => self.postMessage({ id: data.id, phase })),
-    });
+    const { calculate, rankAlternatesSteps } = await ready;
+    let result;
+    if (data.rank) {
+      const steps = rankAlternatesSteps(data.settings, {
+        phase: data.rank.phase,
+        budgetMs: data.rank.budgetMs,
+        remaining: data.rank.remaining === true,
+        hunting: data.rank.hunting === true,
+        onPhase: phase => self.postMessage({ id: data.id, phase }),
+        shouldStop: () => cancelled.has(data.id),
+      });
+      for (;;) {
+        const step = steps.next();
+        if (step.done) {
+          result = step.value;
+          break;
+        }
+        self.postMessage({ id: data.id, done: step.value.done, total: step.value.total });
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    } else result = calculate(data.settings, phase => self.postMessage({ id: data.id, phase }));
+    self.postMessage({ id: data.id, result });
   } catch (error) {
     self.postMessage({ id: data.id, error: error.message });
   }
+  cancelled.delete(data.id);
+};
+self.onmessage = ({ data }) => {
+  if (data.cancel !== undefined) cancelled.add(data.cancel);
+  else queue = queue.then(() => run(data));
 };`),
   );
   await fs.writeFile(path.join(dist, '.nojekyll'), '');

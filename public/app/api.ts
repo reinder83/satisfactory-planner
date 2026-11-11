@@ -35,6 +35,8 @@ import type { ProgressState, Progression, UpdateOp, WorkspaceSummary } from '../
 export type RequestOptions = RequestInit & {
   onProgress?: (phase: number) => void;
   onRankProgress?: (done: number, total: number) => void;
+  // Aborting it makes a payoff ranking stop and reply with what it has (browser-api.ts, #1332).
+  stop?: AbortSignal;
 };
 
 // Number of queued writes still in flight (queuedWrite: save() and restoring a progress

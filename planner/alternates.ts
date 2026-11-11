@@ -41,7 +41,30 @@ import { calculate } from './calculate.ts';
 // and Compacted Coal costs a Hard Drive each, so a profile with the MAM recipes off still ranks them.
 const NO_HARD_DRIVE = STANDARD_ALTERNATES.filter(id => !turbofuelRecipes.includes(id));
 type Stages = Partial<Record<StageKey, CurrentStage>>;
-export function rankAlternates(
+// Cancelling (BUG-7, #1332): `shouldStop()` is asked before each trial, and a true answer ends the
+// ranking there exactly as `budgetMs` does (`stopped`, the candidates so far). A trial is one
+// synchronous calculation, so nothing can interrupt it; the ranking stops between two. To let the
+// caller hear of a cancel while one runs, the work is written as a generator, rankAlternatesSteps,
+// which yields `{ done, total }` before the first trial and after each one; the browser worker and
+// the server's ranking thread (server/rank-thread.ts) hand control back to their event loop at each
+// yield, which is where a cancel message arrives. rankAlternates runs it to the end.
+export interface RankOptions {
+  phase: StageKey;
+  remaining?: boolean;
+  hunting?: boolean;
+  onProgress?: (done: number, total: number) => void;
+  onPhase?: (phase: number) => void;
+  budgetMs?: number;
+  shouldStop?: () => boolean;
+}
+export function rankAlternates(input: unknown, options: RankOptions): AlternateRanking {
+  const steps = rankAlternatesSteps(input, options);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
+}
+export function* rankAlternatesSteps(
   input: unknown,
   {
     phase,
@@ -50,15 +73,9 @@ export function rankAlternates(
     onProgress,
     onPhase,
     budgetMs = Infinity,
-  }: {
-    phase: StageKey;
-    remaining?: boolean;
-    hunting?: boolean;
-    onProgress?: (done: number, total: number) => void;
-    onPhase?: (phase: number) => void;
-    budgetMs?: number;
-  },
-): AlternateRanking {
+    shouldStop,
+  }: RankOptions,
+): Generator<{ done: number; total: number }, AlternateRanking> {
   const started = Date.now();
   // A cap on hard drives (#1233) is left out: the payoff of an alternate is what allowing it
   // changes, and under a cap that binds each trial would pick another set (a search per trial).
@@ -143,8 +160,9 @@ export function rankAlternates(
     ...hunted.map(recipe => ({ recipe, hunt: true })),
     ...candidates.map(recipe => ({ recipe, hunt: false })),
   ];
+  yield { done: 0, total: jobs.length };
   for (const { recipe: candidate, hunt } of jobs) {
-    if (Date.now() - started > budgetMs) {
+    if (Date.now() - started > budgetMs || shouldStop?.()) {
       stopped = true;
       break;
     }
@@ -221,6 +239,7 @@ export function rankAlternates(
     }
     list.push(entry);
     onProgress?.(list.length, jobs.length);
+    yield { done: list.length, total: jobs.length };
   }
   return {
     phase,

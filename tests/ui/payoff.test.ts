@@ -178,7 +178,7 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   openPlan();
   render();
   assert.equal(sessionPayoff, null);
-  assert.match($('[data-payoff]')!.textContent!, /Which hard drive to spend next/);
+  assert.match($('[data-payoff]')!.textContent!, /Shows which alternate recipe saves the most/);
   const calls = stubFetch({ '/api/rank-alternates': stored() });
   $('[data-rank-alternates]')!.click();
   await nextTick();

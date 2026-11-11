@@ -7,6 +7,12 @@
   this phase shows at once, one made before #1075 as it was (that phase alone). Nothing is ranked
   or recalculated until the user presses the button.
 
+  A ranking takes up to two minutes (#1332, BUG-7), so it runs in app/rank-job.ts, which outlives
+  this panel: while it runs the panel shows "Checking 12 of 58 alternates…" with a progress bar and
+  Cancel, which stops it before its next alternate and keeps those checked so far, marked partial.
+  The user can leave the tab or the page and come back to the same progress; when it finishes
+  elsewhere a toast, a polite announcement and ADA say so.
+
   The table sorts by Δ buildings first, whatever the goal (#1075); a threshold hides the rows that
   save fewer buildings; the tab has room for every row (#1243). A recipe not allowed yet
   has "Add as hunting": it recalculates this profile in place with that recipe allowed as one to
@@ -17,56 +23,58 @@
   app/payoff.ts. It draws nothing in "New to Satisfactory" mode (#1076), so the tab goes too.
 -->
 <script setup lang="ts">
-import { computed, ref, shallowRef } from 'vue';
-import { post, toast } from '../../api.ts';
-import { num } from '../../format.ts';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import {
   PAYOFF_COLUMNS,
   PAYOFF_STATUS,
   PAYOFF_WORDS,
   payoffDelta,
   payoffTable,
-  rankedMessage,
   rankedPhases,
   type PayoffColumn,
 } from '../../payoff.ts';
-import { announce } from '../../announce.ts';
+import { cancelRank, clearRankDone, rankLabel, startRank, wasCancelled } from '../../rank-job.ts';
+import { RANK_LIMIT, rankLeftOut, rankLive, rankRun } from './rank-state.ts';
 import { huntingSettings } from '../../recipe-states.ts';
 import { beginnerMode } from '../../beginner.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
-import { RANK_BUDGET_MS } from '../../../state.ts';
-import {
-  calcStage,
-  calculated,
-  currentProfile,
-  payoff,
-  phaseLabel,
-  setPayoff,
-  stage,
-} from '../../session.ts';
-import { render } from '../../shell.ts';
+import { calcStage, calculated, currentProfile, payoff, phaseLabel, stage } from '../../session.ts';
 import { openAltRecipe } from '../../wizard/recipes.ts';
 import { legacy } from '../bridge.ts';
 import { recalculateOffer } from '../recalc-offer.ts';
-import type { RankReply, StoredPayoff } from '../../../types/index.ts';
 
 // The chosen sort; null is Δ buildings (#1075).
 const sortBy = ref<PayoffColumn | null>(null);
 const direction = ref<1 | -1>(1);
-// "Checking 23 of 67 alternates…" while a ranking runs; empty otherwise.
-const running = ref('');
+// The ranking that is running, from app/rank-job.ts (which outlives this panel); null otherwise.
+const run = computed(() => rankRun.current);
+const running = computed(() => !!run.value);
+// "Checking 23 of 67 alternates…" while it runs.
+const label = computed(() => (run.value ? rankLabel(run.value) : ''));
+const otherProfile = computed(() => !!run.value && run.value.profileId !== currentProfile.id);
+// Cancel was pressed from the keyboard or pointer: when the progress goes, focus goes back to the
+// button that started it rather than to <body>.
+let refocus = false;
+watch(running, now => {
+  if (now) return;
+  const focusLost = refocus || !document.activeElement || document.activeElement === document.body;
+  refocus = false;
+  if (focusLost)
+    void nextTick(() =>
+      document.querySelector<HTMLButtonElement>('[data-rank-alternates]')?.focus(),
+    );
+});
+function cancel() {
+  refocus = true;
+  void cancelRank();
+}
+// A ranking that finished while the user was elsewhere has had its say with ADA once it is looked
+// at here.
+onMounted(clearRankDone);
 // The payoff threshold (#1075): only rows saving at least this many buildings; 0 shows all.
 const THRESHOLDS = [0, 1, 5, 10, 20];
 const threshold = ref(0);
-// The pins the last ranking left out because the game data no longer takes them (#1273, the
-// reply's `leftOut`), with the payoff they belong to: shown while that payoff is the one on
-// screen. Never stored, so a reload or another ranking forgets them.
-const leftOut = shallowRef<{ payoff: StoredPayoff; notes: string[] } | null>(null);
 const ADD_LABEL = 'Add as hunting';
-// The ranking's time limit in words, the same in both editions (#1257). A ranking started while
-// others run may wait for one to finish first (two at once on the server, server/ranking.ts),
-// and its limit only starts when it runs.
-const RANK_LIMIT = `${RANK_BUDGET_MS / 60000} minutes`;
 
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 const view = computed(() =>
@@ -111,7 +119,8 @@ const view = computed(() =>
       // A ranking kept from another phase, named so the button's meaning is clear.
       otherPhase: stored && !ranking ? phaseLabel(stored.ranking.phase) : '',
       when: stored?.rankedAt ? new Date(stored.rankedAt).toLocaleString() : '',
-      leftOut: ranking && leftOut.value?.payoff === stored ? leftOut.value.notes : [],
+      leftOut: ranking && rankLeftOut.value?.payoff === stored ? rankLeftOut.value.notes : [],
+      cancelled: !!ranking && wasCancelled(ranking),
       rows,
       hidden: (table?.rows.length || 0) - rows.length,
       columns,
@@ -131,34 +140,10 @@ function sort(column: PayoffColumn) {
 const ariaSort = (column: PayoffColumn) =>
   view.value?.column === column ? (direction.value === 1 ? 'ascending' : 'descending') : 'none';
 
-// Runs the ranking for the phase on screen and the ones after it, and shows it, unless another
-// profile was opened meanwhile (the result is stored with the profile it was run for either way).
-// The button is busy while it runs (bound aria-disabled, app/busy.ts: it keeps focus, #299), and
-// once the ranking shows a polite announcement says so (app/announce.ts, #1255).
-async function rank() {
-  if (running.value) return;
-  const profileId = currentProfile.id;
-  running.value = 'Checking alternates…';
-  try {
-    const { leftOut: notes, ...result } = await post<RankReply>(
-      '/api/rank-alternates',
-      { phase: stage(), remaining: true, hunting: true },
-      true,
-      {
-        onRankProgress: (done, total) =>
-          (running.value = `Checking ${num(done)} of ${num(total)} alternates…`),
-      },
-    );
-    if (currentProfile.id !== profileId) return;
-    setPayoff(result);
-    leftOut.value = notes?.length ? { payoff: result, notes } : null;
-    render();
-    announce([rankedMessage(result.ranking), ...(notes ?? [])].join(' '));
-  } catch (error) {
-    toast((error as Error).message, true);
-  } finally {
-    running.value = '';
-  }
+// "Rank alternates" starts the ranking (app/rank-job.ts), which the button is busy for while it runs
+// (bound aria-disabled, app/busy.ts: it keeps focus, #299). A second press starts nothing (#1255).
+function rank() {
+  if (!running.value) void startRank();
 }
 
 // "Add as hunting": the recalculation in place every plan offer makes, after its confirmation.
@@ -187,16 +172,41 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
     </div>
     <!-- Ranking solves a transcribed handbook afresh, once per alternate (#480). -->
     <p v-if="transcribed" class="notice warn" data-resolve-warning>{{ RESOLVE_WARNING }}</p>
-    <p v-if="running" class="small" data-payoff-progress role="status">
-      {{ running }}
-      This can take up to {{ RANK_LIMIT }}, or longer while other rankings are running.
-    </p>
-    <template v-if="!view.ranking">
+    <!-- The ranking's progress (#1332). Its label is not a live region itself: one update per
+         alternate would be read out every couple of seconds; the hidden status line is throttled
+         (rankLive, app/rank-job.ts) and the finished ranking is announced separately. -->
+    <div v-if="run" class="payoff-run" data-payoff-progress>
+      <p id="payoff-run-label" class="payoff-run-label" data-payoff-label>{{ label }}</p>
+      <div class="payoff-run-bar">
+        <progress
+          aria-labelledby="payoff-run-label"
+          :max="run.total || undefined"
+          :value="run.total && !run.queued ? run.done : undefined"
+          data-payoff-bar
+        ></progress>
+        <button
+          type="button"
+          class="btn quiet"
+          data-rank-cancel
+          :aria-disabled="run.cancelling || undefined"
+          @click="cancel"
+        >
+          Cancel
+        </button>
+      </div>
+      <span class="visually-hidden" role="status" data-payoff-live>{{ rankLive }}</span>
       <p class="small muted">
-        Which hard drive to spend next: what each alternate recipe would change in the plan from
-        {{ view.phase }} on (buildings, raw resources, power and delivery time), and what each
-        recipe you are hunting saves once found. It recalculates the plan once per alternate and
-        keeps the result with this profile.
+        <template v-if="otherProfile">This ranking is for another profile. </template>This can take
+        up to {{ RANK_LIMIT }}, or longer while other rankings are running. You can leave this page
+        or tab: the ranking carries on, and you are told when it is done. Cancel keeps what is
+        checked so far.
+      </p>
+    </div>
+    <template v-if="!view.ranking">
+      <p class="small muted" data-payoff-empty>
+        Shows which alternate recipe saves the most buildings, raw resources, power or delivery time
+        from {{ view.phase }} on, and what each recipe you are hunting would save once found. Takes
+        up to {{ RANK_LIMIT }}; the result stays with this profile.
       </p>
       <p v-if="view.otherPhase" class="small muted" data-payoff-other>
         The stored ranking is for {{ view.otherPhase }}.
@@ -204,12 +214,24 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
     </template>
     <template v-else>
       <p class="small muted" data-payoff-summary>
+        <span v-if="view.ranking.stopped" class="payoff-partial" data-payoff-partial>Partial</span>
         {{ view.ranking.candidates.length }} of {{ view.ranking.total }} alternates checked for
         {{ view.phases }}<template v-if="view.when">, {{ view.when }}</template
         >. Negative is better: fewer buildings, less raw, less power, sooner done.
       </p>
-      <p v-if="view.ranking.stopped" class="notice error" data-payoff-stopped role="status">
-        The ranking stopped at its time limit; Re-rank to try again.
+      <p
+        v-if="view.ranking.stopped"
+        class="notice"
+        :class="view.cancelled ? 'info' : 'error'"
+        data-payoff-stopped
+        role="status"
+      >
+        <template v-if="view.cancelled">You cancelled the ranking</template
+        ><template v-else
+          >The ranking stopped before it was done (cancelled, or at its time limit)</template
+        >: the {{ view.ranking.candidates.length }} alternates checked are ranked below, the other
+        {{ view.ranking.total - view.ranking.candidates.length }} are not. Re-rank to check them
+        all.
       </p>
       <!-- Pins the ranking left out (#1273); any recalculation of the plan drops them. -->
       <p v-for="note in view.leftOut" :key="note" class="notice warn" data-payoff-left-out>
