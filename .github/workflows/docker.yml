@@ -79,10 +79,15 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # The runner image ships Google Chrome with its system libraries, so the check uses it
+      # instead of downloading Chromium and installing its apt dependencies: an apt mirror outage
+      # (#1364) then cannot block every pull request.
       - name: Test browser edition and save transfers
+        env:
+          PLANNER_BROWSER_CHANNEL: chrome
         run: |
           npm run build
-          npx playwright install --with-deps chromium
+          google-chrome --version
           node browser-check.ts
 
   docker-smoke:

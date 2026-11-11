@@ -215,7 +215,7 @@ npm run build
 node browser-check.ts
 ```
 
-`PLANNER_PLAYWRIGHT` can point to an already installed Playwright entry file. `PLANNER_BROWSER_CHANNEL=msedge` can use installed Edge. Browser checks serve the build under `/satisfactory-planner/`, run the actual WASM calculator, and test persistence, isolated profiles, concurrent tabs and Docker transfers in temporary storage.
+`PLANNER_PLAYWRIGHT` can point to an already installed Playwright entry file. `PLANNER_BROWSER_CHANNEL=msedge` can use installed Edge; CI sets `PLANNER_BROWSER_CHANNEL=chrome` and uses the runner image's preinstalled Google Chrome, so it needs no `playwright install --with-deps` (no apt, #1364). Browser checks serve the build under `/satisfactory-planner/`, run the actual WASM calculator, and test persistence, isolated profiles, concurrent tabs and Docker transfers in temporary storage.
 
 Use tests appropriate to the change. UI redesigns require real-browser inspection in addition to tests; see `public/AGENTS.md`. The VM-based interface tests currently reference UI functions/selectors. If restructuring them, update the tests to cover equivalent behavior rather than deleting coverage. Documentation-only changes need link/path and diff review, not the whole Docker test suite.
 
