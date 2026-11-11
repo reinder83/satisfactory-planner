@@ -11,7 +11,7 @@
 //   reportValidity() and :invalid still see it);
 // - a form's FormData holds the plain numbers as well (the browser's own `formdata` event).
 import type { Directive } from 'vue';
-import { formatNumber, parseNumber } from '../../../numbers.ts';
+import { formatNumber, formatPlain, parseNumber } from '../../../numbers.ts';
 
 type Field = HTMLInputElement;
 
@@ -26,12 +26,14 @@ const whole = (field: Field) => /^[1-9]\d*$/.test(field.getAttribute('step') ?? 
 const parse = (field: Field) => parseNumber(read(field), whole(field));
 const attribute = (field: Field, name: string) => parseNumber(field.getAttribute(name) ?? '');
 
-// What the field shows for `text`: the number grouped, or while the field is being typed in the
-// plain number, or the text itself when it is not a number.
+// What the field shows for `text`: in a whole-number field the number grouped ("92,100"), in a
+// decimal field the plain number ("1250.5", so what is shown parses back to the same number), the
+// plain number while the field is being typed in, or the text itself when it is not a number.
 function shown(field: Field, text: string): string {
   const number = parseNumber(text, whole(field));
   if (number === null) return text;
-  return field.ownerDocument.activeElement === field ? String(number) : formatNumber(number, 10);
+  if (field.ownerDocument.activeElement === field || !whole(field)) return formatPlain(number);
+  return formatNumber(number, 10);
 }
 
 // The message the native number field gave for a value out of range, off its step or not a number.

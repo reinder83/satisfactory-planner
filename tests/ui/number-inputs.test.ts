@@ -157,3 +157,42 @@ test('a form sends the plain numbers of its number fields', () => {
   plainNumbers(form, data);
   assert.equal(data.get('availablePowerMW'), '92100');
 });
+
+// #1362 review: a lone "1,250" was read as 1250 in a decimal field, so a Dutch 1.25 hours was saved
+// as 1250 with no message and the blur echo ("1,250") hid it.
+test('Hours per phase (a decimal field) reads "1,250" as 1.25 and shows it without grouping', async () => {
+  wizard!.step = 3;
+  render();
+  await settle();
+  const hours = field('hours');
+  type(hours, '1,250');
+  assert.equal(hours.value, '1.25');
+  leave(hours);
+  assert.equal(shown(hours), '1.25', 'the echo is the number, not "1,250"');
+  assert.equal(hours.value, '1.25');
+  assert.equal(hours.validity.valid, true);
+  type(hours, '2.500');
+  leave(hours);
+  assert.equal(hours.value, '2.5');
+  // What the field shows reads back as the same number.
+  type(hours, shown(hours));
+  leave(hours);
+  assert.equal(hours.value, '2.5');
+  const form = $<HTMLFormElement>('#wizard-form')!;
+  type(hours, '1,250');
+  leave(hours);
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  assert.equal(wizard!.settings.hours, 1.25);
+});
+
+test('a whole-number field still reads "1,250" as 1250 and shows it grouped', () => {
+  const spare = field('availablePowerMW');
+  type(spare, '1,250');
+  leave(spare);
+  assert.equal(spare.value, '1250');
+  assert.equal(shown(spare), '1,250');
+  type(spare, '1.500');
+  leave(spare);
+  assert.equal(spare.value, '1500');
+});
