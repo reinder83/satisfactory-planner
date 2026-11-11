@@ -5,7 +5,7 @@
 // bound in the components themselves, with the handlers in ui/actions.ts.
 
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
-// the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
+// the order. In order: image error (capture), skip link click, hashchange, #detail backdrop click, #detail
 // cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange, focus,
 // keydown (the toast's Ctrl+Z).
 import {
@@ -20,7 +20,7 @@ import {
 } from './api.ts';
 import { required } from './format.ts';
 import { onBackdropClick } from './backdrop.ts';
-import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
+import { SKIP_TARGET, setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
 import { watchToast } from './toast-place.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
@@ -47,6 +47,15 @@ document.addEventListener(
 // the new page starts at its top unless render() brings something else into view: a group's
 // "Build order →" or a step's "Open factory: <name> →" on the way back from its flow page (#917,
 // #1047, focusOpenedPage in ui/refocus.ts).
+// "Skip to planner" moves focus to the workspace and keeps the page and its address: followed
+// as a link it would change the hash, and #main names no page (#1360 review).
+document.addEventListener('click', event => {
+  const link = event.target instanceof Element ? event.target.closest('a.skip') : null;
+  if (!link || link.getAttribute('href') !== `#${SKIP_TARGET}`) return;
+  event.preventDefault();
+  document.getElementById(SKIP_TARGET)?.focus();
+});
+
 window.addEventListener('hashchange', () => {
   if (!acceptRoute()) return;
   setView(viewOf(location.hash.slice(1)));

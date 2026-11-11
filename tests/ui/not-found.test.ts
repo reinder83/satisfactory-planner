@@ -15,6 +15,7 @@ beforeEach(() => {
 
 test('only an unknown address is not found: the bare address and every route keep their page', () => {
   assert.equal(viewOf(''), 'plan', 'the bare address opens the plan');
+  assert.equal(viewOf('main'), 'plan', 'the skip link’s target is no page of its own (#1360)');
   for (const route of [
     'plan',
     'factories',
@@ -49,7 +50,7 @@ test('the not-found page says so, with ADA’s line and links to Build plan and 
   assert.equal(profiles.textContent!.trim(), 'Saves & profiles');
   assert.equal($$('.nav a.active').length, 0, 'the sidebar marks no page');
   assert.equal(document.title, pageTitle('Page not found', 'notfound'));
-  assert.match(document.title, /^Page not found · Not found · /);
+  assert.equal(document.title, 'Page not found · Satisfactory Planner', 'the page is named once');
 });
 
 test('a known route still draws its own page, not the not-found page', async () => {
@@ -63,4 +64,23 @@ test('a known route still draws its own page, not the not-found page', async () 
   await nextTick();
   assert.equal($('[data-not-found]'), null);
   assert.equal($('h1')!.textContent, 'Saves & profiles');
+});
+
+test('“Skip to planner” moves focus to the workspace and keeps the page and its address (#1360)', async () => {
+  await import('../../public/app/listeners.ts');
+  location.hash = '#factories';
+  go(viewOf('factories'));
+  render();
+  await nextTick();
+  const skip = document.createElement('a');
+  skip.href = '#main';
+  skip.className = 'skip';
+  skip.textContent = 'Skip to planner';
+  document.body.prepend(skip);
+  skip.click();
+  await nextTick();
+  assert.equal(location.hash, '#factories', 'the address keeps its page');
+  assert.equal(document.activeElement?.id, 'main', 'focus is on the workspace');
+  assert.equal($('[data-not-found]'), null, 'no not-found page');
+  skip.remove();
 });
