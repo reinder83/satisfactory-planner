@@ -165,12 +165,13 @@ textarea:focus-visible {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
-/* A page's heading takes focus when an action opens that page (ui/refocus.ts, #304); it shows the
-   same ring as a control, after a key press only (:focus-visible), never after a click. */
-h1[tabindex='-1']:focus-visible,
-h2[tabindex='-1']:focus-visible {
-  outline: 2px solid var(--accent-hi);
-  outline-offset: 4px;
+/* A page's heading takes focus when an action opens that page (ui/refocus.ts, #304), so a screen
+   reader reads it out and the next Tab starts below it. It is not a control, and Tab never lands
+   on a tabindex="-1" heading, so it shows no ring (#1326): after a key press it showed the
+   orange box that looked like a stuck focus ring. Controls keep theirs (above). */
+h1[tabindex='-1']:focus,
+h2[tabindex='-1']:focus {
+  outline: none;
 }
 input[type='checkbox'],
 input[type='radio'] {
