@@ -6,7 +6,7 @@
   #243); the server version points there where it used to be.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   labelImport,
@@ -41,6 +41,7 @@ import { backupAge, restoreMessage } from '../../views/backup.ts';
 import { backupQuestion, savesImportQuestion, WRONG_BACKUP_FORMAT } from '../../import-summary.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import ProgressMerge from '../backup/ProgressMerge.vue';
+import { keepSaves, onPersistenceChange, persistence } from '../../storage-persistence.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -220,20 +221,26 @@ async function restoreProgress(event: Event) {
   }
 }
 
-// "Request persistent browser storage" (browser edition): ask the browser not to evict this
-// site's storage, and say whether it agreed. Nothing is saved.
+// "Keep my saves" (browser edition, #1368): ask the browser not to clear this site's storage,
+// and say whether it agreed. The button is the user's own action, which Firefox's prompt wants.
+// Nothing is saved; keepSaves never throws.
 async function persistStorage() {
-  try {
-    const granted = await navigator.storage?.persist?.();
-    toast(
-      granted
-        ? 'Persistent browser storage enabled.'
-        : 'Browser did not grant persistence. Keep downloaded backups.',
-    );
-  } catch (error) {
-    toast((error as Error).message, true);
-  }
+  const granted = await keepSaves();
+  toast(
+    granted
+      ? 'Your browser will keep these saves.'
+      : 'Your browser did not agree to keep them. Export a backup to be safe.',
+    !granted,
+  );
 }
+onBeforeUnmount(onPersistenceChange(invalidate));
+const kept = computed(() => legacy(() => persistence.value === 'kept'));
+// The browser said no: the button can ask again. With no API there is nothing to ask.
+const canAsk = computed(() => legacy(() => persistence.value === 'not-kept'));
+// The browser may clear the saves: it said no, or there is nothing to ask.
+const mayClear = computed(() =>
+  legacy(() => persistence.value === 'not-kept' || persistence.value === 'unsupported'),
+);
 </script>
 
 <template>
@@ -330,12 +337,18 @@ async function persistStorage() {
       }}
       Export before clearing browser data.
     </p>
-    <button class="btn" data-persist-storage @click="persistStorage">
-      Request persistent browser storage
-    </button>
-    <p class="small">
-      This reduces automatic eviction when supported. It cannot protect against manually clearing
-      site data.
+    <div v-if="kept" class="notice info" data-persistence-status="kept">
+      <b>Saves are kept:</b> your browser won't clear them on its own.
+      <span class="small">Clearing site data yourself still removes them.</span>
+    </div>
+    <div v-else-if="mayClear" class="notice warn" data-persistence-status="may-clear">
+      <b>Your browser may clear these saves.</b> Export a backup to be safe.
+    </div>
+    <p v-if="canAsk">
+      <button type="button" class="btn" data-persist-storage @click="persistStorage">
+        Keep my saves
+      </button>
+      <span class="small muted"> Asks your browser not to clear them on its own.</span>
     </p>
     <p>
       To move from Docker, update the Docker app and use Backup → Export all saves, then import that

@@ -1,7 +1,9 @@
 // The open workspace, save and profile, and the UI state every screen reads.
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
+import { browserMode } from '../browser-api.ts';
 import { readStoredData } from '../browser-store.ts';
+import { readPersistence } from './storage-persistence.ts';
 import { firstPlanPhase, milestoneOnlyPhase } from '../progression.ts';
 import { initialState } from '../state.ts';
 import {
@@ -684,6 +686,8 @@ export async function boot() {
   dropToastAction();
   try {
     workspace = await request<WorkspaceSummary>('/api/workspace');
+    // Whether the browser will keep the saves, read only (#1368); Backup and the notice show it.
+    if (browserMode) void readPersistence();
     if (!workspace.user) {
       authMode = 'login';
       // Signed out: the previous user's progress is dropped, and no page reads the state until
