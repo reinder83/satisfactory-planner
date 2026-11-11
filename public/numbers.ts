@@ -35,7 +35,8 @@ export function formatPlain(value: number, digits = 10): string {
 // - a separator that occurs more than once is a thousands separator ("1,234,567");
 // - a single separator is the decimal mark in a field that takes decimals (the default): "1,250"
 //   is 1.25 and "1.500" is 1.5, never 1250 or 1500, so a Dutch "1,250" is not read 1000x off;
-// - in a whole-number field (`whole`) a single "," or "." followed by exactly three digits, after
+// - in a whole-number field, or a grouped one that may hold decimals too (`whole`), a single "," or
+//   "." followed by exactly three digits, after
 //   1 to 3 digits that do not start with 0, is a thousands separator ("92,100" and "92.100" are
 //   92100, as the pages print it); any other single separator is still the decimal mark.
 export function parseNumber(text: string, whole = false): number | null {
@@ -47,6 +48,11 @@ export function parseNumber(text: string, whole = false): number | null {
     const decimal = value.lastIndexOf(',') > value.lastIndexOf('.') ? ',' : '.',
       thousands = decimal === ',' ? '.' : ',';
     if (value.split(decimal).length !== 2) return null;
+    // Every thousands separator is followed by exactly three digits ("1.250,5", "1,250.5"); "1.5,"
+    // and "1,5." are mistakes, not numbers, and the decimals hold digits only.
+    const [integer = '', fraction = ''] = value.split(decimal);
+    if (!/^-?\d{1,3}(,\d{3})+$/.test(integer.replaceAll(thousands, ',')) || !/^\d*$/.test(fraction))
+      return null;
     value = value.split(thousands).join('').replace(decimal, '.');
   } else if (commas || dots) {
     const mark = commas ? ',' : '.',

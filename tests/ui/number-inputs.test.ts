@@ -30,11 +30,11 @@ const leave = (input: HTMLInputElement) => {
   input.dispatchEvent(new Event('focusout', { bubbles: true }));
 };
 
-function settingsStep() {
+function settingsStep(step = 1) {
   page();
   open({ workspace: { catalog: catalog() } });
   setWizard({
-    step: 1,
+    step,
     saveId: null,
     saveName: 'World',
     name: '',
@@ -195,4 +195,52 @@ test('a whole-number field still reads "1,250" as 1250 and shows it grouped', ()
   type(spare, '1.500');
   leave(spare);
   assert.equal(spare.value, '1500');
+});
+
+test('a budget limit reads "92,100" and "92.100" as 92100, and still takes decimals (#1362 review)', async () => {
+  settingsStep(4);
+  const limit = $<HTMLInputElement>('#wizard-form input[name^="limit:"]');
+  assert.ok(limit, 'the budget boxes are on the settings page');
+  type(limit, '92,100');
+  leave(limit);
+  assert.equal(limit.value, '92100');
+  assert.equal(shown(limit), '92,100');
+  type(limit, '92.100');
+  leave(limit);
+  assert.equal(limit.value, '92100');
+  type(limit, '12,5');
+  leave(limit);
+  assert.equal(limit.value, '12.5');
+  type(limit, '1,250.5');
+  leave(limit);
+  assert.equal(limit.value, '1250.5');
+  assert.equal(shown(limit), '1,250.5');
+  // What code writes is a plain number and stays one: 12.345 is not 12345.
+  limit.value = '12.345';
+  assert.equal(limit.value, '12.345');
+  leave(limit);
+  assert.equal(limit.value, '12.345');
+  // Stored as the plain number.
+  type(limit, '92,100');
+  leave(limit);
+  $<HTMLFormElement>('#wizard-form')!.dispatchEvent(
+    new Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await settle();
+  assert.equal(wizard!.settings.limits[limit.name.slice('limit:'.length)], 92100);
+});
+
+test('mixed or trailing marks without three-digit groups are invalid', () => {
+  settingsStep(4);
+  const limit = $<HTMLInputElement>('#wizard-form input[name^="limit:"]')!;
+  for (const text of ['1.5,', '1,5.', '1,5.0', '.5,'] as const) {
+    type(limit, text);
+    assert.equal(limit.validity.valid, false, text);
+    assert.match(limit.validationMessage, /Enter a number/, text);
+  }
+  for (const text of ['1.250,5', '1,250.5'] as const) {
+    type(limit, text);
+    assert.equal(limit.validity.valid, true, text);
+    assert.equal(limit.value, '1250.5', text);
+  }
 });

@@ -77,6 +77,39 @@ test('decimal fields: a lone "," or "." is the decimal mark, never thousands (#1
   assert.equal(parseNumber('92100'), 92100);
 });
 
+test('grouped fields (budget limits, survey "used") read a lone mark and three digits as thousands', () => {
+  // Those fields call parseNumber with whole = true and still take decimals.
+  assert.equal(parseNumber('92,100', true), 92100);
+  assert.equal(parseNumber('92.100', true), 92100);
+  assert.equal(parseNumber('12,5', true), 12.5);
+  assert.equal(parseNumber('12.5', true), 12.5);
+  assert.equal(parseNumber('1,250.5', true), 1250.5);
+  assert.equal(parseNumber('1.250,5', true), 1250.5);
+  assert.equal(parseNumber('92,100'), 92.1, 'a plain decimal field still reads it as a decimal');
+});
+
+test('mixed marks need every grouping separator to be followed by three digits', () => {
+  for (const whole of [false, true]) {
+    for (const text of [
+      '1.5,',
+      '1,5.',
+      '1,5.0',
+      '.5,',
+      ',5.',
+      '1.5,0',
+      '1,2345.5',
+      '1.250,5.',
+      '1,250.5,',
+    ])
+      assert.equal(parseNumber(text, whole), null, text);
+    assert.equal(parseNumber('1.250,5', whole), 1250.5);
+    assert.equal(parseNumber('1,250.5', whole), 1250.5);
+    assert.equal(parseNumber('1,250.', whole), 1250);
+    assert.equal(parseNumber('1.250.000,25', whole), 1250000.25);
+    assert.equal(parseNumber('-1,250.5', whole), -1250.5);
+  }
+});
+
 test('negative numbers parse', () => {
   assert.equal(parseNumber('-3'), -3);
   assert.equal(parseNumber('-0,5'), -0.5);

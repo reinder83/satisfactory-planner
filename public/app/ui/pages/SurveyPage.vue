@@ -289,6 +289,7 @@ function submit() {
                       :name="'used:' + budget.name"
                       type="text"
                       v-number
+                      data-grouped
                       min="0"
                       max="10000000"
                       step="any"

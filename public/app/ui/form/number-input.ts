@@ -23,16 +23,26 @@ const write = (field: Field, text: string) => valueOf()?.set?.call(field, text);
 
 // A field of whole numbers: its step is a whole number (not "any", not 0.1).
 const whole = (field: Field) => /^[1-9]\d*$/.test(field.getAttribute('step') ?? '');
-const parse = (field: Field) => parseNumber(read(field), whole(field));
+// A field that reads and shows thousands groups like a whole-number one but may hold decimals
+// (data-grouped: the budget limits and the survey's "used" rates, large rates per minute).
+const grouped = (field: Field) => whole(field) || field.hasAttribute('data-grouped');
+// What the code last wrote into a field, as the text shown and the plain number it stands for: a
+// shown "12.345" that code wrote is 12.345, while the same text typed in a grouped field is 12345.
+const written = new WeakMap<Field, { text: string; number: number }>();
+const parse = (field: Field): number | null => {
+  const text = read(field),
+    last = written.get(field);
+  return last && last.text === text ? last.number : parseNumber(text, grouped(field));
+};
 const attribute = (field: Field, name: string) => parseNumber(field.getAttribute(name) ?? '');
 
 // What the field shows for `text`: in a whole-number field the number grouped ("92,100"), in a
 // decimal field the plain number ("1250.5", so what is shown parses back to the same number), the
 // plain number while the field is being typed in, or the text itself when it is not a number.
-function shown(field: Field, text: string): string {
-  const number = parseNumber(text, whole(field));
+function shown(field: Field, text: string, typed = true): string {
+  const number = parseNumber(text, typed && grouped(field));
   if (number === null) return text;
-  if (field.ownerDocument.activeElement === field || !whole(field)) return formatPlain(number);
+  if (field.ownerDocument.activeElement === field || !grouped(field)) return formatPlain(number);
   return formatNumber(number, 10);
 }
 
@@ -120,11 +130,23 @@ export const vNumber: Directive<Field, boolean | undefined> = {
           number = parse(field);
         return number === null ? text : String(number);
       },
-      set: (text: unknown) => write(field, shown(field, String(text ?? ''))),
+      set: (text: unknown) => {
+        // Code writes plain numbers ("12.345" is 12.345, whatever the field's grouping).
+        const plain = String(text ?? ''),
+          number = parseNumber(plain),
+          out = shown(field, plain, false);
+        write(field, out);
+        if (number !== null) written.set(field, { text: out, number });
+      },
     });
     field.addEventListener('input', () => check(field));
     field.addEventListener('blur', () => {
-      write(field, shown(field, read(field)));
+      const number = parse(field);
+      if (number !== null) {
+        const out = shown(field, String(number), false);
+        write(field, out);
+        written.set(field, { text: out, number });
+      }
       check(field);
     });
     field.addEventListener('keydown', event => {
