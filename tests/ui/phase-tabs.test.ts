@@ -43,7 +43,8 @@ const labels = () =>
   );
 const openTabKey = () =>
   tabs().find(el => el.getAttribute('aria-selected') === 'true')?.dataset.phaseTab;
-const cards = () => $$('#main .gf-card').length;
+// The steps drawn, folded or open as cards.
+const cards = () => $$('#main [data-step]').length;
 const press = (target: Element, name: string) =>
   target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
 
@@ -117,13 +118,18 @@ test('another phase’s tab shows its lines without switching the phase or savin
 test('another phase’s tab is read-only: no line links, no running state, a note says so', async () => {
   await show(OIL);
   assert.equal(cards(), 5);
+  $<HTMLButtonElement>('#main [data-gf-all]')!.click();
+  await settle();
   assert.equal($$('#main .gf-card .rail-link').length, 5, 'the current tab links its lines');
-  assert.equal($$('#main .gf-card .gf-run').length, 5, 'and says whether they run');
+  assert.equal($$('#main .gf-card input[data-check]').length, 5, 'and has a Mark running box each');
+  assert.equal($$('#main .gf-card [data-built-counter]').length, 5, 'and a Built counter');
+  assert.equal($$('#main [data-step-nav] [data-state]').length, 5, 'and a status in the list');
   tab('5').click();
   await settle();
   assert.equal($$('#main .gf-card .rail-link').length, 0, 'no link to a line’s dialog');
   assert.equal($$('#main [data-calc-factory]').length, 0);
-  assert.equal($$('#main .gf-card .gf-run').length, 0, 'no running or built state');
+  assert.equal($$('#main [data-built-counter]').length, 0, 'no Built counter');
+  assert.equal($$('#main [data-step-nav] [data-state]').length, 0, 'no running or built state');
   assert.equal($$('#main .gf-card [data-gf-name]').length, 8, 'the names stay as text');
   const note = $('#main [data-gf-readonly]')!;
   assert.match(note.textContent!, /Viewing Phase 5 — switch phase to tick or edit/);

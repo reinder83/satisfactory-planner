@@ -15,7 +15,7 @@ import { linkItemWords, VEHICLES } from '../../public/app/logistics.ts';
 import { calcStage, flowRoute, setQuery, viewOf } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
-import { $, $$, catalog, generated, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, catalog, generated, generatedWith, go, open, page, expandSteps } from './setup.ts';
 import type {
   CurrentCalculatedPlan,
   FactoryGroups,
@@ -213,6 +213,7 @@ async function showFlow(plan: CurrentCalculatedPlan, groups: FactoryGroups, grou
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
 }
 const text = (el: Element) => el.textContent!.replace(/\s+/g, ' ').trim();
 
@@ -222,16 +223,16 @@ test('a train link reads "by freight train" on the flow page, and Water "Water E
   const train = Object.entries(groups.links!).find(([, transport]) => transport.mode === 'train')!;
   const [from, to] = train[0].split(':') as [string, string];
   await showFlow(plan, groups, to);
-  const rows = $$('.gf-row').map(text);
+  const rows = $$('.gf-row, .gf-comes-item').map(text);
   assert.ok(
     rows.some(row => row.endsWith('by freight train')),
     `a port into ${to} from ${from}: ${JSON.stringify(rows)}`,
   );
   const water = groupLinks(plan.stages['3'], groups).find(link => link.from === 'supply/Water')!;
   await showFlow(plan, groups, water.to);
-  const waterRows = $$('.gf-row').map(text);
+  const waterRows = $$('.gf-row, .gf-comes-item').map(text);
   assert.ok(
-    waterRows.some(row => /^Water\s?[\d.,]+\s?m³\/min\s?Water Extractors here$/.test(row)),
+    waterRows.some(row => /^Water\s?[\d.,]+\s?m³\/min.*Water Extractors here$/.test(row)),
     JSON.stringify(waterRows),
   );
 });

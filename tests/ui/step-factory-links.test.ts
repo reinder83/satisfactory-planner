@@ -214,9 +214,12 @@ test('followed, "Open factory" opens the flow page focused on the line’s card'
   assert.ok($('[data-gf-back]'), 'the flow page is shown');
   assert.equal($('#main .eyebrow')?.textContent, 'FACTORY · BUILD ORDER');
   assert.equal($('#main h1')?.textContent, nameOf(HOME));
-  const card = $(`#main .gf-card[data-line="${WIRE}"]`)!;
-  assert.ok(card, 'the line has a card on its factory’s flow page');
-  const name = card.querySelector('.rail-link')!;
+  const step = $(`#main [data-step="${WIRE}"]`)!;
+  assert.ok(step, 'the line has a step on its factory’s flow page');
+  // Its card's name link, or its fold's button while the step is not the one open (BO-1, #1346).
+  const name = (step.querySelector('.gf-card .rail-link') ??
+    step.querySelector('[data-step-row]'))!;
+  assert.ok(name, 'the step has a card or a fold');
   assert.equal(document.activeElement, name, 'its name link takes focus: ' + describeFocus());
   assert.ok(scrolled.includes(name), 'and is brought into view');
 });

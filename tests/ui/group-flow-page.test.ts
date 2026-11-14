@@ -1,9 +1,9 @@
 // A factory group's flow page, #factories/<group>/flow (#894, ui/pages/GroupFlowPage.vue), mounted
 // the way the app mounts it, in happy-dom, on the planner's default Phase 3 plan with the default
-// factory groups: the route, a missing group, a milestone-only phase, the cards and their words,
-// the key, the Sink & storage fold, the table, self links (#898) and the lanes lit by keyboard
-// focus. Where the lanes land is measured in a real browser (see the pull request); happy-dom
-// lays nothing out.
+// factory groups: the route, a missing group, a milestone-only phase, the steps and their words,
+// the Sink & storage fold, the table and self links (#898). The step list, chips, "Comes in" row
+// and counter are in build-order-steps.test.ts; where things land is measured in a real browser
+// (see the pull request), as happy-dom lays nothing out.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test, vi } from 'vitest';
@@ -14,8 +14,6 @@ import { render } from '../../public/app/shell.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import CalculatedFactoriesPage from '../../public/app/ui/pages/CalculatedFactoriesPage.vue';
 import GroupFlowPage from '../../public/app/ui/pages/GroupFlowPage.vue';
-import { laneStyles, laneWires, type RowAnchor } from '../../public/app/views/group-flow-page.ts';
-import { LANE_METRICS, laneGutter, laneOffset } from '../../public/app/group-flow.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
 import { $, $$, evil, generated, go, open, page } from './setup.ts';
 import type { FactoryGroups, Phase } from '../../public/types/index.ts';
@@ -62,6 +60,11 @@ async function show(groupId: string, { phase = '3' as Phase, factoryGroups = gro
   await nextTick();
   await nextTick();
 }
+// Opens every step as a card, as "Expand all" does.
+async function expandAll() {
+  $<HTMLButtonElement>('[data-gf-all]')!.click();
+  await nextTick();
+}
 const flowOf = (groupId = 'fg-iron01'): GroupFlow =>
   model.groupFlow(plan.stages['3'], groups, groupId, () => '')!;
 
@@ -94,9 +97,11 @@ test('#factories/<group>/flow is the factories view and draws the group’s flow
   assert.equal($('.nav a.active')?.getAttribute('href'), '#factories', 'Factories stays marked');
 });
 
-test('the cards follow the build order, inputs before outputs, belts under the rate', async () => {
+test('the steps follow the build order, inputs before outputs, belts beside the rate', async () => {
   await show('fg-iron01');
   const flow = flowOf();
+  assert.equal($$('.gf-card').length, 1, 'only the current step is open as a card');
+  await expandAll();
   const cards = $$('.gf-card');
   assert.deepEqual(
     cards.map(card => card.dataset.line),
@@ -116,52 +121,12 @@ test('the cards follow the build order, inputs before outputs, belts under the r
   // A link from another line names it; a raw resource says so.
   const second = flow.lines[1]!;
   const fed = cards[1]!.querySelector(`[data-row="${second.inputs[0]!.id}"]`)!;
-  assert.match(fed.textContent!, /from 01 /);
-  assert.match(fed.querySelector('.gf-num small')!.textContent!, /belt/);
+  assert.match(fed.querySelector('.gf-chip')!.textContent!, /^\s*from 01\s*$/);
+  assert.match(fed.querySelector('.gf-num small')!.textContent!, /^· .*belt/);
   assert.ok(!fed.classList.contains('outside'), 'a row fed by a lane has no side bar');
   const ore = cards[0]!.querySelector('[data-row^="in|"]')!;
   assert.match(ore.textContent!, /Raw resource/);
   assert.ok(ore.classList.contains('outside'), 'a row fed from outside has the blue bar');
-  assert.equal($('.gf-card .gf-swatch'), null, 'no swatch in a row');
-});
-
-test('the key lists one colour and dash per item that rides a lane, in lane order', async () => {
-  await show('fg-iron01');
-  const styles = laneStyles(flowOf());
-  assert.ok(styles.size > 6, 'the iron group needs dashes too');
-  const items = $$('[data-gf-key] .gf-key-item').map(item => item.textContent?.trim());
-  assert.deepEqual(items, [...styles.keys()]);
-  const lines = $$<SVGLineElement>('[data-gf-key] line');
-  assert.equal(lines[0]!.style.stroke, 'var(--accent)');
-  assert.equal(lines[6]!.style.strokeDasharray, '7 4', 'the seventh item is dashed');
-});
-
-test('focusing a card by keyboard lights its lanes and dims the others', async () => {
-  await show('fg-iron01');
-  await new Promise(resolve => setTimeout(resolve, 20));
-  await nextTick();
-  const wires = $$('.gf-wire');
-  assert.equal(wires.length, 14, 'one wire per link between the lines');
-  assert.ok(
-    wires.every(wire => !wire.classList.contains('hot') && !wire.classList.contains('dim')),
-  );
-  const third = $$('.gf-card')[2]!;
-  const link = third.querySelector<HTMLButtonElement>('.rail-link')!;
-  link.focus();
-  await nextTick();
-  assert.equal(document.activeElement, link);
-  assert.ok(third.classList.contains('hot'));
-  const id = third.dataset.line!;
-  const hot = $$('.gf-wire.hot');
-  assert.ok(hot.length > 0);
-  assert.ok(
-    hot.every(wire => wire.dataset.fromRow!.includes(id) || wire.dataset.toRow!.includes(id)),
-    'only its own links light up',
-  );
-  assert.equal($$('.gf-wire.dim').length, wires.length - hot.length);
-  link.blur();
-  await nextTick();
-  assert.equal($$('.gf-wire.dim').length, 0, 'leaving the card puts the lanes back');
 });
 
 test('Sink & storage is folded until it is opened, and the table repeats every link', async () => {
@@ -181,18 +146,16 @@ test('Sink & storage is folded until it is opened, and the table repeats every l
   assert.equal($<HTMLDetailsElement>('[data-gf-table]')!.open, false);
 });
 
-test('a self link reads "from itself" and "to itself" and rides no lane (#898)', async () => {
+test('a self link reads "from itself" and "to itself" and has no chip to go to (#898)', async () => {
   hooks.withSelf = true;
   await show('fg-iron01');
+  await expandAll();
   const card = $$('.gf-card')[0]!;
   const input = card.querySelector('[data-row^="in|"]')!;
   const output = card.querySelector('[data-row^="out|"]')!;
   assert.match(input.textContent!, /from itself/);
   assert.match(output.textContent!, /to .*itself/);
-  assert.ok(
-    $$('.gf-wire').every(wire => wire.dataset.toRow !== input.getAttribute('data-row')),
-    'no lane ends on the row fed only by itself',
-  );
+  assert.equal(input.querySelectorAll('button.gf-chip').length, 0, 'no chip to go to');
   assert.ok($$('[data-gf-connection]').some(row => row.textContent!.includes('itself')));
 });
 
@@ -245,6 +208,7 @@ test('the table breaks only the cells holding a group’s long name (#988)', asy
 test('a line’s ↗ opens that factory’s dialog, and closing it returns to the link (#886, #895)', async () => {
   // The page replaced the group's build-order dialog, whose stages linked to their factories.
   await show('fg-iron01');
+  await expandAll();
   const flow = flowOf();
   const links = $$<HTMLButtonElement>('#main .gf-head .rail-link');
   assert.equal(links.length, flow.lines.length, 'one link per line');
@@ -272,26 +236,4 @@ test('a milestone-only phase shows the factories page’s "Go to Phase N" notice
   assert.equal($('.gf-card'), null);
   assert.equal($('[data-gf-missing]'), null, 'the group is there, only not in this phase');
   assert.equal($('#main h1')?.textContent, iron.name);
-});
-
-test('each wire runs from its output row’s dot to an arrow tip on the input row’s border', () => {
-  const flow = flowOf();
-  const anchors = new Map<string, RowAnchor>();
-  flow.lines.forEach((line, i) =>
-    [...line.inputs, ...line.outputs].forEach((row, j) =>
-      anchors.set(row.id, { x: 72, y: i * 100 + j * 20 + 7 }),
-    ),
-  );
-  const wires = laneWires(flow.lanes, anchors, LANE_METRICS.wide);
-  assert.equal(wires.length, 14);
-  for (const wire of wires) {
-    const lane = flow.lanes.find(entry => entry.from === wire.fromRow)!;
-    assert.deepEqual(wire.dot, anchors.get(wire.fromRow));
-    assert.deepEqual(wire.tip, anchors.get(wire.toRow), 'the tip touches the border at the row');
-    const x = 72 - laneOffset(lane.lane, LANE_METRICS.wide);
-    assert.equal(wire.path, `M72,${wire.dot.y} H${x} V${wire.tip.y} H65`);
-  }
-  // A lane, the outermost included, stays inside the gutter.
-  const gutter = laneGutter(flow.laneCount, LANE_METRICS.wide);
-  assert.equal(72 - laneOffset(flow.laneCount - 1, LANE_METRICS.wide), 72 - gutter + 4);
 });

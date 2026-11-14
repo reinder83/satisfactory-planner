@@ -11,7 +11,7 @@ import { beforeEach, test } from 'vitest';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { flowRoute, setQuery, viewOf } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, generatedWith, go, open, page, expandSteps } from './setup.ts';
 import type { FactoryGroups } from '../../public/types/index.ts';
 import { STANDARD_BEFORE_1040 } from '../helpers/standard-before-1040.ts';
 
@@ -44,6 +44,7 @@ async function show(hash: string) {
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
 }
 
 beforeEach(() => {
@@ -74,5 +75,5 @@ test("Group 1's flow page: its own line's Aluminum Scrap still feeds its own lin
   assert.ok(scrap, 'the own line has an output row');
   const text = (scrap.textContent || '').replace(/\s+/g, ' ');
   // To Group 1's Pure Aluminum Ingot line (named by its number) and the AWESOME Sink, nowhere else.
-  assert.match(text, /^→ Aluminum Scrap to \d\d, AWESOME Sink\d/);
+  assert.match(text, /^→ Aluminum Scrap to \d\d AWESOME Sink\d/);
 });
