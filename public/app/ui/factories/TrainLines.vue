@@ -106,7 +106,7 @@ async function addRearLoco(id: string) {
       >
         + Add train line
       </button>
-      <span v-if="view.full" class="small muted" data-lines-full>
+      <span v-if="view.full" class="small muted prose" data-lines-full>
         A profile holds at most {{ TRAIN_LINE_MAX }} train lines.
       </span>
     </p>

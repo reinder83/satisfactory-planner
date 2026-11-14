@@ -533,6 +533,33 @@ test('paragraphs read in the sans token; numbers, tables and code keep mono (X-1
   );
 });
 
+test('prose spans read sans and figure readouts stay mono (X-1 leftovers, #1336)', () => {
+  const all = rules(screenCss());
+  const family = (selector: string) =>
+    all
+      .filter(r => r.selector.split(/\s*,\s*/).includes(selector))
+      .flatMap(r => decls(r.body, 'font-family'))
+      .at(-1);
+  assert.equal(family('.prose'), 'var(--sans)', 'a prose span is sans');
+  assert.equal(family('.supply-hint'), 'var(--sans)', 'a field hint is prose');
+  assert.equal(family('p.power-headline'), 'var(--mono)', 'the power headline is figures');
+  const proseSpans: [string, string][] = [
+    ['public/app/ui/factories/MineOnly.vue', 'data-mine-note'],
+    ['public/app/ui/pages/StoragePage.vue', 'An added bay uses this letter'],
+    ['public/app/ui/NoteBox.vue', 'v-if="label"'],
+    ['public/app/ui/plan/RecalcBanner.vue', 'owned-ticks-dismiss-note'],
+    ['public/app/ui/factories/OnSitePicker.vue', 'data-on-site-unsaved'],
+  ];
+  for (const [file, marker] of proseSpans) {
+    const source = fs.readFileSync(file, 'utf8');
+    const at = source.lastIndexOf(marker);
+    assert.ok(at >= 0, file + ' has ' + marker);
+    const open = source.lastIndexOf('<span', at);
+    const tag = source.slice(open, source.indexOf('>', open));
+    assert.match(tag, /class="[^"]*\bprose\b/, `${file}: ${marker} is a prose span`);
+  }
+});
+
 test('a table wrapper is positioned, so hidden headers stay inside its scroll box (#1375)', () => {
   const css = fs.readFileSync('public/style.css', 'utf8');
   const wrap = css.match(/(?:^|\n)\.table-wrap \{([^}]*)\}/);

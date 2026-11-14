@@ -912,6 +912,7 @@ table .notice,
 /* A paragraph that holds only a figure (a count, a peak, rates) is data, not prose. */
 p[data-station-count],
 p[data-power-peak],
+p.power-headline,
 p[data-proposal-rates] {
   font-family: var(--mono);
 }
@@ -925,6 +926,11 @@ p[data-proposal-rates] {
 }
 .muted {
   color: var(--muted);
+}
+/* A short sentence in a span (a hint under a filter, a note beside a button) is prose too (#1336):
+   it reads sans, while a small muted span that holds a count stays mono. */
+.prose {
+  font-family: var(--sans);
 }
 .small {
   font-size: 11px;
@@ -9193,6 +9199,7 @@ th.resource-cell {
 }
 .supply-hint {
   grid-column: 1/-1;
+  font-family: var(--sans);
   font-size: 10.5px;
   letter-spacing: 0.04em;
   color: var(--dim);

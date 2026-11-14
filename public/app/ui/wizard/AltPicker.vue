@@ -513,7 +513,7 @@ async function best() {
                 }}{{ row.outs.length > 1 ? ' · also ' + row.outs.slice(1).join(', ') : '' }}</small
               ></span
             >
-            <span v-if="row.why" class="alt-required small muted"
+            <span v-if="row.why" class="alt-required small muted prose"
               >Required by your {{ row.why }}</span
             >
             <span

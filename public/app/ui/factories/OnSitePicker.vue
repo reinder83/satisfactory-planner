@@ -257,7 +257,7 @@ async function apply(event: Event) {
         >
           Discard
         </button>
-        <span v-if="changed && !holding" class="small muted" data-on-site-unsaved
+        <span v-if="changed && !holding" class="small muted prose" data-on-site-unsaved
           >Not saved yet.</span
         >
         <span :id="id + '-saved'" class="small" role="status" data-on-site-saved

@@ -65,7 +65,7 @@ const overclock = ref(!!draft().settings.overclock);
     <button type="button" class="btn primary" data-open-extraction @click="openExtraction()">
       Work these out from my nodes →
     </button>
-    <span class="small muted" data-explain
+    <span class="small muted prose" data-explain
       >Count what your world holds and the planner turns it into these rates.</span
     >
   </p>
