@@ -119,12 +119,8 @@ test('Overview counts a notice that asks for something until it is dismissed', a
   assert.ok($('#plan-panel-overview [data-owned-ticks]'), 'the ticks notice is in Overview');
   assert.ok($('#plan-panel-overview [data-power-short]'), 'and so is the power warning');
   const overview = $('[data-plan-tab="overview"]')!;
-  assert.equal(words(overview.querySelector('[data-plan-tab-count]')), '2');
-  assert.equal(
-    overview.querySelector('[data-plan-tab-count]')!.getAttribute('aria-hidden'),
-    'true',
-  );
-  assert.equal(words(overview), 'Overview2, 2 new');
+  assert.equal(words(overview.querySelector('[data-plan-tab-count]')), '2 warnings');
+  assert.equal(words(overview), 'Overview · 2 warnings', 'the badge says what it counts (BP-4)');
   assert.equal($('[data-plan-tab="hard-drives"] [data-plan-tab-count]'), null);
   overview.click();
   await nextTick();
@@ -132,7 +128,11 @@ test('Overview counts a notice that asks for something until it is dismissed', a
   await nextTick();
   await nextTick();
   assert.equal($('[data-owned-ticks]'), null);
-  assert.equal(words($('[data-plan-tab="overview"] [data-plan-tab-count]')), '1', 'one less');
+  assert.equal(
+    words($('[data-plan-tab="overview"] [data-plan-tab-count]')),
+    '1 warning',
+    'one less',
+  );
   assert.equal(selected(), 'overview', 'the summary keeps the tab');
   assert.equal(document.activeElement, $('[data-plan-tab="overview"]'), 'focus on its tab');
 });

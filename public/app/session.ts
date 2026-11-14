@@ -356,7 +356,7 @@ export function setSectionCollapsed(id: string, value: boolean) {
   } catch {}
 }
 // What the build plan's "Your ticks show more than this plan counts" notice found when it was
-// dismissed (#1068, ui/plan/OwnedTicksNotice.vue), per "<save>/<profile>", so it shows again only
+// dismissed (#1068, ui/plan/RecalcBanner.vue), per "<save>/<profile>", so it shows again only
 // when the ticks add something new (foundSince in owned-ticks.ts). Like the folded sections a view
 // preference remembered in this browser, never in a saved profile: nothing stored, or anything
 // unreadable, shows the notice. Kept in memory as well, so Dismiss still works where the browser

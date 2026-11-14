@@ -14,7 +14,8 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { itemRate } from '../../flow.ts';
+import { itemRate, itemRateFigure } from '../../flow.ts';
+import { displayPercent, displayPower, figureText } from '../../../numbers.ts';
 import { num } from '../../format.ts';
 import { calcStage, calculated, checked, milestoneOnly, workspace } from '../../session.ts';
 import { resourceUse, tightestFirst } from '../../views/resources.ts';
@@ -55,12 +56,18 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
   const required = view.needMW,
     available = view.availableMW,
     short = view.shortMW;
-  const scale = Math.max(required, available) || 1,
+  const shown = (mw: number) => {
+      const figure = displayPower(mw);
+      return { text: figureText(figure), exact: figure.exact };
+    },
+    scale = Math.max(required, available) || 1,
     width = (mw: number) => (mw / scale) * 100 + '%';
+  const share =
+    available > 0 && !short ? displayPercent(((available - required) / available) * 100) : null;
   const headline = short
-    ? 'Short by ' + power(short)
-    : available > 0
-      ? Math.floor(((available - required) / available) * 100) + '% headroom'
+    ? 'Short by ' + shown(short).text
+    : share
+      ? figureText(share) + ' headroom'
       : 'No power needed';
   const list = (parts: PowerPart[]) =>
     parts
@@ -69,9 +76,10 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
       .join(' + ') || '0 MW';
   return {
     headline,
+    headlineExact: short ? shown(short).exact : share ? share.exact + ' headroom' : '',
     short: short > 0,
-    required: power(required),
-    available: power(available),
+    required: shown(required),
+    available: shown(available),
     demand: view.demand.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
     supply: view.supply.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
     shortWidth: width(short),
@@ -125,10 +133,12 @@ const page = computed(() =>
           return {
             ...use,
             name,
-            required: itemRate(name, required),
-            budget: itemRate(name, budget),
-            remaining: itemRate(name, budget - required),
-            overBy: use.over ? itemRate(name, Math.max(0, required) - Math.max(0, budget)) : '',
+            required: itemRateFigure(name, required),
+            budget: itemRateFigure(name, budget),
+            remaining: itemRateFigure(name, budget - required),
+            overFigure: use.over
+              ? itemRateFigure(name, Math.max(0, required) - Math.max(0, budget))
+              : null,
           };
         })
         .sort(tightestFirst),
@@ -208,11 +218,15 @@ const miningTerms = computed(() => {
     <section class="panel power-headroom" data-power-headroom>
       <h2>Power headroom</h2>
       <p :class="['power-headline', page.power.short ? 'short' : '']" data-power-headline>
-        <strong
+        <strong :title="page.power.headlineExact || undefined"
           ><span v-if="page.power.short" aria-hidden="true">⚠ </span
           >{{ page.power.headline }}</strong
         >
-        <span>{{ page.power.required }} needed of {{ page.power.available }} available</span>
+        <span
+          ><span :title="page.power.required.exact">{{ page.power.required.text }}</span> needed of
+          <span :title="page.power.available.exact">{{ page.power.available.text }}</span>
+          available</span
+        >
       </p>
       <p v-if="page.power.parts" class="small power-parts" data-power-parts>
         Power needed: {{ page.power.parts }}.
@@ -277,9 +291,11 @@ const miningTerms = computed(() => {
                 <ItemIcon :name="row.name" /><span>{{ row.name }}</span>
               </div>
             </td>
-            <td class="number">{{ row.required }}</td>
-            <td class="number">{{ row.budget }}</td>
-            <td :class="['number', row.over ? 'warn' : '']">{{ row.remaining }}</td>
+            <td class="number" :title="row.required.exact">{{ row.required.text }}</td>
+            <td class="number" :title="row.budget.exact">{{ row.budget.text }}</td>
+            <td :class="['number', row.over ? 'warn' : '']" :title="row.remaining.exact">
+              {{ row.remaining.text }}
+            </td>
             <td :class="row.over ? 'warn' : undefined" data-use>
               {{ row.use }}
               <div
@@ -288,8 +304,13 @@ const miningTerms = computed(() => {
               >
                 <span :style="{ width: row.bar + '%' }"></span>
               </div>
-              <div v-if="row.over" class="small" data-over>
-                <span aria-hidden="true">⚠ </span>Over by {{ row.overBy }}
+              <div
+                v-if="row.over && row.overFigure"
+                class="small"
+                data-over
+                :title="row.overFigure.exact"
+              >
+                <span aria-hidden="true">⚠ </span>Over by {{ row.overFigure.text }}
               </div>
             </td>
           </tr>

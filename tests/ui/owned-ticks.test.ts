@@ -1,5 +1,5 @@
 // "Ticks keep it current" (#1068): the build plan's notice when the ticks show more than the plan's
-// "What you already have" settings count (ui/plan/OwnedTicksNotice.vue): a better miner milestone,
+// "What you already have" settings count (ui/plan/RecalcBanner.vue): a better miner milestone,
 // an alternate's unlock, generators marked running beyond what a phase runs. It is absent without
 // such ticks and on any phase but the working one; "Recalculate in place with what you have" asks
 // first, naming the backup, and sends the plan's settings with the owned fields raised; Dismiss
@@ -87,15 +87,19 @@ test('ticking a better miner milestone and an alternate unlock shows one notice;
   await tick(MINER_MK2);
   const notice = $('[data-owned-ticks]');
   assert.ok(notice, 'the notice appears');
-  assert.ok(notice.classList.contains('info'), 'guidance, not a warning');
-  assert.equal(notice.getAttribute('role'), 'status');
+  // One card with the other recalculation reasons (BP-7), not a card of its own.
+  const card = notice.closest('[data-recalc-banner]')!;
+  assert.ok(card.classList.contains('warn'));
+  assert.equal(card.getAttribute('role'), 'status');
+  assert.equal($$('#plan-panel-overview .notice.warn[data-recalc-banner]').length, 1);
   assert.equal(text('[data-owned-ticks-found="unlocked"]'), 'You have unlocked Miner Mk.2.');
   assert.equal($('[data-owned-ticks-found="alternates"]'), null);
   await tick(SCREWS_UNLOCK);
   assert.equal($$('[data-owned-ticks]').length, 1, 'still one notice');
   assert.equal(text('[data-owned-ticks-found="alternates"]'), 'You own the Cast Screws alternate.');
-  assert.match(text('[data-owned-ticks]'), /^Your ticks show more than this plan counts\./);
-  assert.match(text('[data-owned-ticks]'), /Nothing changes until you start it\./);
+  assert.match(text('[data-recalc-banner]'), /^This plan needs a recalculation\./);
+  assert.match(text('[data-owned-ticks]'), /^You have unlocked Miner Mk\.2\./);
+  assert.match(text('[data-recalc-banner]'), /Nothing changes until you start it\./);
   assert.equal(text('[data-recalc-owned-ticks]'), 'Recalculate in place with what you have');
 });
 

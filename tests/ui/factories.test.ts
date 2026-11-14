@@ -15,6 +15,7 @@ import { calcTasks } from '../../public/app/views/calculated.ts';
 import { SEARCH_PAUSE_MS } from '../../public/app/ui/search-field.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { lineLoad } from '../../public/power.ts';
+import { displayPower, displayRate, figureText } from '../../public/numbers.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import CalculatedFactoriesPage from '../../public/app/ui/pages/CalculatedFactoriesPage.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
@@ -1044,11 +1045,7 @@ test('a calculated dialog shows the same three cells as its card, with output pe
     [
       'Total',
       '5',
-      generator.machine +
-        ' · generates ' +
-        num(406.8) +
-        ' MW, up to ' +
-        power(5 * -generator.power),
+      generator.machine + ' · generates ' + power(406.8) + ', up to ' + power(5 * -generator.power),
     ],
     ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
     [
@@ -1129,7 +1126,7 @@ test('a migrated profile’s oil, fluid and nuclear dialogs say their output und
   render();
   openCalculatedFactory(row('alumina-solution', '4'));
   noTiles();
-  assert.equal(summary(), `${num(10126.666666666666)}${noBreakSpace}m³/min`);
+  assert.equal(summary(), `10,127${noBreakSpace}m³/min`);
   // Nuclear: the guide's nuclear-site notice stays.
   openCalculatedFactory(row('uranium-fuel-rod', '4'));
   noTiles();
@@ -1162,7 +1159,7 @@ test('a calculated dialog says its card’s headline under the title, and output
   // One output named like the row: the headline says it all, so the list is not repeated.
   openCalculatedFactory(named.id);
   const rate = Object.values(named.outputs)[0]!;
-  assert.equal(summary(), num(rate) + '/min');
+  assert.equal(summary(), figureText(displayRate(rate, '/min')));
   assert.equal(summary()!.replace(/\s+/g, ''), headline(named.id), 'the card’s headline');
   assert.equal(outputsHeading(), false);
   assert.equal($('#detail .dialog-body > h3')!.textContent, 'Flow at Phase 3');
@@ -1176,7 +1173,7 @@ test('a calculated dialog says its card’s headline under the title, and output
   assert.ok(main);
   // A generator makes no items: its power is the headline, and nothing else is listed.
   openCalculatedFactory(generator.id);
-  assert.equal(summary(), power(generator.generationMW));
+  assert.equal(summary(), figureText(displayPower(generator.generationMW)));
   assert.equal(outputsHeading(), false);
   assert.match(machineCells()[0]![2]!, /generates/);
 });
@@ -1272,7 +1269,7 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   noMarkup();
   const card = cardOf(`#main button.name[data-calc-factory="${made.id}"]`);
   const [item, rate] = Object.entries(made.outputs)[0]!;
-  assert.equal(headline(card), num(rate) + '/min');
+  assert.equal(headline(card), figureText(displayRate(rate, '/min')));
   assert.ok(
     machinesLine(card)!.startsWith(`${made.machines} × ${made.machine} · last at `),
     'machines, then the adjustable one’s clock',
@@ -1281,7 +1278,7 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   // A row named after its one output has no line repeating the headline.
   if (made.name === item) assert.equal(card.querySelector('.recipe'), null);
   const power = cardOf(`#main button.name[data-calc-factory="${generator.id}"]`);
-  assert.equal(headline(power), num(406.8) + ' MW', 'a word unit keeps a no-break space');
+  assert.equal(headline(power), '407' + ' MW', 'a word unit keeps a no-break space');
   assert.equal(power.querySelector('.output span')!.textContent, 'MW');
   // Generators are whole and run at 100% (#1064): they burn fuel only for the power drawn.
   assert.equal(machinesLine(power), `5 × ${generator.machine}`);
@@ -1354,7 +1351,7 @@ test('a nuclear plant card leads with its power and lists its waste below it (#3
   for (const row of made) {
     const card = cardOf(`#main button.name[data-calc-factory="${row.id}"]`);
     openCalculatedFactory(row.id);
-    assert.equal(summary(), power(row.generationMW));
+    assert.equal(summary(), figureText(displayPower(row.generationMW)));
     assert.equal(plain(summary()!), plain(headline(card)));
     assert.ok($$('#detail h3').some(h => h.textContent === 'Outputs per minute'));
     assert.match(detail(), new RegExp(Object.keys(row.outputs)[0]!));
@@ -1745,6 +1742,7 @@ test('a calculated card with several outputs names each of them below the headli
 // dialog's summary line already did; solids keep /min (#351, #361). plain() reads a no-break
 // space (or its &nbsp; in markup) as a space.
 const m3 = (rate: number) => num(rate) + ' m³/min';
+const m3Shown = (rate: number) => plain(figureText(displayRate(rate, 'm³/min')));
 const ROW_FUEL = 'Recipe_ResidualFuel_C'; // Residual Fuel: Heavy Oil Residue in, Fuel out.
 const ROW_OIL = 'Recipe_LiquidFuel_C'; // Fuel: Crude Oil in, Fuel and Polymer Resin out.
 
@@ -1753,7 +1751,7 @@ test('a migrated card measures a fluid in m³/min, like its dialog (#351)', asyn
   openMigrated({ phase: '4' });
   render();
   const card = cardOf(`#main button.name[data-calc-factory="${alumina}"]`);
-  assert.equal(plain(headline(card)), m3(10126.666666666666));
+  assert.equal(plain(headline(card)), m3Shown(10126.666666666666));
   assert.equal(card.querySelector('.output span')!.textContent, 'm³/min');
   // The headline agrees with the dialog's summary line.
   openCalculatedFactory(alumina);
@@ -1917,7 +1915,7 @@ test('a calculated card measures a fluid in m³/min, like its dialog (#351)', ()
   open({ calculated: plan });
   render();
   const card = cardOf(`#main button.name[data-calc-factory="${fuel.id}"]`);
-  assert.equal(plain(headline(card)), m3(fuel.outputs.Fuel!));
+  assert.equal(plain(headline(card)), m3Shown(fuel.outputs.Fuel!));
   assert.equal(card.querySelector('.output span')!.textContent, 'm³/min');
   // Named Residual Fuel, so its one output is listed below, in the same unit.
   assert.equal(

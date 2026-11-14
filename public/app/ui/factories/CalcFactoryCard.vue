@@ -24,7 +24,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { itemRate, rateOfItem, rateUnit, unitGap } from '../../flow.ts';
-import { num } from '../../format.ts';
+import { displayPower, displayRate } from '../../../numbers.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import { rowTotal } from '../../group-order.ts';
 import { calculated, checked, factoryEditing, stage, state } from '../../session.ts';
@@ -42,7 +42,7 @@ import {
   machineLine,
   siteGroupName,
 } from '../../views/factories.ts';
-import { power, powerParts } from '../../wizard/fields.ts';
+import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
@@ -119,8 +119,8 @@ const card = computed(() =>
       // in m³/min, as the dialog's summary line says it (#351).
       headline:
         generator || !main
-          ? powerParts(row.generationMW)
-          : { value: num(total), unit: rateUnit(main) },
+          ? displayPower(row.generationMW ?? 0)
+          : displayRate(total, rateUnit(main)),
       machines: machineLine(
         row.machines,
         row.machine,
@@ -200,7 +200,7 @@ const card = computed(() =>
       <span class="card-icon"><ItemIcon v-if="card.icon" :name="card.icon" /></span>
       <div class="card-main">
         <button class="name" v-bind="factoryLink({ calcFactory: row.id })">{{ row.name }}</button>
-        <div class="output">
+        <div class="output" :title="card.headline.exact">
           {{ card.headline.value }}{{ unitGap(card.headline.unit)
           }}<span>{{ card.headline.unit }}</span>
         </div>

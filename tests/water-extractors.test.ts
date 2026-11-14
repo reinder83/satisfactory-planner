@@ -207,7 +207,7 @@ test('the extractor advice: both options with extractors, shards and MW; one whe
   );
   assert.equal(
     plain(extractorAdvice(700)),
-    'Water Extractors at 100% (suggested): 5 at 100% + 1 at 83.33% (6 extractors, 115.72 MW). Or 2 overclocked at 250% and 1 at 83.33% (3 extractors, 6 Power Shards, 150.03 MW).',
+    'Water Extractors at 100% (suggested): 5 at 100% + 1 at 83.33% (6 extractors, 116 MW). Or 2 overclocked at 250% and 1 at 83.33% (3 extractors, 6 Power Shards, 150 MW).',
   );
   assert.equal(
     plain(extractorAdvice(121.2)),
@@ -215,7 +215,7 @@ test('the extractor advice: both options with extractors, shards and MW; one whe
   );
   assert.equal(
     plain(extractorAdvice(7.49)),
-    'Water Extractors: 1 at 6.24% (0.51 MW); no Power Shards needed.',
+    'Water Extractors: 1 at 6.24% (511 kW); no Power Shards needed.',
   );
   assert.equal(
     plain(extractorAdvice(120)),
@@ -271,7 +271,7 @@ test('only the Water no byproduct covers is extracted, and counted in extractors
   const distilled = waterOf(alternates, '4', 'Distilled Silica')!;
   assert.equal(
     plainText(distilled.extractors!),
-    'Water Extractors: 1 at 6.24% (0.51 MW); no Power Shards needed.',
+    'Water Extractors: 1 at 6.24% (511 kW); no Power Shards needed.',
   );
   // Phase 5's Alumina Solution needs two shard-boosted extractors.
   assert.match(

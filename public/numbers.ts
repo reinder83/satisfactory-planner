@@ -70,3 +70,60 @@ export function parseNumber(text: string, whole = false): number | null {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
+
+// Display rounding (#1335, X-2). The pages show rounded figures and put the exact one in a title
+// (hover). This is display only: the solver, the fields, the exports and the stored data keep the
+// exact numbers, and a field never shows these (it uses formatPlain). The rules:
+// - rates: no decimals from 100 up ("2,921.89" -> "2,922"), else up to 2 ("4.59");
+// - power: kW below 1 MW ("0.25 MW" -> "250 kW"), MW up to 1,000, GW above, with the rate rule
+//   (GW keeps 2 decimals);
+// - percent: 1 decimal ("4.59" -> "4.6").
+// A nonzero figure never shows as 0: a rounded-away amount reads "<0.01" (or "<0.1" for a percent),
+// so a short-by amount is never hidden.
+export interface DisplayFigure {
+  value: string;
+  unit: string;
+  exact: string;
+}
+
+function roundedFigure(value: number, digits: number): string {
+  const text = formatNumber(value, digits);
+  if (value === 0 || Number(text.replaceAll(',', '')) !== 0) return text;
+  return (value > 0 ? '<' : '>-') + formatNumber(10 ** -digits, digits);
+}
+
+const rateDigits = (value: number) => (Math.abs(value) >= 100 ? 0 : 2);
+
+// A rate (items or m³ a minute) rounded for display, with its exact value; `unit` is the caller's.
+export function displayRate(value: number, unit = ''): DisplayFigure {
+  return {
+    value: roundedFigure(value, rateDigits(value)),
+    unit,
+    exact: figureText({ value: formatNumber(value, 6), unit, exact: '' }),
+  };
+}
+
+// Power in MW rounded for display: kW below 1 MW, GW above 1,000 MW.
+export function displayPower(mw: number): DisplayFigure {
+  const exact = figureText({ value: formatNumber(mw, 6), unit: 'MW', exact: '' });
+  if (mw !== 0 && Math.abs(mw) < 1)
+    return { value: roundedFigure(mw * 1000, rateDigits(mw * 1000)), unit: 'kW', exact };
+  if (mw > 1000) return { value: formatNumber(mw / 1000, 2), unit: 'GW', exact };
+  return { value: roundedFigure(mw, rateDigits(mw)), unit: 'MW', exact };
+}
+
+// A percentage (0-100 scale, not a share) with one decimal.
+export function displayPercent(percent: number): DisplayFigure {
+  // Below 100 it is floored at one decimal near the top, so 99.96 reads 99.9%, never 100%.
+  const shown = percent < 100 && percent >= 99.95 ? Math.floor(percent * 10) / 10 : percent;
+  return {
+    value: roundedFigure(shown, 1),
+    unit: '%',
+    exact: formatNumber(percent, 4) + '%',
+  };
+}
+
+// The figure as one string: "2,922 m³/min", "250 kW", "4.6%". A unit that is a word gets a
+// no-break space before it, "/min" and "%" follow the number.
+export const figureText = ({ value, unit }: DisplayFigure): string =>
+  value + (unit && !/^[/%]/.test(unit) ? ' ' : '') + unit;
