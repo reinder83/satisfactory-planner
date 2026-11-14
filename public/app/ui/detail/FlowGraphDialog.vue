@@ -14,8 +14,10 @@
   graph-layout.ts); a line's box takes focus in the automatic order wherever it sits, Enter opens
   it and the arrow keys move it (Shift: bigger steps). Where the lines sit, the zoom and the
   scroll offsets are stored per factory (useGraphLayout, graph-layout-save.ts; groups[].layout,
-  state version 22) and put back on the next opening; "Reset layout" goes back to the automatic
-  layout at natural size, after a confirmation when a box was moved. Inputs and outputs (#1240): a
+  state version 22) and put back on the next opening; "Tidy up" (FG-3, #1343) lays the graph out
+  again as the automatic layout draws it (layered, with few crossings, FG-1: flowGraph) at natural
+  size, replacing where boxes were moved, and offers Undo (the button beside it, or Ctrl+Z: a
+  dialog is open, so the toast's shortcut stays quiet here) until the next move of a box. Inputs and outputs (#1240): a
   drag of an input's or an output's box, or the arrow keys on it, moves it the same way (stored by
   node id, `places`, state version 25; the lines are held where they are on its first move), and
   every move snaps to a 5 px grid (GRAPH_GRID, graph-layout.ts), the arrow keys a grid step at a
@@ -39,7 +41,7 @@
   Another phase's graph is the stored layout applied to the boxes it has in common with the phase
   on screen (the spots are by row id and node id) and the automatic layout for the rest
   (placedGraph), and is read-only: a drag of a box pans the drawing, the arrow keys do not move a
-  box, a press on a line opens nothing (it would open the phase on screen's line), "Reset layout"
+  box, a press on a line opens nothing (it would open the phase on screen's line), "Tidy up"
   and the tags switch are left out, and the layout is never saved while such a tab is open
   (useGraphLayout's `readonly`: not the spots, the tags, the zoom or the scroll). Switching tab
   first saves what a zoom or scroll of the phase on screen's tab was still waiting to save.
@@ -68,7 +70,6 @@ import type { StageKey } from '../../../types/index.ts';
 import PhaseTabs from '../PhaseTabs.vue';
 import { factoryGroupsState, machineLine } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
-import { confirmAction } from '../confirm.ts';
 import DialogFrame from './DialogFrame.vue';
 import { GRAPH_ZOOM, type GraphPoint, type GraphView } from '../../graph-view.ts';
 import {
@@ -111,6 +112,7 @@ let home: GraphView | null = null;
 // Saves what the phase on screen's tab was waiting to save, then shows the tab.
 function pickTab(key: StageKey) {
   layout.now();
+  tidied.value = null;
   activeNode.value = null;
   hoveredEdge.value = null;
   const leaving = !readonly.value;
@@ -279,6 +281,8 @@ const nodeAt = (node: string): GraphPoint | null => {
 const putNode = (node: string, to: [number, number]) => {
   const graph = placed.value;
   if (!graph) return;
+  // A move after Tidy up is a newer edit than the one Undo would put back over it.
+  tidied.value = null;
   const row = lineRowOf(node);
   const held = heldSpots(graph, layout.spots.value);
   // The first move keeps the boxes settled below the ones they grew into where they are drawn.
@@ -396,23 +400,50 @@ function onNodeKey(e: KeyboardEvent, node: GraphNode) {
 // The help over the graph is open where there is room for it and a "How to use" line on a phone,
 // where it would take most of the screen from the graph (#1280).
 const roomy = globalThis.matchMedia?.('(max-width: 720px)').matches !== true;
-// Back to the automatic layout at natural size, from the top-left corner; asked first when a box
-// was moved, since that is work to redo.
-async function resetLayout() {
+// What Tidy up replaced, for Undo (FG-3): the spots of the lines, inputs and outputs and the view.
+// Null when there is nothing to undo.
+const tidied = ref<{
+  spots: Record<string, [number, number]>;
+  places: Record<string, [number, number]>;
+  view: GraphView;
+} | null>(null);
+// Lays the graph out again as the automatic layout draws it, at natural size, from the top-left
+// corner: the moved boxes' spots go (saved like a drag, layout.now). No question is asked, since
+// Undo puts everything back.
+async function tidyUp() {
   if (readonly.value) return;
-  if (
-    (Object.keys(layout.spots.value).length || Object.keys(layout.places.value).length) &&
-    !(await confirmAction({
-      title: 'Reset the layout?',
-      body: 'The production lines, inputs and outputs you moved go back to their automatic places, and the graph to 100%. Opened again, it is fitted to the window.',
-      confirmLabel: 'Reset layout',
-    }))
-  )
-    return;
+  const el = box.value;
+  const before = {
+    spots: { ...layout.spots.value },
+    places: { ...layout.places.value },
+    view: { zoom: zoom.value, left: el?.scrollLeft ?? 0, top: el?.scrollTop ?? 0 },
+  };
+  const moved = Object.keys(before.spots).length + Object.keys(before.places).length > 0;
   layout.spots.value = {};
   layout.places.value = {};
   await show({ zoom: 1, left: 0, top: 0 });
   layout.now();
+  tidied.value = moved ? before : null;
+}
+// Undo of Tidy up: the boxes and the view back as they were, saved.
+async function undoTidy() {
+  const back = tidied.value;
+  if (!back || readonly.value) return;
+  tidied.value = null;
+  layout.spots.value = back.spots;
+  layout.places.value = back.places;
+  await show(back.view);
+  layout.now();
+}
+// Ctrl+Z (⌘Z) while the graph is open undoes Tidy up, unless it is typing in a field.
+function onPanelKey(e: KeyboardEvent) {
+  if (!tidied.value || readonly.value) return;
+  if (e.defaultPrevented || e.shiftKey || e.altKey) return;
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+  if ((e.target as Element | null)?.closest?.('input:not([type="checkbox"]), textarea, select'))
+    return;
+  e.preventDefault();
+  void undoTidy();
 }
 </script>
 
@@ -432,6 +463,7 @@ async function resetLayout() {
       :role="view.name !== null ? 'tabpanel' : undefined"
       :aria-labelledby="view.name !== null ? tabId('fg', shown) : undefined"
       data-flow-graph-panel
+      @keydown="onPanelKey"
     >
       <p v-if="view.name === null" class="notice warn" data-flow-graph-missing>
         This profile has no such factory any more. It may have been removed on the Factories page.
@@ -453,7 +485,7 @@ async function resetLayout() {
             output to move it (or the arrow keys on a focused box; not on another phase's tab), zoom
             with the mouse wheel, a pinch or the buttons, and press a production line to open it.
             Moved boxes snap to a 5 px grid, so they line up. The graph opens as you left it, until
-            you reset the layout.
+            you tidy it up: that lays everything out again, and Ctrl+Z brings your layout back.
             <template v-if="view.quiet && !layout.tags.value">
               What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
             </template>
@@ -499,11 +531,19 @@ async function resetLayout() {
             v-if="!readonly"
             class="btn"
             type="button"
-            data-flow-layout-reset
-            @click="resetLayout"
+            title="Lay the graph out again, replacing where you moved boxes (Ctrl+Z undoes it)"
+            data-flow-tidy
+            @click="tidyUp"
           >
-            Reset layout
+            Tidy up
           </button>
+          <span class="fgraph-undo small muted" role="status">
+            <template v-if="tidied && !readonly">
+              Tidied up.
+              <button class="btn" type="button" data-flow-tidy-undo @click="undoTidy">Undo</button>
+              <kbd>Ctrl+Z</kbd>
+            </template>
+          </span>
           <label v-if="view.quiet && !readonly" class="fgraph-switch">
             <input
               type="checkbox"

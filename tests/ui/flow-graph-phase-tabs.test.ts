@@ -2,7 +2,7 @@
 // ui/detail/FlowGraphDialog.vue): one tab per phase, opening on the phase on screen and marked
 // "· current"; another phase's graph is the stored layout applied to the boxes the two phases
 // share and the automatic layout for the rest, and it is read-only: a drag, the arrow keys, a
-// press on a line, "Reset layout", the tags switch, a zoom and a scroll never write the stored
+// press on a line, "Tidy up", the tags switch, a zoom and a scroll never write the stored
 // layout (or anything else), and switching the tab never switches the profile's phase. The tab
 // is in the dialog's own state: opening the graph again opens the phase on screen's. The profile
 // is the planner's default, made for Phase 3: fg-oilcp1 has 5 lines in Phase 3 and 8 in Phase 5.
@@ -173,11 +173,12 @@ test('another phase reuses the saved spots of the boxes both phases have, the re
   assert.equal(new Set(later.map(id => drawnAt(id)!.join())).size, later.length, 'none on another');
 });
 
-test('a drag, the arrow keys, Reset layout, the tags, a zoom and a scroll never write the layout', async () => {
+test('a drag, the arrow keys, Tidy up, the tags, a zoom and a scroll never write the layout', async () => {
   await showFactories(arranged());
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   await openGraph();
   const stored = JSON.stringify(storedLayout());
+  assert.ok($('#detail [data-flow-tidy]'), 'Tidy up is offered on the phase on screen');
   await pick('5');
   const box = sizedBox();
   const [first] = lineIds(graphOf('5')).filter(id => SPOTS[rowOf(id)]) as [string];
@@ -205,8 +206,9 @@ test('a drag, the arrow keys, Reset layout, the tags, a zoom and a scroll never 
   assert.equal(key.defaultPrevented, false);
   assert.deepEqual(drawnAt(first), at);
   assert.ok($('#detail [data-flow-graph]'), 'Enter opens no line');
-  // Reset layout and the tags switch are not offered.
-  assert.equal($('#detail [data-flow-layout-reset]'), null);
+  // Tidy up (FG-3) and the tags switch are not offered, nor its Undo.
+  assert.equal($('#detail [data-flow-tidy]'), null);
+  assert.equal($('#detail [data-flow-tidy-undo]'), null);
   assert.equal($('#detail [data-flow-tags]'), null);
   // A zoom and a scroll are looked at, never stored.
   $<HTMLButtonElement>('#detail [data-flow-zoom="in"]')!.click();
@@ -232,14 +234,14 @@ test('closing while another phase is open saves nothing either', async () => {
   assert.deepEqual(calls, []);
 });
 
-test('back on the phase on screen the layout can be moved and Reset layout is there again', async () => {
+test('back on the phase on screen the layout can be moved and Tidy up is there again', async () => {
   await showFactories(arranged());
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   await openGraph();
   await pick('5');
   await pick('3');
   sizedBox();
-  assert.ok($('#detail [data-flow-layout-reset]'));
+  assert.ok($('#detail [data-flow-tidy]'));
   const [first] = lineIds(graphOf('3')) as [string];
   const line = $(`#detail [data-node="${first}"]`)!;
   assert.equal(line.getAttribute('role'), 'button');
