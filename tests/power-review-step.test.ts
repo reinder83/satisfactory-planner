@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import { milestonePhase, phaseSteps } from '../public/progression.ts';
 import { calculate } from '../planner.ts';
 import { waterPowerWords } from '../public/mining.ts';
+import { powerAmount } from '../public/wording.ts';
 import type {
   CalcRow,
   Progression,
@@ -41,10 +42,9 @@ const review = (plan: StoredCalculatedPlan, checks: Record<string, boolean>, pha
   phaseSteps(plan, { checks }, data, phase).find(step => step.id.endsWith('-power-review'))!;
 
 // A power figure in en-US, MW or GW above 1,000 MW, as the pages write it.
-const gw = (mw: number) =>
-  mw > 1000
-    ? (mw / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' GW'
-    : mw.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' MW';
+// The step words power through the one display rule (X-2, #1335): the figures are the exact
+// values (the grid's MW, asserted above to add up), shown rounded like every other page.
+const gw = (mw: number) => powerAmount(mw);
 
 // Where the 20% allowance comes from (#1090), before the check.
 const PREFERENCES =

@@ -22,7 +22,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { calcFlowModel, FLUIDS } from '../../flow.ts';
+import { calcFlowModel, rateUnit } from '../../flow.ts';
+import { displayPower, displayRate, figureText } from '../../../numbers.ts';
 import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
 import {
   buildRowName,
@@ -89,7 +90,11 @@ const view = computed(() =>
     const guide = calculated?.guide?.factories?.[row.id];
     const outputs = Object.entries(row.outputs || {}),
       [main, rate] = outputs[0] || [],
-      generator = row.generationMW > 0;
+      generator = row.generationMW > 0,
+      figure =
+        main && !generator
+          ? displayRate(rate ?? 0, rateUnit(main))
+          : displayPower(row.generationMW ?? 0);
     return {
       row,
       title: buildRowName(row.id),
@@ -102,10 +107,8 @@ const view = computed(() =>
       note: guide?.note ?? '',
       // A row the guide builds at the nuclear site, as the handbook's dialog says (#478).
       nuclear: !!guide?.nuclear,
-      summary:
-        main && !generator
-          ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
-          : power(row.generationMW),
+      summary: figureText(figure),
+      summaryExact: figure.exact,
       icon: rowIcon(row),
       flow: calcFlowModel(row),
       // Why the plan sinks the line's spare coke rather than burning it (#1063).
@@ -153,6 +156,7 @@ const view = computed(() =>
     :title="view.title"
     :subtitle="view.subtitle"
     :summary="view.summary"
+    :summary-exact="view.summaryExact"
     :icon="view.icon"
   >
     <template #actions

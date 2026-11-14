@@ -19,10 +19,12 @@ import {
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import { factoryLink } from '../actions.ts';
+import { displayPercent, figureText } from '../../../numbers.ts';
 
 // At most this many held-back rows are listed; the rest are counted.
 const MAX_WAITING = 5;
-const percent = (share: number) => Math.round(share * 100);
+// The share is kept exact (a few tenths of a percent is still delivery); the text rounds it.
+const percent = (share: number) => share * 100;
 
 const view = computed(() =>
   legacy(() => {
@@ -33,14 +35,14 @@ const view = computed(() =>
       .map(row => ({
         id: row.id,
         name: buildRowName(row.id),
-        text: `running at ${percent(row.share)}%, short of ${row.shortOf}`,
+        text: `running at ${Math.round(percent(row.share))}%, short of ${row.shortOf}`,
       }));
     const next = status.next && {
       id: status.next.id,
       name: buildRowName(status.next.id),
       why:
         status.next.gain > 0
-          ? `adds ${Math.max(1, percent(status.next.gain))}% of the elevator delivery`
+          ? `adds ${Math.max(1, Math.round(percent(status.next.gain)))}% of the elevator delivery`
           : status.next.unblocks > 0
             ? `gets ${num(status.next.unblocks)} built machine${status.next.unblocks === 1 ? '' : 's'} running`
             : 'is the next unbuilt step in build order',
@@ -55,6 +57,7 @@ const view = computed(() =>
       from: currentCarry()?.from || '',
       total: status.rowCount,
       share: percent(status.deliveryShare),
+      shareFigure: displayPercent(percent(status.deliveryShare)),
       delivery: status.delivery.map(delivery => ({
         item: delivery.item,
         text: `${num(delivery.now)} of ${num(delivery.planned)}/min now`,
@@ -100,7 +103,8 @@ const view = computed(() =>
       Nothing reaches the elevator yet.
     </p>
     <p v-else-if="view.delivery.length" class="small">
-      {{ view.share }}% of the phase's delivery rate is flowing.
+      <span :title="view.shareFigure.exact">{{ figureText(view.shareFigure) }}</span> of the phase's
+      delivery rate is flowing.
     </p>
     <p v-if="view.next" class="small" data-build-next>
       Build next:
