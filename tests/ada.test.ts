@@ -926,6 +926,24 @@ test('ADA restates a merge of a friend’s progress on the Backup page (#1160)',
   assert.ok(!ids(facts({ view: 'backup' })).includes('progress-merged'), 'absent means none');
 });
 
+test('ADA says what a restored backup changed on the Backup page (X-6, #1352)', () => {
+  const find = (restored?: { words: string; good: boolean }) =>
+    adaRemarks(facts({ view: 'backup', restored })).filter(r =>
+      r.id.startsWith('progress-restored'),
+    );
+  const good = find({ words: '3 lines now running. I will allow it.', good: true });
+  assert.deepEqual(
+    good.map(r => [r.id, r.tone, r.text]),
+    [['progress-restored', 'praise', '3 lines now running. I will allow it.']],
+  );
+  const back = find({ words: '1 line no longer marked running.', good: false });
+  assert.deepEqual(
+    back.map(r => [r.id, r.tone]),
+    [['progress-restored-back', 'calm']],
+  );
+  assert.deepEqual(find(), [], 'absent means none');
+});
+
 test('ADA restates the Backup page’s activity log (#1214)', () => {
   const remark = (activity: { ticks: number; people: string }) =>
     adaRemarks(facts({ view: 'backup', activity })).find(r => r.id === 'activity-log');

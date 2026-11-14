@@ -22,6 +22,7 @@ import {
   groupMoved,
   importedSaves,
   mergedProgress,
+  restoredProgress,
   sessionSize,
   buildMinutes,
   milestoneOnly,
@@ -421,6 +422,14 @@ function mergedFacts(): Pick<AdaFacts, 'merged' | 'mergedFrom'> {
   return { merged: merged.count, mergedFrom: `“${merged.fileName}”` };
 }
 
+// The last restore of a progress backup into the open profile (X-6, #1352), as the page's summary
+// counted it.
+function restoredFacts(): Pick<AdaFacts, 'restored'> {
+  const restored = restoredProgress;
+  if (!restored || restored.profileId !== currentProfile.id) return {};
+  return { restored: { words: restored.words, good: restored.good } };
+}
+
 // The Backup page's activity log (#1214): its ticks and the names in it, as the page lists them.
 function activityFacts(view: string): Pick<AdaFacts, 'activity'> {
   if (view !== 'backup') return {};
@@ -585,6 +594,7 @@ function adaFacts(): AdaFacts {
       workspace.saves.filter(save => importedSaves.includes(save.id)).map(save => `“${save.name}”`),
     ),
     ...mergedFacts(),
+    ...restoredFacts(),
     ...activityFacts(view),
     ...sessionFacts(view),
     unplaced: unplacedCount(),
