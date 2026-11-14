@@ -5,13 +5,13 @@
 // a table" lists every one of them, self links included. Pan and zoom (#1223): the wheel over the
 // drawing zooms it, a drag on its background moves it while a press on a line's box without a
 // drag opens that line, and − / + / Fit zoom it. Rearranging (#1224): a drag of a line's box moves
-// it and saves the layout once it ends, an arrow key moves a focused line, Reset layout goes back
+// it and saves the layout once it ends, an arrow key moves a focused line, Tidy up (FG-3, #1343) goes back
 // to the automatic layout, and the graph opens again as it was left. Storage and the sink (#1231):
 // their arrows are quiet until lit, a box pointed at or focused lights up its own arrows with
 // their labels (a line's quiet ones too, #1242) and fades the rest, and "Show storage and sink as tags" draws them as named tags, saved with the
 // layout. Inputs and outputs (#1240): a drag (mouse or finger) or the arrow keys move them too,
 // their arrows follow and they are saved with the layout (version 25), kept while storage and the
-// sink are tags and put back by Reset layout; every move snaps to a 5 px grid. Where the boxes land
+// sink are tags and put back by Tidy up; every move snaps to a 5 px grid. Where the boxes land
 // is checked in a real browser (browser-check.ts); happy-dom lays nothing out, so a test gives the
 // box its size.
 import assert from 'node:assert/strict';
@@ -496,43 +496,121 @@ test('the help over the graph is open with room and folded on a phone', async ()
   }
 });
 
-test('Reset layout goes back to the automatic layout at 100%, asking first when a line was moved', async () => {
+test('Tidy up lays the graph out again at 100%, saves it like a drag, and Undo or Ctrl+Z puts the boxes back (FG-3)', async () => {
   const automatic = graphOf();
   const [first] = lineIds(automatic) as [string];
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   await showFactories(arrangedGroups({ nodes: { [rowOf(first)]: [900, 30] }, zoom: 1.5 }));
   await openGraph();
   sizedBox();
-  const reset = $<HTMLButtonElement>('#detail [data-flow-layout-reset]')!;
-  assert.equal(reset.textContent!.trim(), 'Reset layout');
-  assert.equal(reset.type, 'button');
-  // Cancelled: nothing changes.
-  const asked = answerConfirms(false);
-  reset.click();
+  assert.equal($('#detail [data-flow-layout-reset]'), null, 'Reset layout is gone');
+  const tidy = $<HTMLButtonElement>('#detail [data-flow-tidy]')!;
+  assert.equal(tidy.textContent!.trim(), 'Tidy up');
+  assert.equal(tidy.type, 'button');
+  assert.equal($('#detail [data-flow-tidy-undo]'), null, 'nothing to undo yet');
+  const moved = drawnAt(first);
+  assert.deepEqual(moved, [900, 30]);
+  // No question: the automatic layout at natural size, the stored layout gone, Undo offered.
+  const asked = answerConfirms(true);
+  tidy.click();
   await settle();
-  assert.equal(asked.length, 1);
-  assert.match(asked[0]!, /go back to their automatic places/);
-  // It says what the graph does when opened again: fitted, not at the 100% it shows now (#1280).
-  assert.match(asked[0]!, /to 100%. Opened again, it is fitted to the window.$/);
-  assert.deepEqual(drawnAt(first), [900, 30]);
-  assert.deepEqual(layoutSaves(calls), []);
-  // Confirmed: the automatic layout at natural size, and the stored layout goes.
-  answerConfirms(true);
-  reset.click();
-  await settle();
+  assert.deepEqual(asked, [], 'Undo makes a confirmation needless');
   const spot = automatic.nodes.find(node => node.id === first)!;
   assert.deepEqual(drawnAt(first), [spot.x, spot.y]);
   assert.equal(zoomLevel(), '100%');
   assert.deepEqual(layoutSaves(calls), [{ type: 'factoryGroupLayout', id: GROUP, layout: null }]);
   assert.equal(storedLayout(), undefined);
-  // With only a zoom to undo it does not ask.
-  const zoomOnly = answerConfirms(true);
+  const undo = $<HTMLButtonElement>('#detail [data-flow-tidy-undo]')!;
+  assert.ok(undo, 'Undo is beside Tidy up');
+  // Undo puts the box, the zoom and the stored layout back.
+  undo.click();
+  await settle();
+  assert.deepEqual(drawnAt(first), moved);
+  assert.equal(zoomLevel(), '150%');
+  assert.deepEqual(storedLayout(), { nodes: { [rowOf(first)]: [900, 30] }, zoom: 1.5 });
+  assert.equal($('#detail [data-flow-tidy-undo]'), null, 'it is spent');
+  // Ctrl+Z does the same, from anywhere in the graph's panel.
+  tidy.click();
+  await settle();
+  assert.deepEqual(drawnAt(first), [spot.x, spot.y]);
+  const key = new KeyboardEvent('keydown', {
+    key: 'z',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  $('#detail [data-flow-graph]')!.dispatchEvent(key);
+  await settle();
+  assert.equal(key.defaultPrevented, true);
+  assert.deepEqual(drawnAt(first), moved);
+  assert.deepEqual(storedLayout(), { nodes: { [rowOf(first)]: [900, 30] }, zoom: 1.5 });
+  // With only a zoom to undo there is nothing to take back, so no Undo.
+  tidy.click();
+  await settle();
   $<HTMLButtonElement>('#detail [data-flow-zoom="in"]')!.click();
   await settle();
-  reset.click();
+  tidy.click();
   await settle();
-  assert.deepEqual(zoomOnly, []);
   assert.equal(zoomLevel(), '100%');
+  assert.equal($('#detail [data-flow-tidy-undo]'), null);
+});
+
+test('a move of a box after Tidy up is newer than its Undo, which is withdrawn', async () => {
+  const automatic = graphOf();
+  const [first] = lineIds(automatic) as [string];
+  await showFactories(arrangedGroups({ nodes: { [rowOf(first)]: [900, 30] } }));
+  await openGraph();
+  const box = sizedBox();
+  $<HTMLButtonElement>('#detail [data-flow-tidy]')!.click();
+  await settle();
+  assert.ok($('#detail [data-flow-tidy-undo]'));
+  const line = $(`#detail [data-node="${first}"]`)!;
+  line.focus();
+  line.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+  );
+  await settle();
+  assert.equal($('#detail [data-flow-tidy-undo]'), null);
+  const key = new KeyboardEvent('keydown', {
+    key: 'z',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  box.dispatchEvent(key);
+  assert.equal(key.defaultPrevented, false, 'Ctrl+Z is left alone');
+});
+
+test('every drawn arrow has a label with its item and rate, fluids in m³/min', async () => {
+  await openGraph();
+  const graph = graphOf();
+  const drawnEdges = graph.edges.filter(edge => edge.path);
+  assert.ok(drawnEdges.length > 5);
+  for (const edge of drawnEdges) {
+    const label = labelEl(edge.id);
+    assert.ok(label, `${edge.id} has a label`);
+    const texts = [...label.querySelectorAll('text')].map(text => text.textContent!.trim());
+    assert.deepEqual(texts, [edge.item, edge.rateText], edge.id);
+    if (edge.item === 'Water') assert.match(edge.rateText, /m³\/min$/);
+    assert.match(edgeEl(edge.id).getAttribute('d')!, /^M/);
+  }
+  // The hover title names the item and the rate.
+  const hit = $(`#detail path[data-edge-hit="${drawnEdges[0]!.id}"] title`)!;
+  assert.match(hit.textContent!, new RegExp(drawnEdges[0]!.item));
+  assert.ok(hit.textContent!.includes(drawnEdges[0]!.rateText));
+});
+
+test('the graph keeps scrolling but shows no scrollbar', async () => {
+  await openGraph();
+  // The rule lives in style.css; happy-dom has none, so read the stylesheet.
+  const css = (await import('node:fs')).readFileSync('public/style.css', 'utf8');
+  assert.match(css, /\.fgraph-scroll\[data-flow-graph\]\s*\{[^}]*scrollbar-width:\s*none/);
+  assert.match(
+    css,
+    /\.fgraph-scroll\[data-flow-graph\]::-webkit-scrollbar\s*\{[^}]*display:\s*none/,
+  );
+  const box = $<HTMLElement>('#detail [data-flow-graph]')!;
+  assert.equal(box.getAttribute('tabindex'), '0', 'still focusable, so the keys scroll it');
 });
 
 // #1231: the classes an arrow, its label and a box have now.
@@ -859,7 +937,7 @@ test('the arrow keys move a focused input or output a grid step, and the graph o
   assert.deepEqual(drawnAt(output), spot, 'it opens where it was put');
 });
 
-test('Reset layout puts moved inputs and outputs back too, asking first', async () => {
+test('Tidy up puts moved inputs and outputs back too, and Undo returns them', async () => {
   const automatic = graphOf();
   const [input] = placeIds(automatic, 'in') as [string];
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
@@ -871,16 +949,17 @@ test('Reset layout puts moved inputs and outputs back too, asking first', async 
     node => node.id === input,
   )!;
   assert.deepEqual(drawnAt(input), [settled.x, settled.y]);
-  const asked = answerConfirms(true);
-  $<HTMLButtonElement>('#detail [data-flow-layout-reset]')!.click();
+  $<HTMLButtonElement>('#detail [data-flow-tidy]')!.click();
   await settle();
-  assert.equal(asked.length, 1, 'a moved input is work to redo');
-  assert.match(asked[0]!, /production lines, inputs and outputs you moved/);
   const spot = automatic.nodes.find(node => node.id === input)!;
   assert.deepEqual(drawnAt(input), [spot.x, spot.y]);
   assert.deepEqual(layoutSaves(calls), [{ type: 'factoryGroupLayout', id: GROUP, layout: null }]);
   assert.equal(storedLayout(), undefined);
   assert.ok(state.version < 22);
+  $<HTMLButtonElement>('#detail [data-flow-tidy-undo]')!.click();
+  await settle();
+  assert.deepEqual(drawnAt(input), [settled.x, settled.y]);
+  assert.deepEqual(storedLayout(), { places: { [input]: [15, 400] } });
 });
 
 test('storage and the sink keep their stored spots while they are tags', async () => {
@@ -930,7 +1009,7 @@ test('a layout stored before #1240 opens as it was: its lines unmoved, inputs an
 // Phase 3's Oil & fuel campus had four such pairs). It is left out until its arrow is pointed at;
 // its value stays in the arrow's hover title and the table.
 test('at rest a label with no free spot is left out until its arrow is pointed at', async () => {
-  const OIL = 'fg-oilcp1';
+  const OIL = 'fg-projct';
   await openGraph(OIL);
   const edges = graphOf(OIL).edges.filter(edge => edge.path && !edge.quiet);
   const crowded = edges.filter(edge => edge.label?.crowded);

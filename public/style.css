@@ -5134,6 +5134,23 @@ button.rail-tile:hover {
   touch-action: none;
   cursor: grab;
 }
+/* No visible scrollbar on the flow graph (FG-7): it still scrolls by drag, wheel, touch and keys. */
+.fgraph-scroll[data-flow-graph] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.fgraph-scroll[data-flow-graph]::-webkit-scrollbar {
+  display: none;
+}
+/* "Tidied up. Undo Ctrl+Z" beside Tidy up (FG-3): quiet text with a compact button. */
+.fgraph-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fgraph-undo .btn {
+  min-height: 34px;
+}
 .fgraph-scroll.panning,
 .fgraph-scroll.moving,
 .fgraph-scroll.moving .fgraph-node {

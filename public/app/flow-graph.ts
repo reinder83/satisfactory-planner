@@ -148,6 +148,9 @@ export interface FlowGraph {
   edges: GraphEdge[];
   tags: GraphTag[];
   layers: number;
+  // Crossings of the automatic layout's arrows (the forward ones, as laid out): every pair, and the
+  // pairs of arrows that are not quiet (storage and sink arrows are thin and grey, FG-1).
+  crossings: { all: number; loud: number };
   width: number;
   height: number;
   // Boxes drawn below where they were stored because they grew to show their rates (placedGraph's
@@ -158,6 +161,9 @@ export interface FlowGraph {
 // What a graph is drawn with: `tags` draws the storage and sink flows as tags on their lines.
 export interface GraphOptions {
   tags?: boolean;
+  // How hard the order of the boxes in each column is worked at (FG-1, #1343): see Ordering.
+  // Default ORDERING; a test passes PREVIOUS_ORDERING to count the crossings the layout had before.
+  ordering?: Ordering;
 }
 
 // The places whose edges are quiet: Protected storage and the AWESOME Sink, the right-hand boxes
@@ -235,10 +241,11 @@ export function flowGraph(
   const nodes = graphNodes(flow, rateText, caption).filter(node => !tagOnly.has(node.id));
   addRates(nodes, edges, flow, rateText);
   const tags = graphTags(edges, rateText);
-  const bottom = layOut(
+  const { bottom, crossings } = layOut(
     nodes,
     edges.filter(edge => !edge.asTag),
     tags,
+    options.ordering ?? ORDERING,
   );
   const byId = new Map(nodes.map(node => [node.id, node]));
   const width =
@@ -249,6 +256,7 @@ export function flowGraph(
     edges,
     tags,
     layers: Math.max(0, ...nodes.map(node => node.layer + 1)),
+    crossings,
     width,
     height: graphHeight(bottom, edges),
   };
@@ -454,20 +462,25 @@ interface Slot {
 
 // Gives each node its layer and place, and each drawn edge (all of `edges` but self links) its
 // path and label. Returns the bottom of the lowest box or waypoint.
-function layOut(nodes: GraphNode[], edges: GraphEdge[], tags: readonly GraphTag[]): number {
+function layOut(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  tags: readonly GraphTag[],
+  ordering: Ordering,
+): { bottom: number; crossings: { all: number; loud: number } } {
   const byId = new Map(nodes.map(node => [node.id, node]));
   assignLayers(nodes, edges, byId);
   const forward = edges.filter(edge => edge.note !== 'self' && isForward(edge, byId));
   fitPorts(nodes, forward);
   const { layers, chains } = slotLayers(nodes, forward, byId);
-  orderLayers(layers, chains);
-  placeSlots(layers);
+  const crossings = orderLayers(layers, chains, ordering);
+  placeSlots(layers, chains);
   const bottom = Math.max(0, ...layers.flat().map(slot => slot.y + slot.height));
   const back = edges.filter(edge => edge.note !== 'self' && !isForward(edge, byId));
   const curves = routeForward(forward, chains, byId);
   for (const [edge, lane] of routeBack(back, bottom, byId)) curves.set(edge, [lane]);
   placeEdgeLabels(edges, curves, labelObstacles(nodes, tags));
-  return bottom;
+  return { bottom, crossings };
 }
 
 // A box with many edges on one side grows to give each its own port, GRAPH.port apart.
@@ -544,21 +557,95 @@ function slotLayers(
   return { layers, chains };
 }
 
-// A few sweeps left to right and back, each layer sorted by the mean place of its slots'
-// neighbours in the layer before (or after). A slot without neighbours there keeps its place;
-// ties keep the order they had.
-const SWEEPS = 4;
-function orderLayers(layers: Slot[][], chains: ReadonlyMap<GraphEdge, Slot[]>) {
+// How the boxes of each column are put in order (FG-1, #1343): `passes` of barycenter sweeps (each
+// down the columns, then back up), from `restarts` starts (the first is the order the boxes come
+// in, the others shuffled with a seeded generator, so the layout is the same every time), each
+// then improved by swapping neighbours while that removes a crossing (`transpose`); the order with
+// the fewest crossings is kept, the earliest of equals.
+export interface Ordering {
+  passes: number;
+  restarts: number;
+  transpose: boolean;
+}
+export const ORDERING: Ordering = { passes: 10, restarts: 8, transpose: true };
+// The layout before #1343: four sweeps from the one start. The tests count its crossings to show
+// what the new one saves.
+export const PREVIOUS_ORDERING: Ordering = { passes: 4, restarts: 1, transpose: false };
+
+// A hop of an arrow from one slot to the one in the next column.
+interface Hop {
+  from: Slot;
+  to: Slot;
+  quiet: boolean;
+}
+
+// Two hops between the same two columns cross when their ends are in opposite orders.
+function crossingsBetween(hops: readonly Hop[], place: ReadonlyMap<Slot, number>) {
+  let all = 0,
+    loud = 0;
+  for (let i = 0; i < hops.length; i++)
+    for (let j = i + 1; j < hops.length; j++) {
+      const one = hops[i]!,
+        other = hops[j]!;
+      const across =
+        (place.get(one.from)! - place.get(other.from)!) *
+        (place.get(one.to)! - place.get(other.to)!);
+      if (across >= 0) continue;
+      all++;
+      if (!one.quiet && !other.quiet) loud++;
+    }
+  return { all, loud };
+}
+// What an order costs: every crossing, the ones between arrows that are not quiet counting four.
+const cost = (found: { all: number; loud: number }) => found.all + 3 * found.loud;
+
+// A small seeded generator (mulberry32), so the restarts shuffle the same way every time.
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Puts every column in the order with the fewest crossings (see Ordering); returns its crossings.
+function orderLayers(
+  layers: Slot[][],
+  chains: ReadonlyMap<GraphEdge, Slot[]>,
+  ordering: Ordering,
+): { all: number; loud: number } {
+  const hops: Hop[] = [];
   const before = new Map<Slot, Slot[]>(),
     after = new Map<Slot, Slot[]>();
-  for (const chain of chains.values())
+  for (const [edge, chain] of chains)
     for (let i = 1; i < chain.length; i++) {
       // i and i - 1 are inside the chain.
       const left = chain[i - 1]!,
         right = chain[i]!;
+      hops.push({ from: left, to: right, quiet: edge.quiet });
       before.set(right, [...(before.get(right) ?? []), left]);
       after.set(left, [...(after.get(left) ?? []), right]);
     }
+  // The hops from column n to the one after it.
+  const hopsFrom = layers.map((_, n) => hops.filter(hop => hop.from.layer === n));
+  const placesOf = (order: Slot[][]) => {
+    const place = new Map<Slot, number>();
+    for (const layer of order) layer.forEach((slot, i) => place.set(slot, i));
+    return place;
+  };
+  const total = (order: Slot[][]) => {
+    const place = placesOf(order);
+    const sum = { all: 0, loud: 0 };
+    for (const list of hopsFrom) {
+      const found = crossingsBetween(list, place);
+      sum.all += found.all;
+      sum.loud += found.loud;
+    }
+    return sum;
+  };
   const sortBy = (layer: Slot[], neighbours: Map<Slot, Slot[]>, side: Slot[]) => {
     const place = new Map(side.map((slot, i) => [slot, i]));
     const key = new Map(
@@ -572,23 +659,139 @@ function orderLayers(layers: Slot[][], chains: ReadonlyMap<GraphEdge, Slot[]>) {
     );
     layer.sort((a, b) => key.get(a)! - key.get(b)!);
   };
-  for (let sweep = 0; sweep < SWEEPS; sweep++) {
-    for (let i = 1; i < layers.length; i++) sortBy(layers[i]!, before, layers[i - 1]!);
-    for (let i = layers.length - 2; i >= 0; i--) sortBy(layers[i]!, after, layers[i + 1]!);
+  // Swaps neighbours in a column while a swap lowers the cost of the hops on both its sides.
+  const transpose = (order: Slot[][]) => {
+    const place = placesOf(order);
+    const local = (n: number) =>
+      cost(crossingsBetween(hopsFrom[n] ?? [], place)) +
+      cost(crossingsBetween(n > 0 ? hopsFrom[n - 1]! : [], place));
+    for (let round = 0, changed = true; changed && round < 20; round++) {
+      changed = false;
+      order.forEach((layer, n) => {
+        for (let i = 0; i + 1 < layer.length; i++) {
+          const one = layer[i]!,
+            other = layer[i + 1]!;
+          const was = local(n);
+          place.set(one, i + 1);
+          place.set(other, i);
+          if (local(n) < was) {
+            layer[i] = other;
+            layer[i + 1] = one;
+            changed = true;
+          } else {
+            place.set(one, i);
+            place.set(other, i + 1);
+          }
+        }
+      });
+    }
+  };
+  const random = seeded(1343);
+  const shuffled = <T>(list: readonly T[]): T[] => {
+    const copy = [...list];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+    }
+    return copy;
+  };
+  let best = layers.map(layer => [...layer]);
+  let bestFound = { all: Infinity, loud: Infinity };
+  for (let start = 0; start < Math.max(1, ordering.restarts); start++) {
+    const order = layers.map(layer => (start === 0 ? [...layer] : shuffled(layer)));
+    for (let pass = 0; pass < ordering.passes; pass++) {
+      for (let i = 1; i < order.length; i++) sortBy(order[i]!, before, order[i - 1]!);
+      for (let i = order.length - 2; i >= 0; i--) sortBy(order[i]!, after, order[i + 1]!);
+    }
+    if (ordering.transpose) transpose(order);
+    const found = total(order);
+    if (cost(found) < cost(bestFound)) {
+      best = order;
+      bestFound = found;
+    }
   }
+  layers.forEach((layer, n) => layer.splice(0, layer.length, ...best[n]!));
+  return bestFound.all === Infinity ? { all: 0, loud: 0 } : bestFound;
 }
 
-// Each layer stacked from the top, centred on the tallest layer, and its boxes placed.
-function placeSlots(layers: Slot[][]) {
+// How many passes of averaging the boxes' heights get (placeSlots).
+const PLACE_PASSES = 8;
+
+// The slots of one column at the heights nearest `wanted` (a top per slot) that keep their order
+// with GRAPH.rowGap between them: the least squared move, found by pooling neighbours that would
+// otherwise overlap (isotonic regression on the tops less the room above each).
+function nearestTops(layer: readonly Slot[], wanted: readonly number[]): number[] {
+  const room: number[] = [];
+  let above = 0;
+  for (const slot of layer) {
+    room.push(above);
+    above += slot.height + GRAPH.rowGap;
+  }
+  const blocks: { sum: number; count: number }[] = [];
+  wanted.forEach((top, i) => {
+    blocks.push({ sum: top - room[i]!, count: 1 });
+    while (blocks.length > 1) {
+      const last = blocks[blocks.length - 1]!,
+        prev = blocks[blocks.length - 2]!;
+      if (prev.sum / prev.count <= last.sum / last.count) break;
+      blocks.splice(blocks.length - 2, 2, {
+        sum: prev.sum + last.sum,
+        count: prev.count + last.count,
+      });
+    }
+  });
+  const tops: number[] = [];
+  for (const block of blocks)
+    for (let k = 0; k < block.count; k++) tops.push(block.sum / block.count + room[tops.length]!);
+  return tops;
+}
+
+// The columns' boxes and waypoints placed (FG-1, #1343): stacked from the top and centred on the
+// tallest column to start with, then PLACE_PASSES times a sweep to the right (each slot moves
+// toward the middle of the slots feeding it) and one back to the left (toward the ones it
+// feeds), never closer than GRAPH.rowGap, so a line with one neighbour stands level with it and
+// a waypoint runs straight. Everything then moves up so the top slot has its padding, on whole units.
+function placeSlots(layers: Slot[][], chains: ReadonlyMap<GraphEdge, Slot[]>) {
   const heightOf = (layer: Slot[]) =>
     layer.reduce((sum, slot) => sum + slot.height, 0) +
     Math.max(0, layer.length - 1) * GRAPH.rowGap;
   const tallest = Math.max(0, ...layers.map(heightOf));
-  layers.forEach((layer, n) => {
-    let y = GRAPH.pad + GRAPH.labelHeight / 2 + (tallest - heightOf(layer)) / 2;
+  for (const layer of layers) {
+    let y = (tallest - heightOf(layer)) / 2;
     for (const slot of layer) {
       slot.y = y;
       y += slot.height + GRAPH.rowGap;
+    }
+  }
+  const before = new Map<Slot, Slot[]>(),
+    after = new Map<Slot, Slot[]>();
+  for (const chain of chains.values())
+    for (let i = 1; i < chain.length; i++) {
+      const left = chain[i - 1]!,
+        right = chain[i]!;
+      before.set(right, [...(before.get(right) ?? []), left]);
+      after.set(left, [...(after.get(left) ?? []), right]);
+    }
+  const middle = (slot: Slot) => slot.y + slot.height / 2;
+  const settle = (layer: Slot[], sides: readonly Map<Slot, Slot[]>[]) => {
+    const wanted = layer.map(slot => {
+      const near = sides.flatMap(side => side.get(slot) ?? []);
+      return near.length
+        ? near.reduce((sum, other) => sum + middle(other), 0) / near.length - slot.height / 2
+        : slot.y;
+    });
+    nearestTops(layer, wanted).forEach((top, i) => (layer[i]!.y = top));
+  };
+  for (let pass = 0; pass < PLACE_PASSES; pass++) {
+    for (let i = 1; i < layers.length; i++) settle(layers[i]!, [before]);
+    for (let i = layers.length - 2; i >= 0; i--) settle(layers[i]!, [after]);
+  }
+  for (const layer of layers) settle(layer, [before, after]);
+  const top = Math.min(...layers.flat().map(slot => slot.y));
+  const start = GRAPH.pad + GRAPH.labelHeight / 2;
+  layers.forEach((layer, n) => {
+    for (const slot of layer) {
+      slot.y = Math.round(slot.y + start - top);
       if (slot.node) {
         slot.node.x = columnX(n);
         slot.node.y = slot.y;
