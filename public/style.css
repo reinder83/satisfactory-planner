@@ -5552,7 +5552,7 @@ button.rail-tile:hover {
 }
 .fgraph-panel-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: 12px 24px;
   margin: 10px 0 0;
 }
@@ -7282,6 +7282,10 @@ button.rail-tile:hover {
 .help-tip {
   width: min(360px, calc(100vw - 32px));
   font-size: 12.5px;
+  /* A long help never runs off the bottom of a phone: it scrolls inside itself (#1355). */
+  max-height: min(60vh, calc(100vh - 32px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 /* A glossary term (#1076, ui/Term.vue): the word as written, underlined with dots, and its
    definition in a tooltip under it. The tooltip is at the end of <body>, fixed where the component
