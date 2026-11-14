@@ -8,7 +8,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { beforeEach, test } from 'vitest';
-import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
+import {
+  adaClearFault,
+  adaCurrent,
+  setAdaChatter,
+  setAdaIndex,
+} from '../../public/app/ada-panel.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { powerView } from '../../public/power.ts';
 import { generated, generatedWith, go, open, page } from './setup.ts';
@@ -147,4 +152,40 @@ test('ADA has no power remark on the handbook profile', () => {
     setAdaIndex(i);
     assert.notEqual(adaCurrent()?.id, 'power');
   }
+});
+
+// The thin-headroom remark (power-thin) says the figure the Resources page shows, displayPercent
+// of (available - need) / available, and speaks only while that shown value is under 10.
+function thinRemark(spareShare: number) {
+  setAdaChatter('chatty');
+  const plan = structuredClone(generated());
+  plan.settings.phase = '3';
+  const grid = plan.stages['3']!.grid!;
+  grid.availableMW = 10000;
+  grid.needMW = 10000 * (1 - spareShare);
+  open({ calculated: plan, phase: '3' });
+  go('resources');
+  for (let i = 0; i < 40; i++) {
+    setAdaIndex(i);
+    const line = adaCurrent();
+    if (line?.id === 'power-thin') return line.text;
+  }
+  return undefined;
+}
+
+test('thin headroom is said as the Resources page shows it, and only while that is under 10%', () => {
+  assert.equal(
+    thinRemark(0.095),
+    'Headroom is down to 9.5%. Somewhere a fuse is preparing a dramatic exit.',
+    '9.5% is not floored to 9%',
+  );
+  assert.equal(
+    thinRemark(0.0505),
+    'Headroom is down to 5.1%. Somewhere a fuse is preparing a dramatic exit.',
+  );
+  // The page reads 10% here, so ADA is silent rather than saying 9%.
+  assert.equal(thinRemark(0.0995), undefined, '9.95% shows as 10% on the page');
+  assert.equal(thinRemark(0.0999), undefined);
+  assert.equal(thinRemark(0.1), undefined, '10% is not thin');
+  assert.equal(thinRemark(0.3), undefined);
 });

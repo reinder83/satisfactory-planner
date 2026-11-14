@@ -30,6 +30,18 @@ export interface AdaFacts {
   steps: { done: number; total: number };
   next: string;
   retireOpen: number;
+  // The first open retirement step of the shown phase, by id: where "Show step" goes ('' when none).
+  retireStep?: string;
+  // Ticks set in the open profile (#1353): never backed up with 50+ of them is a factory history
+  // that lives in one browser.
+  ticks?: number;
+  // Headroom of the stage's power as a whole percentage of what it can supply, when it is 0-9%
+  // (not short, which `power` says); absent otherwise.
+  // The spare power as the Resources page shows it (displayPercent), e.g. "9.5%", when under 10.
+  powerThin?: string;
+  // Train stations and train lines of the open profile (#1284).
+  trainStations?: number;
+  trainLines?: number;
   // Unticked steps of lines a delivered Space Elevator part leaves without work (#1062).
   idleLines?: number;
   // Unticked storage-only lines of the open phase (#1061): optional, listed last.
@@ -278,12 +290,20 @@ export interface AdaLine {
   essential?: boolean;
   // The one button the line may carry (#1353).
   action?: AdaAction;
+  // The mood label, when it is not the one the tone gives.
+  mood?: AdaMood;
 }
 
 // A button on a line: its label and the route it opens.
+// `step` is a build-plan step the page scrolls to and focuses; `target` a selector on the page
+// that gets focus once it has drawn (the button that fixes the problem, the summary to read).
 export interface AdaAction {
   label: string;
   view: string;
+  step?: string;
+  target?: string;
+  // The Logistics tab to open first (the page remembers the last one used).
+  tab?: 'trains';
 }
 
 // One remark: see the comment above RULES.
@@ -297,9 +317,26 @@ interface AdaRule {
   // always essential; any other calm line is said only at Chatty.
   essential?: true;
   lead?: boolean;
+  // The mood label, when it is not the one the tone gives.
+  mood?: AdaMood;
+  // The one button, when the line names a fix (#1353). Undefined when there is nothing to press,
+  // such as the page it would open already being the one shown.
+  action?: (facts: AdaFacts) => AdaAction | undefined;
   when: (facts: AdaFacts) => unknown;
   text: (facts: AdaFacts) => string;
 }
+
+// A button that opens another page, left out on that page itself.
+const goTo =
+  (label: string, view: string) =>
+  (facts: AdaFacts): AdaAction | undefined =>
+    facts.view === view ? undefined : { label, view };
+// A button that opens the Backup page on its "Export all saves" button.
+const exportAll = (): AdaAction => ({
+  label: 'Export all saves',
+  view: 'backup',
+  target: '[data-export-saves]',
+});
 
 // Small text helpers: "3 steps", "A, B, C and 2 more", and a whole-number percentage.
 const plural = (count: number, word: string) => count + ' ' + word + (count === 1 ? '' : 's');
@@ -333,6 +370,7 @@ const RULES: AdaRule[] = [
   // lead on whatever page is open.
   {
     id: 'draft',
+    action: goTo('Open profiles', 'profiles'),
     on: ['resources'],
     tone: 'warn',
     when: facts => facts.feasible === false,
@@ -341,6 +379,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'draft-map',
+    action: goTo('Open resources', 'resources'),
     on: ['plan', 'resources'],
     tone: 'warn',
     when: facts => facts.feasible === false && !!facts.mapShort,
@@ -357,6 +396,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'power',
+    action: goTo('Open build plan', 'plan'),
     on: ['resources'],
     tone: 'warn',
     when: facts => facts.power?.tight,
@@ -461,11 +501,13 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'retire',
+    action: facts =>
+      facts.retireStep ? { label: 'Show step', view: 'plan', step: facts.retireStep } : undefined,
     on: ['plan'],
     tone: 'warn',
     when: facts => facts.retireOpen > 0,
     text: facts =>
-      `${plural(facts.retireOpen, 'retirement step')} still open. This phase stopped budgeting for those lines; your power grid did not. Dismantle them and reclaim the material.`,
+      `${plural(facts.retireOpen, 'retirement step')} still open: this phase stopped budgeting for those lines, your power grid did not. Dismantle them and reclaim the material.`,
   },
   {
     // The lines a delivered elevator part leaves without work (#1062), dimmed in the build plan.
@@ -612,6 +654,7 @@ const RULES: AdaRule[] = [
   {
     id: 'factories-none',
     on: ['factories'],
+    action: goTo('Open factories', 'factories'),
     tone: 'calm',
     when: facts => facts.factories?.total && !facts.factories.done,
     text: facts =>
@@ -631,6 +674,7 @@ const RULES: AdaRule[] = [
   // Build-so-far (#66): what the factories marked running actually deliver, from facts.build.
   {
     id: 'build-waiting',
+    action: goTo('Open factories', 'factories'),
     on: ['plan', 'factories'],
     tone: 'warn',
     when: facts => facts.build?.waiting.length,
@@ -639,6 +683,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'build-dry',
+    action: goTo('Open factories', 'factories'),
     on: ['plan', 'factories'],
     tone: 'calm',
     // Lines marked running deliver nothing at all: the same stall as build-waiting, which warns.
@@ -646,6 +691,41 @@ const RULES: AdaRule[] = [
     when: facts => facts.build?.built && !facts.build.share && facts.build.next,
     text: facts =>
       `${facts.build!.built} ${facts.build!.built === 1 ? 'production line' : 'production lines'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
+  },
+  {
+    // Spare power under 10% of what the stage can supply, but not yet short (power says that).
+    id: 'power-thin',
+    on: ['resources', 'plan'],
+    tone: 'calm',
+    mood: 'observant',
+    action: goTo('Open resources', 'resources'),
+    when: facts => facts.powerThin !== undefined,
+    text: facts =>
+      `Headroom is down to ${facts.powerThin}. Somewhere a fuse is preparing a dramatic exit.`,
+  },
+  {
+    // Train stations are built and not one train line runs between them (#1284).
+    id: 'trains-no-lines',
+    on: ['logistics', 'map'],
+    tone: 'calm',
+    mood: 'amused',
+    action: facts =>
+      facts.view === 'logistics'
+        ? undefined
+        : { label: 'Plan a train line', view: 'logistics', tab: 'trains' },
+    when: facts => (facts.trainStations ?? 0) > 0 && !facts.trainLines,
+    text: facts =>
+      `${plural(facts.trainStations!, 'train station')}, zero train lines. Bold of you to trust the conveyor belts this much.`,
+  },
+  {
+    // An address that names no page (#1330): the page says it too, so Chatty only.
+    id: 'unknown-route',
+    on: ['notfound'],
+    tone: 'calm',
+    mood: 'amused',
+    action: () => ({ label: 'Go to Build plan', view: 'plan' }),
+    when: facts => facts.view === 'notfound',
+    text: () => 'That sector is not on any FICSIT map. Your saves are exactly where you left them.',
   },
   {
     id: 'build-next',
@@ -803,6 +883,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'on-site-pending',
+    action: goTo('Open factories', 'factories'),
     on: ['factories', 'plan', 'logistics'],
     tone: 'warn',
     when: facts => facts.onSitePending,
@@ -815,6 +896,7 @@ const RULES: AdaRule[] = [
   {
     // The lines asked to run at exact clocks differ from the plan's (#1066).
     id: 'exact-clocks-pending',
+    action: goTo('Open factories', 'factories'),
     on: ['factories', 'plan'],
     tone: 'warn',
     when: facts => (facts.exactClocksPending ?? 0) > 0,
@@ -824,6 +906,7 @@ const RULES: AdaRule[] = [
   {
     // The somersloop pins asked for differ from the plan's (#1235).
     id: 'sloop-pins-pending',
+    action: goTo('Open factories', 'factories'),
     on: ['factories', 'plan'],
     tone: 'calm',
     // Waiting on a recalculation, as exact-clocks-pending (warn) is.
@@ -835,6 +918,7 @@ const RULES: AdaRule[] = [
   {
     // Pins the plan could not keep and planned without (#1235), never silently.
     id: 'sloop-pins-dropped',
+    action: goTo('Open build plan', 'plan'),
     on: ['factories', 'plan'],
     tone: 'warn',
     when: facts => (facts.sloopPinsDropped?.count ?? 0) > 0,
@@ -844,6 +928,7 @@ const RULES: AdaRule[] = [
   {
     // The Power Shard pins asked for differ from the plan's clocks (#1239).
     id: 'shard-pins-pending',
+    action: goTo('Open factories', 'factories'),
     on: ['factories', 'plan'],
     tone: 'calm',
     // Waiting on a recalculation, as exact-clocks-pending (warn) is.
@@ -855,6 +940,7 @@ const RULES: AdaRule[] = [
   {
     // Clocks the plan could not keep and planned without (#1239), never silently.
     id: 'shard-pins-dropped',
+    action: goTo('Open build plan', 'plan'),
     on: ['factories', 'plan'],
     tone: 'warn',
     when: facts => (facts.shardPinsDropped?.count ?? 0) > 0,
@@ -888,6 +974,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'note-conflict',
+    action: goTo('Open notes', 'notes'),
     on: ['notes', 'plan', 'factories', 'storage'],
     tone: 'warn',
     when: facts => facts.noteConflicts,
@@ -905,14 +992,18 @@ const RULES: AdaRule[] = [
   // Browser edition only: full-export reminders from workspace.lastBackup.
   {
     id: 'backup-never',
+    action: exportAll,
     on: ['backup'],
     tone: 'warn',
     when: facts => facts.browserMode && facts.backupDays === null,
-    text: () =>
-      `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
+    text: facts =>
+      (facts.ticks ?? 0) >= 50
+        ? `Your entire factory history lives in one browser tab, and it has never been exported. FICSIT calls that a single point of failure; I call it Tuesday. Backup → Export all saves.`
+        : `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
   },
   {
     id: 'backup-old',
+    action: exportAll,
     on: ['backup'],
     tone: 'calm',
     // The same data-loss warning as backup-never, only calmer.
@@ -927,6 +1018,7 @@ const RULES: AdaRule[] = [
   // so it leads, as the ranking finished does, until the page is left or the summary dismissed.
   {
     id: 'progress-restored',
+    action: () => ({ label: 'See changes', view: 'backup', target: '#restore-changes-title' }),
     lead: true,
     on: ['backup'],
     tone: 'praise',
@@ -936,6 +1028,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'progress-restored-back',
+    action: () => ({ label: 'See changes', view: 'backup', target: '#restore-changes-title' }),
     lead: true,
     on: ['backup'],
     tone: 'calm',
@@ -1357,6 +1450,12 @@ export function adaRuleLevels(): { id: string; tone: string; essential: boolean 
   return RULES.map(rule => ({ id: rule.id, tone: rule.tone, essential: essentialRule(rule) }));
 }
 
+// The line's one button as a field to spread: none when the rule has none or nothing to press.
+function adaActionOf(rule: AdaRule, facts: AdaFacts): { action?: AdaAction } {
+  const action = rule.action?.(facts);
+  return action ? { action } : {};
+}
+
 // Facts in, remarks out. Never throws: a joke must not be able to break the
 // planner, so a rule that trips over unexpected data is skipped.
 // `facts` comes from adaFacts in app/ada-panel.ts. Returns every applicable rule as
@@ -1378,6 +1477,8 @@ export function adaRemarks(given: Partial<AdaFacts> = {}): AdaLine[] {
           tone: rule.tone,
           text: rule.text(facts),
           essential: essentialRule(rule),
+          ...(rule.mood ? { mood: rule.mood } : {}),
+          ...adaActionOf(rule, facts),
         });
     } catch {}
   }
