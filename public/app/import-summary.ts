@@ -81,7 +81,7 @@ export function stepsDone(
   plan: StoredCalculatedPlan | null | undefined,
   state: SavedState,
   progression: Progression | null | undefined,
-): { done: number; total: number; other: number } | null {
+): { done: number; total: number; other: number; listed: ReadonlySet<string> } | null {
   if (!plan || !progression) return null;
   const { settings: _working, ...progress } = state;
   const phases = profilePhases(plan, progress, progression) || [];
@@ -100,7 +100,7 @@ export function stepsDone(
     phases.flatMap(entry => planStepIds(plan, progress, progression, entry.phase, memo)),
   );
   const other = Object.entries(state.checks).filter(([id, ticked]) => ticked && !listed.has(id));
-  return { ...steps, other: other.length };
+  return { ...steps, other: other.length, listed };
 }
 
 const summaryRecord = (value: unknown): value is Record<string, unknown> =>

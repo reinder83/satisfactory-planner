@@ -12,6 +12,7 @@ import {
   restoreUnchanged,
   restoreWentBack,
 } from '../public/app/restore-changes.ts';
+import { stepsDone } from '../public/app/import-summary.ts';
 import { deliveryKey } from '../public/progression.ts';
 import { saveExport, version21 } from './types/fixtures.ts';
 import type {
@@ -130,4 +131,57 @@ test('ticks that move without changing the count are still a change', () => {
   );
   assert.ok(!restoreUnchanged(changes));
   assert.deepEqual(restoreChangeLines(changes, phaseLabel), ['2 other ticks changed']);
+});
+
+// #1389 review: a restore replaces the whole progress, so "nothing changed" is only for an equal one.
+test('a restore that only replaced personal tasks or a group name names them, never "nothing changed"', () => {
+  const tasks = restoreChanges(
+    base(),
+    { ...base(), customTasks: [{ id: 'custom-9', title: 'Pave the yard', phase }] },
+    context,
+  );
+  assert.ok(!restoreUnchanged(tasks));
+  assert.deepEqual(tasks.replaced, ['personal tasks']);
+  assert.deepEqual(restoreChangeLines(tasks, phaseLabel), ['Also replaced: Personal tasks']);
+  assert.match(restoreAdaWords(tasks), /^It replaced personal tasks\./);
+  assert.doesNotMatch(restoreAdaWords(tasks), /nothing changed/);
+
+  const group = (name: string): SavedState => ({
+    ...base(),
+    customTasks: [],
+    factoryGroups: { groups: [{ id: 'fg-1', name }], assignments: {} },
+  });
+  const renamed = restoreChanges(group('Iron'), group('Iron works'), context);
+  assert.ok(!restoreUnchanged(renamed));
+  assert.deepEqual(restoreChangeLines(renamed, phaseLabel), ['Also replaced: Factory groups']);
+});
+
+test('bookkeeping and key order are not a change; the phase alone is its own line', () => {
+  const before = { ...base(), revision: 3, tickedBy: {} };
+  const after = { ...base(), revision: 9, tickedBy: { x: { at: '2026-11-14T10:00:00Z' } } };
+  assert.ok(restoreUnchanged(restoreChanges(before, after as SavedState, context)));
+  const reordered = Object.fromEntries(Object.entries(base()).reverse()) as SavedState;
+  assert.ok(restoreUnchanged(restoreChanges(base(), reordered, context)));
+});
+
+test('ticks outside the steps are listed when the steps moved too', () => {
+  const steps = stepsDone(plan, base(), progression)!;
+  const step = [...steps.listed].find(id => !id.startsWith('calc-'))!;
+  const changes = restoreChanges(
+    base(),
+    { ...base(), checks: { [step]: true, 'storage-x': true, 'storage-y': true } },
+    context,
+  );
+  const lines = restoreChangeLines(changes, phaseLabel);
+  assert.ok(lines.some(line => /^Steps done: 0 → 1 of /.test(line)));
+  assert.ok(lines.includes('Other ticks: 0 → 2'));
+});
+
+test('steps done names both totals when the restore changed how many steps there are', () => {
+  const changes = {
+    ...restoreChanges(base(), base(), context),
+    identical: false,
+    steps: { before: 40, after: 52, totalBefore: 221, total: 226, changed: 12 },
+  };
+  assert.deepEqual(restoreChangeLines(changes, phaseLabel), ['Steps done: 40 of 221 → 52 of 226']);
 });

@@ -13,7 +13,12 @@
 //     9,800 of 12,000"), by delivery id as the build plan's counters key them;
 //   - the build-plan steps done, as the confirmation counts them (stepsDone), and the phase the
 //     profile works on;
-//   - the notes that now read differently.
+//   - the notes that now read differently;
+//   - the ticks that are neither a line's running box nor a build-plan step;
+//   - which other parts of the progress the restore replaced (personal tasks, storage, trains,
+//     map markers…), named but not counted.
+// "Nothing changed" is said only when the whole progress is the same (#1389 review): a restore
+// replaces all of it, so a difference the lines above do not count is still named.
 // A profile whose plan has no stages to count says only what its other ticks, deliveries and notes do.
 //
 // This module reads no session state, so the node tests import it; the Backup page hands it the
@@ -42,10 +47,24 @@ export interface RestoreChanges {
   running: number;
   lines: number;
   deliveries: DeliveryChange[];
-  // Build-plan steps done before and after, in all phases; null without a plan or progression.json.
-  steps: { before: number; after: number; total: number } | null;
-  // The ticks of every kind, and how many keys are ticked in one and not the other.
-  ticks: { before: number; after: number; changed: number };
+  // Build-plan steps done before and after, in all phases, out of how many steps each had (the
+  // confirmation says the one before), and how many step ticks moved; null without a plan or
+  // progression.json.
+  steps: {
+    before: number;
+    after: number;
+    totalBefore: number;
+    total: number;
+    changed: number;
+  } | null;
+  // The ticks of every kind, before and after.
+  ticks: { before: number; after: number };
+  // The ticks that are neither a line's running box nor a step, and how many of those moved.
+  otherTicks: { before: number; after: number; changed: number };
+  // The other parts of the progress that differ, as words ("personal tasks", "trains").
+  replaced: string[];
+  // Whether the whole progress is the same.
+  identical: boolean;
   // The phase the profile works on before and after; null when it is the same.
   phase: { before: StageKey; after: StageKey } | null;
   notes: number;
@@ -57,15 +76,76 @@ export interface ChangeContext {
   progression: Progression | null | undefined;
 }
 
-// The keys ticked in one state and not in the other.
-const restoreTickChanges = (before: SavedState, after: SavedState) =>
-  [...new Set([...Object.keys(before.checks), ...Object.keys(after.checks)])].filter(
-    key => !!before.checks[key] !== !!after.checks[key],
-  ).length;
 const restoreTicked = (state: SavedState) => Object.values(state.checks).filter(Boolean).length;
 
 // The text of a note, an unset note and an empty one being the same.
 const restoreNoteText = (state: SavedState, key: string) => state.notes[key] ?? '';
+
+// The words for the parts of the progress the lines do not count. Bookkeeping that changes with
+// every write (version, revision, who ticked what) is not a difference.
+const RESTORE_SKIPPED = new Set([
+  'version',
+  'revision',
+  'tickedBy',
+  'checks',
+  'notes',
+  'deliveries',
+]);
+const RESTORE_PART_WORDS: Record<string, string> = {
+  customTasks: 'personal tasks',
+  storageEdits: 'storage',
+  taskEdits: 'build plan edits',
+  factoryGroups: 'factory groups',
+  handbookOrigin: 'migration details',
+  onSiteReview: 'made-on-site reviews',
+  exactClocks: 'machine clocks',
+  lineClocks: 'machine clocks',
+  builtMachines: 'built machines',
+  sloopPins: 'Somersloop pins',
+  mapMarkers: 'map markers',
+  mapLayers: 'map layers',
+  factoryPlaces: 'factory places on the map',
+  trainStations: 'trains',
+  trainLines: 'trains',
+  trainLayout: 'trains',
+  detailLevel: 'detail level',
+  settings: 'settings',
+};
+
+// A value as text with its keys sorted and unset keys left out, so two equal values read the same
+// whatever order the server or IndexedDB gave their keys in.
+function restoreStable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(restoreStable).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .filter(key => record[key] !== undefined)
+      .sort()
+      .map(key => `${JSON.stringify(key)}:${restoreStable(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+// The parts besides ticks, notes and deliveries that differ, in words, each once. The phase is
+// its own line, so settings count only for what else they hold.
+function restoreReplaced(before: SavedState, after: SavedState): string[] {
+  const part = (state: SavedState, key: string): unknown => {
+    if (key === 'settings') return { ...state.settings, phase: undefined };
+    const record: Record<string, unknown> = { ...state };
+    return record[key];
+  };
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const words = [...keys]
+    .filter(key => !RESTORE_SKIPPED.has(key))
+    .filter(key => restoreStable(part(before, key)) !== restoreStable(part(after, key)))
+    .map(key => RESTORE_PART_WORDS[key] ?? 'other details');
+  return [...new Set(words)];
+}
+
+// "a, b and c".
+const restoreList = (words: string[]) =>
+  words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
 
 export function restoreChanges(
   before: SavedState,
@@ -76,6 +156,7 @@ export function restoreChanges(
   let stopped = 0;
   let running = 0;
   let lines = 0;
+  const runningKeys = new Set<string>();
   const deliveries: DeliveryChange[] = [];
   for (const [phase, stage] of Object.entries(plan?.stages ?? {}) as [
     StageKey,
@@ -83,6 +164,7 @@ export function restoreChanges(
   ][]) {
     for (const row of stage?.rows ?? []) {
       const key = `calc-${phase}-${row.id}`;
+      runningKeys.add(key);
       const was = !!before.checks[key];
       const now = !!after.checks[key];
       lines++;
@@ -100,6 +182,34 @@ export function restoreChanges(
   const stepsBefore = stepsDone(plan, before, progression);
   const stepsAfter = stepsDone(plan, after, progression);
   const noteKeys = new Set([...Object.keys(before.notes), ...Object.keys(after.notes)]);
+  // Each tick is a running box, a step (as listed for that state's own progress) or another tick.
+  const none: ReadonlySet<string> = new Set();
+  const kind = (state: SavedState, listed: ReadonlySet<string>, key: string) =>
+    !state.checks[key] ? '' : runningKeys.has(key) ? 'running' : listed.has(key) ? 'step' : 'other';
+  const tickKeys = new Set([...Object.keys(before.checks), ...Object.keys(after.checks)]);
+  let otherBefore = 0;
+  let otherAfter = 0;
+  let otherChanged = 0;
+  let stepChanged = 0;
+  for (const key of tickKeys) {
+    const was = kind(before, stepsBefore?.listed ?? none, key);
+    const now = kind(after, stepsAfter?.listed ?? none, key);
+    if (was === 'other') otherBefore++;
+    if (now === 'other') otherAfter++;
+    if ((was === 'other') !== (now === 'other')) otherChanged++;
+    if ((was === 'step') !== (now === 'step')) stepChanged++;
+  }
+  const replaced = restoreReplaced(before, after);
+  const sameMap = (a: Record<string, unknown>, b: Record<string, unknown>, empty: unknown) =>
+    [...new Set([...Object.keys(a), ...Object.keys(b)])].every(
+      key => (a[key] ?? empty) === (b[key] ?? empty),
+    );
+  const identical =
+    !replaced.length &&
+    before.settings.phase === after.settings.phase &&
+    sameMap(before.checks, after.checks, false) &&
+    sameMap(before.notes, after.notes, '') &&
+    sameMap(before.deliveries, after.deliveries, 0);
   return {
     started,
     stopped,
@@ -108,13 +218,18 @@ export function restoreChanges(
     deliveries,
     steps:
       stepsBefore && stepsAfter
-        ? { before: stepsBefore.done, after: stepsAfter.done, total: stepsAfter.total }
+        ? {
+            before: stepsBefore.done,
+            after: stepsAfter.done,
+            totalBefore: stepsBefore.total,
+            total: stepsAfter.total,
+            changed: stepChanged,
+          }
         : null,
-    ticks: {
-      before: restoreTicked(before),
-      after: restoreTicked(after),
-      changed: restoreTickChanges(before, after),
-    },
+    ticks: { before: restoreTicked(before), after: restoreTicked(after) },
+    otherTicks: { before: otherBefore, after: otherAfter, changed: otherChanged },
+    replaced,
+    identical,
     phase:
       before.settings.phase === after.settings.phase
         ? null
@@ -124,14 +239,8 @@ export function restoreChanges(
   };
 }
 
-// Whether the restore changed nothing the summary counts.
-export const restoreUnchanged = (changes: RestoreChanges): boolean =>
-  !changes.started &&
-  !changes.stopped &&
-  !changes.deliveries.length &&
-  !changes.phase &&
-  !changes.notes &&
-  !changes.ticks.changed;
+// Whether the restore left the progress exactly as it was.
+export const restoreUnchanged = (changes: RestoreChanges): boolean => changes.identical;
 
 // Whether anything the summary counts went down: a line stopped, a delivered count or the steps
 // done fell. ADA only approves a restore that did not.
@@ -161,29 +270,36 @@ export function restoreChangeLines(changes: RestoreChanges, phaseLabel: (phase: 
       `${change.part}, ${phaseLabel(change.phase)}: ${restoreCount(change.from)} → ${restoreCount(change.to)}` +
         (change.target ? ` of ${restoreCount(change.target)} delivered` : ' delivered'),
     );
-  const stepsMoved = !!changes.steps && changes.steps.before !== changes.steps.after;
-  if (stepsMoved)
+  const steps = changes.steps;
+  if (steps && steps.before !== steps.after)
     out.push(
-      `Steps done: ${restoreCount(changes.steps!.before)} → ${restoreCount(changes.steps!.after)} of ${restoreCount(changes.steps!.total)}`,
+      steps.totalBefore === steps.total
+        ? `Steps done: ${restoreCount(steps.before)} → ${restoreCount(steps.after)} of ${restoreCount(steps.total)}`
+        : `Steps done: ${restoreCount(steps.before)} of ${restoreCount(steps.totalBefore)} → ${restoreCount(steps.after)} of ${restoreCount(steps.total)}`,
     );
-  else {
-    // The ticks the lines above do not explain: the running boxes are ticks too.
-    const wasRunning = changes.running - changes.started + changes.stopped;
-    const before = changes.ticks.before - wasRunning;
-    const after = changes.ticks.after - changes.running;
-    const other = changes.ticks.changed - changes.started - changes.stopped;
-    if (other > 0)
-      out.push(
-        before === after
-          ? `${plural(other, 'other tick')} changed`
-          : `Other ticks: ${restoreCount(before)} → ${restoreCount(after)}`,
-      );
-  }
+  else if (steps?.changed)
+    out.push(
+      `${plural(steps.changed, 'step')} ticked differently, ${restoreCount(steps.after)} of ${restoreCount(steps.total)} done either way`,
+    );
+  // The ticks that are neither running boxes nor steps, whether or not the steps moved.
+  const other = changes.otherTicks;
+  if (other.changed > 0)
+    out.push(
+      other.before === other.after
+        ? `${plural(other.changed, 'other tick')} changed`
+        : `Other ticks: ${restoreCount(other.before)} → ${restoreCount(other.after)}`,
+    );
   if (changes.phase)
     out.push(
       `Works on ${phaseLabel(changes.phase.after)}, was ${phaseLabel(changes.phase.before)}`,
     );
   if (changes.notes) out.push(`${plural(changes.notes, 'note')} now read differently`);
+  if (changes.replaced.length) {
+    const list = restoreList(changes.replaced);
+    out.push(`Also replaced: ${list.charAt(0).toUpperCase()}${list.slice(1)}`);
+  }
+  // Never an empty list for a progress that differs: a restore replaces all of it.
+  if (!out.length && !changes.identical) out.push('Some saved details differ from before');
   return out;
 }
 
@@ -204,7 +320,11 @@ export function restoreAdaWords(changes: RestoreChanges): string {
     parts.push(
       `${restoreCount(changes.steps.after)} of ${restoreCount(changes.steps.total)} steps are done now, was ${restoreCount(changes.steps.before)}.`,
     );
-  if (!parts.length) parts.push('Only ticks and notes changed.');
+  if (changes.replaced.length)
+    parts.push(
+      `${parts.length ? 'It also replaced' : 'It replaced'} ${restoreList(changes.replaced)}.`,
+    );
+  if (!parts.length) parts.push('Only ticks, notes or the phase changed.');
   parts.push(
     restoreWentBack(changes)
       ? 'Some of that went backwards. I only report it.'
