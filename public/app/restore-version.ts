@@ -1,7 +1,7 @@
 // "Restore this version" (POST /api/restore-version, #1071): the undo of a recalculation in place,
 // offered on the card of a version it kept (ui/pages/ProfilesPage.vue). The kept version's plan
 // and progress go back into the profile it was kept for, which keeps its id, name and place; the
-// version they replace is kept in turn as "<name> (before restore, Oct 7, 2:05 PM)", still
+// version they replace is kept in turn as "Oct 7 · restore backup 1", still
 // linked, so the restore can be undone the same way. The request names the plans the user saw on
 // both profiles, so one changed meanwhile in another tab or on another device is refused (409).
 import { post } from './api.ts';
@@ -30,11 +30,10 @@ export interface Restore {
   backupName: string;
 }
 
-// The name the version a restore replaces is kept under: "<name> (before restore, Oct 7, 2:05
-// PM)", numbered when that name is taken in the save.
-export const restoreKeptName = (saveId: string, name: string, date = new Date()): string =>
+// The name the version a restore replaces is kept under: "Oct 7 · restore backup 1", numbered
+// past the names taken in the save.
+export const restoreKeptName = (saveId: string, date = new Date()): string =>
   backupName(
-    name,
     date,
     workspace?.saves.find(save => save.id === saveId)?.profiles.map(p => p.name),
     'restore',

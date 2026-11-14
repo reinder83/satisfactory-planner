@@ -248,7 +248,7 @@ test('“Recalculate in place with exact clocks” recalculates this profile in 
   assert.match(asked[0]!, /with the production lines at the clocks you chose/);
   assert.match(
     asked[0]!,
-    /is kept as “.* \(before edit, [^”]+\)” under Profiles, with all of its progress\./,
+    /is kept as “[^·”]+ · backup 1” under Profiles, with all of its progress\./,
   );
   assert.deepEqual(sent!.settings.exactClocks, { '3': [line.id] });
   assert.equal(sent!.planCreatedAt, plan.createdAt, 'the plan the offer was made on');

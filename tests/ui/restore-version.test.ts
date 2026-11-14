@@ -95,7 +95,7 @@ test('Cancel sends nothing', async () => {
   assert.equal(asked.length, 1);
   assert.match(
     asked[0]!,
-    /^“Balanced” gets the plan and progress of “Balanced \(before edit, Oct 7, 2:05 PM\)” back, under its own name\. Its current version is kept as “Balanced \(before restore, .+\)”, with all of its progress, so you can switch back the same way\.$/,
+    /^“Balanced” gets the plan and progress of “Balanced \(before edit, Oct 7, 2:05 PM\)” back, under its own name\. Its current version is kept as “[^·”]+ · restore backup 1”, with all of its progress, so you can switch back the same way\.$/,
   );
   assert.deepEqual(calls, [], 'nothing is sent');
 });
@@ -116,7 +116,7 @@ test('confirmed, it restores, reloads the open profile and says where the replac
   assert.equal(body.into, 'p');
   assert.equal(body.planCreatedAt, 'plan-edited', 'naming the plans the cards show');
   assert.equal(body.backupPlanCreatedAt, 'plan-kept');
-  assert.match(String(body.backupName), /^Balanced \(before restore, .+\)$/);
+  assert.match(String(body.backupName), /^[^·”]+ · restore backup 1$/);
   assert.equal(calls.headers[sent]!['X-Profile-Id'], 'b', 'scoped to the kept version');
   assert.equal(calls.headers[sent]!['X-Save-Id'], 's');
   assert.ok(
@@ -125,7 +125,7 @@ test('confirmed, it restores, reloads the open profile and says where the replac
   );
   assert.match(
     text('#toast'),
-    /^Restored\. “Balanced” has this version’s plan and progress again\. The version it replaced is kept as “Balanced \(before restore, .+\)” under Profiles\.$/,
+    /^Restored\. “Balanced” has this version’s plan and progress again\. The version it replaced is kept as “[^·”]+ · restore backup 1” under Profiles\.$/,
   );
 });
 

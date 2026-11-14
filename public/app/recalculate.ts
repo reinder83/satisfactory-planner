@@ -47,11 +47,10 @@ export interface Recalculation {
   detailLevel?: DetailLevel | undefined;
 }
 
-// The name the previous version of profile `name` in save `saveId` is kept under now:
-// "<name> (before edit, Oct 7, 2:05 PM)", numbered when that name is taken in the save.
-export const keptName = (saveId: string, name: string, date = new Date()): string =>
+// The name the previous version of a profile of save `saveId` is kept under now:
+// "Oct 7 · backup 1", numbered past the names taken in the save.
+export const keptName = (saveId: string, date = new Date()): string =>
   backupName(
-    name,
     date,
     workspace?.saves.find(save => save.id === saveId)?.profiles.map(p => p.name),
   );

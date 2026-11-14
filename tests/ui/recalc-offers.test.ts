@@ -97,7 +97,7 @@ test('the question names the profile and the backup as text, and Cancel sends no
   assert.match(asked[0]!, /left unticked for review/);
   assert.match(
     asked[0]!,
-    /is kept as “.*\(before edit, [^”]+\)” under Profiles, with all of its progress\./,
+    /is kept as “[^·”]+ · backup 1” under Profiles, with all of its progress\./,
   );
   assert.equal(document.querySelector('x-evil'), null, 'the name is text');
   assert.deepEqual(paths, [], 'nothing is sent');

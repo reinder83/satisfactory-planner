@@ -359,17 +359,22 @@ test('a new profile is named after its goal, what changed and the day; a backup 
     defaultProfileName(settings, settings, goals, day),
     'two goals, two names',
   );
-  const long = backupName('N'.repeat(80), day);
-  assert.ok(long.length <= 80, 'a backup name fits the 80 characters a name may have');
-  assert.match(long, /^N+ \(before edit, .+\)$/);
-  // A second edit within the same minute gets a backup name of its own.
-  const first = backupName('Minimal', day);
-  const second = backupName('Minimal', day, ['Minimal', first]);
-  assert.match(second, /^Minimal \(before edit 2, .+\)$/);
-  assert.match(backupName('Minimal', day, [first, second]), /^Minimal \(before edit 3, .+\)$/);
-  const longSecond = backupName('N'.repeat(80), day, [long]);
-  assert.ok(longSecond.length <= 80);
-  assert.match(longSecond, /^N+ \(before edit 2, .+\)$/);
+  // PRO-3: a short name, "Oct 7 · backup 1", without the profile's name.
+  const first = backupName(day);
+  assert.equal(first, `${nameDate(day)} · backup 1`);
+  assert.ok(first.length <= 20, 'short enough for a card and the switcher');
+  // A second edit on the same day gets a backup name of its own, and a third another.
+  const second = backupName(day, ['Minimal', first]);
+  assert.equal(second, `${nameDate(day)} · backup 2`);
+  assert.equal(backupName(day, [first, second]), `${nameDate(day)} · backup 3`);
+  // The next day starts at 1 again; a restore's copy is counted apart.
+  const next = new Date(day.getTime() + 36 * 3600_000);
+  assert.equal(backupName(next, [first, second]), `${nameDate(next)} · backup 1`);
+  assert.equal(backupName(day, [first], 'restore'), `${nameDate(day)} · restore backup 1`);
+  // Names the save already has, from before this format, are neither taken nor changed.
+  const old = [`Minimal (before edit, ${nameDate(day)}, 2:05 PM)`, 'Oct 7 · backup'];
+  assert.equal(backupName(day, old), first);
+  assert.deepEqual(old, [`Minimal (before edit, ${nameDate(day)}, 2:05 PM)`, 'Oct 7 · backup']);
 });
 
 // The oldest released format: the first full export (2026-09-13), an original profile with a
