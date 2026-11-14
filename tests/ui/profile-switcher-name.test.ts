@@ -45,3 +45,41 @@ test('a short name is drawn as before, followed by its settings lines', () => {
   assert.equal($('.profile-switcher-name')!.textContent, 'Main');
   assert.equal($('[data-profile-switcher]')!.querySelectorAll('br').length, 3);
 });
+
+// #1355 (PRO-3 polish): a kept version's name is only "Nov 14 · backup 2", so the switcher's menu
+// names the profile it is a version of; the profile the user opened keeps its own name.
+test('the switcher menu names the profile a kept version belongs to', () => {
+  open({
+    name: 'Iron run',
+    calculated: true,
+    workspace: {
+      saves: [
+        {
+          id: 's',
+          name: 'World',
+          activeProfile: 'p',
+          profiles: [
+            { id: 'p', kind: 'calculated', name: 'Iron run', completed: 0, phase: '3' },
+            {
+              id: 'b',
+              kind: 'calculated',
+              name: 'Nov 14 · backup 2',
+              completed: 0,
+              phase: '3',
+              backupOf: 'p',
+            },
+          ],
+        },
+      ],
+    },
+  });
+  render();
+  const items = [...document.querySelectorAll('#profile-switcher [role="menuitemradio"]')].map(
+    item => item.textContent!.replace(/\s+/g, ' ').trim(),
+  );
+  assert.ok(
+    items.some(text => text.startsWith('Nov 14 · backup 2 (of Iron run)')),
+    items.join('|'),
+  );
+  assert.ok(items.some(text => text.startsWith('Iron run') && !text.includes('(of')));
+});

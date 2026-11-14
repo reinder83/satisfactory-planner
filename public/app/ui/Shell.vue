@@ -54,6 +54,7 @@ import {
 import { allowSwitch, notesNotSaved, pending, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
+import { profileLabel } from '../profile-edit.ts';
 import { PAGE_NAMES } from '../page-title.ts';
 import { leftOutNote } from '../../mining.ts';
 import {
@@ -72,7 +73,7 @@ import {
   workspace,
 } from '../session.ts';
 import type { View } from '../session.ts';
-import type { Phase } from '../../types/index.ts';
+import type { Phase, ProfileSummary } from '../../types/index.ts';
 import { render } from '../shell.ts';
 import { saveCard } from '../views/backup.ts';
 import { onPersistenceChange, persistence } from '../storage-persistence.ts';
@@ -182,13 +183,12 @@ const frame = computed(() =>
     footer: profileFooter(),
     // The open save's profiles, for the switcher. A signed-out workspace has no saves, and the
     // frame may redraw once more before the sign-in screen replaces it.
-    profiles: (workspace.saves?.find(s => s.id === currentSave.id)?.profiles ?? []).map(
-      profile => ({
+    profiles: ((list: ProfileSummary[]) =>
+      list.map(profile => ({
         id: profile.id,
-        name: profile.name,
+        name: profileLabel(list, profile.id),
         open: profile.id === currentProfile?.id,
-      }),
-    ),
+      })))(workspace.saves?.find(s => s.id === currentSave.id)?.profiles ?? []),
     accountsEnabled: !!workspace.accountsEnabled,
   })),
 );
