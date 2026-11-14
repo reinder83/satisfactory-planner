@@ -11,7 +11,7 @@ import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
-import { $, $$, evil, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, evil, generatedWith, go, open, page, expandSteps } from './setup.ts';
 import type { FactoryGroups, Phase, TaskEdits } from '../../public/types/index.ts';
 
 const plan = generatedWith({ phase: '3', recipes: 'all' });
@@ -245,6 +245,7 @@ async function showFlow(groupId: string, phase: Phase) {
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
 }
 
 test("a group's flow page has the advice under the rows it concerns, and its lanes follow the same rule", async () => {
@@ -291,6 +292,7 @@ test("a line card on a group's flow page counts its own Water Extractors, with n
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
   const concrete = rowId('4', 'Alternate: Wet Concrete');
   const water = $(`#main .gf-card[data-line="${concrete}"] .gf-in[data-row$="|Water"] .gf-advice`);
   assert.equal(

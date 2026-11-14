@@ -54,6 +54,7 @@ import {
   stubFetch,
   transcribed,
   unstamped,
+  expandSteps,
 } from './setup.ts';
 
 import type { UpdateOp } from '../../public/types/index.ts';
@@ -2238,6 +2239,7 @@ test('Build order is a link to the group’s flow page, which stages suppliers f
   go(viewOf(location.hash.slice(1)));
   render();
   await nextTick();
+  await expandSteps();
   try {
     assert.equal($('#main h1')!.textContent, 'Chain test', 'the group’s flow page');
     assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'no dialog opens');

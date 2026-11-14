@@ -13,7 +13,7 @@ import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { render } from '../../public/app/shell.ts';
 import { machineLine } from '../../public/app/views/factories.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
-import { $, $$, catalog, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, catalog, generatedWith, go, open, page, expandSteps } from './setup.ts';
 import type { CurrentCalculatedPlan } from '../../public/types/index.ts';
 
 const BASE = { phase: '3', recipes: 'standard', storageFromSurplus: true };
@@ -131,6 +131,7 @@ test('the flow page’s line cards say the line’s clock', async () => {
   go(viewOf(location.hash.slice(1)));
   render();
   await settle();
+  await expandSteps();
   const card = $$('.gf-card').find(node => node.getAttribute('data-line') === ROD)!;
   assert.match(card.textContent!, new RegExp(`${rod.machines} × Constructor at 250%`));
   // Any line at 100% has no clock.

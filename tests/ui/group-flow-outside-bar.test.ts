@@ -11,7 +11,7 @@ import { flowRoute, setQuery, viewOf } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { isLaneLink } from '../../public/app/views/group-flow-page.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
-import { $$, generated, go, open, page } from './setup.ts';
+import { $$, generated, go, open, page, expandSteps } from './setup.ts';
 import type { FactoryGroups } from '../../public/types/index.ts';
 
 // The default plans have no self link, so while `self` is set the first input of the open
@@ -54,6 +54,7 @@ async function show() {
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
 }
 const flow = (): GroupFlow => model.groupFlow(plan.stages['3'], groups, GROUP, () => '')!;
 const inputs = (): FlowRow[] => flow().lines.flatMap(line => line.inputs);
