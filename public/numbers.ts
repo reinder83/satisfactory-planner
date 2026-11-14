@@ -106,7 +106,8 @@ export function displayRate(value: number, unit = ''): DisplayFigure {
 // Power in MW rounded for display: kW below 1 MW, GW above 1,000 MW.
 export function displayPower(mw: number): DisplayFigure {
   const exact = figureText({ value: formatNumber(mw, 6), unit: 'MW', exact: '' });
-  if (mw !== 0 && Math.abs(mw) < 1)
+  // 999.5 kW and up would round to "1,000 kW": that is 1 MW, and reads as one (#1355).
+  if (mw !== 0 && Math.abs(mw) < 1 && Math.abs(mw * 1000) < 999.5)
     return { value: roundedFigure(mw * 1000, rateDigits(mw * 1000)), unit: 'kW', exact };
   if (mw > 1000) return { value: formatNumber(mw / 1000, 2), unit: 'GW', exact };
   return { value: roundedFigure(mw, rateDigits(mw)), unit: 'MW', exact };
