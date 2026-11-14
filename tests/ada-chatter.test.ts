@@ -88,7 +88,6 @@ test('problems, milestones and data loss are essential; plain observations and i
 const ESSENTIAL_CALM = [
   'no-save',
   'build-dry',
-  'backup-never-ticks',
   'unplaced',
   'site-review',
   'sloop-pins-pending',

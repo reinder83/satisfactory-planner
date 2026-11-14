@@ -37,7 +37,8 @@ export interface AdaFacts {
   ticks?: number;
   // Headroom of the stage's power as a whole percentage of what it can supply, when it is 0-9%
   // (not short, which `power` says); absent otherwise.
-  powerThin?: number;
+  // The spare power as the Resources page shows it (displayPercent), e.g. "9.5%", when under 10.
+  powerThin?: string;
   // Train stations and train lines of the open profile (#1284).
   trainStations?: number;
   trainLines?: number;
@@ -301,6 +302,8 @@ export interface AdaAction {
   view: string;
   step?: string;
   target?: string;
+  // The Logistics tab to open first (the page remembers the last one used).
+  tab?: 'trains';
 }
 
 // One remark: see the comment above RULES.
@@ -651,6 +654,7 @@ const RULES: AdaRule[] = [
   {
     id: 'factories-none',
     on: ['factories'],
+    action: goTo('Open factories', 'factories'),
     tone: 'calm',
     when: facts => facts.factories?.total && !facts.factories.done,
     text: facts =>
@@ -689,18 +693,6 @@ const RULES: AdaRule[] = [
       `${facts.build!.built} ${facts.build!.built === 1 ? 'production line' : 'production lines'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
   },
   {
-    // Many lines planned and none running: the open phase, seen from another page.
-    id: 'lines-planned',
-    on: ['plan'],
-    tone: 'calm',
-    mood: 'observant',
-    action: goTo('Open factories', 'factories'),
-    when: facts =>
-      facts.view !== 'factories' && facts.factories?.total >= 10 && !facts.factories.done,
-    text: facts =>
-      `${facts.factories.total} production lines planned for ${facts.phaseLabel}, none running. FICSIT admires ambition; it admires output more.`,
-  },
-  {
     // Spare power under 10% of what the stage can supply, but not yet short (power says that).
     id: 'power-thin',
     on: ['resources', 'plan'],
@@ -709,7 +701,7 @@ const RULES: AdaRule[] = [
     action: goTo('Open resources', 'resources'),
     when: facts => facts.powerThin !== undefined,
     text: facts =>
-      `Headroom is down to ${facts.powerThin}%. Somewhere a fuse is preparing a dramatic exit.`,
+      `Headroom is down to ${facts.powerThin}. Somewhere a fuse is preparing a dramatic exit.`,
   },
   {
     // Train stations are built and not one train line runs between them (#1284).
@@ -717,7 +709,10 @@ const RULES: AdaRule[] = [
     on: ['logistics', 'map'],
     tone: 'calm',
     mood: 'amused',
-    action: goTo('Plan a train line', 'logistics'),
+    action: facts =>
+      facts.view === 'logistics'
+        ? undefined
+        : { label: 'Plan a train line', view: 'logistics', tab: 'trains' },
     when: facts => (facts.trainStations ?? 0) > 0 && !facts.trainLines,
     text: facts =>
       `${plural(facts.trainStations!, 'train station')}, zero train lines. Bold of you to trust the conveyor belts this much.`,
@@ -731,22 +726,6 @@ const RULES: AdaRule[] = [
     action: () => ({ label: 'Go to Build plan', view: 'plan' }),
     when: facts => facts.view === 'notfound',
     text: () => 'That sector is not on any FICSIT map. Your saves are exactly where you left them.',
-  },
-  {
-    // The data-loss warning for a profile with real progress, on any page but Backup, which has
-    // backup-never: never backed up, 50 ticks or more.
-    id: 'backup-never-ticks',
-    tone: 'calm',
-    mood: 'concerned',
-    essential: true,
-    action: exportAll,
-    when: facts =>
-      facts.browserMode &&
-      facts.backupDays === null &&
-      facts.view !== 'backup' &&
-      (facts.ticks ?? 0) >= 50,
-    text: () =>
-      'Your entire factory history lives in one browser tab, which FICSIT calls a single point of failure. I call it Tuesday.',
   },
   {
     id: 'build-next',
@@ -1017,8 +996,10 @@ const RULES: AdaRule[] = [
     on: ['backup'],
     tone: 'warn',
     when: facts => facts.browserMode && facts.backupDays === null,
-    text: () =>
-      `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
+    text: facts =>
+      (facts.ticks ?? 0) >= 50
+        ? `Your entire factory history lives in one browser tab, and it has never been exported. FICSIT calls that a single point of failure; I call it Tuesday. Backup → Export all saves.`
+        : `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
   },
   {
     id: 'backup-old',

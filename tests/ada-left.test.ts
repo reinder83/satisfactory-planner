@@ -1,7 +1,7 @@
 // What was left of ADA's event-triggered remarks (#1353): the button on each problem remark, the
 // retirement remark trimmed to two sentences, and the triggers whose data the app already has
-// (many lines and none running, thin power headroom, stations without train lines, an unknown
-// route, never backed up with 50+ ticks).
+// (thin power headroom, stations without train lines, an unknown
+// route; never backed up reads stronger from 50 ticks, inside the existing remark).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { adaRemarks, type AdaFacts, type AdaLine } from '../public/ada.ts';
@@ -125,26 +125,12 @@ test('the retirement remark is two sentences and its button shows the first open
   assert.equal(lineOf({ retireOpen: 1 }, 'retire')!.action, undefined, 'no step, no button');
 });
 
-test('many lines planned and none running is said away from Factories, with a button there', () => {
-  const line = lineOf({ factories: { done: 0, total: 73 } }, 'lines-planned')!;
-  assert.match(line.text, /^73 production lines planned for Phase 3, none running\./);
-  assert.equal(sentences(line.text), 2);
-  assert.equal(line.essential, false, 'a Chatty remark');
-  assert.deepEqual(line.action, { label: 'Open factories', view: 'factories' });
-  assert.equal(lineOf({ factories: { done: 0, total: 9 } }, 'lines-planned'), undefined);
-  assert.equal(lineOf({ factories: { done: 1, total: 73 } }, 'lines-planned'), undefined);
-  assert.equal(
-    lineOf({ view: 'factories', factories: { done: 0, total: 73 } }, 'lines-planned'),
-    undefined,
-  );
-});
-
 test('power headroom under 10% is said once it is spare, with a button to the resources', () => {
-  const line = lineOf({ view: 'plan', powerThin: 8 }, 'power-thin')!;
+  const line = lineOf({ view: 'plan', powerThin: '8%' }, 'power-thin')!;
   assert.equal(line.text, 'Headroom is down to 8%. Somewhere a fuse is preparing a dramatic exit.');
   assert.equal(line.essential, false);
   assert.equal(line.action?.view, 'resources');
-  assert.equal(lineOf({ view: 'resources', powerThin: 8 }, 'power-thin')!.action, undefined);
+  assert.equal(lineOf({ view: 'resources', powerThin: '8%' }, 'power-thin')!.action, undefined);
   assert.equal(lineOf({ view: 'plan' }, 'power-thin'), undefined);
 });
 
@@ -177,29 +163,46 @@ test('an unknown route is said on the not-found page, with a way back to the bui
   assert.equal(lineOf({ view: 'plan' }, 'unknown-route'), undefined);
 });
 
-test('never backed up with 50 ticks or more is an essential data-loss line off the Backup page', () => {
-  const over = { browserMode: true, backupDays: null, ticks: 50 };
-  const line = lineOf({ view: 'plan', ...over }, 'backup-never-ticks')!;
-  assert.equal(line.essential, true);
-  assert.equal(line.mood, 'concerned');
-  assert.equal(sentences(line.text), 2);
-  assert.equal(line.action?.label, 'Export all saves');
-  assert.equal(lineOf({ view: 'backup', ...over }, 'backup-never-ticks'), undefined);
-  assert.equal(lineOf({ view: 'plan', ...over, ticks: 49 }, 'backup-never-ticks'), undefined);
-  assert.equal(lineOf({ view: 'plan', ...over, backupDays: 3 }, 'backup-never-ticks'), undefined);
+test('lines planned and none running is one remark, factories-none, with a button off the Factories page', () => {
+  const line = lineOf({ view: 'plan', factories: { done: 0, total: 73 } }, 'factories-none')!;
+  assert.match(line.text, /^73 production lines for Phase 3, none marked running./);
+  assert.deepEqual(line.action, { label: 'Open factories', view: 'factories' });
   assert.equal(
-    lineOf({ view: 'plan', ...over, browserMode: false }, 'backup-never-ticks'),
+    lineOf({ view: 'factories', factories: { done: 0, total: 73 } }, 'factories-none')!.action,
     undefined,
   );
+  // The duplicate rules are gone: one line per situation.
+  const ids = adaRemarks(baseFacts({ view: 'plan', factories: { done: 0, total: 73 } })).map(
+    r => r.id,
+  );
+  assert.ok(!ids.includes('lines-planned'));
+});
+
+test('never backed up is one remark at any tick count, stronger from 50 ticks', () => {
+  const over = { view: 'plan', browserMode: true, backupDays: null } as const;
+  const few = lineOf({ ...over, ticks: 10 }, 'backup-never')!;
+  const many = lineOf({ ...over, ticks: 50 }, 'backup-never')!;
+  assert.match(few.text, /^This browser has never exported a full backup./);
+  assert.match(many.text, /^Your entire factory history lives in one browser tab/);
+  assert.equal(many.essential, true);
+  assert.equal(many.action?.label, 'Export all saves');
+  const ids = adaRemarks(baseFacts({ ...over, ticks: 80 })).map(r => r.id);
+  assert.equal(ids.filter(id => id.startsWith('backup-never')).length, 1, ids.join());
+});
+
+test('Plan a train line opens the Trains tab', () => {
+  const action = lineOf(
+    { view: 'map', trainStations: 2, trainLines: 0 },
+    'trains-no-lines',
+  )!.action;
+  assert.deepEqual(action, { label: 'Plan a train line', view: 'logistics', tab: 'trains' });
 });
 
 test('every new line is at most two sentences', () => {
   const lines = [
-    lineOf({ factories: { done: 0, total: 20 } }, 'lines-planned'),
-    lineOf({ powerThin: 4 }, 'power-thin'),
+    lineOf({ powerThin: '4%' }, 'power-thin'),
     lineOf({ view: 'logistics', trainStations: 3, trainLines: 0 }, 'trains-no-lines'),
     lineOf({ view: 'notfound' }, 'unknown-route'),
-    lineOf({ browserMode: true, ticks: 80 }, 'backup-never-ticks'),
   ];
   for (const line of lines) assert.ok(line && sentences(line.text) <= 2, line?.id);
 });

@@ -14,7 +14,7 @@ import {
   setAdaIndex,
 } from '../../public/app/ada-panel.ts';
 import { render } from '../../public/app/shell.ts';
-import { setRestoredProgress } from '../../public/app/session.ts';
+import { setLogisticsTab, setRestoredProgress, state } from '../../public/app/session.ts';
 import { jumpTarget, setJumpTarget } from '../../public/app/step-jump.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import { $, $$, generated, go, openMigrated, page } from './setup.ts';
@@ -141,4 +141,62 @@ test('the strip is hidden except on a phone with the ticker folded, and its butt
   assert.match(css, /\n\.ada-strip \{\n {2}display: none;/);
   assert.match(css, /\.ada:not\(\.is-open\) \.ada-strip \{\n {4}display: flex;/);
   assert.match(css, /\.ada-strip \.btn \{\n {4}min-height: 44px;/);
+});
+
+test('a strip button closes the modal menu drawer around it, whether it opens a page or says Later', async () => {
+  setRestoredProgress({ profileId: 'p', words: 'Restored 3 lines.', good: true });
+  go('plan');
+  render();
+  await nextTick();
+  const toggle = $<HTMLButtonElement>('[data-menu-toggle]')!;
+  for (const press of ['[data-ada-strip-action]', '[data-ada-strip-later]']) {
+    if (press === '[data-ada-strip-later]') {
+      setAdaChatter('chatty');
+      adaNote('part-delivered', { name: 'Versatile Framework', count: '1 of 1' });
+      render();
+      await nextTick();
+    }
+    toggle.click();
+    await nextTick();
+    await nextTick();
+    assert.equal($('#sidebar')!.getAttribute('role'), 'dialog', 'the drawer is open');
+    $(press)!.click();
+    await nextTick();
+    await nextTick();
+    assert.equal($('#sidebar')!.getAttribute('role'), null, press + ' leaves no drawer open');
+    assert.equal($('.layout.menu-open'), null);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  }
+  assert.equal(location.hash, '#backup', 'the first press still opened its page');
+  setRestoredProgress(null);
+});
+
+test('Plan a train line opens Logistics on the Trains tab whichever tab was used last', async () => {
+  setAdaChatter('chatty');
+  setLogisticsTab('links');
+  state.trainStations = [
+    { id: 'ts-a', name: 'A', platforms: [{ kind: 'load', cargo: ['Iron Ore'] }] },
+    { id: 'ts-b', name: 'B', platforms: [{ kind: 'unload' }] },
+  ];
+  state.trainLines = [];
+  go('map');
+  render();
+  await nextTick();
+  // Other remarks may rank first: cycle to this one.
+  for (let i = 0; i < 30 && adaView()?.action?.label !== 'Plan a train line'; i++) {
+    setAdaIndex(i);
+    render();
+    await nextTick();
+  }
+  assert.equal(adaView()?.action?.label, 'Plan a train line');
+  $('[data-ada-action]')!.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(location.hash, '#logistics');
+  // The page opens as the address change draws it.
+  go('logistics');
+  render();
+  await nextTick();
+  await nextTick();
+  assert.equal($('[data-logistics-tab="trains"]')!.getAttribute('aria-selected'), 'true');
 });

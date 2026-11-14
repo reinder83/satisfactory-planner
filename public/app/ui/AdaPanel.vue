@@ -25,11 +25,14 @@ import {
   setAdaIndex,
 } from '../ada-panel.ts';
 import { navigate } from '../api.ts';
+import { setLogisticsTab } from '../session.ts';
 import { setJumpTarget } from '../step-jump.ts';
 import type { AdaAction, AdaChatter } from '../../ada.ts';
 import type { View } from '../session.ts';
 import { invalidate, legacy } from './bridge.ts';
 
+// A pressed button or "Later" in the phone strip: the menu drawer around it closes (Shell.vue).
+const emit = defineEmits<{ acted: [] }>();
 const ada = computed(() => legacy(adaView));
 // Whether the phone ticker has unfolded the full panel. View state only, never saved.
 const open = ref(false);
@@ -113,6 +116,9 @@ function act() {
   const action: AdaAction | null | undefined = ada.value?.action;
   if (!action) return;
   if (action.step) setJumpTarget(action.step);
+  if (action.tab) setLogisticsTab(action.tab);
+  // At phone width the panel sits in the modal menu drawer: close it before the page is focused.
+  emit('acted');
   navigate(action.view as View);
   // The step's checkbox: the build plan only focuses it when it is opened, not when it is already
   // the page shown.
@@ -128,7 +134,8 @@ const strip = computed(() => {
 });
 
 // "Later": an event remark goes, and the others wait for the next one.
-function later() {
+function later(fromStrip = false) {
+  if (fromStrip) emit('acted');
   adaDismissEvent();
   invalidate();
 }
@@ -172,7 +179,13 @@ function poke() {
       >
         {{ ada.action.label }}
       </button>
-      <button v-if="ada.event" class="btn quiet" type="button" data-ada-strip-later @click="later">
+      <button
+        v-if="ada.event"
+        class="btn quiet"
+        type="button"
+        data-ada-strip-later
+        @click="later(true)"
+      >
         Later
       </button>
     </div>
@@ -219,7 +232,7 @@ function poke() {
         <template v-else>
           <button class="btn quiet" type="button" id="ada-next" data-ada-next @click="next">
             Another remark ({{ ada.position }}/{{ ada.total }})</button
-          ><button v-if="ada.event" class="btn quiet" type="button" data-ada-later @click="later">
+          ><button v-if="ada.event" class="btn quiet" type="button" data-ada-later @click="later()">
             Later
           </button>
         </template>

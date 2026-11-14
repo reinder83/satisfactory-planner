@@ -28,6 +28,7 @@ import { savedHooks } from './saved-hooks.ts';
 import { ownedBeyondKept, powerView } from '../power.ts';
 import { deliveryKey } from '../progression.ts';
 import { durationOfHours, num, plural } from './format.ts';
+import { displayPercent, figureText } from '../numbers.ts';
 import {
   calcStage,
   calculated,
@@ -613,9 +614,15 @@ function adaFacts(): AdaFacts {
   const headroom = grid?.shortMW ?? 0;
   // Spare power under 10% of the supply without being short (the `power` remark is the shortage).
   const spareShare = grid && grid.availableMW > 0 ? grid.leftMW / grid.availableMW : 1;
+  // The figure is the one the Resources page shows (displayPercent, #1370), and she speaks only when
+  // that shown value is under 10: 9.95% reads "10%" there, so she says nothing.
+  const spareShown = grid && grid.leftMW > 0.01 ? displayPercent(spareShare * 100) : null;
   const powerThin =
-    grid && headroom <= 0.01 && grid.leftMW > 0.01 && spareShare < 0.1
-      ? Math.floor(spareShare * 100)
+    grid &&
+    spareShown &&
+    headroom <= 0.01 &&
+    (spareShown.value.startsWith('<') || Number(spareShown.value.replaceAll(',', '')) < 10)
+      ? figureText(spareShown)
       : undefined;
   const savedPhase = openedFrom();
   // Plain data only; ada.ts decides which remarks apply.
