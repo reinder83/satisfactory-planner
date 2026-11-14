@@ -15,7 +15,6 @@ import { computed } from 'vue';
 import {
   clockChoices,
   knownWorld,
-  leavesNodesOut,
   leftOutPool,
   minedResources,
   minerMarks,
@@ -39,6 +38,7 @@ import {
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import SelectField from '../form/SelectField.vue';
+import HelpPopover from '../HelpPopover.vue';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import CountTable from '../survey/CountTable.vue';
@@ -60,9 +60,6 @@ const page = computed(() =>
       step = wizard.extractionStep ?? 1;
     const sample = (name: string, purity: string) =>
       num(Math.round(nodeYield(name, purity, extraction)));
-    // The nodes the survey leaves out of the plan (#1183) come off the pool before what is
-    // committed: their column shows only when some are left out.
-    const leaving = leavesNodesOut(extraction);
     const budgets = BUDGET_ROWS.map(name => {
       const pool = Math.round(resourcePool(extraction, name)),
         used = Number(extraction.used?.[name]) || 0,
@@ -73,11 +70,18 @@ const page = computed(() =>
       const fluid = FLUIDS.has(name);
       return {
         name,
-        pool: pool ? itemRate(name, pool) : '—',
         used: used || '',
         unit: rateUnit(name),
         label: name + ' already committed' + (fluid ? ', cubic metres' : '') + ' per minute',
-        leftOut: out > 0 ? '−' + itemRate(name, Math.round(out)) : '—',
+        // ONB-6: one number column. What the pool came to is shown only where something is taken
+        // off it (nodes left out of the plan, an amount already committed): "pool − left out −
+        // committed", the budget being the number above it.
+        breakdown:
+          pool && (used > 0 || out > 0)
+            ? itemRate(name, pool) +
+              (out > 0 ? ' − ' + itemRate(name, Math.round(out)) + ' left out' : '') +
+              (used > 0 ? ' − ' + itemRate(name, used) + ' committed' : '')
+            : '',
         left: pool ? itemRate(name, Math.max(0, Math.round(rest) - used)) : '—',
         over: pool && used > rest,
       };
@@ -104,7 +108,6 @@ const page = computed(() =>
         well: itemRate('Crude Oil', Math.round(wellYield('normal', extraction))),
       },
       water: itemRate('Water', wizard.settings.limits.Water || 0),
-      leaving,
       budgets,
       allOut: allOut.join(', '),
       empty: empty.length
@@ -150,201 +153,192 @@ function submit() {
       title="Work out your resource budgets"
       subtitle="Count what your world holds; the planner turns it into the rates it plans against."
     />
-    <div class="wizard-progress">
-      <button
-        v-for="(title, i) in EXTRACTION_STEPS"
-        :key="title"
-        type="button"
-        :class="page.step === i + 1 ? 'current' : ''"
-        :data-extraction-step="i + 1"
-        :aria-current="page.step === i + 1 ? 'step' : undefined"
-        @click="go(i + 1)"
-      >
-        {{ i + 1 }}. {{ title }}
-      </button>
-    </div>
-    <form
-      id="wizard-form"
-      class="panel wizard-panel extraction-panel"
-      @change="changed"
-      @submit.prevent.stop="submit"
-    >
-      <template v-if="page.step === 1">
-        <h2>Where your numbers come from</h2>
-        <div class="notice info">
-          <b>You do not have to count nodes by hand.</b> Open the
-          <a :href="MAP_URL" target="_blank" rel="noreferrer"
-            >Satisfactory Calculator interactive map</a
-          >, upload your save file there, and it lists every resource node your world holds —
-          including which are impure, normal and pure, and which resource wells you have found. Copy
-          those counts into the next two screens.
-          <p class="small">
-            Uploading a save to that site is your decision and happens entirely between you and
-            them; this planner never sends your save anywhere. If you would rather not, the map also
-            works without a save and shows the default world's nodes.
-          </p>
-        </div>
-        <h2>How you will mine them</h2>
-        <p>
-          Extraction depends on the miner and its clock speed far more than on anything else. Plan
-          for the miner this phase can build and power, not the one you happen to have running
-          today.
-        </p>
-        <div class="form-grid">
-          <SelectField
-            label="Miner"
-            name="mark"
-            help="extractionMark"
-            :options="marks"
-            :value="page.mark"
-          />
-          <SelectField
-            label="Clock speed"
-            name="clock"
-            help="extractionClock"
-            :options="clocks"
-            :value="page.clock"
-          />
-        </div>
-        <div class="notice info">
-          <b>At these settings</b> one iron node gives {{ page.samples.impure }}/min impure,
-          {{ page.samples.normal }}/min normal and {{ page.samples.pure }}/min pure. A crude oil
-          node gives {{ page.samples.oil }} normal, and one resource-well satellite
-          {{ page.samples.well }}.
-        </div>
-      </template>
-      <template v-else-if="page.step === 2">
-        <h2>Your ore nodes</h2>
-        <WorldSettings />
-        <p>
-          How many nodes of each purity your world holds for each ore.
-          <HelpTip name="extractionNodes" /> Zero means zero: a purity your world has none of, or an
-          ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter
-          everything you intend to work.
-        </p>
-        <CountTable kind="node" :names="minedResources" />
-        <LeaveOut :tables="[{ kind: 'node', names: minedResources }]" />
-      </template>
-      <template v-else-if="page.step === 3">
-        <h2>Resource wells</h2>
-        <WorldSettings />
-        <p>
-          Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells.
-          <HelpTip name="extractionWells" />
-        </p>
-        <h3>Crude oil nodes</h3>
-        <CountTable kind="node" :names="['Crude Oil']" />
-        <h3>Resource well satellites</h3>
-        <CountTable kind="well" :names="['Crude Oil', 'Nitrogen Gas']" />
-        <LeaveOut
-          :tables="[
-            { kind: 'node', names: ['Crude Oil'], heading: 'Crude oil nodes' },
-            {
-              kind: 'well',
-              names: ['Crude Oil', 'Nitrogen Gas'],
-              heading: 'Resource well satellites',
-            },
-          ]"
-        />
-        <div class="notice info">
-          <ItemIcon name="Water" /> <b>Water is not counted.</b> Extractors sit on any lake or ocean
-          and there is far more coastline than a factory can draw on, so a node count would be a
-          fiction. The planner keeps its standing water allowance of {{ page.water }}, which you can
-          still change in All settings if you want to model a genuinely constrained site.
-        </div>
-      </template>
-      <template v-else-if="page.step === 4">
-        <h2>Your budgets</h2>
-        <p>
-          What those nodes yield, less the nodes you leave out of this plan and anything already
-          committed to factories this plan does not include. That deduction is what makes a budget
-          mean <em>free for this plan to use</em>.
-          <HelpTip name="extractionUsed" />
-        </p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Resource</th>
-                <th>Whole pool</th>
-                <th v-if="page.leaving">Left out</th>
-                <th>Already committed</th>
-                <th>Budget</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="budget in page.budgets" :key="budget.name">
-                <td class="resource-name">
-                  <ItemIcon :name="budget.name" /><span>{{ budget.name }}</span>
-                </td>
-                <td class="number">{{ budget.pool }}</td>
-                <td v-if="page.leaving" class="number">{{ budget.leftOut }}</td>
-                <td>
-                  <span class="used-field"
-                    ><input
-                      class="used-input"
-                      :name="'used:' + budget.name"
-                      type="text"
-                      v-number
-                      data-grouped
-                      min="0"
-                      max="10000000"
-                      step="any"
-                      :value="budget.used"
-                      placeholder="0"
-                      :aria-label="budget.label"
-                    /><span class="used-unit" aria-hidden="true">{{ budget.unit }}</span></span
-                  >
-                </td>
-                <td :class="['number', budget.over ? 'warn' : '']">{{ budget.left }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-if="page.empty" class="notice warn">
-          <b>{{ page.empty.heading }}</b>
-          {{ page.empty.names }}. A zero budget means this plan may not use that resource at all — a
-          fine answer for something you have genuinely not found, but if you simply have not counted
-          them yet, go back and fill them in or the plan will not fit.
-        </div>
-        <div v-if="page.allOut" class="notice warn" data-all-left-out>
-          <b>Every node left out:</b> {{ page.allOut }}. This plan cannot mine
-          {{ page.allOut.includes(',') ? 'them' : 'it' }}, so a phase that needs
-          {{ page.allOut.includes(',') ? 'one' : 'it' }} will not fit. Put some nodes back on the
-          counting screens if the plan should use them.
-        </div>
-        <p class="small muted">
-          Production you already run is a different question, asked separately: that one credits
-          finished parts, this one takes raw extraction off the top. Use this for ore feeding
-          factories the plan will not rebuild, and the other for parts the plan would otherwise make
-          again.
-        </p>
-      </template>
-      <p
-        id="wizard-error"
-        class="form-error notice error"
-        role="alert"
-        tabindex="-1"
-        data-wizard-error
-      ></p>
-      <div class="wizard-actions">
-        <button type="button" class="btn" data-extraction-back @click="go(page.step - 1)">
-          {{ page.step <= 1 ? 'Cancel' : 'Back' }}
-        </button>
-        <span class="guided-escape"
-          ><button
-            v-if="page.step > 1"
-            type="button"
-            class="btn quiet"
-            data-extraction-cancel
-            @click="leaveExtraction()"
-          >
-            Leave these budgets alone
-          </button>
-          <button class="btn primary" type="submit">
-            {{ page.last ? 'Use these budgets' : 'Continue →' }}
-          </button></span
+    <form id="wizard-form" class="extraction-form" @change="changed" @submit.prevent.stop="submit">
+      <WorldSettings v-if="page.step === 2 || page.step === 3" class="extraction-world" />
+      <div class="wizard-progress">
+        <button
+          v-for="(title, i) in EXTRACTION_STEPS"
+          :key="title"
+          type="button"
+          :class="page.step === i + 1 ? 'current' : ''"
+          :data-extraction-step="i + 1"
+          :aria-current="page.step === i + 1 ? 'step' : undefined"
+          @click="go(i + 1)"
         >
+          {{ i + 1 }}. {{ title }}
+        </button>
+      </div>
+      <div class="panel wizard-panel extraction-panel">
+        <template v-if="page.step === 1">
+          <h2>Where your numbers come from</h2>
+          <div class="notice info">
+            <b>You do not have to count nodes by hand.</b> Open the
+            <a :href="MAP_URL" target="_blank" rel="noreferrer"
+              >Satisfactory Calculator interactive map</a
+            >, upload your save there and copy the counts it lists into the next two screens.
+            <HelpPopover name="surveySource" topic="the interactive map" />
+          </div>
+          <h2>How you will mine them</h2>
+          <p>
+            Extraction depends on the miner and its clock speed far more than on anything else. Plan
+            for the miner this phase can build and power, not the one you happen to have running
+            today.
+          </p>
+          <div class="form-grid">
+            <SelectField
+              label="Miner"
+              name="mark"
+              help="extractionMark"
+              :options="marks"
+              :value="page.mark"
+            />
+            <SelectField
+              label="Clock speed"
+              name="clock"
+              help="extractionClock"
+              :options="clocks"
+              :value="page.clock"
+            />
+          </div>
+          <div class="notice info">
+            <b>At these settings</b> one iron node gives {{ page.samples.impure }}/min impure,
+            {{ page.samples.normal }}/min normal and {{ page.samples.pure }}/min pure. A crude oil
+            node gives {{ page.samples.oil }} normal, and one resource-well satellite
+            {{ page.samples.well }}.
+          </div>
+        </template>
+        <template v-else-if="page.step === 2">
+          <h2>Your ore nodes</h2>
+          <p>
+            How many nodes of each purity your world holds for each ore.
+            <HelpTip name="extractionNodes" /> Zero means zero: a purity your world has none of, or
+            an ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter
+            everything you intend to work.
+          </p>
+          <CountTable kind="node" :names="minedResources" />
+          <LeaveOut :tables="[{ kind: 'node', names: minedResources }]" />
+        </template>
+        <template v-else-if="page.step === 3">
+          <h2>Resource wells</h2>
+          <p>
+            Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells.
+            <HelpTip name="extractionWells" />
+          </p>
+          <h3>Crude oil nodes</h3>
+          <CountTable kind="node" :names="['Crude Oil']" />
+          <h3>Resource well satellites</h3>
+          <CountTable kind="well" :names="['Crude Oil', 'Nitrogen Gas']" />
+          <LeaveOut
+            :tables="[
+              { kind: 'node', names: ['Crude Oil'], heading: 'Crude oil nodes' },
+              {
+                kind: 'well',
+                names: ['Crude Oil', 'Nitrogen Gas'],
+                heading: 'Resource well satellites',
+              },
+            ]"
+          />
+          <div class="notice info">
+            <ItemIcon name="Water" /> <b>Water is not counted.</b> Extractors sit on any lake or
+            ocean and there is far more coastline than a factory can draw on, so a node count would
+            be a fiction. The planner keeps its standing water allowance of {{ page.water }}, which
+            you can still change in All settings if you want to model a genuinely constrained site.
+          </div>
+        </template>
+        <template v-else-if="page.step === 4">
+          <h2>Your budgets</h2>
+          <p>
+            What those nodes yield, less the nodes you leave out and anything already committed.
+            <HelpPopover name="surveyBudgets" topic="the budgets" />
+            <HelpTip name="extractionUsed" />
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Resource</th>
+                  <th>Budget</th>
+                  <th>Already committed</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="budget in page.budgets" :key="budget.name">
+                  <td class="resource-name">
+                    <ItemIcon :name="budget.name" /><span>{{ budget.name }}</span>
+                  </td>
+                  <td :class="['number', 'budget-cell', budget.over ? 'warn' : '']">
+                    {{ budget.left
+                    }}<small
+                      v-if="budget.breakdown"
+                      class="muted budget-breakdown"
+                      data-budget-breakdown
+                      >{{ budget.breakdown }}</small
+                    >
+                  </td>
+                  <td>
+                    <span class="used-field"
+                      ><input
+                        class="used-input"
+                        :name="'used:' + budget.name"
+                        type="text"
+                        v-number
+                        data-grouped
+                        min="0"
+                        max="10000000"
+                        step="any"
+                        :value="budget.used"
+                        placeholder="0"
+                        :aria-label="budget.label"
+                      /><span class="used-unit" aria-hidden="true">{{ budget.unit }}</span></span
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="page.empty" class="notice warn">
+            <b>{{ page.empty.heading }}</b>
+            {{ page.empty.names }}. A zero budget means this plan may not use that resource at all —
+            a fine answer for something you have genuinely not found, but if you simply have not
+            counted them yet, go back and fill them in or the plan will not fit.
+          </div>
+          <div v-if="page.allOut" class="notice warn" data-all-left-out>
+            <b>Every node left out:</b> {{ page.allOut }}. This plan cannot mine
+            {{ page.allOut.includes(',') ? 'them' : 'it' }}, so a phase that needs
+            {{ page.allOut.includes(',') ? 'one' : 'it' }} will not fit. Put some nodes back on the
+            counting screens if the plan should use them.
+          </div>
+          <p class="small muted">
+            Already-run production is a different question, asked separately.
+            <HelpPopover name="surveyAlreadyRun" topic="production you already run" />
+          </p>
+        </template>
+        <p
+          id="wizard-error"
+          class="form-error notice error"
+          role="alert"
+          tabindex="-1"
+          data-wizard-error
+        ></p>
+        <div class="wizard-actions">
+          <button type="button" class="btn" data-extraction-back @click="go(page.step - 1)">
+            {{ page.step <= 1 ? 'Cancel' : 'Back' }}
+          </button>
+          <span class="guided-escape"
+            ><button
+              v-if="page.step > 1"
+              type="button"
+              class="btn quiet"
+              data-extraction-cancel
+              @click="leaveExtraction()"
+            >
+              Leave these budgets alone
+            </button>
+            <button class="btn primary" type="submit">
+              {{ page.last ? 'Use these budgets' : 'Continue →' }}
+            </button></span
+          >
+        </div>
       </div>
     </form>
   </template>

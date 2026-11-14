@@ -168,14 +168,18 @@ test('the budgets screen takes the left-out nodes off the pool, and applying kee
   });
   assert.deepEqual(
     $$('#main thead th').map(th => th.textContent.trim()),
-    ['Resource', 'Whole pool', 'Left out', 'Already committed', 'Budget'],
+    ['Resource', 'Budget', 'Already committed'],
   );
-  // 92,100 less 6 pure nodes' 7,200 less the 900 committed.
-  const iron = cells(budgetRow('Iron Ore'));
-  assert.equal(iron[1], '92,100/min');
-  assert.equal(iron[2], '−7,200/min');
-  assert.equal(iron[4], '84,000/min');
-  assert.equal(cells(budgetRow('Coal'))[2], '—');
+  // 92,100 less 6 pure nodes' 7,200 less the 900 committed (ONB-6: the sum sits under the budget,
+  // and only on the row that has something taken off).
+  const iron = budgetRow('Iron Ore').querySelector('.budget-cell')!;
+  assert.equal(iron.firstChild!.textContent!.trim(), '84,000/min');
+  assert.equal(
+    text('[data-budget-breakdown]'),
+    '92,100/min − 7,200/min left out − 900/min committed',
+  );
+  assert.equal($$('#main [data-budget-breakdown]').length, 1);
+  assert.equal(cells(budgetRow('Coal'))[1], '42,300/min');
   assert.equal($('[data-all-left-out]'), null);
   $('#wizard-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await nextTick();
@@ -188,7 +192,10 @@ test('the budgets screen takes the left-out nodes off the pool, and applying kee
 test('a resource with every node left out is named on the budgets screen; a survey without any has no column', async () => {
   const world = presetSurvey('vanilla');
   survey(4, { ...world, excludedNodes: { Sulfur: { ...world.nodes.Sulfur! } } });
-  assert.equal(cells(budgetRow('Sulfur'))[4], '0/min');
+  assert.equal(
+    budgetRow('Sulfur').querySelector('.budget-cell')!.firstChild!.textContent!.trim(),
+    '0/min',
+  );
   assert.equal(
     text('[data-all-left-out]'),
     'Every node left out: Sulfur. This plan cannot mine it, so a phase that needs it will not fit. Put some nodes back on the counting screens if the plan should use them.',
@@ -198,7 +205,7 @@ test('a resource with every node left out is named on the budgets screen; a surv
   survey(4, presetSurvey('vanilla'));
   assert.deepEqual(
     $$('#main thead th').map(th => th.textContent.trim()),
-    ['Resource', 'Whole pool', 'Already committed', 'Budget'],
+    ['Resource', 'Budget', 'Already committed'],
   );
 });
 
