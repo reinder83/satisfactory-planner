@@ -33,6 +33,7 @@ import {
   phaseLabel,
   progressionData,
   setImportedSaves,
+  setRestoredProgress,
   setWorkspace,
   state,
   workspace,
@@ -40,8 +41,15 @@ import {
 import { render } from '../../shell.ts';
 import { backupAge, restoreMessage } from '../../views/backup.ts';
 import { backupQuestion, savesImportQuestion, WRONG_BACKUP_FORMAT } from '../../import-summary.ts';
+import {
+  restoreAdaWords,
+  restoreChangeLines,
+  restoreChanges,
+  restoreWentBack,
+} from '../../restore-changes.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import ProgressMerge from '../backup/ProgressMerge.vue';
+import RestoreChanges from '../backup/RestoreChanges.vue';
 import { keepSaves, onPersistenceChange, persistence } from '../../storage-persistence.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
@@ -67,6 +75,21 @@ const page = computed(() =>
   })),
 );
 const exporting = ref(false);
+// What the last restore changed on this page (X-6, #1352), for the profile it was restored into.
+const restoreSummary = ref<{ profileId: string; lines: string[] } | null>(null);
+const shownSummary = computed(() =>
+  legacy(() =>
+    restoreSummary.value?.profileId === currentProfile.id ? restoreSummary.value : null,
+  ),
+);
+// Dismiss: the summary and ADA's line go, and focus goes back to the button that restored.
+function dismissSummary() {
+  restoreSummary.value = null;
+  setRestoredProgress(null);
+  invalidate();
+  document.querySelector<HTMLElement>('[data-restore-backup]')?.focus();
+}
+onBeforeUnmount(() => setRestoredProgress(null));
 // The saves ticked under "Choose saves to export" (#160), by id.
 const chosen = ref<string[]>([]);
 // "Import saves…" and "Restore this profile…" are real buttons that open a file input kept out of
@@ -211,9 +234,24 @@ async function restoreProgress(event: Event) {
       { fileName: file.name, progression: progressionData, phaseLabel },
     );
     if (!(await confirmAction(question))) return;
-    // The review list as it is before the restore, which replaces the state.
-    const before = { handbookOrigin: structuredClone(state.handbookOrigin) };
+    // The progress as it is before the restore, which replaces the state: its review list for the
+    // toast, and all of it for the summary of what changed (X-6, #1352).
+    const before = structuredClone(state);
+    const profileId = currentProfile.id;
     const restored = await queuedWrite('/api/import', data);
+    // Another profile opened meanwhile: the summary would describe the wrong one.
+    if (currentProfile.id === profileId) {
+      const changes = restoreChanges(before, restored, {
+        plan: calculated,
+        progression: progressionData,
+      });
+      restoreSummary.value = { profileId, lines: restoreChangeLines(changes, phaseLabel) };
+      setRestoredProgress({
+        words: restoreAdaWords(changes),
+        good: !restoreWentBack(changes),
+        profileId,
+      });
+    }
     render();
     toast(restoreMessage(before, restored));
   } catch (error) {
@@ -265,6 +303,8 @@ const mayClear = computed(() =>
       'Checkmarks, deliveries and notes belong to ' + page.saveName + ' / ' + page.profileName
     "
   />
+  <!-- What a restore changed (X-6): its heading takes focus when it appears. -->
+  <RestoreChanges v-if="shownSummary" :lines="shownSummary.lines" @dismiss="dismissSummary" />
   <!-- Full-save export and import (the satisfactory-planner-saves format), in both editions.
        Import always adds copies; it never replaces a save. -->
   <section class="panel">

@@ -263,7 +263,7 @@ function recalculate(event: Event) {
           >
             Dismiss
           </button>
-          <span id="owned-ticks-dismiss-note" class="small muted"
+          <span id="owned-ticks-dismiss-note" class="small muted prose"
             >It comes back when your ticks show something new.</span
           ></span
         >{{ ' ' }}

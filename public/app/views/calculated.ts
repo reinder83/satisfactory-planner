@@ -14,7 +14,7 @@ import {
   phaseCarry,
   type PhaseCarry,
 } from '../handover.ts';
-import { FLUIDS, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
+import { FLUIDS, itemBelts, itemRate, rateOfItem, wholeGenerators } from '../flow.ts';
 import {
   builtIntro,
   builtLine,
@@ -113,8 +113,12 @@ const outputList = (row: CalcRow): string =>
 
 // The same rates one by one (StepRate), for a step's inputs and outputs as the dialog lists them
 // (BP-5); a generator's power comes first among the outputs, as in outputList.
-const rateEntries = (rates: Record<string, number>): StepRate[] =>
-  Object.entries(rates).map(([name, rate]) => ({ name, rate: itemRate(name, rate) }));
+const rateEntries = (rates: Record<string, number>, stageKey?: string): StepRate[] =>
+  Object.entries(rates).map(([name, rate]) => ({
+    name,
+    rate: itemRate(name, rate),
+    ...(stageKey ? { belts: itemBelts(name, rate, stageKey) } : {}),
+  }));
 const outputEntries = (row: CalcRow): StepRate[] =>
   row.generationMW > 0 || Object.keys(row.outputs || {}).length
     ? [
@@ -181,31 +185,30 @@ function rowStep(
   const built = builtView(row, shownPhase);
   const carried = built ? '' : carriedStepText(row, shownPhase),
     owned = ownedGeneratorsText(row, snapshot),
-    parts = rowLineParts(row);
+    parts = rowLineParts(row, shownPhase === 'post' ? '5' : shownPhase);
   const lead = carried + owned + parts.text + burn.map(note => ' ' + note).join('');
   const table = built?.table(title, lead);
   const text = table ? table.intro + ' ' + lead : lead;
   const extra = built && table ? { table, ...built.notes } : {};
-  // The same words as the dialog's structure (BP-5); a built line keeps its table and text.
-  const facts: Partial<Pick<PlanStepData, 'facts'>> = table
-    ? {}
-    : {
-        facts: {
-          notes: [carried, owned, ...parts.notes].map(note => note.trim()).filter(Boolean),
-          machines: parts.setup.summary,
-          perMachine: parts.perMachine,
-          inputs: parts.inputs,
-          outputs: parts.outputs,
-          extras: [...parts.extras, ...burn].map(note => note.trim()).filter(Boolean),
-        },
-      };
+  // The same words as the dialog's structure (BP-5). A grown, switched or spare line keeps its
+  // table above it, which then ends without the prose that the facts say.
+  const facts: Pick<PlanStepData, 'facts'> = {
+    facts: {
+      notes: [carried, owned, ...parts.notes].map(note => note.trim()).filter(Boolean),
+      machines: parts.setup.summary,
+      perMachine: parts.perMachine,
+      inputs: parts.inputs,
+      outputs: parts.outputs,
+      extras: [...parts.extras, ...burn].map(note => note.trim()).filter(Boolean),
+    },
+  };
   const advice = rowAdvice(row, snapshot).map(adviceLineText);
   if (!advice.length) return { body: text, ...facts, ...extra };
   return {
     body: text + ' ' + advice.join(' '),
     // Under a built line's table or the facts, the advice alone.
     list: {
-      intro: table || facts.facts ? '' : lead,
+      intro: '',
       items: advice,
       label: `${title}: byproducts and inputs`,
     },
@@ -356,14 +359,14 @@ function carriedStepText(row: CalcRow, shownPhase: Phase): string {
 // worked out once per row (#1060).
 // The text in its parts (BP-5): the opening notes, the machine setup, the somersloop and Power Shard
 // sentences, the inputs and the outputs, and the same words joined (`text`).
-function rowLineParts(row: CalcRow) {
+function rowLineParts(row: CalcRow, stageKey: string) {
   const site = siteLineText(row),
     stock = stockLineText(row),
     setup = machineSetup(row),
     perMachine = setupParts(setup),
     sloops = sloopText(row),
     shards = shardText(row),
-    inputs = rateEntries(row.inputs || {}),
+    inputs = rateEntries(row.inputs || {}, stageKey),
     outputs = outputEntries(row);
   return {
     notes: [site, stock],

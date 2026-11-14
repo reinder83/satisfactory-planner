@@ -268,7 +268,7 @@ function addHunting(event: Event, row: NonNullable<(typeof view)['value']>['rows
                   {{ row.name }}
                 </button>
                 <span class="small muted">{{ row.machine }}</span>
-                <span v-if="row.hunting" class="small muted" data-payoff-hunting
+                <span v-if="row.hunting" class="small muted prose" data-payoff-hunting
                   >Hunting: if found</span
                 ><button
                   v-else-if="row.hunt"

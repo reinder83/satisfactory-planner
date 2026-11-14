@@ -345,8 +345,13 @@ async function deletePersonal(event: Event) {
           step.ticked
         }}</span>
       </summary>
-      <StepTable v-if="step.table" :table="step.table" :terms="step.terms ?? []" />
-      <StepFacts v-else-if="step.facts" :facts="step.facts" :terms="step.terms ?? []" />
+      <StepTable
+        v-if="step.table"
+        :table="step.table"
+        :terms="step.terms ?? []"
+        :hide-after="!!step.facts"
+      />
+      <StepFacts v-if="step.facts" :facts="step.facts" :terms="step.terms ?? []" />
       <StepList v-if="step.list" :list="step.list" />
       <p v-if="!step.table && !step.facts && !step.list && step.body">
         <TermText :text="step.body" :terms="step.terms ?? []" />

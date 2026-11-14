@@ -46,7 +46,13 @@ const closingTerms = computed(() => {
         <ul v-if="facts.inputs.length" class="step-rates">
           <li v-for="input in facts.inputs" :key="input.name">
             <span>{{ input.name }}</span
-            >{{ ' ' }}<b>{{ input.rate }}</b>
+            >{{ ' '
+            }}<span class="step-rate-end"
+              ><b>{{ input.rate }}</b
+              ><template v-if="input.belts"
+                >{{ ' ' }}<span class="muted" data-step-belts>{{ input.belts }}</span></template
+              ></span
+            >
           </li>
         </ul>
         <template v-else>None</template>

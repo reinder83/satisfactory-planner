@@ -877,11 +877,11 @@ test('a calculated step writes a fluid input or output in m³/min and a solid in
       .join(', ');
   const fuel = rows.find(r => r.id === 'Recipe_ResidualFuel_C')!;
   assert.ok(fuel, 'the default plan makes Fuel from Heavy Oil Residue');
-  assert.match(facts(fuel.id, 'inputs'), /^Heavy Oil Residue [\d.,]+ m³\/min$/);
+  assert.match(facts(fuel.id, 'inputs'), /^Heavy Oil Residue [\d.,]+ m³\/min 1 × Mk\.\d pipe$/);
   assert.match(facts(fuel.id, 'outputs'), /^Fuel [\d.,]+ m³\/min$/);
   // A solid keeps /min.
   const iron = rows.find(r => r.id === 'Recipe_IngotIron_C')!;
-  assert.match(facts(iron.id, 'inputs'), /^Iron Ore [\d.,]+\/min$/);
+  assert.match(facts(iron.id, 'inputs'), /^Iron Ore [\d.,]+\/min \d+ × Mk\.\d belts?$/);
   assert.match(facts(iron.id, 'outputs'), /^Iron Ingot [\d.,]+\/min$/);
 });
 

@@ -50,8 +50,8 @@ const {
     @blur="flush"
   ></textarea>
   <div class="note-save">
-    <span v-if="label" class="small muted">{{ label }}</span
-    ><span class="small muted"
+    <span v-if="label" class="small muted prose">{{ label }}</span
+    ><span class="small muted prose"
       ><span :id="id + '-status'" aria-live="polite" :data-note-status="status">{{ message }}</span
       >&nbsp;<button
         v-if="status === 'failed'"

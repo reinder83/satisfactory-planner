@@ -391,7 +391,7 @@ function toggleLayout() {
     <div v-for="bay in page.hidden" :key="bay.id" class="check-row">
       <span
         ><b>{{ bay.id }}</b> · {{ bay.name }}</span
-      ><span v-if="bay.taken" class="small muted">An added bay uses this letter.</span
+      ><span v-if="bay.taken" class="small muted prose">An added bay uses this letter.</span
       ><button v-else class="btn" :data-restore-bay="bay.id" @click="restoreBay($event, bay.id)">
         Restore
       </button>

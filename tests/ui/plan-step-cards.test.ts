@@ -143,7 +143,7 @@ test("a production line's step has the dialog's structure and keeps every fact o
     // Every input and output, with its rate, is in the body's lists and in its own row.
     assert.deepEqual(
       within('[data-step-inputs] li', card).map(text),
-      facts.inputs.map(rate => plain(rate.name + ' ' + rate.rate)),
+      facts.inputs.map(rate => plain(rate.name + ' ' + rate.rate + ' ' + (rate.belts ?? ''))),
     );
     assert.deepEqual(
       within('[data-step-outputs] li', card).map(text),
@@ -217,4 +217,19 @@ test('"Tap the resource nodes" folds its long table behind "Show all N resources
   assert.equal(rows.filter(row => row.hidden).length, 0);
   assert.equal(text(more), 'Show fewer');
   assert.equal(more.getAttribute('aria-expanded'), 'true');
+});
+
+test('each input row says how many belts or pipes carry it, and outputs do not (BP-5)', () => {
+  const step = planTasks().find(s => s.facts && s.facts.inputs.length)!;
+  const card = $(`[data-task="${step.id}"]`)!;
+  const inputs = within('[data-step-inputs] li', card);
+  assert.equal(inputs.length, step.facts!.inputs.length);
+  inputs.forEach((row, index) => {
+    const belts = text(row.querySelector('[data-step-belts]'));
+    assert.match(belts, /^\d+ × Mk\.\d+ (belt|pipe)s?$/);
+    assert.equal(belts, step.facts!.inputs[index]!.belts);
+  });
+  assert.equal(card.querySelectorAll('[data-step-outputs] [data-step-belts]').length, 0);
+  // The step's words (search, copying) keep the rate without it.
+  assert.ok(!step.body!.includes('belt'), 'the body is unchanged');
 });
