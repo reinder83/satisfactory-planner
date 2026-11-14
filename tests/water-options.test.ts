@@ -150,7 +150,7 @@ test('a line’s advice gives both options, the suggested one first, and never h
   for (const choice of [choiceAt(4), choiceAt(4, { waterOverclock: true }), storedChoice(3)])
     assert.equal(
       plain(waterExtractorWords(7.49, choice)),
-      'Water Extractors: 1 at 6.24% (0.51 MW); no Power Shards needed.',
+      'Water Extractors: 1 at 6.24% (511 kW); no Power Shards needed.',
     );
   // The line advice (recycle.ts) is the same words.
   assert.equal(
@@ -165,7 +165,7 @@ test("the owner's Water row (#1169): the overclocked option's figures, never cut
   const rate = 33 * 120 + 0.8206 * 120;
   assert.equal(
     plain(waterExtractorWords(rate, storedChoice(3))),
-    `Water Extractors at 100% (suggested): 33 at 100% + 1 at 82.06% (34 extractors, 675.4 MW). Or overclocked (${AFTER_RESEARCH}): 13 at 250% + 1 at 132.06% (14 extractors, 40 Power Shards, 901.9 MW).`,
+    `Water Extractors at 100% (suggested): 33 at 100% + 1 at 82.06% (34 extractors, 675 MW). Or overclocked (${AFTER_RESEARCH}): 13 at 250% + 1 at 132.06% (14 extractors, 40 Power Shards, 902 MW).`,
   );
   const over = waterOptions(rate, storedChoice(3))!.second!.option;
   const made = over.runs.reduce((sum, run) => sum + run.count * run.clock, 0) * 1.2;

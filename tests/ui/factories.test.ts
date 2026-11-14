@@ -1045,11 +1045,7 @@ test('a calculated dialog shows the same three cells as its card, with output pe
     [
       'Total',
       '5',
-      generator.machine +
-        ' · generates ' +
-        num(406.8) +
-        ' MW, up to ' +
-        power(5 * -generator.power),
+      generator.machine + ' · generates ' + power(406.8) + ', up to ' + power(5 * -generator.power),
     ],
     ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
     [

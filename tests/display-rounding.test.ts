@@ -41,5 +41,9 @@ test('percent: one decimal', () => {
   assert.equal(displayPercent(4.59).exact, '4.59%');
   assert.equal(show(displayPercent(100)), '100%');
   assert.equal(show(displayPercent(0)), '0%');
-  assert.equal(show(displayPercent(99.96)), '100%');
+  // Below 100 never reads 100% (#1370 review): 99.95 and up is floored, so a nearly full share is not full.
+  assert.equal(show(displayPercent(99.95)), '99.9%');
+  assert.equal(show(displayPercent(99.96)), '99.9%');
+  assert.equal(show(displayPercent(99.999)), '99.9%');
+  assert.equal(displayPercent(99.96).exact, '99.96%');
 });

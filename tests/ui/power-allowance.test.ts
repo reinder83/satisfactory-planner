@@ -45,8 +45,8 @@ const plain = (text: string | null | undefined) => (text || '').replace(/[\s  ]+
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // The MW figures a sentence gives for its parts ("483.1 GW for production lines", "96.62 GW at
-// 20% for trains, drones and pumps"), their sum, and how far the rounding of each (to 0.01 of its
-// unit) can take that sum from the exact need.
+// 20% for trains, drones and pumps"), their sum, and how far the rounding of each (to the digits shown, X-2's one display rule: whole MW from 100 MW)
+// can take that sum from the exact need.
 function shownParts(text: string) {
   let sum = 0,
     slack = 1e-6,
@@ -54,7 +54,7 @@ function shownParts(text: string) {
   for (const [, amount, unit] of text.matchAll(/([\d,.]+) ([MG]W) (?:at \d+% )?for /g)) {
     const scale = unit === 'GW' ? 1000 : 1;
     sum += Number(amount!.replace(/,/g, '')) * scale;
-    slack += 0.005 * scale;
+    slack += 0.5 * 10 ** -(amount!.split('.')[1]?.length ?? 0) * scale;
     count++;
   }
   return { sum, slack, count };

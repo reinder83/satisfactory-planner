@@ -62,10 +62,12 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
     },
     scale = Math.max(required, available) || 1,
     width = (mw: number) => (mw / scale) * 100 + '%';
+  const share =
+    available > 0 && !short ? displayPercent(((available - required) / available) * 100) : null;
   const headline = short
     ? 'Short by ' + shown(short).text
-    : available > 0
-      ? figureText(displayPercent(((available - required) / available) * 100)) + ' headroom'
+    : share
+      ? figureText(share) + ' headroom'
       : 'No power needed';
   const list = (parts: PowerPart[]) =>
     parts
@@ -74,7 +76,7 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
       .join(' + ') || '0 MW';
   return {
     headline,
-    headlineExact: short ? shown(short).exact : '',
+    headlineExact: short ? shown(short).exact : share ? share.exact + ' headroom' : '',
     short: short > 0,
     required: shown(required),
     available: shown(available),
