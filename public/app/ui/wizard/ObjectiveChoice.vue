@@ -33,6 +33,8 @@ const LABELS = {
   raw: 'Raw resources weight',
 };
 const ZERO = 'Give at least one weight above 0.';
+// The legend's words, which also name its ⓘ ("Help: What the plan keeps lowest", #1355).
+const HEADING = 'What the plan keeps lowest';
 
 async function choose(e: Event) {
   const card = e.target as HTMLInputElement;
@@ -61,9 +63,7 @@ function typed(e: Event) {
 
 <template>
   <fieldset class="objective-choice" data-objective>
-    <legend>
-      What the plan keeps lowest <HelpTip name="objective" topic="What the plan keeps lowest" />
-    </legend>
+    <legend>{{ HEADING }} <HelpTip name="objective" :topic="HEADING" /></legend>
     <p class="small muted" data-explain>
       The goal sets how fast each phase delivers; this sets what the plan keeps lowest while it
       does.

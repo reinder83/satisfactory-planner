@@ -132,7 +132,7 @@ test('deleting a personal task moves focus to the next step’s summary, also wh
   assert.ok(focusedOn('[data-task="custom-one"] > summary'), describeFocus());
 });
 
-test('removing a factory group moves focus to the next group’s name, else the new group field', async () => {
+test('removing a factory group moves focus to the next group’s fold button, else the new group field', async () => {
   stubFetch({ '/api/update': applyUpdate });
   openMigrated({
     state: {
@@ -151,7 +151,8 @@ test('removing a factory group moves focus to the next group’s name, else the 
   press('[data-remove-group="fg-cable01"]');
   await settle();
   assert.ok(!$('[data-remove-group="fg-cable01"]'));
-  assert.ok(focusedOn('[data-group-rename="fg-plates1"]'), describeFocus());
+  // Not its name field: there Ctrl+Z is the field's own undo, not the toast's (#1355).
+  assert.ok(focusedOn('[data-collapse="fg-plates1"]'), describeFocus());
   press('[data-remove-group="fg-plates1"]');
   await settle();
   assert.ok(focusedOn('#new-group-name'), describeFocus());
