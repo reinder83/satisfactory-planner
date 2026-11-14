@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { setFactoryFilter, setQuery } from '../../public/app/session.ts';
+import { setFactoryFilter, setQuery, type View } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
 import {
@@ -139,7 +139,7 @@ test('every button, link, field and disclosure on the pages has a name (A11Y-1)'
   };
   openMigrated();
   const unnamed: string[] = [];
-  const routes = [
+  const routes: View[] = [
     'plan',
     'factories',
     'logistics',
