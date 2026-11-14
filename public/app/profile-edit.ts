@@ -167,6 +167,14 @@ export function renameOffers(
   return offers;
 }
 
+// One line each for the three ways to make a variant (PRO-2), as the buttons' hover text and the
+// profiles help say them.
+export const VARIANT_HINTS = {
+  save: 'A new world with its own profiles and progress.',
+  profile: 'Calculate another profile in this save, from different settings.',
+  duplicate: 'Copy this profile with its progress, to try changes without touching it.',
+} as const;
+
 // The name the previous version of an edited profile is kept under: "<name> (before edit, Oct
 // 7, 2:05 PM)", the name cut so the whole fits in 80 characters. A second edit within the same
 // minute, whose backup would get a name one of `taken` (the save's profile names) has, is
