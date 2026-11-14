@@ -619,10 +619,25 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
     encodeURIComponent(id),
   );
   await page.goto(base + '#map');
+  await page.waitForFunction(() => location.hash === '#map');
   await factory.waitFor();
-  // Enter picks it and then follows it too.
-  await factory.focus();
-  await page.keyboard.press('Enter');
+  // Enter picks it and then follows it too. Coming back is a same-document hash change, so the
+  // map may still redraw once after the pin appears and take its focus away: focus it, check the
+  // focus held, and try once more before pressing Enter (#1382 review).
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await factory.focus();
+    const focused = await factory.evaluate(el => el.contains(document.activeElement));
+    if (!focused) continue;
+    await page.keyboard.press('Enter');
+    const card = page.locator(`[data-map-card-for="${id}"]`);
+    if (
+      await card.waitFor({ timeout: 5000 }).then(
+        () => true,
+        () => false,
+      )
+    )
+      break;
+  }
   await page.locator(`[data-map-card-for="${id}"]`).waitFor();
   await page.keyboard.press('Enter');
   await page.waitForFunction(
