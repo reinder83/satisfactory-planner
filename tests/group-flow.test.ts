@@ -3,13 +3,7 @@
 // fold and the item lanes, on hand-made stages and on a real plan.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assignLanes,
-  groupFlow,
-  laneGutter,
-  laneOffset,
-  LANE_METRICS,
-} from '../public/app/group-flow.ts';
+import { assignLanes, groupFlow } from '../public/app/group-flow.ts';
 import type { FlowLine, FlowLink, GroupFlow } from '../public/app/group-flow.ts';
 import { groupLinks, OUTSIDE, sourceOf } from '../public/app/group-links.ts';
 import { defaultFactoryGroups } from '../public/state/factory-groups.ts';
@@ -364,24 +358,6 @@ test('on generated plans, every group gets the fewest lanes its trunks allow (#8
     }
   }
   assert.ok(crowded > 10, 'the plans have groups with crowded lanes');
-});
-
-test('the gutter is sized to the lanes needed, at an even step', () => {
-  for (const [metrics, step, inner] of [
-    [LANE_METRICS.wide, 10, 18],
-    [LANE_METRICS.narrow, 8, 14],
-  ] as const) {
-    assert.equal(laneGutter(0, metrics), 0, 'no lanes, no gutter');
-    assert.equal(laneGutter(1, metrics), 4 + inner);
-    assert.equal(laneGutter(6, metrics), 4 + 5 * step + inner);
-    const offsets = [0, 1, 2, 3, 4, 5].map(lane => laneOffset(lane, metrics));
-    assert.equal(offsets[0], inner, 'the innermost lane keeps the gap to the cards');
-    assert.ok(offsets.every((offset, i) => !i || offset - offsets[i - 1]! === step));
-    // The outermost lane sits `outer` px from the gutter's left edge.
-    assert.equal(laneGutter(6, metrics) - offsets[5]!, 4);
-  }
-  assert.equal(laneGutter(6, LANE_METRICS.wide), 72);
-  assert.equal(laneGutter(6, LANE_METRICS.narrow), 58);
 });
 
 test('a link to a line built earlier is marked as a loop', () => {

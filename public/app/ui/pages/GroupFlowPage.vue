@@ -144,7 +144,8 @@ const page = computed(() =>
         const hold = heldBack(line.id);
         if (hold) held.add(hold.shortOf);
       }
-    const produced = current ? (currentBuildStatus()?.produced ?? {}) : {};
+    const status = current ? currentBuildStatus() : null;
+    const produced = status?.produced ?? {};
     return {
       name: groups.groups.find(group => group.id === groupId)?.name ?? null,
       phase: phaseLabel(current ? phase() : shown),
@@ -158,7 +159,7 @@ const page = computed(() =>
       flow,
       steps,
       next,
-      comes: flow ? comesIn(flow.ins, held, produced) : [],
+      comes: flow ? comesIn(flow.ins, held, produced, status?.demand) : [],
       running,
     };
   }),
