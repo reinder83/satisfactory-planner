@@ -654,8 +654,8 @@ test('the arrows into storage and the sink are quiet: no label or arrowhead unti
   const first = quiet[0]!;
   const hit = $(`#detail path[data-edge-hit="${first.id}"]`)!;
   assert.equal(
+    hit.querySelector('title')!.textContent,
     `${first.item}: ${first.rateText} from ${first.fromText} to ${first.toText} · ${first.belts}`,
-    `${first.item}: ${first.rateText} from ${first.fromText} to ${first.toText}`,
   );
   enter(hit);
   await nextTick();
