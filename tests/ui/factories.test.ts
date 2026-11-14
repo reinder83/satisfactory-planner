@@ -198,6 +198,9 @@ const chips = () =>
     chip.getAttribute('aria-checked'),
     chip.getAttribute('tabindex'),
   ]);
+// Held back is a sub-filter of Running (FAC-1, #1342): its chip says so.
+const HELD_1 = 'Held back 1 of running';
+const HELD_0 = 'Held back 0 of running';
 const chosen = () => $('#factory-filter [aria-checked="true"]')?.dataset.filter;
 const statusChip = (value: string) =>
   $<HTMLButtonElement>(`#factory-filter [data-filter="${value}"]`)!;
@@ -238,9 +241,10 @@ test('a migrated profile’s chips count what the search finds, Local included',
     ['all', `All ${rows.length}`, 'true', '0'],
     ['todo', `Not running ${rows.length - 1}`, 'false', '-1'],
     ['done', 'Running 1', 'false', '-1'],
+    // Wire is ticked while Copper Ingot, which feeds it, is not, so it is held back. Held back is
+    // a part of Running, drawn right after it as one (FAC-1, #1342).
+    ['held', HELD_1, 'false', '-1'],
     ['local', `Local ${local}`, 'false', '-1'],
-    // Wire is ticked while Copper Ingot, which feeds it, is not, so it is held back.
-    ['held', 'Held back 1', 'false', '-1'],
   ]);
   // A search narrows every count, whichever chip is chosen.
   statusChip('done').click();
@@ -254,8 +258,8 @@ test('a migrated profile’s chips count what the search finds, Local included',
       `All ${wires.length}`,
       `Not running ${wires.length - 1}`,
       'Running 1',
+      HELD_1,
       `Local ${wires.filter(isLocal).length}`,
-      'Held back 1',
     ],
   );
   assert.deepEqual(factoryIds('#main'), [row('wire')]);
@@ -289,25 +293,25 @@ test('the chips are a radio group: arrows, Home and End move and choose, one Tab
   assert.equal(chosen(), 'done');
   press('End');
   await nextTick();
-  assert.equal(document.activeElement, statusChip('held'));
-  assert.equal(chosen(), 'held');
+  assert.equal(document.activeElement, statusChip('local'));
+  assert.equal(chosen(), 'local');
   press('ArrowRight');
   await nextTick();
   assert.equal(document.activeElement, statusChip('all'), 'the arrows wrap around');
   press('ArrowLeft');
   await nextTick();
-  assert.equal(chosen(), 'held');
+  assert.equal(chosen(), 'local');
   press('Home');
   await nextTick();
   assert.equal(chosen(), 'all');
   press('ArrowUp');
   await nextTick();
-  assert.equal(chosen(), 'held');
+  assert.equal(chosen(), 'local');
   // Other keys are left alone.
   const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-  statusChip('held').dispatchEvent(tab);
+  statusChip('local').dispatchEvent(tab);
   assert.equal(tab.defaultPrevented, false);
-  assert.equal(chosen(), 'held');
+  assert.equal(chosen(), 'local');
 });
 
 test('the chosen chip stays through redraws and pages, and older filter values still apply', async () => {
@@ -351,7 +355,7 @@ test('the calculated page has the chips too, with Held back for rows a missing s
     ['all', `All ${rows.length}`, 'true', '0'],
     ['todo', `Not running ${rows.length - 1}`, 'false', '-1'],
     ['done', 'Running 1', 'false', '-1'],
-    ['held', 'Held back 1', 'false', '-1'],
+    ['held', HELD_1, 'false', '-1'],
   ]);
   statusChip('held').click();
   await nextTick();
@@ -363,7 +367,7 @@ test('the calculated page has the chips too, with Held back for rows a missing s
   await find('no-such-part');
   assert.deepEqual(
     chips().map(c => c[1]),
-    ['All 0', 'Not running 0', 'Running 0', 'Held back 0'],
+    ['All 0', 'Not running 0', 'Running 0', HELD_0],
   );
   assert.equal(emptyText(), 'No production lines match “Held back” and this search.');
   $<HTMLButtonElement>('[data-show-all]')!.click();
@@ -378,7 +382,7 @@ test('the calculated page has the chips too, with Held back for rows a missing s
   render();
   await nextTick();
   assert.equal(chosen(), 'held');
-  assert.equal(chipText('held'), 'Held back 0');
+  assert.equal(chipText('held'), HELD_0);
   assert.equal(emptyText(), 'No production lines match “Held back”.');
   // Local is a plan guide's chip: without a guide it shows All.
   setFactoryFilter('local');
@@ -3234,7 +3238,7 @@ test('a guided plan: the nuclear-site notice in a dialog, and the Local chip', a
   render();
   await nextTick();
   const chips = () => $$('#main [data-filter]').map(chip => chip.dataset.filter);
-  assert.deepEqual(chips(), ['all', 'todo', 'done', 'local', 'held']);
+  assert.deepEqual(chips(), ['all', 'todo', 'done', 'held', 'local']);
   $('#main [data-filter="local"]')!.click();
   await nextTick();
   assert.deepEqual(

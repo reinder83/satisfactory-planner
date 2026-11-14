@@ -20,7 +20,18 @@ import { render } from '../../public/app/shell.ts';
 import { buildRowName } from '../../public/app/views/calculated.ts';
 import { listNames } from '../../public/wording.ts';
 import { retiredLineText, retiredLines } from '../../public/progression.ts';
-import { $, $$, evil, generatedWith, go, migratedPlan, open, openMigrated, page } from './setup.ts';
+import {
+  $,
+  $$,
+  evil,
+  generatedWith,
+  go,
+  migratedPlan,
+  open,
+  openMigrated,
+  page,
+  unfoldFactories,
+} from './setup.ts';
 import type {
   CalcRow,
   CurrentCalculatedPlan,
@@ -77,6 +88,7 @@ async function show(
     phase: shown,
     state: { version: 3, checks, ...(groups ? { factoryGroups: groups } : {}) },
   });
+  unfoldFactories();
   go('factories');
   render();
   await nextTick();

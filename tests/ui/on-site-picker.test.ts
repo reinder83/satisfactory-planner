@@ -180,6 +180,13 @@ test('the picker shows a box per offered item while editing, and the marks other
   assert.equal(picker(MOTORS)!.querySelector('legend')!.textContent, 'Made on site in Motors');
   // Each box is a real checkbox inside its label, so a click on the name ticks it and Space works.
   assert.ok(boxes.every(input => input.type === 'checkbox' && input.closest('label')));
+  // One factory is open while editing (FAC-3, #1342): Motors, the first; Plates opens from its fold
+  // button and Motors folds.
+  assert.equal(picker(PLATES), null, 'Plates is folded');
+  $<HTMLButtonElement>(`[data-collapse="${PLATES}"]`)!.click();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await nextTick();
+  assert.equal(picker(MOTORS), null, 'Motors folded');
   assert.ok(picker(PLATES)!.querySelector('[data-on-site-none]'), 'Plates is offered nothing');
   assert.equal($(`[data-on-site-save="${PLATES}"]`), null);
   // An item it marks that none of its lines uses now stays listed, ticked, so it can be cleared.

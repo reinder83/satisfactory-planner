@@ -6,7 +6,19 @@ import { num } from '../format.ts';
 import { rowShares } from '../group-links.ts';
 import { rowMemberships } from '../group-order.ts';
 import { mineFilter } from '../mine.ts';
-import { calculated, checked, sectionCollapsed, state } from '../session.ts';
+import {
+  calcStage,
+  calculated,
+  checked,
+  editOpenFactory,
+  factoryEditing,
+  sectionCollapsed,
+  sectionVisitOpened,
+  setEditOpenFactory,
+  setSectionCollapsed,
+  stage,
+  state,
+} from '../session.ts';
 import { inputText } from './storage.ts';
 import { localeNumber } from '../../wording.ts';
 import type {
@@ -159,8 +171,10 @@ export function machineCounts(machines: number, lastClock = 100, full = 100): Ma
 // ('all', 'todo', 'done', 'local'), with 'held' added. Local shows when a plan guide builds rows
 // locally (#478), so a value the page has no chip for (or any other) shows All, and is kept for
 // when it has one again. Local and Held back are subsets: a held-back row is ticked Running.
+// Held back is drawn as a sub-filter of Running, right after it ("Held back 10 of running"),
+// so All = Not running + Running adds up and the subset reads as one (FAC-1, #1342): `sub`.
 export type StatusFilter = 'all' | 'todo' | 'done' | 'local' | 'held';
-export type FilterChip = { value: StatusFilter; label: string; count: number };
+export type FilterChip = { value: StatusFilter; label: string; count: number; sub?: boolean };
 const FILTER_LABELS: Record<StatusFilter, string> = {
   all: 'All',
   todo: 'Not running',
@@ -184,6 +198,7 @@ export function statusFilter<T>(
     value,
     label: FILTER_LABELS[value],
     count: items.filter(keep).length,
+    ...(value === 'held' ? { sub: true } : {}),
   }));
   const activeIndex = Math.max(
     0,
@@ -212,7 +227,7 @@ export interface SiteEntry {
   collapsed: boolean;
   jump: JumpEntry;
 }
-const SITE_LABELS: Record<SiteEntry['kind'], string> = {
+export const SITE_LABELS: Record<SiteEntry['kind'], string> = {
   oil: 'Oil campus',
   nuclear: 'Nuclear site',
 };
@@ -292,3 +307,59 @@ export function filterEmptyText(noun: string, active: FilterChip, query: string)
   if (active.value === 'all') return `No ${noun} match this search.`;
   return `No ${noun} match “${active.label}”${query ? ' and this search' : ''}.`;
 }
+
+// How far each factory of the profile is in the phase shown (FAC-4, #1342): its lines that have
+// a share in it (membershipsOf) and how many of them are ticked Running, in the order the groups
+// are listed. A factory with no line in this phase is left out. "Mine only" applies, as on the
+// cards. Reads the whole phase, whatever the search and the chips show.
+export interface FactoryProgress {
+  id: string;
+  name: string;
+  running: number;
+  total: number;
+}
+export function factoryProgress(): FactoryProgress[] {
+  const rows = (calcStage()?.rows || []).filter(row =>
+    mineKeeps(activeMine(factoryEditing), row.id),
+  );
+  return factoryGroupsState()
+    .groups.map(group => {
+      const lines = rows.filter(row => membershipsOf(row.id).some(m => m.group === group.id));
+      const running = lines.filter(row => checked('calc-' + stage() + '-' + row.id)).length;
+      return { id: group.id, name: group.name, running, total: lines.length };
+    })
+    .filter(factory => factory.total > 0);
+}
+
+// "Next up" (FAC-4): the first factory in the profile's order that is not fully running yet, or
+// null when every factory with lines runs.
+export const nextUp = (progress: FactoryProgress[] = factoryProgress()): FactoryProgress | null =>
+  progress.find(factory => factory.running < factory.total) ?? null;
+
+// Whether a factory's section is folded now. Outside edit mode (FAC-4): a factory the user folded
+// stays folded; one they unfolded this visit stays open; otherwise one with no line running folds,
+// except the Next up factory, so the page opens on what is started and what to build next.
+// While groups are edited (FAC-3): exactly one factory is open, \`editOpenFactory\` (the first
+// until one is chosen), because every factory with its "Made on site" grid made the page about
+// 18,000 px. A factory with no line in this phase is never folded by the first rule.
+export function groupFolded(id: string): boolean {
+  if (factoryEditing) {
+    const first = factoryGroupsState().groups[0]?.id;
+    return id !== (editOpenFactory === null ? first : editOpenFactory);
+  }
+  if (sectionCollapsed(id)) return true;
+  if (sectionVisitOpened(id)) return false;
+  const progress = factoryProgress();
+  const factory = progress.find(known => known.id === id);
+  return !!factory && factory.running === 0 && nextUp(progress)?.id !== id;
+}
+
+// Folds or unfolds a factory's section by the rules of groupFolded; the caller redraws.
+export function setGroupFolded(id: string, fold: boolean) {
+  if (factoryEditing) setEditOpenFactory(fold ? '' : id);
+  else setSectionCollapsed(id, fold);
+}
+
+// The id of the factory open in edit mode now, or '' (the factory a Made on site choice would sit in).
+export const openFactoryId = (): string =>
+  factoryGroupsState().groups.find(group => !groupFolded(group.id))?.id ?? '';

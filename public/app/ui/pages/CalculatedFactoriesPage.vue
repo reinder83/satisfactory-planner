@@ -46,6 +46,7 @@ import {
   groupJumps,
   membershipsOf,
   mineKeeps,
+  nextUp,
   siteEntry,
   statusFilter,
   type StatusFilter,
@@ -68,6 +69,7 @@ import FilterChips from '../factories/FilterChips.vue';
 import { UNGROUPED } from '../../group-order.ts';
 import JumpBar from '../factories/JumpBar.vue';
 import MineOnly from '../factories/MineOnly.vue';
+import NextUp from '../factories/NextUp.vue';
 import RecalcBanner from '../plan/RecalcBanner.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
@@ -105,9 +107,10 @@ const page = computed(() =>
     // A guide that builds some rows locally adds the Local chip (#478).
     const notes = calculated.guide?.factories || {};
     type Row = (typeof found)[number];
+    // Held back comes right after Running, which it is a part of (FAC-1, #1342).
     const chips: [StatusFilter, (row: Row) => boolean][] = [['held', r => !!heldBack(r.id)]];
     if (Object.values(notes).some(note => note.local))
-      chips.unshift(['local', r => !!notes[r.id]?.local]);
+      chips.push(['local', r => !!notes[r.id]?.local]);
     const status = statusFilter(found, factoryFilter, running, chips);
     const rows = status.list;
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
@@ -151,6 +154,8 @@ const page = computed(() =>
           ? MINE_EMPTY
           : filterEmptyText('production lines', status.active, query),
       editing: factoryEditing,
+      // The factory to build next (FAC-4), whatever the search and the chips show; not while editing.
+      next: factoryEditing ? null : nextUp(),
       rows,
       sites,
       singles,
@@ -246,6 +251,7 @@ async function roundUp(event: Event) {
       solids. Liquid and nuclear balances remain controlled.
     </div>
     <CalcWarnings />
+    <NextUp v-if="page.next" :next="page.next" />
     <div class="toolbar">
       <input
         id="factory-search"

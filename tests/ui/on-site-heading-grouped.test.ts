@@ -10,7 +10,7 @@ import { beforeEach, test } from 'vitest';
 import { setFactoryEditing, setFactoryFilter, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
-import { $, evil, generated, generatedWith, go, open, page } from './setup.ts';
+import { $, evil, generated, generatedWith, go, open, page, unfoldFactories } from './setup.ts';
 import type { FactoryGroups, StoredCalculatedPlan } from '../../public/types/index.ts';
 
 const MOTORS = 'fg-motors1';
@@ -41,6 +41,7 @@ const bothMakeWire = () =>
   );
 const show = async (plan: StoredCalculatedPlan, now: FactoryGroups) => {
   open({ calculated: plan, state: { factoryGroups: now }, phase: '3' });
+  unfoldFactories();
   render();
   await nextTick();
 };

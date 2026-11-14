@@ -232,9 +232,11 @@ test('folding the group keeps it open while its choice is unsaved; another group
   assert.equal(sectionCollapsed(MOTORS), false, 'Motors stays open');
   assert.equal(text(heldRegion()), 'This choice is not saved yet. Save it or discard it first.');
   assert.equal(document.activeElement, saveButton());
+  // Only one factory is open while editing (FAC-3, #1342): Plates, folded, does not open over it.
   $<HTMLButtonElement>(`[data-collapse="${PLATES}"]`)!.click();
   await settle();
-  assert.equal(sectionCollapsed(PLATES), true, 'Plates has nothing unsaved: it folds');
+  assert.equal($(`[data-on-site-picker="${PLATES}"]`), null, 'Plates stays folded');
+  assert.equal(text(heldRegion()), 'This choice is not saved yet. Save it or discard it first.');
   assert.deepEqual(sent, []);
 });
 

@@ -9422,3 +9422,41 @@ th.resource-cell {
     border-left: 0;
   }
 }
+
+/* Factories page: the tidy-up of #1342. Held back as a sub-filter of Running (FAC-1), the one next
+   action on a factory with held-back lines (FAC-2), the factory open while editing (FAC-3) and
+   "Next up" (FAC-4). */
+.filter-chips .tab.sub {
+  flex: 0 1 auto;
+}
+.filter-chips .tab.sub .sub-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.jump-bar .btn[aria-current='true'] {
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}
+.notice.next-up,
+.factory-waiting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.notice.next-up {
+  margin: 0 0 12px;
+}
+.notice.next-up .btn,
+.factory-waiting .btn {
+  margin: 0;
+}
+.factory-waiting {
+  margin: 0 0 13px;
+}
+.factory-waiting-fix {
+  overflow-wrap: anywhere;
+}
+.notice.next-up b {
+  overflow-wrap: anywhere;
+}
