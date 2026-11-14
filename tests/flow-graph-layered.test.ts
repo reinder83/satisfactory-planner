@@ -11,6 +11,7 @@ import {
   GRAPH,
   ORDERING,
   PREVIOUS_ORDERING,
+  restartsFor,
   type FlowGraph,
   type GraphNode,
 } from '../public/app/flow-graph.ts';
@@ -211,4 +212,24 @@ test('the layout is the same every time', () => {
     ]);
   assert.equal(key(graphOf()), key(graphOf()));
   assert.equal(key(graphOf({ tags: true })), key(graphOf({ tags: true })));
+});
+
+test('a big graph gets fewer restarts, at least two, and never more than asked for (#1344)', () => {
+  assert.equal(restartsFor(ORDERING.restarts, 0), ORDERING.restarts);
+  assert.equal(
+    restartsFor(ORDERING.restarts, 26),
+    ORDERING.restarts,
+    'the planner’s own factories',
+  );
+  assert.equal(restartsFor(ORDERING.restarts, 46), 3);
+  assert.equal(restartsFor(ORDERING.restarts, 57), 2);
+  assert.equal(
+    restartsFor(ORDERING.restarts, 500),
+    2,
+    'two is the least: the given order and one shuffle',
+  );
+  assert.equal(restartsFor(1, 500), 1, 'the previous ordering asks for one and keeps it');
+  assert.equal(restartsFor(4, 10), 4);
+  // The busy fixture is under the cap, so its layout is the one it had.
+  assert.deepEqual(graphOf().crossings, graphOf({ ordering: ORDERING }).crossings);
 });

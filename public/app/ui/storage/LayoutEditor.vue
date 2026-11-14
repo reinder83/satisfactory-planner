@@ -35,6 +35,18 @@ const blocked = computed(() =>
       : '',
 );
 
+// The rule for this floor's Hide or Remove, as helper text beside the button (not in its label).
+const rule = computed(() =>
+  props.bays
+    ? props.floor.builtin
+      ? 'Hide or remove its bays first.'
+      : 'Remove its bays first.'
+    : blocked.value ||
+      (props.floor.builtin
+        ? 'It comes back under Hidden bays and floors.'
+        : 'Removes this added floor.'),
+);
+
 const randomId = (prefix: string, bytes: number) =>
   prefix +
   Array.from(crypto.getRandomValues(new Uint8Array(bytes)), byte =>
@@ -181,68 +193,88 @@ async function removeFloor(event: Event) {
   <section class="panel edit-panel">
     <h2>Storage layout</h2>
     <div class="edit-grid">
-      <form id="add-bay" class="inline-form" @submit.prevent="addBay">
-        <input
-          id="new-bay-letter"
-          class="new-bay-letter"
-          name="letter"
-          maxlength="2"
-          required
-          pattern="[A-Za-z]{1,2}"
-          :value="letter"
-          :placeholder="suggested() || undefined"
-          aria-label="New bay letter"
-          @input="letter = ($event.target as HTMLInputElement).value"
-          @blur="refillIfEmpty"
-        /><input
-          id="new-bay-name"
-          name="name"
-          maxlength="80"
-          required
-          placeholder="New bay on this floor…"
-          aria-label="New bay name"
-        /><button class="btn primary" type="submit">+ Add bay</button>
+      <form id="add-bay" class="edit-card" @submit.prevent="addBay">
+        <h3>Add a bay</h3>
+        <div class="edit-fields">
+          <label class="edit-field edit-field-letter" for="new-bay-letter"
+            ><span>Letter</span
+            ><input
+              id="new-bay-letter"
+              class="new-bay-letter"
+              name="letter"
+              maxlength="2"
+              required
+              pattern="[A-Za-z]{1,2}"
+              :value="letter"
+              :placeholder="suggested() || undefined"
+              @input="letter = ($event.target as HTMLInputElement).value"
+              @blur="refillIfEmpty"
+          /></label>
+          <label class="edit-field" for="new-bay-name"
+            ><span>Bay name</span
+            ><input
+              id="new-bay-name"
+              name="name"
+              maxlength="80"
+              required
+              placeholder="e.g. Fuel and oil"
+          /></label>
+        </div>
+        <p class="small muted">Goes on this floor. The next free letter is filled in.</p>
+        <button class="btn primary" type="submit">+ Add bay</button>
       </form>
-      <form id="add-floor" class="inline-form" @submit.prevent="addFloor">
-        <input
-          id="new-floor-name"
-          name="name"
-          maxlength="80"
-          required
-          placeholder="New floor (e.g. Basement overflow)"
-          aria-label="New floor name"
-        /><button class="btn" type="submit">Add floor</button>
+      <form id="add-floor" class="edit-card" @submit.prevent="addFloor">
+        <h3>Add a floor</h3>
+        <label class="edit-field" for="new-floor-name"
+          ><span>Floor name</span
+          ><input
+            id="new-floor-name"
+            name="name"
+            maxlength="80"
+            required
+            placeholder="e.g. Basement overflow"
+        /></label>
+        <button class="btn" type="submit">Add floor</button>
       </form>
-      <form id="rename-floor" class="inline-form" @submit.prevent="renameFloor">
-        <input
-          id="floor-rename-input"
-          name="name"
-          maxlength="80"
-          required
-          placeholder="Rename this floor…"
-          aria-label="Rename this floor"
-        /><button class="btn" type="submit">Rename floor</button>
+      <form id="rename-floor" class="edit-card" @submit.prevent="renameFloor">
+        <h3>Rename this floor</h3>
+        <label class="edit-field" for="floor-rename-input"
+          ><span>New name</span
+          ><input
+            id="floor-rename-input"
+            name="name"
+            maxlength="80"
+            required
+            :placeholder="floor.label"
+        /></label>
+        <button class="btn" type="submit">Rename floor</button>
       </form>
-      <button
-        v-if="floor.builtin"
-        class="btn"
-        :data-hide-floor="floor.id"
-        :aria-disabled="hiding || undefined"
-        :disabled="!hiding && (bays > 0 || !!blocked)"
-        @click="hideFloor"
-      >
-        {{ bays ? 'Hide or remove its bays first' : blocked || 'Hide this floor' }}
-      </button>
-      <button
-        v-if="!floor.builtin"
-        class="btn danger"
-        :data-remove-floor="floor.id"
-        :aria-disabled="removing || undefined"
-        :disabled="!removing && (bays > 0 || !!blocked)"
-        @click="removeFloor"
-      >
-        {{ bays ? 'Remove its bays first' : blocked || 'Remove this floor' }}
-      </button>
+      <div class="edit-card">
+        <h3>{{ floor.builtin ? 'Hide this floor' : 'Remove this floor' }}</h3>
+        <p id="floor-remove-rule" class="small muted">{{ rule }}</p>
+        <button
+          v-if="floor.builtin"
+          class="btn"
+          :data-hide-floor="floor.id"
+          :aria-disabled="hiding || undefined"
+          :disabled="!hiding && (bays > 0 || !!blocked)"
+          aria-describedby="floor-remove-rule"
+          @click="hideFloor"
+        >
+          Hide this floor
+        </button>
+        <button
+          v-else
+          class="btn danger"
+          :data-remove-floor="floor.id"
+          :aria-disabled="removing || undefined"
+          :disabled="!removing && (bays > 0 || !!blocked)"
+          aria-describedby="floor-remove-rule"
+          @click="removeFloor"
+        >
+          Remove this floor
+        </button>
+      </div>
     </div>
     <p class="small muted">
       Built-in bays and their addresses stay put: rename them, hide them or fill reserved positions.

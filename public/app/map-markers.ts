@@ -107,3 +107,28 @@ export function markerTarget(id: string): { id: string } | { spot: WorldPoint } 
 // The toasts.
 export const markerDeletedNews = (name: string) => `Deleted marker “${name}”.`;
 export const markerRestoredNews = (name: string) => `Marker “${name}” is back on the map.`;
+
+// Where the marker dialog docks (MAP-4, #1348): at the side of the window away from the spot it was
+// opened for, so it never covers it. A wide window docks it left or right, a narrow one (a phone)
+// as a sheet along the bottom or the top. `at` is the spot's client point (the click, or the middle
+// of the map for "Add marker"), `window` the size of the window.
+export type MarkerDock = 'left' | 'right' | 'top' | 'bottom';
+export const NARROW_WINDOW = 720;
+export function markerDock(
+  at: { x: number; y: number } | null,
+  size: { width: number; height: number },
+): MarkerDock {
+  const spot = at ?? { x: 0, y: 0 };
+  if (size.width <= NARROW_WINDOW) return spot.y < size.height / 2 ? 'bottom' : 'top';
+  return spot.x < size.width / 2 ? 'right' : 'left';
+}
+// The client point a marker dialog is about to open for: set by the map, taken by the dialog once.
+let dockAnchor: { x: number; y: number } | null = null;
+export const setMarkerAnchor = (at: { x: number; y: number } | null) => {
+  dockAnchor = at;
+};
+export function takeMarkerAnchor(): { x: number; y: number } | null {
+  const at = dockAnchor;
+  dockAnchor = null;
+  return at;
+}

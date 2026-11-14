@@ -326,11 +326,21 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
     const rect = el.querySelector('[data-node^="line:"] rect')!.getBoundingClientRect();
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   });
+  // A press on a line selects it (FG-5, #1344): the graph stays and the panel under it opens.
   await page.mouse.click(line.x, line.y);
+  await page.locator('#detail [data-flow-graph-selection]').waitFor();
+  assert.ok(await page.locator('#detail [data-flow-graph]').count(), 'the graph stays');
+  assert.ok(
+    await page.locator('#detail [data-selection-in] li').count(),
+    'what comes in is listed',
+  );
+  assert.ok(await page.locator('#detail [data-edge].hl').count(), 'its arrows are lit');
+  // "Open line" opens the production line in place of the graph.
+  await page.locator('#detail [data-selection-line]').click();
   await page.waitForFunction(() => !document.querySelector('#detail [data-flow-graph]'));
   assert.ok(
     await page.evaluate(() => document.querySelector<HTMLDialogElement>('#detail')!.open),
-    'a press on a line opens it in place of the graph',
+    '"Open line" opens it in place of the graph',
   );
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
@@ -597,24 +607,42 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   await page.reload();
   await factory.waitFor();
   assert.deepEqual(await drawnAt(), spot, 'after a reload it is where it was put');
-  // A mouse click on the pin follows the link to the factory's build order (the map's own
-  // presses start no native drag, #1289, which leaves the pin's alone).
+  // A mouse click on the pin picks it and opens its card (MAP-3, #1348); a second click follows the
+  // link to the factory's build order (the map's own presses start no native drag, #1289, which
+  // leaves the pin's alone).
+  // The link is followed once the factory's build order is drawn in the map's place, not as soon
+  // as the address changes: the hashchange that draws it comes a task later, and a goto back to
+  // #map before it runs folds both changes into one, so the map is never left and keeps its pick,
+  // and the next Enter follows the link (main's browser job after #1382).
+  const followed = async () => {
+    await page.waitForFunction(
+      group => location.hash.startsWith(`#factories/${group}/flow`),
+      encodeURIComponent(id),
+    );
+    await page.locator('#main [data-gf-back]').waitFor();
+    await page.locator('[data-world-map]').waitFor({ state: 'detached' });
+  };
+  // Back on the map it is drawn afresh, with nothing picked and no card open.
+  const backOnMap = async () => {
+    await page.goto(base + '#map');
+    await factory.waitFor();
+    assert.equal(await page.locator('[data-map-card]').count(), 0, 'no card after coming back');
+  };
+  const card = page.locator(`[data-map-card-for="${id}"]`);
   await factory.locator('.map-factory-pin').click();
-  await page.waitForFunction(
-    group => location.hash.startsWith(`#factories/${group}/flow`),
-    encodeURIComponent(id),
-  );
-  await page.goto(base + '#map');
-  await factory.waitFor();
-  // Enter follows it too.
+  await card.waitFor();
+  assert.equal(new URL(page.url()).hash, '#map', 'the first click follows no link');
+  await factory.locator('.map-factory-pin').click();
+  await followed();
+  await backOnMap();
+  // Enter picks it and then follows it too.
   await factory.focus();
   await page.keyboard.press('Enter');
-  await page.waitForFunction(
-    group => location.hash.startsWith(`#factories/${group}/flow`),
-    encodeURIComponent(id),
-  );
-  await page.goto(base + '#map');
-  await factory.waitFor();
+  await card.waitFor();
+  assert.equal(new URL(page.url()).hash, '#map', 'the first Enter follows no link');
+  await page.keyboard.press('Enter');
+  await followed();
+  await backOnMap();
   await factory.focus();
   await page.keyboard.press('Delete');
   await factory.waitFor({ state: 'detached' });

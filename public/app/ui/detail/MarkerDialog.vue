@@ -6,7 +6,8 @@
   are edited here; Save sends the whole marker as one `mapMarker` update and puts focus on it on
   the map. "Delete marker" removes it with Undo in the toast (ui/map-marker-actions.ts), and
   focus goes to the map. Nothing is saved before Save: Cancel, × and Escape leave the map as it
-  was. The spot is shown in game units, which is how a known in-game position can be compared.
+  was. It docks as a side panel (a sheet on a phone) on the side away from the spot it was opened
+  for (MAP-4), so the spot stays in view. The spot is shown in game units, which is how a known in-game position can be compared.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -18,10 +19,12 @@ import { required } from '../../format.ts';
 import {
   MARKER_COLORS,
   MARKER_TYPES,
+  markerDock,
   markerSpotText,
   markerTarget,
   newMarkerId,
   newMarkerName,
+  takeMarkerAnchor,
 } from '../../map-markers.ts';
 import { state } from '../../session.ts';
 import { legacy } from '../bridge.ts';
@@ -39,6 +42,12 @@ const start: MapMarker | null =
     ? { id: newMarkerId(), name: newMarkerName(markers()), type: 'landmark', ...target.spot }
     : (markers().find(marker => marker.id === target.id) ?? null);
 const isNew = 'spot' in target;
+// The side it docks at, away from the spot it was opened for (MAP-4, markerDock): the map's click or
+// the middle of its view; the right side when it opens from elsewhere.
+const dock = markerDock(takeMarkerAnchor(), {
+  width: window.innerWidth,
+  height: window.innerHeight,
+});
 const gone = computed(() => !isNew && !markers().some(marker => marker.id === start?.id));
 
 const name = ref(start?.name ?? '');
@@ -87,6 +96,7 @@ function typed() {
 
 <template>
   <DialogFrame :title="isNew ? 'New marker' : 'Edit marker'" subtitle="World map">
+    <span hidden :data-marker-dock="dock"></span>
     <p v-if="!start || gone" class="notice warn" data-marker-gone>
       This marker is no longer on the map. It was deleted in another tab or on another device.
     </p>

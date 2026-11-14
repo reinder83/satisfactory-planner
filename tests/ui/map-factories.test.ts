@@ -6,14 +6,16 @@
 // factories for the profile (`mapLayers`), as the open profile has it.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
-import { afterEach, beforeEach, test } from 'vitest';
+import { afterEach, beforeEach, test, vi } from 'vitest';
 import { toastShortcut } from '../../public/app/api.ts';
 import { render } from '../../public/app/shell.ts';
 import { flowRoute, state } from '../../public/app/session.ts';
 import { PLACE_STEP } from '../../public/app/map-factories.ts';
 import { MARKER_NUDGE, nudgedMarker, onMap } from '../../public/app/map-markers.ts';
 import { WORLD_MAP, imageToWorld, worldToImage } from '../../public/app/world-map.ts';
-import { $, $$, applyUpdate, evil, go, open, page, stubFetch } from './setup.ts';
+import { helpText } from '../../public/preferences.ts';
+import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
+import { $, $$, applyUpdate, evil, generated, go, open, page, stubFetch } from './setup.ts';
 import type { FactoryPlaces, ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 // happy-dom lays out nothing, so the map's box is given the size a browser would draw it at, with
@@ -90,9 +92,16 @@ const placed = (places: FactoryPlaces): Partial<ProgressState> => ({
 });
 
 let sent: UpdateOp[] = [];
-async function showMap(progress: Partial<ProgressState> = {}) {
+async function showMap(
+  progress: Partial<ProgressState> = {},
+  calculated?: ReturnType<typeof generated>,
+) {
   page();
-  open({ name: evil, state: { factoryGroups: GROUPS, ...progress } });
+  open({
+    name: evil,
+    state: { factoryGroups: GROUPS, ...progress },
+    ...(calculated ? { calculated, phase: '3' as const } : {}),
+  });
   sent = [];
   stubFetch<UpdateOp>({
     '/api/update': (update: UpdateOp) => {
@@ -246,16 +255,21 @@ test('every factory placed: no picker; a profile without factories has none eith
   assert.equal($('[data-map-place]'), null);
   await showMap({ factoryGroups: { groups: [], assignments: {} } });
   assert.equal($('[data-map-place]'), null);
-  assert.doesNotMatch($('.world-map > p.small')!.textContent!, /factory/i);
+  assert.equal($('[data-map-list-toggle]'), null, 'no factory list while none is on the map');
 });
 
-test('a press on a factory follows its link; a drag moves it, saves on the drop and follows nothing', async () => {
+// MAP-3 (#1348): the first press picks a factory and opens its card; the next one follows the link.
+test('a press on a factory opens its card, a second one follows its link; a drag moves it, saves on the drop and follows nothing', async () => {
   await showMap(placed({ 'fg-plates1': PLATES }));
   const plates = factory('fg-plates1')!;
   plates.dispatchEvent(pointer('pointerdown', 50, 50));
   plates.dispatchEvent(pointer('pointerup', 50, 50));
   plates.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-  assert.deepEqual(clicks, [false], 'a press without a drag follows the link');
+  assert.deepEqual(clicks, [true], 'the first press picks it: the link is not followed');
+  await settle();
+  assert.ok($('[data-map-card]'), 'and its card opens');
+  plates.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  assert.deepEqual(clicks, [true, false], 'a second press without a drag follows the link');
   assert.deepEqual(sent, []);
   const from = worldToImage(PLATES);
   plates.dispatchEvent(pointer('pointerdown', 100, 100));
@@ -270,7 +284,7 @@ test('a press on a factory follows its link; a drag moves it, saves on the drop 
   plates.dispatchEvent(end);
   await settle();
   assert.equal(end.defaultPrevented, true, 'the click that ends a drag follows nothing');
-  assert.deepEqual(clicks, [false], 'and goes no further');
+  assert.deepEqual(clicks, [true, false], 'and goes no further');
   assert.equal(sent.length, 1);
   const update = sent[0]! as Extract<UpdateOp, { type: 'mapFactory' }>;
   assert.equal(update.id, 'fg-plates1');
@@ -362,7 +376,7 @@ test('“Show on the map” hides and shows the factories for the profile', asyn
   assert.deepEqual(state.mapLayers, { factories: false });
   assert.equal($$('[data-map-factory]').length, 0, 'hidden');
   assert.equal($('[data-map-place]'), null, 'and nothing to place while hidden');
-  assert.match($('.world-map > p.small')!.textContent!, /The factories are hidden\./);
+  assert.equal($('[data-map-list-toggle]'), null, 'and no factory list');
   assert.ok($$('[data-map-add-marker]').length, 'the markers are not touched');
   toggle.checked = true;
   toggle.dispatchEvent(new Event('change'));
@@ -682,4 +696,122 @@ test('the Remove from map pill is kept inside the map frame', async () => {
   } finally {
     HTMLElement.prototype.getBoundingClientRect = original;
   }
+});
+
+// MAP-1 (#1348): the factory list floats on the map, collapsed by default, opened with an "N
+// factories" button, and its state is kept for this viewer (localStorage), not in the profile.
+const LIST_KEY = 'planner-map-list';
+const bothPlaced = () => placed({ 'fg-plates1': PLATES, 'fg-wires1': WIRE });
+test('the factory list is collapsed by default, the button opens it, and the state is remembered', async () => {
+  localStorage.clear();
+  await showMap(bothPlaced());
+  const toggle = $<HTMLButtonElement>('[data-map-list-toggle]')!;
+  assert.match(toggle.textContent!.replace(/\s+/g, ' ').trim(), /^2 factories/);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal($('[data-map-list]'), null, 'collapsed: no list in the page');
+  assert.ok(toggle.closest('[data-map-frame]'), 'it floats on the map');
+  toggle.click();
+  await settle();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(
+    $$('[data-map-list-item]').map(el => el.dataset.mapListItem),
+    ['fg-plates1', 'fg-wires1'],
+  );
+  assert.deepEqual(sent, [], 'nothing is saved: the state is this browser’s');
+  assert.equal(localStorage.getItem(LIST_KEY), 'open');
+  // Opened again (a reload): still open; then closed and remembered.
+  await showMap(bothPlaced());
+  assert.ok($('[data-map-list]'), 'remembered open');
+  $<HTMLButtonElement>('[data-map-list-toggle]')!.click();
+  await settle();
+  await showMap(bothPlaced());
+  assert.equal($('[data-map-list]'), null, 'remembered closed');
+  // Blocked storage: it still opens, just not remembered.
+  const blocked = () => {
+    throw new Error('blocked');
+  };
+  const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+  const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+  try {
+    await showMap(placed({ 'fg-plates1': PLATES }));
+    assert.equal($('[data-map-list]'), null);
+    $<HTMLButtonElement>('[data-map-list-toggle]')!.click();
+    await settle();
+    assert.ok($('[data-map-list]'), 'opens without storage');
+  } finally {
+    get.mockRestore();
+    set.mockRestore();
+    localStorage.clear();
+  }
+});
+
+// MAP-2: the paragraph of keys is behind "?" (HelpPopover) beside the zoom buttons.
+test('the map’s help is behind "?", not in a paragraph under the heading', async () => {
+  await showMap(placed({ 'fg-plates1': PLATES }));
+  assert.equal($('.world-map > p.small:not([data-map-attribution])'), null, 'no paragraph of keys');
+  assert.doesNotMatch($('.world-map')!.textContent!, /arrow keys/);
+  const help = $<HTMLButtonElement>('[data-map-frame] [data-help="mapHelp"]')!;
+  assert.equal(help.getAttribute('aria-label'), 'Help: the world map');
+  assert.ok(help.closest('[data-map-tools]'), 'with the zoom buttons');
+  assert.equal(document.querySelector('[data-help-tip]'), null, 'closed: no text in the page');
+  help.click();
+  await settle();
+  assert.equal(document.querySelector('[data-help-tip]')!.textContent, helpText.mapHelp);
+  assert.match(helpText.mapHelp!, /arrow keys move it \(Shift: further\)/);
+  help.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await settle();
+  assert.equal(document.querySelector('[data-help-tip]'), null, 'Escape closes it');
+});
+
+// MAP-3: a pin opens a card with its facts and both buttons; Escape, the × and a press on the map
+// close it; the second press and the Remove pill are the #1312 / #1316 behaviour (above).
+test('a pin opens its card with status, lines, machines, power, needs, Build order and Flow graph', async () => {
+  localStorage.clear();
+  const plan = generated();
+  const groups = defaultFactoryGroups(plan);
+  const iron = groups.groups.find(group => group.id === 'fg-iron01')!;
+  await showMap(
+    { version: 28, factoryGroups: groups, factoryPlaces: { 'fg-iron01': WIRE } },
+    structuredClone(plan),
+  );
+  assert.equal($('[data-map-card]'), null, 'no card until a pin is pressed');
+  factory('fg-iron01')!.click();
+  await settle();
+  const card = $('[data-map-card]')!;
+  assert.equal(card.getAttribute('aria-label'), iron.name);
+  assert.match(
+    card.querySelector('.eyebrow')!.textContent!.replace(/\s+/g, ' ').trim(),
+    /Factory · (Not started|Building|Built|Running|Held back)/,
+  );
+  assert.match($('[data-map-card-lines]')!.textContent!, /^\d+ \/ [1-9]\d*$/);
+  assert.match($('[data-map-card-machines]')!.textContent!, /^[\d,]+ \/ [1-9][\d,]*$/);
+  assert.match($('[data-map-card-power]')!.textContent!, /\d+(\.\d+)? (MW|GW)/);
+  assert.match($('[data-map-card-needs]')!.textContent!, /^\s*Needs /);
+  const order = $<HTMLAnchorElement>('[data-map-card-order]')!;
+  assert.equal(order.textContent!.trim(), 'Build order');
+  assert.equal(order.getAttribute('href'), '#' + flowRoute('fg-iron01'));
+  const graph = $<HTMLButtonElement>('[data-map-card-graph]')!;
+  assert.equal(graph.textContent!.trim(), 'Flow graph');
+  graph.click();
+  await settle();
+  assert.equal($<HTMLDialogElement>('#detail')!.open, true, 'the flow graph dialog opens');
+  $<HTMLDialogElement>('#detail')!.close();
+  card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await settle();
+  assert.equal($('[data-map-card]'), null, 'Escape closes it');
+  factory('fg-iron01')!.click();
+  await settle();
+  $<HTMLButtonElement>('[data-map-card-close]')!.click();
+  await settle();
+  assert.equal($('[data-map-card]'), null, '× closes it');
+  // The list picks a factory and opens its card; a press on the map closes it.
+  $<HTMLButtonElement>('[data-map-list-toggle]')!.click();
+  await settle();
+  $<HTMLButtonElement>('[data-map-list-item="fg-iron01"]')!.click();
+  await settle();
+  assert.ok($('[data-map-card]'), 'a factory picked in the list opens its card');
+  $('[data-map-image]')!.dispatchEvent(pointer('pointerdown', 5, 5));
+  await settle();
+  assert.equal($('[data-map-card]'), null, 'a press on the map closes it');
+  localStorage.clear();
 });
