@@ -5399,6 +5399,9 @@ button.rail-tile:hover {
    view however far the drawing is scrolled. */
 .fgraph-wrap {
   position: relative;
+  /* Its own stacking context: the column's z-index stays inside it, so the dialog's sticky header
+     (z-index 1) is drawn over the column when the dialog is scrolled (#1355). */
+  isolation: isolate;
 }
 .fgraph-newstep {
   position: absolute;

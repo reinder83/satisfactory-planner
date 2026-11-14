@@ -28,3 +28,12 @@ test('the flow graph help is short and its popup is capped, so a phone can read 
   assert.match(tip, /max-height:/, 'a popup never runs off the bottom of the window');
   assert.match(tip, /overflow-y: auto/, 'and scrolls inside itself when it must');
 });
+
+// FG-8 polish (#1355): the dragged "New step" column (z-index 2) was drawn over the dialog's sticky
+// header (z-index 1) while the dialog was scrolled. The drawing's wrapper is its own stacking
+// context now, so the header covers whatever of the column has scrolled up behind it.
+test('the New step column stays under the dialog header (#1355)', () => {
+  assert.match(rule('.fgraph-wrap'), /isolation: isolate/);
+  assert.match(rule('.fgraph-newstep'), /z-index: 2/);
+  assert.match(rule('.dialog-head'), /z-index: 1/);
+});

@@ -257,6 +257,7 @@ test('the ⋯ menu moves the selected line to a later step; the build order foll
   await openGraph();
   const automatic = graphOf();
   const { first } = picks(automatic);
+  const oldLabel = automatic.nodes.find(node => node.id === first.id)!.label;
   await select(first.id);
   const items = await menu();
   const count = automatic.columns.length;
@@ -289,6 +290,10 @@ test('the ⋯ menu moves the selected line to a later step; the build order foll
   // Undo (the button, or Ctrl+Z) puts it back and saves the layout as it was. The panel repeats
   // what was done, with its own Undo, since the toolbar is out of sight from there.
   assert.match(undoText()!, /^Moved .+ to Step \d+\.$/);
+  // It names the line as the graph numbers it now, not by the number it had before the move (#1355).
+  const newLabel = pushed.nodes.find(node => node.id === first.id)!.label;
+  assert.notEqual(newLabel, oldLabel, 'the move renumbered the line');
+  assert.ok(undoText()!.startsWith(`Moved ${newLabel} to`), undoText()!);
   assert.match(
     $('#detail [data-selection-note]')!.textContent!,
     /^\s*Moved .+ to Step \d+\.\s*Undo\s*$/,
@@ -359,7 +364,9 @@ test('dragging a box shows the New step column; dropping it there pushes the lin
   const zone = $<HTMLElement>('#detail [data-flow-newstep]')!;
   assert.ok(zone, 'the New step column shows while a box is dragged');
   assert.match(zone.textContent!, /New step/);
-  assert.match(zone.textContent!, new RegExp(`after step ${automatic.columns.length}`));
+  // It does not promise a step: a line whose consumers follow it closes up (#1355).
+  assert.match(zone.textContent!, /Drop here to build this line later/);
+  assert.doesNotMatch(zone.textContent!, /after step/);
   assert.equal(zone.getAttribute('aria-hidden'), 'true', 'the menu is the accessible way');
   // happy-dom lays nothing out: the column is the right 200 px of a 600 x 400 box.
   zone.getBoundingClientRect = () => new DOMRect(400, 0, 200, 400);
