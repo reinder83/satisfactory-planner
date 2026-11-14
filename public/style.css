@@ -3112,7 +3112,10 @@ p.eyebrow {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
+/* Positioned, so a visually hidden header (position: absolute) stays inside the scroll box
+   and never widens the page on a phone (#1375 review). */
 .table-wrap {
+  position: relative;
   overflow: auto;
   border: 1px solid var(--line);
   background: var(--panel);
