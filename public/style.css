@@ -745,6 +745,9 @@ input[type='radio'] {
 .ada-ticker {
   display: none;
 }
+.ada-strip {
+  display: none;
+}
 /* Under reduced motion nothing blinks (#1254, WCAG 2.2.2): not the save status's dot, not ADA's
    mark in any tone (the fault tone's faster blink is more specific than .ada-mark alone). */
 @media (prefers-reduced-motion: reduce) {
@@ -7806,6 +7809,17 @@ button.rail-tile:hover {
   }
   .ada .ada-head {
     display: none;
+  }
+  /* Folded, her button and "Later" sit under the ticker (#1353). */
+  .ada:not(.is-open) .ada-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 10px;
+  }
+  .ada-strip .btn {
+    min-height: 44px;
+    font-size: 11px;
   }
   .ada:not(.is-open) .ada-tools,
   .ada:not(.is-open) .ada-stamp,

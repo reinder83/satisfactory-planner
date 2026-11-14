@@ -611,6 +611,12 @@ function adaFacts(): AdaFacts {
   // needs, its new generation and the spare power, with what the augmenters add (#334).
   const grid = calculated ? powerView(storedStage, calculated.settings) : null;
   const headroom = grid?.shortMW ?? 0;
+  // Spare power under 10% of the supply without being short (the `power` remark is the shortage).
+  const spareShare = grid && grid.availableMW > 0 ? grid.leftMW / grid.availableMW : 1;
+  const powerThin =
+    grid && headroom <= 0.01 && grid.leftMW > 0.01 && spareShare < 0.1
+      ? Math.floor(spareShare * 100)
+      : undefined;
   const savedPhase = openedFrom();
   // Plain data only; ada.ts decides which remarks apply.
   return {
@@ -635,6 +641,11 @@ function adaFacts(): AdaFacts {
     steps: { done: steps.filter(stepDone).length, total: steps.length },
     next: next?.title || '',
     retireOpen: steps.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
+    retireStep: steps.find(t => t.id.startsWith('retire-') && !checked(t.id))?.id ?? '',
+    ticks: Object.values(state.checks || {}).filter(value => value === true).length,
+    ...(powerThin !== undefined ? { powerThin } : {}),
+    trainStations: state.trainStations?.length ?? 0,
+    trainLines: state.trainLines?.length ?? 0,
     idleLines: idleOpen,
     stockLines: (storedStage.rows || []).filter(row => row.stock && !checked(runningKey(row)))
       .length,

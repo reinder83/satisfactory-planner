@@ -6,8 +6,9 @@
   remark and the speaker, which opens the chatter setting: Off / Essential / Chatty (#1353). It is
   one panel in every setting, so a focused control stays where it is when the setting changes.
   At phone width (≤720px, style.css) she is a one-line ticker in the menu drawer (SP-38, #273):
-  the ticker button unfolds the full panel in place and folds it again. Wider screens hide the
-  ticker and always show the panel.
+  the ticker button unfolds the full panel in place and folds it again. Folded, a strip under
+  the ticker carries her button and "Later" when the line has them. Wider screens hide the ticker
+  and the strip and always show the panel.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -24,7 +25,8 @@ import {
   setAdaIndex,
 } from '../ada-panel.ts';
 import { navigate } from '../api.ts';
-import type { AdaChatter } from '../../ada.ts';
+import { setJumpTarget } from '../step-jump.ts';
+import type { AdaAction, AdaChatter } from '../../ada.ts';
 import type { View } from '../session.ts';
 import { invalidate, legacy } from './bridge.ts';
 
@@ -91,10 +93,39 @@ function toggleRead() {
 }
 
 // The one button of the line she says: it opens the page that fixes or shows what she named.
-function act() {
-  const action = ada.value?.action;
-  if (action) navigate(action.view as View);
+// A step to show is marked by the build plan (step-jump.ts) and its checkbox focused here; a target is focused
+// once its page has drawn. Both the panel's button and the phone strip's press it.
+function focusWhenDrawn(selector: string, tries = 30) {
+  const element = document.querySelector<HTMLElement>(selector);
+  if (element) {
+    // A step inside "Done (n)" or an unlock group is unfolded first, as an activity-log jump does.
+    for (
+      let fold = element.closest('details');
+      fold;
+      fold = fold.parentElement?.closest('details') ?? null
+    )
+      fold.open = true;
+    element.scrollIntoView?.({ block: 'center' });
+    element.focus({ preventScroll: true });
+  } else if (tries > 0) requestAnimationFrame(() => focusWhenDrawn(selector, tries - 1));
 }
+function act() {
+  const action: AdaAction | null | undefined = ada.value?.action;
+  if (!action) return;
+  if (action.step) setJumpTarget(action.step);
+  navigate(action.view as View);
+  // The step's checkbox: the build plan only focuses it when it is opened, not when it is already
+  // the page shown.
+  const target = action.step
+    ? `#main input[data-check="${CSS.escape(action.step)}"]`
+    : action.target;
+  if (target) requestAnimationFrame(() => focusWhenDrawn(target));
+}
+// The phone strip under the folded ticker: her button and "Later", when the line has them.
+const strip = computed(() => {
+  const now = ada.value;
+  return !!now && now.chatter !== 'off' && !!(now.action || now.event);
+});
 
 // "Later": an event remark goes, and the others wait for the next one.
 function later() {
@@ -131,6 +162,20 @@ function poke() {
       ><span class="ada-ticker-text">{{ open ? ada.name || 'ADA' : tickerText }}</span
       ><span class="ada-ticker-sign" aria-hidden="true">{{ open ? '−' : '+' }}</span>
     </button>
+    <div v-if="strip" class="ada-strip" data-ada-strip>
+      <button
+        v-if="ada.action"
+        class="btn ada-strip-action"
+        type="button"
+        data-ada-strip-action
+        @click="act"
+      >
+        {{ ada.action.label }}
+      </button>
+      <button v-if="ada.event" class="btn quiet" type="button" data-ada-strip-later @click="later">
+        Later
+      </button>
+    </div>
     <div id="ada-body" class="ada-body">
       <div class="ada-head">
         <span class="ada-mark" aria-hidden="true" @click="poke">◈</span>
