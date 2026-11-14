@@ -31,7 +31,7 @@
 
 :root {
   color-scheme: dark;
-  font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 13px;
   line-height: 1.55;
   color: #dce3e8;
@@ -63,6 +63,9 @@
   --warm-border: #4a3a1c;
   --drop: 0 3px 0 #07090a;
   --head: 'Saira Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  /* Long prose only (X-1, #1336): the system's own sans, so no font is downloaded. */
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --hazard: repeating-linear-gradient(
     135deg,
     #f89c1c 0px,
@@ -836,6 +839,19 @@ h3 {
 p {
   line-height: 1.7;
   margin: 8px 0 14px;
+}
+/* Paragraphs read in sans (X-1, #1336). Numbers, labels, tables and codes keep the mono
+   inherited from :root; an eyebrow is a label, and a paragraph in a table cell is data. */
+p,
+.notice,
+.subtitle,
+.session-intro {
+  font-family: var(--sans);
+}
+p.eyebrow,
+table p,
+table .notice {
+  font-family: var(--mono);
 }
 /* A page's subtitle can be a profile's name (the build plan's), so a long word breaks too (#976). */
 .subtitle {
