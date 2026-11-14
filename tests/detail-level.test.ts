@@ -81,12 +81,12 @@ test('anything but the three levels is refused, and a newer version with the upd
   assert.equal(detailLevelOf('beginner'), 'beginner');
   for (const bad of ['Expert', undefined, null, 3]) assert.equal(detailLevelOf(bad), undefined);
   // A version-30 planner accepts versions up to 30 and refuses a higher one with the update
-  // message, never dropping what it does not know; this one does the same above 31.
+  // message, never dropping what it does not know; this one does the same above 32.
   assert.throws(
-    () => validateState({ ...json(version31), version: 32 }),
+    () => validateState({ ...json(version31), version: 33 }),
     /newer planner version\. Update the app/,
   );
-  assert.throws(() => validateState({ ...json(version31), version: '32' }), /Update the app/);
+  assert.throws(() => validateState({ ...json(version31), version: '33' }), /Update the app/);
 });
 
 test('the detailLevel update sets one level, refuses others, and is never refused as stale', () => {

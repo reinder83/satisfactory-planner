@@ -398,7 +398,9 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
   sizedBox();
   // Every box takes focus, in the graph's own order (the places' too since #1231).
   const focusable = () =>
-    $$('#detail [data-flow-graph] [tabindex="0"]').map(node => node.dataset.node);
+    $$('#detail [data-flow-graph] [tabindex="0"]:not([data-step-name])').map(
+      node => node.dataset.node,
+    );
   assert.deepEqual(
     focusable(),
     graph.nodes.map(node => node.id),
@@ -774,7 +776,7 @@ test('"Show storage and sink as tags" draws them as named tags, keeps the table 
     assert.equal(tag.querySelector('text')!.textContent, model.text);
   }
   // A tag follows its line in the tab order.
-  const order = $$('#detail [data-flow-graph] [tabindex="0"]').map(
+  const order = $$('#detail [data-flow-graph] [tabindex="0"]:not([data-step-name])').map(
     el => el.dataset.node ?? el.dataset.tag,
   );
   for (const tag of tagged.tags)

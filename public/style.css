@@ -5375,6 +5375,105 @@ button.rail-tile:hover {
 .fgraph-undo .btn {
   min-height: 34px;
 }
+/* Steps (FG-8, #1345): each column of lines has a header the user can rename in place, and while a
+   box is dragged a "New step" column shows at the right edge of the box: dropping the box there
+   builds its line later. The column is HTML over the box (not part of the drawing), so it stays in
+   view however far the drawing is scrolled. */
+.fgraph-wrap {
+  position: relative;
+}
+.fgraph-newstep {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(150px, 34%);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: 2px dashed var(--accent-sh);
+  background: rgba(247, 162, 27, 0.07);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
+}
+.fgraph-newstep strong {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.fgraph-newstep.over {
+  border-color: var(--accent);
+  border-style: solid;
+  background: rgba(247, 162, 27, 0.2);
+  color: var(--ink);
+}
+.fgraph-panel-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fgraph-step-head rect {
+  fill: transparent;
+}
+.fgraph-step-head text {
+  fill: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.fgraph-step.named .fgraph-step-head text {
+  fill: var(--ink);
+}
+.fgraph-step-head.edit {
+  cursor: text;
+  outline: none;
+}
+.fgraph-step-head.edit:hover text,
+.fgraph-step-head.edit:focus-visible text {
+  fill: var(--accent);
+  text-decoration: underline;
+}
+.fgraph-step-head.edit:focus-visible rect {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.fgraph-step-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--accent);
+}
+/* A step the user named in the flow graph names each of its lines in the build order (FG-8): a
+   small tag after the line in the list, a heading over its card or row. */
+.gf-stephead {
+  display: block;
+  margin: 10px 0 4px;
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.gf-steptag {
+  display: block;
+  margin-top: 2px;
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 .fgraph-scroll.panning,
 .fgraph-scroll.moving,
 .fgraph-scroll.moving .fgraph-node {

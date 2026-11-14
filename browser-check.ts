@@ -735,6 +735,134 @@ async function checkGraphLayout(
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
 }
+// Steps in the flow graph (FG-8, #1345), in real Chromium: a header is renamed in place (Esc
+// cancels, Enter saves), a line is pushed to a later step with the selection panel's ⋯ menu and by
+// dropping its box in the "New step" column that shows at the right while it is dragged, both are
+// stored with the factory as version 32 and come back after a reload, the build order page shows
+// the name over its lines, and Tidy up (after asking) puts the lines back and keeps the name.
+// `stored` reads the open profile's progress state from the browser edition.
+async function checkGraphSteps(
+  page: Page,
+  graphGroup: string,
+  stored: () => Promise<ProgressState>,
+) {
+  const openGraph = async () => {
+    await page.locator(`#main [data-group-graph="${graphGroup}"]`).click();
+    await page.locator('#detail [data-flow-graph] svg').waitFor();
+  };
+  const layoutOf = async () =>
+    (await stored()).factoryGroups.groups.find(group => group.id === graphGroup)?.layout;
+  const waitFor = async (done: (layout: Awaited<ReturnType<typeof layoutOf>>) => boolean) => {
+    let layout = await layoutOf();
+    for (let tries = 0; tries < 50 && !done(layout); tries++) {
+      await page.waitForTimeout(100);
+      layout = await layoutOf();
+    }
+    return layout;
+  };
+  const headText = (step: number) =>
+    page.locator(`#detail [data-step-name="${step}"] text`).textContent();
+  await openGraph();
+  assert.equal(await headText(1), 'Step 1', 'the first column is headed Step 1');
+  // Esc cancels a rename and leaves the dialog open; Enter saves it.
+  await page.locator('#detail [data-step-name="1"]').click();
+  const input = page.locator('#detail [data-step-input]');
+  await input.fill('Nope');
+  await input.press('Escape');
+  assert.equal(await page.locator('#detail [data-step-input]').count(), 0);
+  assert.equal(await headText(1), 'Step 1', 'Esc cancels');
+  assert.ok(await page.evaluate(() => document.querySelector<HTMLDialogElement>('#detail')!.open));
+  await page.locator('#detail [data-step-name="1"]').click();
+  await input.fill('Smelting');
+  await input.press('Enter');
+  assert.equal(await headText(1), 'Smelting');
+  let layout = await waitFor(saved => saved?.stepNames?.['1'] === 'Smelting');
+  assert.equal(layout?.stepNames?.['1'], 'Smelting', 'the name is stored with the factory');
+  assert.equal((await stored()).version, 32);
+  // The menu: select the first line, choose "a new step at the end".
+  const firstLine = page.locator('#detail [data-node^="line:"]').first();
+  const lineNode = (await firstLine.getAttribute('data-node'))!;
+  const row = lineNode.slice('line:'.length);
+  const box = await firstLine.locator('rect').boundingBox();
+  assert.ok(box);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.locator('#detail [data-flow-graph-selection]').waitFor();
+  await page.locator('#detail [data-selection-move]').click();
+  const choices = page.locator('#fgraph-move-menu [data-move-step]');
+  assert.ok(await choices.count(), 'the menu lists steps');
+  await choices.last().click();
+  layout = await waitFor(saved => !!saved?.steps?.[row]);
+  assert.ok(layout?.steps?.[row] && layout.steps[row] > 1, 'the push is stored by row id');
+  assert.match(
+    (await page.locator('#detail [data-flow-undo-text]').textContent()) ?? '',
+    /^Moved /,
+  );
+  // Undo takes it back.
+  await page.locator('#detail [data-flow-tidy-undo]').click();
+  layout = await waitFor(saved => !saved?.steps);
+  assert.equal(layout?.steps, undefined, 'Undo puts the line back');
+  // A drag shows the New step column at the right of the box; a drop there pushes the line.
+  const frame = await page.locator('#detail [data-flow-graph]').boundingBox();
+  assert.ok(frame);
+  assert.equal(await page.locator('#detail [data-flow-newstep]').count(), 0);
+  const grab = await page.locator(`#detail [data-node="${lineNode}"] rect`).boundingBox();
+  assert.ok(grab);
+  await page.mouse.move(grab.x + 20, grab.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(grab.x + 60, grab.y + 40, { steps: 4 });
+  const zone = page.locator('#detail [data-flow-newstep]');
+  await zone.waitFor();
+  const zoneBox = await zone.boundingBox();
+  assert.ok(zoneBox, 'the New step column is on screen while dragging');
+  assert.ok(zoneBox.x + zoneBox.width <= frame.x + frame.width + 1, 'inside the graph box');
+  assert.ok(zoneBox.x > frame.x + frame.width / 2, 'at its right edge');
+  await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height / 2, {
+    steps: 6,
+  });
+  assert.ok(await zone.evaluate(el => el.classList.contains('over')), 'it lights up under the box');
+  await page.mouse.up();
+  layout = await waitFor(saved => !!saved?.steps?.[row]);
+  assert.ok(layout?.steps?.[row] && layout.steps[row] > 1, 'the drop pushes the line');
+  assert.equal(await page.locator('#detail [data-flow-newstep]').count(), 0);
+  assert.equal((await stored()).version, 32);
+  // After a reload the name and the push are there, and the build order shows the name.
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  await page.reload();
+  await page.locator(`#main [data-group-graph="${graphGroup}"]`).waitFor();
+  await openGraph();
+  assert.equal(await headText(1), 'Smelting', 'the name survives a reload');
+  assert.equal((await layoutOf())?.steps?.[row], layout?.steps?.[row]);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  await page.goto(base + '#factories/' + graphGroup + '/flow');
+  await page.locator('[data-gf-steps]').waitFor();
+  assert.ok(
+    await page.locator('[data-gf-stephead]').filter({ hasText: 'Smelting' }).count(),
+    'the build order shows the name over its lines',
+  );
+  await page.goto(base + '#factories');
+  await page.locator(`#main [data-group-graph="${graphGroup}"]`).waitFor();
+  // "Back to its own step" puts the line back, and an empty rename drops the name, so the layout
+  // the checks after this one read is the one it was.
+  await openGraph();
+  const back = await page.locator(`#detail [data-node="${lineNode}"] rect`).boundingBox();
+  assert.ok(back);
+  await page.mouse.click(back.x + back.width / 2, back.y + back.height / 2);
+  await page.locator('#detail [data-selection-move]').click();
+  await page.locator('#fgraph-move-menu [data-move-own]').click();
+  layout = await waitFor(saved => !saved?.steps);
+  assert.equal(layout?.steps, undefined, 'the line is back in its own step');
+  assert.equal(layout?.stepNames?.['1'], 'Smelting', 'the name stays');
+  assert.ok(layout?.nodes && layout.places, 'the boxes are where they were put');
+  await page.locator('#detail [data-step-name="1"]').click();
+  await input.fill('');
+  await input.press('Enter');
+  layout = await waitFor(saved => !saved?.stepNames);
+  assert.equal(layout?.stepNames, undefined, 'an empty name is the default again');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+}
 // Edit settings → Review → Recalculate in place (#1138) on the open profile: Review calculates the
 // plan once, and the recalculation stores it without calculating again. How long each took.
 async function reviewedInPlace(page: Page, calculations: () => Promise<number | undefined>) {
@@ -1273,6 +1401,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 720 });
   await checkGraphPanZoom(page, graphButton);
   await checkGraphLayout(page, graphGroup!, () => api<ProgressState>('/api/state'));
+  await checkGraphSteps(page, graphGroup!, () => api<ProgressState>('/api/state'));
   await checkMapMarkers(page, () => api<ProgressState>('/api/state'));
   await checkMapFactories(page, () => api<ProgressState>('/api/state'));
   const checkStorage = async () => {

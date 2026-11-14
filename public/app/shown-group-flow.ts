@@ -6,6 +6,7 @@
 // phase's, for the phase tabs of the build order page and the flow graph: the same figures for that
 // phase, to look at only.
 import { FLUIDS, itemBelts, lanePlan } from './flow.ts';
+import type { StepFloors } from './flow-steps.ts';
 import { groupFlow, type GroupFlow } from './group-flow.ts';
 import { linkItemWords } from './logistics.ts';
 import { calculated, milestoneOnly, stage } from './session.ts';
@@ -18,7 +19,16 @@ import { factoryGroupsState } from './views/factories.ts';
 export const storedStageOf = (key: StageKey): StoredStage | undefined =>
   !calculated || milestoneOnly(key) ? undefined : calculated.stages[key];
 
-export function shownGroupFlow(groupId: string, stageKey: StageKey = stage()): GroupFlow | null {
+// The lines the user pushed to a later step in the factory's flow graph (#1345): the stored ones,
+// unless the caller has newer ones of its own (the open graph keeps its edits until they are saved).
+export const storedStepFloors = (groupId: string): StepFloors =>
+  factoryGroupsState().groups.find(group => group.id === groupId)?.layout?.steps ?? {};
+
+export function shownGroupFlow(
+  groupId: string,
+  stageKey: StageKey = stage(),
+  floors?: StepFloors,
+): GroupFlow | null {
   const storedStage = storedStageOf(stageKey);
   if (!calculated || !storedStage) return null;
   const groups = factoryGroupsState();
@@ -40,5 +50,6 @@ export function shownGroupFlow(groupId: string, stageKey: StageKey = stage()): G
         (rate, fluid) => lanePlan(rate, fluid, stageKey),
         belts,
       ),
+    floors ?? storedStepFloors(groupId),
   );
 }

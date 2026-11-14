@@ -8,6 +8,13 @@
   dialog in the graph's place and "Open in build order" the factory's build order page with the
   line focused (the dialog does both). On another phase's tab (`readonly`) the facts stay and the
   three actions go: the line there is not the phase on screen's to tick, open or find.
+  "Move to step …" (FG-8, #1345), the ⋯ menu after them, is the keyboard's way to push the line
+  to another step, as dropping its box in the "New step" column is the pointer's: every other step
+  and a new one after the last, and "Back to its own step" while the line was pushed. A step the
+  line cannot reach, because a line feeding it sits in or after it, stays in the list marked
+  "needs 03 first" and says so when chosen instead of moving. What a move said ("Needs 03 first: …",
+  or "Moved 02 … to Step 4." with an Undo button) is repeated after the menu, since the toolbar's
+  status it also goes to (and a screen reader reads) is off screen from here.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -15,6 +22,7 @@ import { checked, stage } from '../../session.ts';
 import type { GraphEdge, GraphNode } from '../../flow-graph.ts';
 import { legacy } from '../bridge.ts';
 import { toggleCheck } from '../actions.ts';
+import ActionMenu from '../ActionMenu.vue';
 
 const props = defineProps<{
   node: GraphNode;
@@ -24,8 +32,23 @@ const props = defineProps<{
   // The plan row of the line.
   row: string;
   readonly: boolean;
+  // The steps the line can be moved to (FG-8): the step number, how it is worded ("Step 3 ·
+  // Steel"), and `needs` the line to wait for ("03") when it is out of reach. `own` offers the
+  // line back its own step.
+  moves: { step: number; label: string; needs: string | null }[];
+  own: boolean;
+  // What the last move said, and what it can be undone as (empty for neither).
+  note: string;
+  undoText: string;
 }>();
-defineEmits<{ clear: []; line: []; order: [] }>();
+defineEmits<{
+  clear: [];
+  line: [];
+  order: [];
+  move: [step: number];
+  own: [];
+  undo: [];
+}>();
 
 const check = computed(() => 'calc-' + stage() + '-' + props.row);
 const running = computed(() => legacy(() => checked(check.value)));
@@ -94,6 +117,49 @@ const NOTES: Record<GraphEdge['note'], string> = {
       <button class="btn" type="button" data-selection-order @click="$emit('order')">
         Open in build order
       </button>
+      <ActionMenu
+        v-if="moves.length || own"
+        id="fgraph-move-menu"
+        :label="'Move ' + node.label + ' to another step'"
+        data-selection-move
+        ><button
+          v-for="move in moves"
+          :key="move.step"
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          class="btn"
+          :aria-disabled="move.needs ? 'true' : undefined"
+          :data-move-step="move.step"
+          @click="$emit('move', move.step)"
+        >
+          Move to {{ move.label
+          }}<template v-if="move.needs"> (needs {{ move.needs }} first)</template>
+        </button>
+        <button
+          v-if="own"
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          class="btn"
+          data-move-own
+          @click="$emit('own')"
+        >
+          Back to its own step
+        </button></ActionMenu
+      >
+      <span v-if="note || undoText" class="fgraph-panel-note small muted" data-selection-note>
+        <span aria-hidden="true">{{ note || undoText }}</span>
+        <button
+          v-if="undoText && !note"
+          class="btn"
+          type="button"
+          data-selection-undo
+          @click="$emit('undo')"
+        >
+          Undo
+        </button>
+      </span>
     </footer>
   </section>
 </template>

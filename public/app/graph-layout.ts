@@ -297,16 +297,25 @@ export function factoryLineRows(
 // the zoom to two decimals and the scroll offsets in whole px, `tags: true` while storage and the
 // sink are shown as tags (#1231), and the spots of the moved inputs and outputs (#1240), whole
 // units: every one, also of a box the graph does not draw now (storage and the sink while they are
-// tags, a place of another phase), so it is there when the box is back. Each is left out when it
-// says nothing, and null when nothing is left.
+// tags, a place of another phase), so it is there when the box is back, and (#1345) the lines of
+// `keep` pushed to a later step (`steps`, from step 2) and the names of the steps (`stepNames`,
+// trimmed, none blank). Each is left out when it says nothing, and null when nothing is left.
 export function layoutToSave(
   spots: GraphSpots,
   view: GraphView | null,
   keep: ReadonlySet<string>,
   tags = false,
   places: GraphSpots = {},
+  steps: Readonly<Record<string, number>> = {},
+  stepNames: Readonly<Record<string, string>> = {},
 ): GroupLayout | null {
   const layout: GroupLayout = tags ? { tags: true } : {};
+  const pushed = Object.entries(steps).filter(([row, step]) => keep.has(row) && step > 1);
+  if (pushed.length) layout.steps = Object.fromEntries(pushed);
+  const named = Object.entries(stepNames)
+    .map(([step, name]) => [step, name.trim()] as const)
+    .filter(([, name]) => name);
+  if (named.length) layout.stepNames = Object.fromEntries(named);
   const whole = (list: [string, readonly [number, number]][]) =>
     Object.fromEntries(
       list.map(([key, [x, y]]) => [key, [spotUnit(x), spotUnit(y)] as [number, number]]),

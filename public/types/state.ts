@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–31). Later versions only add optional sections, so an older
+//                  version (1–32). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -32,7 +32,8 @@ import type { ExactClocks, LineClocks, SloopPins } from './calculated.ts';
 // (trainLines), the network diagram's layout (trainLayout), stations placed on the world map
 // (trainStations[].place), a platform's pipe (platforms[].pipe) and an outpost on oil or resource
 // wells (owner.resource Crude Oil, Nitrogen Gas or Water; owner.wells), #1284 slices 2 to 4, 31
-// the profile's detail level (detailLevel, #1337).
+// the profile's detail level (detailLevel, #1337), 32 lines pushed to a later step and named
+// steps in a factory's flow graph (groups[].layout.steps and .stepNames, #1345).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -67,7 +68,8 @@ export type StateVersion =
   | 28
   | 29
   | 30
-  | 31;
+  | 31
+  | 32;
 
 // The world map (#1283, slice 2): a marker the user placed, at a point in the game's world (game
 // units, x east and y south, whole numbers; public/app/world-map.ts converts them to the image),
@@ -297,6 +299,12 @@ export interface GroupLayout {
   zoom?: number;
   pan?: [left: number, top: number];
   tags?: true;
+  // Lines pushed to a later step (#1345, version 32): the step each sits in at the earliest, from
+  // 2, by plan row id; the steps after it follow from what feeds what. `stepNames` is what the
+  // user called the steps, by step number ("1", "2", …), 40 characters at most; a step with no
+  // name has its default ("Step 2"). Both are left out when empty.
+  steps?: Record<string, number>;
+  stepNames?: Record<string, string>;
 }
 
 // Named production areas and the plan rows assigned to them (version 3).
