@@ -18,9 +18,11 @@ withDefaults(
     title: string;
     subtitle?: string;
     summary?: string;
+    // The exact value of a rounded summary, shown on hover (#1335).
+    summaryExact?: string;
     icon?: string;
   }>(),
-  { subtitle: '', summary: '', icon: '' },
+  { subtitle: '', summary: '', summaryExact: '', icon: '' },
 );
 </script>
 
@@ -31,7 +33,9 @@ withDefaults(
       <div>
         <div class="eyebrow">{{ subtitle }}</div>
         <h2 id="detail-title">{{ title }}</h2>
-        <div v-if="summary" class="subtitle" data-dialog-summary>{{ summary }}</div>
+        <div v-if="summary" class="subtitle" data-dialog-summary :title="summaryExact || undefined">
+          {{ summary }}
+        </div>
       </div>
     </div>
     <div class="dialog-head-actions">

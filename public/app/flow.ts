@@ -17,6 +17,7 @@
 // lines, is shared plan-wide.
 import { num, num3 } from './format.ts';
 import { wholeShares } from './apportion.ts';
+import { displayRate, figureText } from '../numbers.ts';
 import { itemBooks, placeTotal, sharedRate } from './group-links.ts';
 import { LINK_DUST, rowPlaces } from './group-order.ts';
 import { calcStage, calculated, checked, progressionData, stage } from './session.ts';
@@ -236,6 +237,13 @@ export const unitGap = (unit: string): string => (unit.startsWith('/') ? '' : '�
 // dialogs' summary line does.
 export const itemRate = (item: string, rate: number): string =>
   num(rate) + (FLUIDS.has(item) ? '\u00a0' : '') + rateUnit(item);
+
+// itemRate rounded for display (#1335): "2,922 m³/min", with "2,921.89 m³/min" as the exact
+// value for a title.
+export const itemRateFigure = (item: string, rate: number): { text: string; exact: string } => {
+  const figure = displayRate(rate, rateUnit(item));
+  return { text: figureText(figure), exact: figure.exact };
+};
 
 // A rate that leads with the amount and names the item in between: "60 m³ Fuel/min" for a
 // fluid, "45 Iron Plate/min" for a solid. `formatNumber` formats the number (num3 for a
