@@ -957,6 +957,65 @@ const searchTimes = (page: Page) =>
     return { keys, results: performance.now() - last };
   });
 
+// The phone shell (MOB-1 to MOB-5, #1354) at 320, 360, 390 and 430px: no page scrolls sideways, the
+// top bar is one row with 44px targets, the bottom bar is 56px tall and the last of the page is
+// not under it, and the pages' tab rows show no scrollbar.
+async function checkPhoneShell(page: Page) {
+  for (const width of [320, 360, 390, 430]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const route of [
+      'plan',
+      'factories',
+      'logistics',
+      'map',
+      'resources',
+      'storage',
+      'notes',
+    ]) {
+      await page.evaluate(hash => (location.hash = hash), route);
+      await page
+        .locator('[data-bottom-link="' + route + '"], [data-bottom-more]')
+        .first()
+        .waitFor();
+      await page.locator('#main h1').first().waitFor();
+      const shell = await page.evaluate(() => {
+        const rect = (selector: string) =>
+          document.querySelector(selector)?.getBoundingClientRect();
+        const bar = rect('[data-bottom-bar]');
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        const main = document.querySelector<HTMLElement>('#main')!;
+        const lastBottom = Math.max(
+          ...[...main.children].map(el => el.getBoundingClientRect().bottom),
+        );
+        return {
+          sideways: document.documentElement.scrollWidth - window.innerWidth,
+          topbar: Math.round(rect('.topbar')!.height),
+          menu: Math.round(rect('[data-menu-toggle]')!.height),
+          select: Math.round(rect('#phase-picker')!.height),
+          bar: Math.round(bar!.height),
+          clear: lastBottom <= bar!.top + 1,
+          tabScrollbars: [
+            ...document.querySelectorAll<HTMLElement>('.phase-tabs, .jump-bar'),
+          ].filter(el => getComputedStyle(el).scrollbarWidth !== 'none').length,
+        };
+      });
+      assert.equal(shell.sideways, 0, route + ' scrolls sideways at ' + width + ' px');
+      assert.ok(shell.topbar <= 80, 'the top bar is one row on ' + route + ' at ' + width + ' px');
+      assert.ok(shell.menu >= 44 && shell.select >= 44, 'the top bar has 44px targets');
+      assert.ok(shell.bar >= 56, 'the bottom bar is 56px tall');
+      assert.ok(shell.clear, 'the end of ' + route + ' is clear of the bottom bar at ' + width);
+      assert.equal(shell.tabScrollbars, 0, 'tab rows have no visible scrollbar');
+    }
+  }
+  // More opens upward over the page and Escape closes it, back on More.
+  await page.locator('[data-bottom-more]').focus();
+  await page.keyboard.press('Enter');
+  assert.ok(await page.locator('#bottom-more [data-more-page="logistics"]').isVisible());
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#bottom-more').isHidden(), true);
+  await page.evaluate(() => (location.hash = 'factories'));
+}
+
 let browser: import('playwright').Browser | undefined, backend: http.Server | undefined;
 try {
   browser = await chromium.launch({
@@ -1372,6 +1431,13 @@ try {
   const graphGroup = await graphButton.getAttribute('data-group-graph');
   await graphButton.focus();
   await page.keyboard.press('Enter');
+  // On a phone it opens as a list of the lines (MOB-3, #1354), with a toggle to the drawing.
+  await page.locator('#detail [data-flow-graph-list]').waitFor();
+  assert.ok(
+    (await page.locator('#detail [data-flow-list-line]').count()) > 0,
+    'the flow graph opens as a list of lines on a phone',
+  );
+  await page.locator('#detail [data-flow-mode-set="graph"]').click();
   await page.locator('#detail [data-flow-graph] svg').waitFor();
   const graphLayout = await page.evaluate(() => {
     const box = document.querySelector<HTMLElement>('#detail [data-flow-graph]')!;
@@ -1398,6 +1464,7 @@ try {
     graphGroup,
     'Escape returns focus to "Flow graph ↗"',
   );
+  await checkPhoneShell(page);
   await page.setViewportSize({ width: 1280, height: 720 });
   await checkGraphPanZoom(page, graphButton);
   await checkGraphLayout(page, graphGroup!, () => api<ProgressState>('/api/state'));
