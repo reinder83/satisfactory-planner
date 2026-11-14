@@ -261,8 +261,9 @@ const edgeClass = (edge: GraphEdge) => {
 const arrowOf = (edge: GraphEdge) =>
   !edge.quiet || lit.value?.edges.has(edge.id) ? 'url(#fgraph-arrow)' : undefined;
 // An arrow's hover title, which keeps its value where its label has no room.
+// and, as the dialog's table has it, the belts or pipes that carry it (FG-2).
 const edgeTitle = (edge: GraphEdge) =>
-  `${edge.item}: ${edge.rateText} from ${edge.fromText} to ${edge.toText}`;
+  `${edge.item}: ${edge.rateText} from ${edge.fromText} to ${edge.toText}${edge.belts ? ' · ' + edge.belts : ''}`;
 // Where an arrow's label is drawn, and how: lit and spread, faded with its arrow, hidden (a quiet
 // or crowded arrow's not lit or pointed at, or a lit label with no room), or as it is at rest.
 function labelOf(edge: GraphEdge): { x: number; y: number; state: string } {
@@ -289,9 +290,14 @@ const tagClass = (tag: GraphTag) => {
   const on = lit.value;
   return ['fgraph-tag', { hl: !!on?.tags.has(tag.id), faded: !!on && !on.tags.has(tag.id) }];
 };
-// A box's hover title: what it makes, draws or receives, every item whole (#1308).
 const rateTitle = (node: GraphNode) =>
   `${node.kind === 'line' ? 'Makes' : node.kind === 'in' ? 'Draws' : 'Receives'}: ${node.rateTitle}`;
+// A box's hover title: its whole name where the box cuts or changes it (FG-4), then what it makes,
+// draws or receives, every item whole (#1308).
+const nodeTitle = (node: GraphNode) =>
+  [node.shortLabel !== node.label ? node.label : '', node.rateTitle ? rateTitle(node) : '']
+    .filter(Boolean)
+    .join(' · ');
 // "Show storage and sink as tags": redrawn at once and saved with the layout.
 function setTags(on: boolean) {
   if (readonly.value) return;
@@ -884,9 +890,15 @@ function onPanelKey(e: KeyboardEvent) {
                   @focus="onNodeFocus($event, node)"
                   @blur="leaveNode(node.id)"
                 >
-                  <title v-if="node.rateTitle">{{ rateTitle(node) }}</title>
+                  <title v-if="node.rateTitle || node.shortLabel !== node.label">
+                    {{ nodeTitle(node) }}
+                  </title>
                   <rect :width="node.width" :height="node.height" />
                   <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
+                  <g v-if="node.alt" class="fgraph-alt" data-node-alt>
+                    <rect :x="node.width - 38" y="6" width="30" height="16" />
+                    <text :x="node.width - 23" y="18" text-anchor="middle">ALT</text>
+                  </g>
                   <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
                   <text
                     v-for="(text, i) in node.rateLines"
@@ -938,6 +950,17 @@ function onPanelKey(e: KeyboardEvent) {
                 />
                 <text text-anchor="middle" y="-2">{{ edge.item }}</text>
                 <text text-anchor="middle" y="11">{{ edge.rateText }}</text>
+              </g>
+              <g
+                v-if="placed.outs"
+                class="fgraph-step fgraph-outs"
+                data-outs-head
+                :transform="`translate(${placed.outs.x},0)`"
+              >
+                <g class="fgraph-step-head">
+                  <rect :width="GRAPH.nodeWidth" height="18" />
+                  <text x="0" y="13">Leaves the factory</text>
+                </g>
               </g>
               <g
                 v-for="column in placed.columns"

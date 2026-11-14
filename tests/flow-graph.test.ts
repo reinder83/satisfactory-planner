@@ -231,3 +231,29 @@ test('a long name is cut in its box and kept whole for the table', () => {
   const edge = graphOf(iron, groups, 'fg-iron').edges.find(entry => entry.to === 'out:fg-motor');
   assert.equal(edge?.toText, name);
 });
+
+test('an alternate recipe line is drawn without its prefix and tagged ALT (FG-4)', () => {
+  const stage: StoredStage = {
+    ...iron,
+    rows: iron.rows.map(entry =>
+      entry.id === 'plate' ? { ...entry, name: 'Alternate: Coated Iron Plate' } : entry,
+    ),
+  };
+  const graph = graphOf(stage, ironGroups, 'fg-iron');
+  const plate = node(graph, 'line:plate');
+  assert.equal(plate.alt, true);
+  assert.match(plate.label, /Alternate: Coated Iron Plate$/, 'the whole name stays for the title');
+  assert.doesNotMatch(plate.shortLabel, /Alternate/);
+  assert.match(plate.shortLabel, /Coated Iron Plate$/);
+  assert.ok([...plate.shortLabel].length <= GRAPH.nameChars - 5, 'room is left for the tag');
+  assert.equal(node(graph, 'line:rod').alt, false);
+});
+
+test('the outputs have their own column, which a header names (FG-4)', () => {
+  const graph = graphOf(iron, ironGroups, 'fg-iron');
+  const outs = graph.nodes.filter(entry => entry.kind === 'out');
+  assert.ok(outs.length);
+  assert.equal(graph.outs?.x, Math.min(...outs.map(entry => entry.x)));
+  const lines = graph.nodes.filter(entry => entry.kind === 'line');
+  assert.ok(graph.outs!.x > Math.max(...lines.map(entry => entry.x)), 'right of every line');
+});

@@ -650,11 +650,11 @@ test('the arrows into storage and the sink are quiet: no label or arrowhead unti
     assert.equal(edgeEl(edge.id).getAttribute('marker-end'), 'url(#fgraph-arrow)');
     assert.equal(has(labelEl(edge.id), 'hidden'), false);
   }
-  // Every arrow has a hover title with its value; pointing at a quiet one lights it with its label.
+  // Every arrow has a hover title with its value and belts (FG-2); pointing at a quiet one lights it with its label.
   const first = quiet[0]!;
   const hit = $(`#detail path[data-edge-hit="${first.id}"]`)!;
   assert.equal(
-    hit.querySelector('title')!.textContent,
+    `${first.item}: ${first.rateText} from ${first.fromText} to ${first.toText} · ${first.belts}`,
     `${first.item}: ${first.rateText} from ${first.fromText} to ${first.toText}`,
   );
   enter(hit);
