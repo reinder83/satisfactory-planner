@@ -500,7 +500,9 @@ async function checkMapMarkers(page: Page, stored: () => Promise<ProgressState>)
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   const placed = (await stored()).mapMarkers;
   assert.equal(placed?.length, 1);
-  assert.equal((await stored()).version, 27);
+  // 27, or the version the profile had already: one made in the wizard has its detail level
+  // (#1337, version 31) from the start.
+  assert.equal((await stored()).version, Math.max(27, before));
   // A drag of 60 px to the right moves it there and saves it once.
   const pin = await marker.locator('.map-marker-pin').boundingBox();
   assert.ok(pin);
@@ -562,7 +564,7 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   assert.equal(await factory.evaluate(el => el === document.activeElement), true, 'focused');
   const placed = (await stored()).factoryPlaces?.[id];
   assert.ok(placed);
-  assert.equal((await stored()).version, 28);
+  assert.equal((await stored()).version, Math.max(28, before));
   const pin = await factory.locator('.map-factory-pin').boundingBox();
   assert.ok(pin);
   // Placed in the middle of the view, the map drawn in its room past the edges (#1289).
