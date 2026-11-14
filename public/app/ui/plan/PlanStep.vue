@@ -7,7 +7,7 @@
   the line's card there; a line split over several places says so under the links. In edit
   mode it adds move, edit and remove tools. `step` is a row from
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark. The lead step
-  (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done. A
+  (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done and a "Then: <next step's title>" preview (`then`, BP-6). A
   line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
   dimmed, with its note under the title; a line at exact clocks, or one whose clocks a
   recalculation would change (`step.clocks`, #1066), says so there too, and so does a line a
@@ -44,6 +44,7 @@ import { removedStepNews, restoredStepNews } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import { listNames } from '../../../wording.ts';
 import TermText from '../TermText.vue';
+import StepFacts from './StepFacts.vue';
 import StepIcon from './StepIcon.vue';
 import StepList from './StepList.vue';
 import StepTable from './StepTable.vue';
@@ -59,10 +60,12 @@ const props = withDefaults(
     step: PlanStepView;
     editing?: boolean;
     lead?: boolean;
+    // The title of the step after the lead one, for its "Then: …" preview (BP-6).
+    then?: string;
     held?: boolean;
     leaving?: boolean;
   }>(),
-  { editing: false, lead: false, held: false, leaving: false },
+  { editing: false, lead: false, then: '', held: false, leaving: false },
 );
 
 // "Open factory: <name> →" is a real link, so it opens in a new tab too; followed here, the flow
@@ -316,11 +319,14 @@ async function deletePersonal(event: Event) {
         }}</span>
       </summary>
       <StepTable v-if="step.table" :table="step.table" :terms="step.terms ?? []" />
+      <StepFacts v-else-if="step.facts" :facts="step.facts" :terms="step.terms ?? []" />
       <StepList v-if="step.list" :list="step.list" />
-      <p v-if="!step.table && !step.list && step.body">
+      <p v-if="!step.table && !step.facts && !step.list && step.body">
         <TermText :text="step.body" :terms="step.terms ?? []" />
       </p>
-      <p v-if="!step.table && !step.list && !step.body">Your own task for this phase.</p>
+      <p v-if="!step.table && !step.facts && !step.list && !step.body">
+        Your own task for this phase.
+      </p>
       <BuiltCounter
         v-if="step.counter"
         :row="step.counter"
@@ -373,6 +379,7 @@ async function deletePersonal(event: Event) {
         data-step-split
         >Split over {{ listNames([step.link.factory.name, ...step.link.factory.others]) }}; this
         step builds it with {{ step.link.factory.name }}.</span
+      ><span v-if="lead && then" class="small muted lead-then" data-step-then>Then: {{ then }}</span
       ><button
         v-if="step.custom && !editing"
         class="delete-task"

@@ -860,22 +860,23 @@ test('a calculated step writes a fluid input or output in m³/min and a solid in
   render();
   await nextTick();
   const rows = generated.stages['3'].rows!;
-  const body = (id: string) =>
-    $(`[data-check="calc-3-${id}"]`)!
-      .closest('.task')!
-      .querySelector('p')!
-      .textContent.replace(/ /g, ' ');
+  // The step's inputs and outputs are lists of item and rate (StepFacts.vue, BP-5).
+  const facts = (id: string, side: 'inputs' | 'outputs') =>
+    [
+      ...$(`[data-check="calc-3-${id}"]`)!
+        .closest('.task')!
+        .querySelectorAll(`[data-step-${side}] li`),
+    ]
+      .map(li => li.textContent!.replace(/\s+/g, ' ').trim())
+      .join(', ');
   const fuel = rows.find(r => r.id === 'Recipe_ResidualFuel_C')!;
   assert.ok(fuel, 'the default plan makes Fuel from Heavy Oil Residue');
-  const text = body(fuel.id);
-  assert.match(text, /Inputs: Heavy Oil Residue [\d.,]+ m³\/min\./);
-  assert.match(text, /Outputs: Fuel [\d.,]+ m³\/min\./);
-  // The old headings ("Inputs /min: …"). The byproduct advice after them (#1022) leads with an
-  // item's rate and a colon, "Heavy Oil Residue 46.6 m³/min: …", so only the headings are looked for.
-  assert.doesNotMatch(text, /(Inputs|Outputs) \/min:/, 'no "Inputs /min:" heading any more');
+  assert.match(facts(fuel.id, 'inputs'), /^Heavy Oil Residue [\d.,]+ m³\/min$/);
+  assert.match(facts(fuel.id, 'outputs'), /^Fuel [\d.,]+ m³\/min$/);
   // A solid keeps /min.
   const iron = rows.find(r => r.id === 'Recipe_IngotIron_C')!;
-  assert.match(body(iron.id), /Inputs: Iron Ore [\d.,]+\/min\. Outputs: Iron Ingot [\d.,]+\/min\./);
+  assert.match(facts(iron.id, 'inputs'), /^Iron Ore [\d.,]+\/min$/);
+  assert.match(facts(iron.id, 'outputs'), /^Iron Ingot [\d.,]+\/min$/);
 });
 
 // A plan with a guide (#393, #466; a migrated handbook profile once #395 writes one) shows the

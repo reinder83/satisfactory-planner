@@ -31,7 +31,13 @@ import { jumpTarget } from './step-jump.ts';
 import { activeMine, factoryGroupsState, mineKeeps } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
 import type { StepMaterialWords } from './views/step-materials.ts';
-import { listText, tableText, type StepList, type StepTable } from '../step-table.ts';
+import {
+  listText,
+  tableText,
+  type StepFacts,
+  type StepList,
+  type StepTable,
+} from '../step-table.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
 // personal tasks have no body. A generated step may be `optional` ("Required steps only" hides it)
@@ -46,6 +52,9 @@ export interface Step {
   // is edited.
   table?: StepTable;
   list?: StepList;
+  // A production line's text as the dialog's structure (BP-5, step-table.ts); absent once the body
+  // is edited.
+  facts?: StepFacts;
   // A grown line's built machines, "5 of 6 built" (#1174), or a switched line's change, "4 to
   // switch from Iron Plate, 1 to add" (#1175), under the title while it is not ticked.
   built?: string;
@@ -132,13 +141,14 @@ export function taskEditsState(): TaskEdits {
 }
 
 // A step with the user's edited title and body in place of the generated ones, where edited. An
-// edited body replaces the generated table or list too (#1136): the user's words are shown as
+// edited body replaces the generated table, list or facts too (#1136): the user's words are shown as
 // written.
 function withEditedWording(t: Step, edits: TaskEdits): Step {
   const edited = { ...t, title: edits.titles[t.id] || t.title, body: edits.bodies[t.id] || t.body };
   if (edits.bodies[t.id]) {
     delete edited.table;
     delete edited.list;
+    delete edited.facts;
   }
   return edited;
 }

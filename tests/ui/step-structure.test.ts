@@ -264,12 +264,16 @@ test('a production line with byproduct advice lists each byproduct and input on 
     found.list!.items.some(item => item.startsWith('Byproduct ')),
   )!;
   assert.ok(step.id.startsWith('calc-4-'), 'a production line’s step');
-  // The body is the intro and the items, in order: the list adds no words of its own.
-  assert.equal(step.body, [step.list!.intro, ...step.list!.items].join(' '));
-  assert.match(step.list!.intro, /Inputs: .*\. Outputs: .*\.$/);
+  // The body is the line's text and the items, in order: the list adds no words of its own. The
+  // line's text is drawn as the dialog's structure above the list (BP-5), not as its intro.
+  const items = step.list!.items.join(' ');
+  assert.ok(step.body!.endsWith(' ' + items), 'the items end the body');
+  assert.match(step.body!.slice(0, -items.length - 1), /Inputs: .*\. Outputs: .*\.$/);
+  assert.equal(step.list!.intro, '');
+  assert.ok($(`[data-task="${step.id}"] [data-step-facts]`), 'the line is drawn as its facts');
   const drawn = listOf(step.id)!;
   assert.ok(drawn, 'the list is drawn');
-  assert.equal(drawn.intro, plain(step.list!.intro));
+  assert.equal(drawn.intro, '');
   assert.deepEqual(drawn.items, step.list!.items.map(plain));
   assert.equal(drawn.label, step.title + ': byproducts and inputs');
   // No body paragraph beside the list (the build materials under it are their own, #1073, and so
@@ -291,12 +295,18 @@ test('an edited production line step shows the edited words, not the list', () =
   editedShowsWords(id);
 });
 
-test('a line without byproducts stays one paragraph', () => {
+test('a line without byproducts is drawn as its facts, with no list or table', () => {
   show('4');
   const plainStep = planTasks().find(step => step.id.startsWith('calc-4-') && !step.list)!;
   const details = $(`[data-task="${plainStep.id}"]`)!;
   assert.equal(details.querySelector('[data-step-list], [data-step-table]'), null);
-  assert.equal(plain(details.querySelector('p')?.textContent), plain(plainStep.body));
+  const facts = plain(details.querySelector('[data-step-facts]')?.textContent);
+  assert.ok(facts.includes(plain(plainStep.facts!.machines)), 'the machine count');
+  for (const rate of [...plainStep.facts!.inputs, ...plainStep.facts!.outputs])
+    assert.ok(facts.includes(plain(rate.name + ' ' + rate.rate)), rate.name);
+  // Every sentence of the body is in the facts.
+  for (const part of [plainStep.facts!.machines, plainStep.facts!.perMachine.text])
+    assert.ok(plain(plainStep.body).includes(plain(part)), part);
 });
 
 test('plans stored before the lists show their byproduct advice as lists', () => {

@@ -805,6 +805,7 @@ export function miningStep(
     table: {
       intro,
       caption: `Phase ${phase}'s resource nodes`,
+      fold: { rows: 4, noun: 'resources' },
       columns: ['Resource', 'Rate', 'Nodes', 'Machines', 'Shards', 'Power'],
       rows: [
         ...resources.map(entry => [

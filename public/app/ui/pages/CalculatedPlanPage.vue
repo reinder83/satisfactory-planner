@@ -322,7 +322,15 @@ function tabKey(event: KeyboardEvent) {
                 name="buildIntro"
                 topic="the build sequence"
             /></span>
-            <EditStepsToggle />
+            <span class="head-actions"
+              ><a
+                v-if="!page.milestones && !page.guided"
+                class="btn"
+                href="#session"
+                data-session-link
+                >Today's session</a
+              ><EditStepsToggle
+            /></span>
           </div>
           <PlanProgress />
           <!-- A guided plan's steps are the guide's own (#466), not the startup, unlock and factory
@@ -336,10 +344,8 @@ function tabKey(event: KeyboardEvent) {
             what each one costs.
           </p>
           <!-- Its text is the "?" beside the heading (X-3, helpText.buildIntro), not a paragraph
-               repeated on every phase (BP-13). -->
-          <p v-if="!page.milestones && !page.guided" class="small" data-session-link-row>
-            <a href="#session" data-session-link>Today's session: the next builds, printable →</a>
-          </p>
+               repeated on every phase (BP-13). Today's session is the button beside Edit steps
+               (BP-11). -->
           <Checklist />
           <AddTaskForm placeholder="Add a task…" />
           <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
