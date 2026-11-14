@@ -23,7 +23,7 @@
 // (the phase before's generators are kept already, carryGenerators in public/power.ts). A plan
 // guide (a profile moved from the retired handbook) has steps of its own and is left out.
 //
-// Nothing here is stored or sent. The build plan's notice (ui/plan/OwnedTicksNotice.vue) offers
+// Nothing here is stored or sent. The build plan's notice (ui/plan/RecalcBanner.vue) offers
 // the recalculation in place with the plan's settings raised to it (withOwnedFound), and Edit
 // settings starts from those settings (startEdit in wizard/wizard.ts).
 import {

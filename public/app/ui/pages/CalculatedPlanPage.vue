@@ -3,7 +3,7 @@
   at exact clocks (#1066), the somersloop pins (#1235) or the Power Shard pins (#1239) asked for
   need a recalculation, one notice with one button for all of them (ui/plan/RecalcBanner.vue,
   #1280), the offer to plan with
-  what the ticks show you already have (ui/plan/OwnedTicksNotice.vue, #1068), a summary line (factories,
+  what the ticks show you already have (ui/plan/RecalcBanner.vue, #1068), a summary line (factories,
   storage and power, each linking to its page, and the delivery time, what is left of it once a
   delivery count is saved, #1062; SP-43), the next phase once the delivery is complete
   (ui/plan/NextPhase.vue, #1069) or Post Phase 5's finish card, the handover from the phase before
@@ -67,7 +67,6 @@ import HandoverSummary from '../plan/HandoverSummary.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import NextPhase from '../plan/NextPhase.vue';
 import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
-import OwnedTicksNotice from '../plan/OwnedTicksNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
@@ -269,8 +268,9 @@ function tabKey(event: KeyboardEvent) {
       :subtitle="page.profileName"
     />
     <PlanEditBar />
-    <!-- A tab's count is part of its name as words ("Overview, 1 new"); the figure drawn beside
-         the label is hidden from a screen reader, as the storage room's floor tabs do. -->
+    <OpenedEarlierNotice />
+    <!-- A tab's count is part of its name as words ("Overview · 2 warnings", BP-4): the badge
+         says what it counts instead of a bare figure. -->
     <div
       v-if="tabbed"
       class="tabs plan-tabs"
@@ -294,8 +294,10 @@ function tabKey(event: KeyboardEvent) {
       >
         {{ tab.label
         }}<template v-if="tab.news"
-          ><span class="count" aria-hidden="true" data-plan-tab-count>{{ tab.news }}</span
-          ><span class="visually-hidden">, {{ tab.news }} new</span></template
+          ><span aria-hidden="true"> · </span
+          ><span class="count" data-plan-tab-count
+            >{{ tab.news }} {{ tab.news === 1 ? 'warning' : 'warnings' }}</span
+          ></template
         >
       </button>
     </div>
@@ -309,7 +311,6 @@ function tabKey(event: KeyboardEvent) {
           </button></template
         >
       </div>
-      <OpenedEarlierNotice />
       <MilestoneOnlyNotice />
       <div :class="page.milestones ? undefined : 'split'">
         <section>
@@ -363,8 +364,7 @@ function tabKey(event: KeyboardEvent) {
     </div>
     <div ref="overviewPanel" v-bind="panelAttrs('overview')" data-plan-panel="overview">
       <CalcWarnings />
-      <RecalcBanner />
-      <OwnedTicksNotice />
+      <RecalcBanner ticks />
       <PlanSummary v-if="!page.milestones" :items="page.summary" />
       <NextPhase />
       <div v-if="page.post" class="notice info" data-finish-card>

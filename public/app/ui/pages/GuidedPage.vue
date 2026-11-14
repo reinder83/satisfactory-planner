@@ -20,7 +20,6 @@
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { beginnerMode } from '../../beginner.ts';
@@ -35,7 +34,6 @@ import {
 } from '../../wizard/guided.ts';
 import { NAME_HINT, cancelWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
-import BrowserNotice from '../BrowserNotice.vue';
 import InputField from '../form/InputField.vue';
 import NameField from '../form/NameField.vue';
 import GuidedBudgets from '../guided/GuidedBudgets.vue';
@@ -161,7 +159,6 @@ async function submit(event: Event) {
 
 <template>
   <template v-if="page">
-    <BrowserNotice v-if="browserMode" />
     <PageHeader
       eyebrow="A FEW QUESTIONS"
       :title="page.title"

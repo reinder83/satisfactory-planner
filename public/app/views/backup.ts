@@ -79,3 +79,42 @@ export function restoreMessage(before: Reviewable, after: Reviewable): string {
     ? 'Backup restored. 1 item from the original plan needs your review in Notes.'
     : `Backup restored. ${count} items from the original plan need your review in Notes.`;
 }
+
+// The sidebar's one save-status card (BP-1, SaveCard in ui/Shell.vue). It replaces the page-top
+// "saves stay in this browser" banner (kept on Backup only), the sidebar's backup-age line and
+// holds the #1368 storage state. Browser edition: "Only in this browser · Never backed up ·
+// [Export backup]", green after a backup today, quiet (no button) for a recent one, a warning
+// again after a week; when the browser has not agreed to keep the saves (`atRisk`) it says the
+// browser may clear them and nudges an export unless one was made today. Docker edition: the
+// server keeps the saves, so it says so, with the backup age when one is known, never "only in
+// this browser".
+export interface SaveCard {
+  tone: 'warn' | 'ok' | 'quiet';
+  lead: string;
+  age: string;
+  button: boolean;
+}
+export function saveCard(
+  browser: boolean,
+  hasSave: boolean,
+  lastBackup: string | null | undefined,
+  atRisk: boolean,
+  now = Date.now(),
+): SaveCard {
+  if (!browser)
+    return {
+      tone: 'quiet',
+      lead: 'Saved on server',
+      age: lastBackup ? backupAge(lastBackup, now).text : '',
+      button: false,
+    };
+  const lead = atRisk ? 'Your browser may clear these saves' : 'Only in this browser';
+  if (!hasSave) return { tone: atRisk ? 'warn' : 'quiet', lead, age: '', button: false };
+  const age = backupAge(lastBackup, now);
+  return {
+    tone: age.stale ? 'warn' : age.days === 0 ? 'ok' : atRisk ? 'warn' : 'quiet',
+    lead,
+    age: age.text,
+    button: age.stale || (atRisk && age.days !== 0),
+  };
+}

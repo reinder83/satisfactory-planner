@@ -205,9 +205,15 @@ describe.each([
     assert.equal(text($('[data-phase-picker-label]')), 'Showing');
     assert.equal(tab('4').getAttribute('aria-selected'), 'true');
     assert.ok(tab('3').classList.contains('working'), 'the working phase stays marked');
-    assert.equal(text($('[data-work-on-phase]')), 'Work on Phase 4');
+    assert.equal(text($('[data-work-on-phase]')), 'Work on Phase 4 instead');
     // The build plan names the working phase and offers it back, writing nothing.
-    assert.equal(text($('[data-opened-earlier]')), 'You are working on Phase 3. Go to Phase 3');
+    assert.equal(
+      text($('[data-opened-earlier]')),
+      "Viewing Phase 4 · you're working on Phase 3. Back to Phase 3 Work on Phase 4 instead",
+    );
+    // One banner holds both ways out; the top bar has no second button on this page (BP-10).
+    assert.equal($$('[data-work-on-phase]').length, 1);
+    assert.equal($('.topbar [data-work-on-phase]'), null);
     // The highlighted tab is the working phase's way back too.
     tab('3').click();
     await settle();

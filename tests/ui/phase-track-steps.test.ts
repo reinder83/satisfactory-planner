@@ -20,9 +20,13 @@ beforeEach(() => page());
 
 const ticked = (ids: string[]) => Object.fromEntries(ids.map(id => [id, true]));
 const segment = (phaseKey: string) => phaseTrack().find(entry => entry.phase === phaseKey)!;
-// The segment's accessible name: its label and the visually hidden share.
-const segmentName = (phaseKey: string) =>
-  $(`[data-phase-seg="${phaseKey}"]`)!.textContent!.replace(/\s+/g, ' ').trim();
+// The segment's accessible name: its label and the visually hidden share (the drawn "42%" or tick
+// beside the label, BP-3, is aria-hidden, so it is not part of the name).
+const segmentName = (phaseKey: string) => {
+  const copy = $(`[data-phase-seg="${phaseKey}"]`)!.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach(el => el.remove());
+  return copy.textContent!.replace(/\s+/g, ' ').trim();
+};
 
 test('a phase with every production line Running but other steps open is not 100% done (#770)', () => {
   const plan = phaseOnePlan();
