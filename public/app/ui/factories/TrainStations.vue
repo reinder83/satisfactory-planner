@@ -92,7 +92,7 @@ const open = (id: string) => showDetail({ kind: 'station', id });
       >
         + Add train station
       </button>
-      <span v-if="view.full" class="small muted" data-stations-full>
+      <span v-if="view.full" class="small muted prose" data-stations-full>
         A profile holds at most {{ TRAIN_STATION_MAX }} train stations.
       </span>
     </p>

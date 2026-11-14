@@ -912,6 +912,7 @@ table .notice,
 /* A paragraph that holds only a figure (a count, a peak, rates) is data, not prose. */
 p[data-station-count],
 p[data-power-peak],
+p.power-headline,
 p[data-proposal-rates] {
   font-family: var(--mono);
 }
@@ -925,6 +926,11 @@ p[data-proposal-rates] {
 }
 .muted {
   color: var(--muted);
+}
+/* A short sentence in a span (a hint under a filter, a note beside a button) is prose too (#1336):
+   it reads sans, while a small muted span that holds a count stays mono. */
+.prose {
+  font-family: var(--sans);
 }
 .small {
   font-size: 11px;
@@ -1393,11 +1399,23 @@ p[data-proposal-rates] {
 }
 .step-rates li {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   max-width: 28em;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--warm-border);
+}
+.step-rates li > span:first-child {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.step-rate-end {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  text-align: right;
 }
 .step-rates li b {
   flex: none;
@@ -5428,6 +5446,18 @@ button.rail-tile:hover {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.fgraph-outs .fgraph-step-head text {
+  fill: var(--accent);
+}
+.fgraph-alt rect {
+  fill: var(--accent);
+}
+.fgraph-alt text {
+  fill: var(--bg);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
 .fgraph-step.named .fgraph-step-head text {
   fill: var(--ink);
 }
@@ -9193,6 +9223,7 @@ th.resource-cell {
 }
 .supply-hint {
   grid-column: 1/-1;
+  font-family: var(--sans);
   font-size: 10.5px;
   letter-spacing: 0.04em;
   color: var(--dim);

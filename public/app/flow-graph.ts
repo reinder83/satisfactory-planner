@@ -73,6 +73,9 @@ export interface GraphNode {
   // The full name and the line under it, each also as the box has room for it (cut with "…").
   label: string;
   shortLabel: string;
+  // An alternate recipe's line (FG-4): its name is drawn without "Alternate: ", with an ALT tag;
+  // `label` keeps the whole name for the box's hover title and screen readers.
+  alt: boolean;
   caption: string;
   shortCaption: string;
   // A line's own output going back into itself (#898): "↻ 30 m³/min Water back in", else ''.
@@ -160,6 +163,9 @@ export interface FlowGraph {
   tags: GraphTag[];
   // The steps, one per column of lines, left to right (none without a line).
   columns: GraphColumn[];
+  // The column of outputs, "Leaves the factory" (FG-4): where it starts, or null without a drawn
+  // output box.
+  outs: { x: number } | null;
   layers: number;
   // Crossings of the automatic layout's arrows (the forward ones, as laid out): every pair, and the
   // pairs of arrows that are not quiet (storage and sink arrows are thin and grey, FG-1).
@@ -274,6 +280,7 @@ export function flowGraph(
     edges,
     tags,
     columns: lineColumns(nodes),
+    outs: outsColumn(nodes),
     layers: Math.max(0, ...nodes.map(node => node.layer + 1)),
     crossings,
     width,
@@ -294,6 +301,12 @@ function lineColumns(nodes: readonly GraphNode[]): GraphColumn[] {
         ...nodes.filter(node => node.kind === 'line' && node.layer === layer).map(node => node.x),
       ),
     }));
+}
+
+// Where the outputs' column begins (FG-4): the left of the right-most boxes that only receive.
+function outsColumn(nodes: readonly GraphNode[]): { x: number } | null {
+  const outs = nodes.filter(node => node.kind === 'out');
+  return outs.length ? { x: Math.min(...outs.map(node => node.x)) } : null;
 }
 
 // What a tag says for its destination, and the start of its name (#1231).
@@ -375,27 +388,38 @@ export function tagsRight(tags: readonly GraphTag[], byId: ReadonlyMap<string, G
   return right;
 }
 
+// An alternate recipe's line is named "Alternate: <what it makes>" (FG-4): the box drops the words
+// and draws an ALT tag instead.
+const ALT_PREFIX = /Alternate: /;
+
 // The boxes: the places that send something in (in the order the flow page lists them), the
 // lines in build order, and the places that receive something.
 function graphNodes(flow: GroupFlow, rateText: GraphRate, caption: GraphCaption): GraphNode[] {
-  const node = (id: string, kind: GraphNodeKind, label: string, under: string, self = '') => ({
-    id,
-    kind,
-    label,
-    shortLabel: shortText(label, GRAPH.nameChars),
-    caption: under,
-    shortCaption: shortText(under, GRAPH.captionChars),
-    selfNote: self,
-    rates: [] as NodeRate[],
-    rateLines: [] as string[],
-    rateTitle: '',
-    baseHeight: self ? GRAPH.nodeHeight + GRAPH.textLine : GRAPH.nodeHeight,
-    layer: 0,
-    x: 0,
-    y: 0,
-    width: GRAPH.nodeWidth,
-    height: self ? GRAPH.nodeHeight + GRAPH.textLine : GRAPH.nodeHeight,
-  });
+  const node = (id: string, kind: GraphNodeKind, label: string, under: string, self = '') => {
+    const alt = kind === 'line' && ALT_PREFIX.test(label);
+    return {
+      id,
+      kind,
+      label,
+      shortLabel: shortText(
+        alt ? label.replace(ALT_PREFIX, '') : label,
+        GRAPH.nameChars - (alt ? 5 : 0),
+      ),
+      alt,
+      caption: under,
+      shortCaption: shortText(under, GRAPH.captionChars),
+      selfNote: self,
+      rates: [] as NodeRate[],
+      rateLines: [] as string[],
+      rateTitle: '',
+      baseHeight: self ? GRAPH.nodeHeight + GRAPH.textLine : GRAPH.nodeHeight,
+      layer: 0,
+      x: 0,
+      y: 0,
+      width: GRAPH.nodeWidth,
+      height: self ? GRAPH.nodeHeight + GRAPH.textLine : GRAPH.nodeHeight,
+    };
+  };
   const places = (ports: GroupFlow['ins'], side: 'in' | 'out') => {
     const seen = new Map<string, GraphNode>();
     for (const port of ports)

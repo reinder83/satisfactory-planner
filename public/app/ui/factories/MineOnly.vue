@@ -58,7 +58,7 @@ function toggle(event: Event) {
         @change="toggle"
       />Mine only</label
     ><MeName />
-    <span v-if="view.note" :id="'mine-note-' + where" class="small muted" data-mine-note>{{
+    <span v-if="view.note" :id="'mine-note-' + where" class="small muted prose" data-mine-note>{{
       view.note
     }}</span>
   </div>
