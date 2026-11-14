@@ -27,7 +27,7 @@ import { rowTotal } from '../../public/app/group-order.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { onSiteEntriesText } from '../../public/app/on-site-picker.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
-import { $, $$, generated, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, generated, generatedWith, go, open, page, expandSteps } from './setup.ts';
 import type { FactoryGroups, StageKey, StoredCalculatedPlan } from '../../public/types/index.ts';
 
 const COVERED = '(a byproduct of central lines covers it)';
@@ -79,6 +79,7 @@ async function showFlow(groupId: string) {
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
 }
 const scrapWater = () =>
   text($(`#main .gf-card[data-line="${scrap.id}"] .gf-out[data-row$="|Water"] .gf-advice`));

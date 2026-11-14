@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { nextTick } from 'vue';
 import { afterEach } from 'vitest';
 import {
   setContext,
@@ -290,6 +291,13 @@ export const migratedState = (progress: Partial<ProgressState> = {}): ProgressSt
     handbook,
     transcribed(),
   );
+
+// The build order page opens only its current step as a card (BO-1, #1346): this opens every
+// step, as its "Expand all" does, for a test that reads the cards.
+export async function expandSteps() {
+  document.querySelector<HTMLButtonElement>('[data-gf-all]')?.click();
+  await nextTick();
+}
 
 export function go(view: View) {
   setView(view);

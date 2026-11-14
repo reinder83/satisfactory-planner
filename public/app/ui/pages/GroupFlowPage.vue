@@ -1,19 +1,22 @@
 <!--
-  #factories/<group>/flow: one factory group's flow (#883, #894), drawn with item lanes as the
-  owner approved in round 3. What comes in at the top, then the group's lines as numbered cards
-  in the build plan's order, then what leaves, with the AWESOME Sink and protected storage folded
-  into one summary. The links between the group's own lines run as lanes in a gutter left of the
-  cards, one colour and dash per item (the key above the cards): each starts at a dot on the
-  source card's output row and ends in an arrowhead touching the target card's border at the
-  input row it feeds. Hovering or focusing a card lights its lanes and dims the rest. The model
-  is groupFlow (group-flow.ts); the words and paths are views/group-flow-page.ts, the
-  measuring ui/group-flow/lane-layout.ts. "The diagram as a table" says it all again as text.
+  #factories/<group>/flow: one factory group's build order (#883, #894, #1346), the page behind
+  "Build order →". At the top, what comes in (FlowComesIn.vue, BO-3): each input with its rate and
+  where it comes from, those a running line is short of in the problem colour ("Plastic 0 of
+  105/min · not arriving"). Then the group's lines as numbered steps in the build plan's order
+  (BO-1): a list of the steps on the left with a status each (running ✓, the count built, the one
+  to build next, held back), and on the right the current step open as a card with its Built
+  counter and Mark running (FlowCard.vue, BO-4), every other step a one-row fold that opens as a
+  card (one at a time, or all of them with "Expand all"; printing opens them all). Each input names
+  its source as a chip (BO-2): "from 01" moves to that step, another factory's name opens its
+  build order. Then what leaves, with the AWESOME Sink and protected storage folded into one
+  summary. "The diagram as a table" says it all again as text. The model is groupFlow
+  (group-flow.ts); the words are views/group-flow-page.ts.
 
   Phase tabs (#1317, PhaseTabs.vue) under the buttons: one per phase of the plan, opening on the
   phase on screen ("Phase 4 · current"), to look at what the factory builds in another phase (its
-  lines, lanes and table, from shownGroupFlow's stage key) without switching the profile's phase
-  or saving anything. Another phase's tab is read-only: its lines are plain names and say nothing
-  of whether they run, and a note says which phase is shown. The tab open is in the address
+  steps and table, from shownGroupFlow's stage key) without switching the profile's phase or saving
+  anything. Another phase's tab is read-only: its steps are plain names with no status, counter or
+  Mark running, and a note says which phase is shown. The tab open is in the address
   (?view=<phase>, flowRoute in session.ts), written without a history entry so Back, a reload and
   a link return to it; a phase it does not name or one with no lines of the factory opens the
   phase on screen. The tab is not stored.
@@ -23,11 +26,12 @@
   calculated one draws nothing, as the other pages do.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { replaceShownRoute } from '../../api.ts';
 import { openTab, phaseTabs, tabId } from '../../phase-tabs.ts';
 import { shownGroupFlow, storedStageOf } from '../../shown-group-flow.ts';
 import {
+  calcStage,
   calculated,
   checked,
   flowGroupOf,
@@ -38,17 +42,31 @@ import {
   phaseLabel,
   stage,
 } from '../../session.ts';
-import type { StageKey } from '../../../types/index.ts';
-import { factoryGroupsState } from '../../views/factories.ts';
-import { flowNames, laneStyles, type LaneWire } from '../../views/group-flow-page.ts';
+import { currentBuildStatus, heldBack, lineCountOf } from '../../views/calculated.ts';
+import type { CalcRow, StageKey } from '../../../types/index.ts';
+import { factoryGroupsState, machineLine } from '../../views/factories.ts';
+import { comesIn, flowNames, lineNumber } from '../../views/group-flow-page.ts';
 import { legacy } from '../bridge.ts';
 import FlowCard from '../group-flow/FlowCard.vue';
+import FlowComesIn from '../group-flow/FlowComesIn.vue';
 import FlowPorts from '../group-flow/FlowPorts.vue';
 import FlowTable from '../group-flow/FlowTable.vue';
-import { useLaneLayout } from '../group-flow/lane-layout.ts';
 import PageHeader from '../PageHeader.vue';
 import PhaseTabs from '../PhaseTabs.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
+
+// One step of the list: how it stands, as the short mark the list shows and in words for a screen
+// reader. Another phase's tab has none ('plain'), since it says nothing of what runs.
+interface Step {
+  id: string;
+  no: string;
+  name: string;
+  summary: string;
+  state: 'running' | 'next' | 'partial' | 'held' | 'todo' | 'plain';
+  mark: string;
+  words: string;
+  row?: CalcRow;
+}
 
 // The tab picked here, with the address it was written to: while the address is still that one the
 // pick stands; any other address (Back, a link) is read afresh.
@@ -67,17 +85,63 @@ const page = computed(() =>
     const shown: StageKey = openTab(tabs, asked());
     const current = shown === stage();
     const flow = shownGroupFlow(groupId, shown);
+    const rows = new Map((current ? (calcStage()?.rows ?? []) : []).map(row => [row.id, row]));
+    const running = (lineId: string) => current && checked(`calc-${shown}-${lineId}`);
+    // The step to build next: the first line of the factory not running yet.
+    const next = current ? flow?.lines.find(line => !running(line.id))?.id : undefined;
+    const steps: Step[] = (flow?.lines ?? []).map(line => {
+      const row = rows.get(line.id);
+      const base = {
+        id: line.id,
+        no: lineNumber(line.no),
+        name: line.name,
+        summary:
+          machineLine(line.machines, line.machine, line.lastClock, line.clock) +
+          (line.inputs.length ? ' · needs ' + line.inputs.map(input => input.item).join(', ') : ''),
+        ...(row ? { row } : {}),
+      };
+      if (!row) return { ...base, state: 'plain', mark: '', words: '' };
+      const hold = heldBack(line.id);
+      const { built, needed } = lineCountOf(row);
+      if (running(line.id))
+        return hold
+          ? { ...base, state: 'held', mark: '⚠', words: `Running, short of ${hold.shortOf}` }
+          : { ...base, state: 'running', mark: '✓', words: 'Running' };
+      const count = built > 0 ? `${built}/${needed}` : '';
+      if (line.id === next)
+        return {
+          ...base,
+          state: 'next',
+          mark: count,
+          words: count ? `Build next, ${built} of ${needed} built` : 'Build next',
+        };
+      return count
+        ? { ...base, state: 'partial', mark: count, words: `${built} of ${needed} built` }
+        : { ...base, state: 'todo', mark: '', words: 'Not built' };
+    });
+    // What the running lines are short of, and what the built lines make now (BO-3).
+    const held = new Set<string>();
+    if (current)
+      for (const line of flow?.lines ?? []) {
+        const hold = heldBack(line.id);
+        if (hold) held.add(hold.shortOf);
+      }
+    const produced = current ? (currentBuildStatus()?.produced ?? {}) : {};
     return {
       name: groups.groups.find(group => group.id === groupId)?.name ?? null,
       phase: phaseLabel(current ? phase() : shown),
       working: phaseLabel(phase()),
       tabs,
       shown,
+      view: current ? null : shown,
       readonly: !current,
       milestones: current && milestoneOnly(),
       snapshot: current ? undefined : storedStageOf(shown),
       flow,
-      running: (lineId: string) => checked(`calc-${shown}-${lineId}`),
+      steps,
+      next,
+      comes: flow ? comesIn(flow.ins, held, produced) : [],
+      running,
     };
   }),
 );
@@ -89,30 +153,35 @@ function pickTab(key: StageKey) {
   replaceShownRoute(flowRoute(group, phase(), key === stage() ? null : key));
   picked.value = { hash: location.hash, view: key };
 }
-const flow = () => page.value?.flow ?? null;
 const names = computed(() => (page.value?.flow ? flowNames(page.value.flow) : null));
-const styles = computed(() => laneStyles(page.value?.flow ?? { lines: [], lanes: [] }));
 
-const host = ref<HTMLElement | null>(null);
-const { gutter, wires } = useLaneLayout(host, flow);
+// The step open as a card: the one picked (a fold, a chip, the list, or any control of a card),
+// else the step to build next, else the first. "Expand all" opens every step; printing does too.
+const pinned = ref<string | null>(null);
+const all = ref(false);
+const open = computed(() => {
+  const current = page.value;
+  if (!current?.flow?.lines.length) return null;
+  const ids = current.flow.lines.map(line => line.id);
+  return pinned.value && ids.includes(pinned.value) ? pinned.value : (current.next ?? ids[0]!);
+});
+const isOpen = (id: string) => all.value || open.value === id;
 
-// The line the pointer or focus is on: its lanes are drawn bright and the others dim.
-const active = ref<string | null>(null);
-const wireState = (wire: LaneWire) =>
-  !active.value ? '' : wire.lines.includes(active.value) ? 'hot' : 'dim';
-// Lit wires last, so a shared trunk shows bright rather than under a dimmed one.
-const drawOrder = computed(() =>
-  [...wires.value].sort((a, b) => +(wireState(a) === 'hot') - +(wireState(b) === 'hot')),
-);
-const styleOf = (item: string) => styles.value.get(item) ?? { color: 'var(--muted)', dash: '' };
-// Leaving a card for another element of the same card keeps it lit.
-function left(event: FocusEvent, lineId: string) {
-  const to = event.relatedTarget as Node | null;
-  if (active.value === lineId && !(event.currentTarget as HTMLElement).contains(to))
-    active.value = null;
+// Opens a step and moves focus to its card (a fold, a chip or the list).
+async function show(id: string) {
+  pinned.value = id;
+  await nextTick();
+  document.querySelector<HTMLElement>(`.gf-card[data-line="${CSS.escape(id)}"]`)?.focus();
 }
 
-const printPage = () => window.print();
+function printPage() {
+  const was = all.value;
+  all.value = true;
+  void nextTick(() => {
+    window.print();
+    all.value = was;
+  });
+}
 </script>
 
 <template>
@@ -161,67 +230,84 @@ const printPage = () => window.print();
         No production lines of this factory produce anything in {{ page.phase }}.
       </p>
       <template v-else-if="page.flow && names">
-        <p v-if="styles.size" class="small muted gf-key" data-gf-key>
-          <span>Lanes inside the factory:</span>
-          <span v-for="[item, style] in styles" :key="item" class="gf-key-item"
-            ><svg class="gf-swatch" width="22" height="8" aria-hidden="true">
-              <line
-                x1="0"
-                y1="4"
-                x2="22"
-                y2="4"
-                :style="{ stroke: style.color, strokeDasharray: style.dash }"
-              /></svg
-            >{{ item }}</span
-          >
-        </p>
-        <FlowPorts id="gf-in-h" title="Comes in" :ports="page.flow.ins" />
-        <div ref="host" class="gf-host" :style="{ paddingLeft: gutter + 'px' }">
-          <svg v-if="wires.length" class="gf-lanes" aria-hidden="true">
-            <g
-              v-for="wire in drawOrder"
-              :key="wire.key"
-              :class="['gf-wire', wireState(wire)]"
-              :data-from-row="wire.fromRow"
-              :data-to-row="wire.toRow"
+        <FlowComesIn :items="page.comes" />
+        <div class="gf-order">
+          <nav class="gf-steps" aria-label="Build steps" data-gf-steps>
+            <h2 class="gf-colcap">Steps</h2>
+            <ol>
+              <li v-for="step in page.steps" :key="step.id">
+                <button
+                  type="button"
+                  :class="['gf-step-btn', step.state, open === step.id ? 'on' : '']"
+                  :aria-current="open === step.id ? 'step' : undefined"
+                  :data-step-nav="step.id"
+                  @click="show(step.id)"
+                >
+                  <span class="chain-no">{{ step.no }}</span
+                  >{{ ' ' }}<span class="gf-step-name">{{ step.name }}</span
+                  >{{ ' '
+                  }}<span
+                    v-if="step.state !== 'plain'"
+                    class="gf-step-mark"
+                    :data-state="step.state"
+                    ><span aria-hidden="true">{{ step.mark }}</span
+                    >{{ ' ' }}<span class="visually-hidden">{{ step.words }}</span></span
+                  >
+                </button>
+              </li>
+            </ol>
+          </nav>
+          <div class="gf-main">
+            <ol class="gf-stack">
+              <li v-for="step in page.steps" :key="step.id" :data-step="step.id">
+                <FlowCard
+                  v-if="isOpen(step.id)"
+                  :line="page.flow.lines.find(line => line.id === step.id)!"
+                  :group="page.flow.group"
+                  :names="names"
+                  :plan="step.row"
+                  :running="page.running(step.id)"
+                  :next="step.state === 'next'"
+                  :view="page.view"
+                  :readonly="page.readonly"
+                  :snapshot="page.snapshot"
+                  @focusin="pinned = step.id"
+                  @change="pinned = step.id"
+                  @click.capture="pinned = step.id"
+                  @go="show"
+                />
+                <button
+                  v-else
+                  type="button"
+                  :class="['gf-fold-row', step.state]"
+                  aria-expanded="false"
+                  :data-step-row="step.id"
+                  @click="show(step.id)"
+                >
+                  <span class="chain-no">{{ step.no }}</span
+                  >{{ ' ' }}<span class="gf-fold-name">{{ step.name }}</span
+                  >{{ ' ' }}<span class="gf-fold-sum small muted">{{ step.summary }}</span
+                  >{{ ' '
+                  }}<span
+                    v-if="step.state !== 'plain'"
+                    class="gf-step-mark"
+                    :data-state="step.state"
+                    ><span aria-hidden="true">{{ step.mark }}</span
+                    >{{ ' ' }}<span class="visually-hidden">{{ step.words }}</span></span
+                  >
+                </button>
+              </li>
+            </ol>
+            <button
+              v-if="page.steps.length > 1"
+              type="button"
+              class="btn gf-all"
+              data-gf-all
+              @click="all = !all"
             >
-              <path
-                :d="wire.path"
-                :style="{
-                  stroke: styleOf(wire.item).color,
-                  strokeDasharray: styleOf(wire.item).dash,
-                }"
-              />
-              <circle
-                class="gf-dot"
-                :cx="wire.dot.x"
-                :cy="wire.dot.y"
-                r="3.5"
-                :style="{ fill: styleOf(wire.item).color }"
-              />
-              <path class="gf-tip" :d="wire.arrow" :style="{ fill: styleOf(wire.item).color }" />
-            </g>
-          </svg>
-          <ol class="gf-stack">
-            <li
-              v-for="line in page.flow.lines"
-              :key="line.id"
-              @mouseenter="active = line.id"
-              @mouseleave="active = null"
-              @focusin="active = line.id"
-              @focusout="left($event, line.id)"
-            >
-              <FlowCard
-                :line="line"
-                :group="page.flow.group"
-                :names="names"
-                :running="page.running(line.id)"
-                :hot="active === line.id"
-                :readonly="page.readonly"
-                :snapshot="page.snapshot"
-              />
-            </li>
-          </ol>
+              {{ all ? 'Show the current step only' : `Expand all ${page.steps.length} steps` }}
+            </button>
+          </div>
         </div>
         <FlowPorts id="gf-out-h" title="Leaves" :ports="page.flow.outs" :fold="page.flow.fold" />
         <FlowTable :flow="page.flow" :names="names" :snapshot="page.snapshot" />

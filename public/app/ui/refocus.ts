@@ -179,13 +179,15 @@ function takeFlowAim() {
   flowAim = null;
   return aim;
 }
-// The name link of the aimed line's card, when the page drawn is that group's flow page.
+// The name link of the aimed line's card, when the page drawn is that group's flow page; a line
+// whose step is folded (BO-1, #1346) has its one-row fold take focus instead.
 function aimedLine(aim: { group: string; line: string } | null) {
   if (!aim || flowGroupOf(location.hash.slice(1)) !== aim.group) return undefined;
+  const line = CSS.escape(aim.line);
   return (
-    document.querySelector<HTMLElement>(
-      `#main .gf-card[data-line="${CSS.escape(aim.line)}"] .rail-link`,
-    ) ?? undefined
+    document.querySelector<HTMLElement>(`#main .gf-card[data-line="${line}"] .rail-link`) ??
+    document.querySelector<HTMLElement>(`#main [data-step-row="${line}"]`) ??
+    undefined
   );
 }
 

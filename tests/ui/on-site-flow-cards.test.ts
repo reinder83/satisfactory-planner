@@ -15,7 +15,7 @@ import { onSiteSettings } from '../../public/app/on-site.ts';
 import { flowRoute, setQuery, state, viewOf } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { buildRowName } from '../../public/app/views/calculated.ts';
-import { $, $$, evil, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, evil, generatedWith, go, open, page, expandSteps } from './setup.ts';
 import type { CalcRow, FactoryGroups, StoredStage } from '../../public/types/index.ts';
 
 const BASE = { phase: '3', wholeMachines: true, limitsConfirmed: true };
@@ -68,6 +68,7 @@ async function show(groupId: string, factoryGroups: FactoryGroups = groups) {
   render();
   await nextTick();
   await nextTick();
+  await expandSteps();
 }
 const cardTitle = (id: string) =>
   $(`#main .gf-card[data-line="${id}"] .gf-head .rail-link`)?.textContent?.trim();
@@ -191,7 +192,9 @@ test('an own line’s card is named as its build-plan step, "Wire for Alpha"', a
   assert.equal(cardTitle(ownLine(ALPHA)), 'Wire for Alpha ↗');
   // The Stator card says where its Wire comes from by the same name, and so does the table.
   const statorWire = $(`#main [data-row="in|Recipe_Stator_C|Wire"]`)!;
-  assert.match(statorWire.textContent ?? '', /from \d\d Wire for Alpha/);
+  const chip = statorWire.querySelector<HTMLButtonElement>('button.gf-chip')!;
+  assert.match(chip.textContent ?? '', /^\s*from \d\d\s*$/);
+  assert.match(chip.getAttribute('aria-label') ?? '', /^Go to step \d\d Wire for Alpha$/);
   const cells = $$('#main [data-gf-table] td').map(cell => cell.textContent?.trim());
   assert.ok(cells.includes('Wire for Alpha'), 'the lines table names it');
   // Under a "Line" header, not "Recipe": an own line and the central one share a recipe (#947).
