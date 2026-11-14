@@ -146,7 +146,7 @@ const view = computed(() =>
   >
   <p id="build-cost-note" class="small muted">
     Each phase must then also make the parts its buildings cost, or it is a draft that says so.
-    <HelpPopover name="buildCostNote" topic="counting what buildings cost" />
+    <HelpPopover name="buildCostNote" topic="Count what buildings cost to build" />
   </p>
   <h3>
     Production you already run <HelpTip name="existingSupply" topic="Production you already run" />
@@ -155,6 +155,6 @@ const view = computed(() =>
   <p class="small muted" data-explain>
     Other settings are notes only; phase plans assume the necessary milestones and
     <Term term="mam" text="MAM" /> research are unlocked.
-    <HelpPopover name="settingsNotes" topic="other settings" />
+    <HelpPopover name="settingsNotes" topic="Other settings" />
   </p>
 </template>

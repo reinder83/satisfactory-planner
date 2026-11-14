@@ -751,7 +751,7 @@ test('the map’s help is behind "?", not in a paragraph under the heading', asy
   assert.equal($('.world-map > p.small:not([data-map-attribution])'), null, 'no paragraph of keys');
   assert.doesNotMatch($('.world-map')!.textContent!, /arrow keys/);
   const help = $<HTMLButtonElement>('[data-map-frame] [data-help="mapHelp"]')!;
-  assert.equal(help.getAttribute('aria-label'), 'Help: the world map');
+  assert.equal(help.getAttribute('aria-label'), 'Help: World map');
   assert.ok(help.closest('[data-map-tools]'), 'with the zoom buttons');
   assert.equal(document.querySelector('[data-help-tip]'), null, 'closed: no text in the page');
   help.click();

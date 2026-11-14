@@ -915,7 +915,7 @@ function onPanelKey(e: KeyboardEvent) {
             </template>
             <span v-else-if="stepNote" data-flow-step-note>{{ stepNote }}</span>
           </span>
-          <HelpPopover name="flowGraphHelp" topic="the flow graph" />
+          <HelpPopover name="flowGraphHelp" topic="Flow graph" />
           <label v-if="view.quiet && !readonly" class="fgraph-switch">
             <input
               type="checkbox"

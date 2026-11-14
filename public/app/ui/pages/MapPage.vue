@@ -1093,7 +1093,7 @@ function onKey(e: KeyboardEvent) {
           >
             Fit
           </button>
-          <HelpPopover name="mapHelp" topic="the world map" />
+          <HelpPopover name="mapHelp" topic="World map" />
         </div>
       </div>
     </div>

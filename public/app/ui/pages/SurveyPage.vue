@@ -176,7 +176,7 @@ function submit() {
             <a :href="MAP_URL" target="_blank" rel="noreferrer"
               >Satisfactory Calculator interactive map</a
             >, upload your save there and copy the counts it lists into the next two screens.
-            <HelpPopover name="surveySource" topic="the interactive map" />
+            <HelpPopover name="surveySource" topic="Counting nodes by hand" />
           </div>
           <h2>How you will mine them</h2>
           <p>
@@ -310,7 +310,7 @@ function submit() {
           </div>
           <p class="small muted">
             Already-run production is a different question, asked separately.
-            <HelpPopover name="surveyAlreadyRun" topic="production you already run" />
+            <HelpPopover name="surveyAlreadyRun" topic="Already-run production" />
           </p>
         </template>
         <p
