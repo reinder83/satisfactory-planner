@@ -571,13 +571,20 @@ function keepSiteTicks(
   state.onSiteReview = { checks };
   return unticked;
 }
-// `group` with only the moved lines of its flow graph layout that are rows in `rows`; without a
-// layout left, without the field.
+// `group` with only the moved lines of its flow graph layout (and the lines pushed to a later step,
+// #1345) that are rows in `rows`; without a layout left, without the field. The step names stay.
 function carriedLayout(group: FactoryGroup, rows: ReadonlySet<string>): FactoryGroup {
-  if (!group.layout?.nodes) return group;
-  const { nodes, ...view } = group.layout;
-  const kept = Object.fromEntries(Object.entries(nodes).filter(([row]) => rows.has(row)));
-  const layout = { ...view, ...(Object.keys(kept).length ? { nodes: kept } : {}) };
+  if (!group.layout?.nodes && !group.layout?.steps) return group;
+  const { nodes, steps, ...view } = group.layout;
+  const only = <T>(record: Record<string, T> | undefined) =>
+    Object.fromEntries(Object.entries(record ?? {}).filter(([row]) => rows.has(row)));
+  const kept = only(nodes),
+    pushed = only(steps);
+  const layout = {
+    ...view,
+    ...(Object.keys(kept).length ? { nodes: kept } : {}),
+    ...(Object.keys(pushed).length ? { steps: pushed } : {}),
+  };
   const { layout: _old, ...rest } = group;
   return Object.keys(layout).length ? { ...rest, layout } : rest;
 }

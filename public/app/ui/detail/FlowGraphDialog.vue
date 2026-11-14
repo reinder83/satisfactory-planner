@@ -51,10 +51,26 @@
   and the tags switch are left out, and the layout is never saved while such a tab is open
   (useGraphLayout's `readonly`: not the spots, the tags, the zoom or the scroll). Switching tab
   first saves what a zoom or scroll of the phase on screen's tab was still waiting to save.
+  Steps (FG-8, #1345): each column of lines is a step, headed "Step 1", "Step 2" … above the
+  graph (`data-step-name`), a name the user can change in place (a press or Enter on the header;
+  Enter saves, Esc cancels, an empty name is the default again; `stepNames`, state version 32) and
+  the build order page shows the same names. There is no way to add a step by hand: the steps come
+  from what feeds what. To build a line later, drag its box into the "New step" column that shows
+  at the right edge of the drawing while a box is dragged (`data-flow-newstep`), or choose "Move to
+  step …" in the ⋯ menu of the selection panel (the keyboard's way): the line then sits in that
+  step at the earliest (`steps`, state version 32, a floor per line), the lines it feeds follow it,
+  and the build order follows (groupFlow, flow-steps.ts). A step a line cannot reach because a line
+  feeding it sits in or after it says "needs 03 first" and nothing moves. A move offers Undo (the
+  button beside Tidy up, or Ctrl+Z) like Tidy up does, which also puts every line back in its own
+  step, after asking. The drop only changes the step: the box goes back to where it was drawn, so
+  a graph arranged by hand keeps its arrangement.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { openCalculatedFactory } from '../../factory-detail.ts';
+import { earliestStep, flowFeeds, lineSteps, movedFloors } from '../../flow-steps.ts';
+import { lineNumber } from '../../views/group-flow-page.ts';
+import { confirmAction } from '../confirm.ts';
 import { closeDetail } from '../actions.ts';
 import { focusFlowLine } from '../flow-line-focus.ts';
 import FlowGraphPanel from './FlowGraphPanel.vue';
@@ -140,9 +156,9 @@ function pickTab(key: StageKey) {
 const view = computed(() =>
   legacy(() => {
     const name = factoryGroupsState().groups.find(group => group.id === props.id)?.name ?? null;
-    const flow = name === null ? null : shownGroupFlow(props.id, shown.value);
+    const flow = name === null ? null : shownGroupFlow(props.id, shown.value, layout.steps.value);
     const graph = flow?.lines.length
-      ? flowGraph(flow, itemRate, machines, { tags: layout.tags.value })
+      ? flowGraph(flow, itemRate, machines, { tags: layout.tags.value, steps: layout.steps.value })
       : null;
     // The tags switch is offered while something goes to storage or the sink.
     const quiet = !!graph?.edges.some(edge => edge.quiet);
@@ -150,6 +166,7 @@ const view = computed(() =>
       name,
       phase: phaseLabel(readonly.value ? shown.value : phase()),
       working: phaseLabel(phase()),
+      flow,
       graph,
       quiet,
     };
@@ -319,8 +336,9 @@ const moveNode = (node: string, to: GraphPoint) => putNode(node, snapSpot(to.x, 
 const { zoom, panning, moving, show, zoomIn, zoomOut, fit, handlers, onClickCapture } =
   useGraphPanZoom(box, () => placed.value, {
     at: nodeAt,
-    move: moveNode,
-    drop: () => layout.now(),
+    grab: grabNode,
+    move: dragMove,
+    drop: dropNode,
   });
 const zoomText = computed(() => `${Math.round(zoom.value * 100)}%`);
 
@@ -344,7 +362,8 @@ const selectNode = (id: string) => {
 };
 // A press on the drawing's background (not on a box, a tag or an arrow) clears the selection.
 function onBackground(e: MouseEvent) {
-  if ((e.target as Element).closest('[data-node], [data-tag], [data-edge-hit]')) return;
+  if ((e.target as Element).closest('[data-node], [data-tag], [data-edge-hit], [data-step]'))
+    return;
   selected.value = null;
 }
 const panel = ref<InstanceType<typeof FlowGraphPanel> | null>(null);
@@ -453,32 +472,225 @@ function onNodeKey(e: KeyboardEvent, node: GraphNode) {
   layout.later();
   void keepInView(node.id);
 }
-// What Tidy up replaced, for Undo (FG-3): the spots of the lines, inputs and outputs and the view.
+// What the last change replaced, for Undo (FG-3, FG-8): the spots of the lines, inputs and
+// outputs, the lines pushed to a later step and, for Tidy up, the view; `text` says what was done.
 // Null when there is nothing to undo.
 const tidied = ref<{
+  text: string;
   spots: Record<string, [number, number]>;
   places: Record<string, [number, number]>;
-  view: GraphView;
+  steps: Record<string, number>;
+  view: GraphView | null;
 } | null>(null);
+
+// Steps (FG-8, #1345). A step's name is the user's or "Step 3"; in a list "Step 3 · Steel".
+const stepName = (step: number) => layout.stepNames.value[String(step)] || `Step ${step}`;
+const stepWords = (step: number) => {
+  const name = layout.stepNames.value[String(step)];
+  return name ? `Step ${step} · ${name}` : `Step ${step}`;
+};
+// What a move of a line needs to know: the lines in build order, what feeds what, the step each
+// sits in now and how many steps there are.
+const stepFacts = computed(() => {
+  const flow = view.value.flow,
+    graph = view.value.graph;
+  if (!flow || !graph) return null;
+  const ids = flow.lines.map(line => line.id),
+    feeds = flowFeeds(flow.lines);
+  return {
+    flow,
+    ids,
+    feeds,
+    steps: lineSteps(ids, feeds, layout.steps.value),
+    count: graph.columns.length,
+  };
+});
+// A message with nothing to undo (a move that did not happen), in the toolbar's status.
+const stepNote = ref('');
+const lineName = (row: string) =>
+  view.value.graph?.nodes.find(node => node.id === 'line:' + row)?.label ?? row;
+// Puts line `row` in step `step` at the earliest, or back in its own (`'own'`). A step before one a
+// line feeding it sits in snaps back with "needs 03 first", and one that changes nothing says so.
+// Offers Undo. Returns whether the line moved.
+function moveToStep(row: string, step: number | 'own'): boolean {
+  const facts = stepFacts.value;
+  if (!facts || readonly.value) return false;
+  const { ids, feeds, steps, flow } = facts;
+  const { step: earliest, after } = earliestStep(row, ids, feeds, steps);
+  const target = step === 'own' ? earliest : step;
+  if (target < earliest) {
+    const needed = flow.lines.find(line => line.id === after);
+    stepNote.value = `Needs ${needed ? lineNumber(needed.no) : ''} first: the line stays where it is.`;
+    return false;
+  }
+  const floors = movedFloors(layout.steps.value, steps, row, target, earliest);
+  const result = lineSteps(ids, feeds, floors);
+  if (ids.every(id => result.get(id) === steps.get(id))) {
+    stepNote.value = `${lineName(row)} is already in ${stepWords(steps.get(row) ?? 1)}.`;
+    return false;
+  }
+  stepNote.value = '';
+  tidied.value = {
+    text: `Moved ${lineName(row)} to ${stepWords(result.get(row) ?? target)}.`,
+    spots: { ...layout.spots.value },
+    places: { ...layout.places.value },
+    steps: { ...layout.steps.value },
+    view: null,
+  };
+  layout.steps.value = floors;
+  activeNode.value = null;
+  layout.now();
+  return true;
+}
+// The steps the selected line can be moved to, for the panel's menu: every other step, and a new
+// one after the last unless the line is alone in it. A step it cannot reach is listed with the
+// line it needs first.
+const moveChoices = computed(() => {
+  const facts = stepFacts.value,
+    row = selection.value?.row;
+  if (!facts || !row || readonly.value) return { moves: [], own: false };
+  const here = facts.steps.get(row);
+  const { step: earliest, after } = earliestStep(row, facts.ids, facts.feeds, facts.steps);
+  const needed = facts.flow.lines.find(line => line.id === after);
+  const alone = [...facts.steps.values()].filter(step => step === facts.count).length === 1;
+  const moves: { step: number; label: string; needs: string | null }[] = [];
+  for (let step = 1; step <= facts.count + 1; step++) {
+    if (step === here || (step === facts.count + 1 && here === facts.count && alone)) continue;
+    moves.push({
+      step,
+      label: step > facts.count ? 'a new step at the end' : stepWords(step),
+      needs: step < earliest && needed ? lineNumber(needed.no) : null,
+    });
+  }
+  return { moves, own: (layout.steps.value[row] ?? 1) > 1 };
+});
+
+// A drag of a line's box shows the "New step" column at the right edge of the box; dropping it
+// there pushes the line to a new step after the last. The boxes go back where they were drawn
+// before the drag, so only the step changes.
+const dragging = ref<string | null>(null);
+const overNewStep = ref(false);
+const newStepZone = ref<HTMLElement | null>(null);
+let held: {
+  spots: Record<string, [number, number]>;
+  places: Record<string, [number, number]>;
+  settling: boolean;
+} | null = null;
+function grabNode(node: string) {
+  if (readonly.value || lineRowOf(node) === null) return;
+  held = {
+    spots: { ...layout.spots.value },
+    places: { ...layout.places.value },
+    settling: settling.value,
+  };
+  dragging.value = node;
+  stepNote.value = '';
+}
+const inNewStep = (pointer?: GraphPoint) => {
+  const zone = newStepZone.value?.getBoundingClientRect();
+  return (
+    !!zone &&
+    !!pointer &&
+    pointer.x >= zone.left &&
+    pointer.x <= zone.right &&
+    pointer.y >= zone.top &&
+    pointer.y <= zone.bottom
+  );
+};
+function dragMove(node: string, to: GraphPoint, pointer?: GraphPoint) {
+  moveNode(node, to);
+  overNewStep.value = dragging.value !== null && inNewStep(pointer);
+}
+function dropNode(node: string, pointer?: GraphPoint) {
+  const row = lineRowOf(node),
+    was = held,
+    into = dragging.value !== null && inNewStep(pointer);
+  dragging.value = null;
+  overNewStep.value = false;
+  held = null;
+  if (into && row !== null && was) {
+    layout.spots.value = was.spots;
+    layout.places.value = was.places;
+    settling.value = was.settling;
+    const count = stepFacts.value?.count ?? 0;
+    moveToStep(row, count + 1);
+  }
+  layout.now();
+}
+
+// A step's name changed in place (FG-8): Enter saves, Esc cancels, an empty name is the default.
+const editingStep = ref<number | null>(null);
+const draft = ref('');
+const nameInput = ref<HTMLInputElement | null>(null);
+const setNameInput = (el: unknown) => {
+  nameInput.value = el instanceof HTMLInputElement ? el : null;
+};
+async function startRename(step: number) {
+  if (readonly.value) return;
+  editingStep.value = step;
+  draft.value = layout.stepNames.value[String(step)] ?? '';
+  await nextTick();
+  nameInput.value?.focus();
+  nameInput.value?.select();
+}
+async function endRename(save: boolean) {
+  const step = editingStep.value;
+  if (step === null) return;
+  editingStep.value = null;
+  if (save) {
+    const name = draft.value.trim(),
+      next = { ...layout.stepNames.value };
+    if (name) next[String(step)] = name;
+    else delete next[String(step)];
+    if (JSON.stringify(next) !== JSON.stringify(layout.stepNames.value)) {
+      layout.stepNames.value = next;
+      layout.now();
+    }
+  }
+  await nextTick();
+  document.querySelector<HTMLElement>(`[data-step-name="${step}"]`)?.focus();
+}
+function onStepKey(e: KeyboardEvent, step: number) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  void startRename(step);
+}
 // Lays the graph out again as the automatic layout draws it, at natural size, from the top-left
 // corner: the moved boxes' spots go (saved like a drag, layout.now). No question is asked, since
 // Undo puts everything back.
 async function tidyUp() {
   if (readonly.value) return;
+  // Lines pushed to a later step go back too: that changes the build order, so it is asked first.
+  if (
+    Object.keys(layout.steps.value).length &&
+    !(await confirmAction({
+      title: 'Put every line back in its own step?',
+      body: 'Tidy up also clears the lines you pushed to a later step, so the build order follows what feeds what again. The names of the steps stay. Undo brings the steps back.',
+      confirmLabel: 'Tidy up',
+    }))
+  )
+    return;
   const el = box.value;
   const before = {
     spots: { ...layout.spots.value },
     places: { ...layout.places.value },
+    steps: { ...layout.steps.value },
     view: { zoom: zoom.value, left: el?.scrollLeft ?? 0, top: el?.scrollTop ?? 0 },
   };
-  const moved = Object.keys(before.spots).length + Object.keys(before.places).length > 0;
+  const moved =
+    Object.keys(before.spots).length +
+      Object.keys(before.places).length +
+      Object.keys(before.steps).length >
+    0;
+  stepNote.value = '';
   layout.spots.value = {};
   layout.places.value = {};
+  layout.steps.value = {};
   await show({ zoom: 1, left: 0, top: 0 });
   layout.now();
   // Undo is offered when something was replaced: a moved box, or a zoom or scroll the reset undid.
   const viewed = before.view.zoom !== 1 || before.view.left !== 0 || before.view.top !== 0;
-  tidied.value = moved || viewed ? before : null;
+  tidied.value = moved || viewed ? { text: 'Tidied up.', ...before } : null;
 }
 // Undo of Tidy up: the boxes and the view back as they were, saved.
 async function undoTidy() {
@@ -487,7 +699,9 @@ async function undoTidy() {
   tidied.value = null;
   layout.spots.value = back.spots;
   layout.places.value = back.places;
-  await show(back.view);
+  layout.steps.value = back.steps;
+  layout.now();
+  if (back.view) await show(back.view);
   layout.now();
 }
 // Ctrl+Z (⌘Z) while the graph is open undoes Tidy up, unless it is typing in a field.
@@ -574,10 +788,11 @@ function onPanelKey(e: KeyboardEvent) {
           </button>
           <span class="fgraph-undo small muted" role="status">
             <template v-if="tidied && !readonly">
-              Tidied up.
+              <span data-flow-undo-text>{{ tidied.text }}</span>
               <button class="btn" type="button" data-flow-tidy-undo @click="undoTidy">Undo</button>
               <kbd>Ctrl+Z</kbd>
             </template>
+            <span v-else-if="stepNote" data-flow-step-note>{{ stepNote }}</span>
           </span>
           <HelpPopover name="flowGraphHelp" topic="the flow graph" />
           <label v-if="view.quiet && !readonly" class="fgraph-switch">
@@ -590,130 +805,187 @@ function onPanelKey(e: KeyboardEvent) {
             Show storage and sink as tags
           </label>
         </div>
-        <div
-          ref="box"
-          :class="['fgraph-scroll', { panning, moving }]"
-          tabindex="0"
-          role="group"
-          :aria-label="graphName"
-          data-flow-graph
-          v-on="handlers"
-          @click.capture="onClickCapture"
-          @click="onBackground"
-          @scroll="layout.later()"
-        >
-          <svg
-            class="fgraph"
-            :width="placed.width * zoom"
-            :height="placed.height * zoom"
-            :viewBox="`0 0 ${placed.width} ${placed.height}`"
-            role="none"
+        <div class="fgraph-wrap">
+          <div
+            v-if="dragging"
+            ref="newStepZone"
+            :class="['fgraph-newstep', { over: overNewStep }]"
+            data-flow-newstep
+            aria-hidden="true"
           >
-            <defs aria-hidden="true">
-              <marker
-                id="fgraph-arrow"
-                viewBox="0 0 8 8"
-                refX="7"
-                refY="4"
-                markerWidth="8"
-                markerHeight="8"
-                orient="auto"
-              >
-                <path d="M0,0 L8,4 L0,8 Z" />
-              </marker>
-            </defs>
-            <template v-for="edge in drawn" :key="edge.id">
-              <path
-                :class="edgeClass(edge)"
-                :d="edge.path!"
-                :data-edge="edge.id"
-                :marker-end="arrowOf(edge)"
-                aria-hidden="true"
-              />
-              <path
-                class="fgraph-hit"
-                :d="edge.path!"
-                :data-edge-hit="edge.id"
-                aria-hidden="true"
-                @pointerenter="hoveredEdge = edge.id"
-                @pointerleave="leaveEdge(edge.id)"
-              >
-                <title>{{ edgeTitle(edge) }}</title>
-              </path>
-            </template>
-            <template v-for="node in placed.nodes" :key="node.id">
-              <g
-                :class="[
-                  'fgraph-node',
-                  node.kind,
-                  { on: lit?.node === node.id, sel: selected === node.id },
-                ]"
-                :data-node="node.id"
-                :transform="`translate(${node.x},${node.y})`"
-                v-bind="node.kind === 'line' ? lineAttrs(node) : placeAttrs(node)"
-                @click="selectNode(node.id)"
-                @keydown="onNodeKey($event, node)"
-                @pointerenter="activeNode = node.id"
-                @pointerleave="leaveNode(node.id)"
-                @focus="onNodeFocus($event, node)"
-                @blur="leaveNode(node.id)"
-              >
-                <title v-if="node.rateTitle">{{ rateTitle(node) }}</title>
-                <rect :width="node.width" :height="node.height" />
-                <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
-                <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
-                <text
-                  v-for="(text, i) in node.rateLines"
-                  :key="i"
-                  class="fgraph-caption fgraph-rate"
-                  :data-node-rate="i"
-                  x="10"
-                  :y="37 + (i + 1) * GRAPH.textLine"
-                >
-                  {{ text }}
-                </text>
-                <text
-                  v-if="node.selfNote"
-                  class="fgraph-caption"
-                  x="10"
-                  :y="37 + (node.rateLines.length + 1) * GRAPH.textLine"
-                >
-                  {{ shortText(node.selfNote, GRAPH.captionChars) }}
-                </text>
-              </g>
-              <g
-                v-for="tag in tagsOf(node)"
-                :key="tag.id"
-                :class="tagClass(tag)"
-                :data-tag="tag.id"
-                :transform="`translate(${tag.left},${tag.top})`"
-                tabindex="0"
-                role="img"
-                :aria-label="tag.name"
-              >
-                <title>{{ tag.name }}</title>
-                <rect :width="tag.width" :height="GRAPH.tagHeight" rx="2" />
-                <text x="6" y="12.5">{{ tag.text }}</text>
-              </g>
-            </template>
-            <g
-              v-for="edge in drawn"
-              :key="'label-' + edge.id"
-              :class="['fgraph-label', labelOf(edge).state, { quiet: edge.quiet }]"
-              :data-edge-label="edge.id"
-              :transform="`translate(${labelOf(edge).x},${labelOf(edge).y})`"
-              aria-hidden="true"
+            <strong>New step</strong>
+            <span>Drop here to build this line after step {{ stepFacts?.count ?? 1 }}</span>
+          </div>
+          <div
+            ref="box"
+            :class="['fgraph-scroll', { panning, moving }]"
+            tabindex="0"
+            role="group"
+            :aria-label="graphName"
+            data-flow-graph
+            v-on="handlers"
+            @click.capture="onClickCapture"
+            @click="onBackground"
+            @scroll="layout.later()"
+          >
+            <svg
+              class="fgraph"
+              :width="placed.width * zoom"
+              :height="placed.height * zoom"
+              :viewBox="`0 0 ${placed.width} ${placed.height}`"
+              role="none"
             >
-              <rect
-                :x="-edge.label!.width / 2"
-                :y="-GRAPH.labelHeight / 2"
-                :width="edge.label!.width"
-                :height="GRAPH.labelHeight"
-              />
-              <text text-anchor="middle" y="-2">{{ edge.item }}</text>
-              <text text-anchor="middle" y="11">{{ edge.rateText }}</text>
-            </g>
-          </svg>
+              <defs aria-hidden="true">
+                <marker
+                  id="fgraph-arrow"
+                  viewBox="0 0 8 8"
+                  refX="7"
+                  refY="4"
+                  markerWidth="8"
+                  markerHeight="8"
+                  orient="auto"
+                >
+                  <path d="M0,0 L8,4 L0,8 Z" />
+                </marker>
+              </defs>
+              <template v-for="edge in drawn" :key="edge.id">
+                <path
+                  :class="edgeClass(edge)"
+                  :d="edge.path!"
+                  :data-edge="edge.id"
+                  :marker-end="arrowOf(edge)"
+                  aria-hidden="true"
+                />
+                <path
+                  class="fgraph-hit"
+                  :d="edge.path!"
+                  :data-edge-hit="edge.id"
+                  aria-hidden="true"
+                  @pointerenter="hoveredEdge = edge.id"
+                  @pointerleave="leaveEdge(edge.id)"
+                >
+                  <title>{{ edgeTitle(edge) }}</title>
+                </path>
+              </template>
+              <template v-for="node in placed.nodes" :key="node.id">
+                <g
+                  :class="[
+                    'fgraph-node',
+                    node.kind,
+                    { on: lit?.node === node.id, sel: selected === node.id },
+                  ]"
+                  :data-node="node.id"
+                  :transform="`translate(${node.x},${node.y})`"
+                  v-bind="node.kind === 'line' ? lineAttrs(node) : placeAttrs(node)"
+                  @click="selectNode(node.id)"
+                  @keydown="onNodeKey($event, node)"
+                  @pointerenter="activeNode = node.id"
+                  @pointerleave="leaveNode(node.id)"
+                  @focus="onNodeFocus($event, node)"
+                  @blur="leaveNode(node.id)"
+                >
+                  <title v-if="node.rateTitle">{{ rateTitle(node) }}</title>
+                  <rect :width="node.width" :height="node.height" />
+                  <text class="fgraph-name" x="10" y="19">{{ node.shortLabel }}</text>
+                  <text class="fgraph-caption" x="10" y="37">{{ node.shortCaption }}</text>
+                  <text
+                    v-for="(text, i) in node.rateLines"
+                    :key="i"
+                    class="fgraph-caption fgraph-rate"
+                    :data-node-rate="i"
+                    x="10"
+                    :y="37 + (i + 1) * GRAPH.textLine"
+                  >
+                    {{ text }}
+                  </text>
+                  <text
+                    v-if="node.selfNote"
+                    class="fgraph-caption"
+                    x="10"
+                    :y="37 + (node.rateLines.length + 1) * GRAPH.textLine"
+                  >
+                    {{ shortText(node.selfNote, GRAPH.captionChars) }}
+                  </text>
+                </g>
+                <g
+                  v-for="tag in tagsOf(node)"
+                  :key="tag.id"
+                  :class="tagClass(tag)"
+                  :data-tag="tag.id"
+                  :transform="`translate(${tag.left},${tag.top})`"
+                  tabindex="0"
+                  role="img"
+                  :aria-label="tag.name"
+                >
+                  <title>{{ tag.name }}</title>
+                  <rect :width="tag.width" :height="GRAPH.tagHeight" rx="2" />
+                  <text x="6" y="12.5">{{ tag.text }}</text>
+                </g>
+              </template>
+              <g
+                v-for="edge in drawn"
+                :key="'label-' + edge.id"
+                :class="['fgraph-label', labelOf(edge).state, { quiet: edge.quiet }]"
+                :data-edge-label="edge.id"
+                :transform="`translate(${labelOf(edge).x},${labelOf(edge).y})`"
+                aria-hidden="true"
+              >
+                <rect
+                  :x="-edge.label!.width / 2"
+                  :y="-GRAPH.labelHeight / 2"
+                  :width="edge.label!.width"
+                  :height="GRAPH.labelHeight"
+                />
+                <text text-anchor="middle" y="-2">{{ edge.item }}</text>
+                <text text-anchor="middle" y="11">{{ edge.rateText }}</text>
+              </g>
+              <g
+                v-for="column in placed.columns"
+                :key="'step-' + column.step"
+                :class="['fgraph-step', { named: !!layout.stepNames.value[String(column.step)] }]"
+                :data-step="column.step"
+                :transform="`translate(${column.x},0)`"
+              >
+                <foreignObject
+                  v-if="editingStep === column.step"
+                  x="0"
+                  y="0"
+                  :width="GRAPH.nodeWidth"
+                  height="26"
+                >
+                  <input
+                    :ref="setNameInput"
+                    v-model="draft"
+                    class="fgraph-step-input"
+                    maxlength="40"
+                    :placeholder="'Step ' + column.step"
+                    :aria-label="'Name of step ' + column.step"
+                    data-step-input
+                    @keydown.enter.prevent="endRename(true)"
+                    @keydown.esc.prevent.stop="endRename(false)"
+                    @blur="endRename(true)"
+                    @pointerdown.stop
+                  />
+                </foreignObject>
+                <g
+                  v-else
+                  :class="['fgraph-step-head', { edit: !readonly }]"
+                  :data-step-name="column.step"
+                  :tabindex="readonly ? undefined : 0"
+                  :role="readonly ? undefined : 'button'"
+                  :aria-label="
+                    readonly ? undefined : `${stepWords(column.step)}. Enter renames it.`
+                  "
+                  @click="startRename(column.step)"
+                  @keydown="onStepKey($event, column.step)"
+                >
+                  <title v-if="!readonly">Rename this step</title>
+                  <rect :width="GRAPH.nodeWidth" height="18" />
+                  <text x="0" y="13">{{ shortText(stepName(column.step), GRAPH.nameChars) }}</text>
+                </g>
+              </g>
+            </svg>
+          </div>
         </div>
         <FlowGraphPanel
           v-if="selection"
@@ -723,6 +995,13 @@ function onPanelKey(e: KeyboardEvent) {
           :outs="selection.outs"
           :row="selection.row"
           :readonly="readonly"
+          :moves="moveChoices.moves"
+          :own="moveChoices.own"
+          :note="stepNote"
+          :undo-text="tidied?.text ?? ''"
+          @undo="undoTidy"
+          @move="moveToStep(selection.row, $event)"
+          @own="moveToStep(selection.row, 'own')"
           @clear="selected = null"
           @line="openLine"
           @order="openOrder"

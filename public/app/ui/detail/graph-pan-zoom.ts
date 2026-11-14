@@ -44,10 +44,14 @@ interface Press {
 // (null for one that does not move), `move` puts it somewhere else (drawing units, whole and never
 // above or left of the drawing) as the pointer moves, and `drop` runs once when a drag that moved
 // it ends.
+// `grab` runs once as a drag of the box starts, before its first move (FG-8, #1345: to keep where
+// the boxes were), and `move` and `drop` are given where the pointer is (client px; none for a drag a
+// second finger ended), for a drop target that is not part of the drawing.
 export interface GraphLineDrag {
   at(node: string): GraphPoint | null;
-  move(node: string, to: GraphPoint): void;
-  drop(node: string): void;
+  grab?(node: string): void;
+  move(node: string, to: GraphPoint, pointer?: GraphPoint): void;
+  drop(node: string, pointer?: GraphPoint): void;
 }
 
 export function useGraphPanZoom(
@@ -143,17 +147,24 @@ export function useGraphPanZoom(
     };
   }
   // The box under a drag, moved as far as the pointer, in the drawing's units.
-  function dragLine(el: HTMLElement, current: Press, dx: number, dy: number) {
+  function dragLine(el: HTMLElement, current: Press, e: PointerEvent) {
     const line = current.line;
     if (!line) return;
     if (!line.moved) {
+      lines?.grab?.(line.node);
       line.moved = moving.value = true;
       el.setPointerCapture?.(current.id);
     }
-    lines?.move(line.node, {
-      x: Math.max(0, Math.round(line.from.x + dx / zoom.value)),
-      y: Math.max(0, Math.round(line.from.y + dy / zoom.value)),
-    });
+    const dx = e.clientX - current.start.x;
+    const dy = e.clientY - current.start.y;
+    lines?.move(
+      line.node,
+      {
+        x: Math.max(0, Math.round(line.from.x + dx / zoom.value)),
+        y: Math.max(0, Math.round(line.from.y + dy / zoom.value)),
+      },
+      { x: e.clientX, y: e.clientY },
+    );
   }
   function onPointerDown(e: PointerEvent) {
     const el = box.value;
@@ -204,7 +215,7 @@ export function useGraphPanZoom(
     const dx = e.clientX - press.start.x;
     const dy = e.clientY - press.start.y;
     if (!press.panning && !press.line?.moved && Math.hypot(dx, dy) < PAN_THRESHOLD) return;
-    if (press.line) return dragLine(el, press, dx, dy);
+    if (press.line) return dragLine(el, press, e);
     if (!press.panning) {
       press.panning = panning.value = true;
       el.setPointerCapture?.(e.pointerId);
@@ -218,7 +229,7 @@ export function useGraphPanZoom(
     if (press?.panning || line?.moved) dragged = true;
     press = null;
     panning.value = moving.value = false;
-    if (line?.moved) lines?.drop(line.node);
+    if (line?.moved) lines?.drop(line.node, { x: e.clientX, y: e.clientY });
     // A finger left after a pinch moves the drawing from where it is now.
     const el = box.value;
     const [rest] = [...pointers.entries()];

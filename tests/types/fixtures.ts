@@ -534,6 +534,38 @@ export const version31 = {
   detailLevel: 'expert',
 } satisfies SavedState;
 
+// Version 32 (#1345): a factory's flow graph with a line pushed to a later step (the Plates
+// factory's iron plate line, to step 3 at the earliest) and two named steps, on top of version 31.
+// The other factory's graph is as version 31 had it. Synthetic.
+export const version32 = {
+  ...version31,
+  version: 32,
+  factoryGroups: {
+    ...version31.factoryGroups,
+    groups: [
+      {
+        id: 'fg-plates1',
+        name: 'Plates',
+        owner: 'Anna',
+        layout: {
+          nodes: { 'iron-plate': [420, 96], Recipe_IronPlate_C: [16, 260] },
+          places: {
+            'in:supply/Iron Ore': [15, 40],
+            'out:fg-wires1': [900, 95],
+            'out:sink': [900, 300],
+          },
+          zoom: 0.8,
+          pan: [120, 40],
+          tags: true,
+          steps: { 'iron-plate': 3 },
+          stepNames: { '1': 'Smelting', '3': 'Plates' },
+        },
+      },
+      version31.factoryGroups.groups[1]!,
+    ],
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -568,6 +600,7 @@ export const states: [SavedState, number][] = [
   [version29, 29],
   [version30, 30],
   [version31, 31],
+  [version32, 32],
 ];
 
 export const backup = {

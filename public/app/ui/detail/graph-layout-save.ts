@@ -2,7 +2,9 @@
 // production lines the user moved, the zoom and the scroll offsets, stored per factory group as
 // groups[].layout (state version 22) with the factoryGroupLayout update, and with them whether
 // storage and the sink are shown as tags (#1231, `tags`, version 23 while on) and the spots of the
-// inputs and outputs the user moved (#1240, `places`, version 25 while any). FlowGraphDialog.vue
+// inputs and outputs the user moved (#1240, `places`, version 25 while any), the lines pushed to a
+// later step and the names of the steps (#1345, `steps`, `stepNames`, version 32 while any).
+// FlowGraphDialog.vue
 // reads the stored layout once as it opens and keeps the spots and the tags here while it is open,
 // so a drag shows at once and the save's reply never moves a box back. A save goes:
 // - when a drag of a box ends, or the tags are switched on or off, at once (`now`);
@@ -50,6 +52,9 @@ export function useGraphLayout(
       ]),
     ),
   );
+  // The lines pushed to a later step and the names of the steps (#1345, state version 32).
+  const steps = ref<Record<string, number>>({ ...stored?.steps });
+  const stepNames = ref<Record<string, string>>({ ...stored?.stepNames });
   // "Show storage and sink as tags" (#1231): off unless this factory stored it on.
   const tags = ref(stored?.tags === true);
   // What was last stored or sent, as JSON; '' after a failed save, which nothing equals.
@@ -71,6 +76,8 @@ export function useGraphLayout(
       factoryLineRows(rows, factoryGroupsState(), groupId),
       tags.value,
       places.value,
+      steps.value,
+      stepNames.value,
     );
   }
   function now() {
@@ -98,5 +105,5 @@ export function useGraphLayout(
   onBeforeUnmount(() => {
     if (timer !== undefined) now();
   });
-  return { stored, spots, places, tags, now, later, settled, storedView: seen };
+  return { stored, spots, places, tags, steps, stepNames, now, later, settled, storedView: seen };
 }

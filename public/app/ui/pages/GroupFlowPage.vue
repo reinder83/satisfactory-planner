@@ -9,7 +9,11 @@
   card (one at a time, or all of them with "Expand all"; printing opens them all). Each input names
   its source as a chip (BO-2): "from 01" moves to that step, another factory's name opens its
   build order. Then what leaves, with the AWESOME Sink and protected storage folded into one
-  summary. "The diagram as a table" says it all again as text. The model is groupFlow
+  summary. The steps follow the flow graph's (FG-8, #1345): a line the user pushed to a later step
+  there is built in that step's turn, and a step the user named in the graph is named on each of
+  its lines here, "Step 2 · Smelting" (a step with the default name says nothing; the plan's order
+  is not grouped by step unless a line was pushed, so the name sits on every line). "The diagram
+  as a table" says it all again as text. The model is groupFlow
   (group-flow.ts); the words are views/group-flow-page.ts.
 
   Phase tabs (#1317, PhaseTabs.vue) under the buttons: one per phase of the plan, opening on the
@@ -46,6 +50,7 @@ import { currentBuildStatus, heldBack, lineCountOf } from '../../views/calculate
 import type { CalcRow, StageKey } from '../../../types/index.ts';
 import { factoryGroupsState, machineLine } from '../../views/factories.ts';
 import { comesIn, flowNames, lineNumber } from '../../views/group-flow-page.ts';
+import { flowFeeds, lineSteps } from '../../flow-steps.ts';
 import { legacy } from '../bridge.ts';
 import FlowCard from '../group-flow/FlowCard.vue';
 import FlowComesIn from '../group-flow/FlowComesIn.vue';
@@ -66,6 +71,8 @@ interface Step {
   mark: string;
   words: string;
   row?: CalcRow;
+  // "Step 2 · Smelting" on a line in a step the user named in the flow graph (FG-8), else ''.
+  head: string;
 }
 
 // The tab picked here, with the address it was written to: while the address is still that one the
@@ -89,12 +96,23 @@ const page = computed(() =>
     const running = (lineId: string) => current && checked(`calc-${shown}-${lineId}`);
     // The step to build next: the first line of the factory not running yet.
     const next = current ? flow?.lines.find(line => !running(line.id))?.id : undefined;
+    // The steps of the lines as the flow graph has them, and the names the user gave them (FG-8).
+    const layout = groups.groups.find(group => group.id === groupId)?.layout;
+    const stepOf = lineSteps(
+      (flow?.lines ?? []).map(line => line.id),
+      flowFeeds(flow?.lines ?? []),
+      layout?.steps ?? {},
+    );
     const steps: Step[] = (flow?.lines ?? []).map(line => {
       const row = rows.get(line.id);
+      const number = stepOf.get(line.id) ?? 1;
+      const given = layout?.stepNames?.[String(number)];
+      const head = given ? `Step ${number} · ${given}` : '';
       const base = {
         id: line.id,
         no: lineNumber(line.no),
         name: line.name,
+        head,
         summary:
           machineLine(line.machines, line.machine, line.lastClock, line.clock) +
           (line.inputs.length ? ' · needs ' + line.inputs.map(input => input.item).join(', ') : ''),
@@ -246,6 +264,8 @@ function printPage() {
                   <span class="chain-no">{{ step.no }}</span
                   >{{ ' ' }}<span class="gf-step-name">{{ step.name }}</span
                   >{{ ' '
+                  }}<span v-if="step.head" class="gf-steptag" data-gf-navhead>{{ step.head }}</span
+                  >{{ ' '
                   }}<span
                     v-if="step.state !== 'plain'"
                     class="gf-step-mark"
@@ -260,6 +280,7 @@ function printPage() {
           <div class="gf-main">
             <ol class="gf-stack">
               <li v-for="step in page.steps" :key="step.id" :data-step="step.id">
+                <h3 v-if="step.head" class="gf-stephead" data-gf-stephead>{{ step.head }}</h3>
                 <FlowCard
                   v-if="isOpen(step.id)"
                   :line="page.flow.lines.find(line => line.id === step.id)!"

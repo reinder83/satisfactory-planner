@@ -22,6 +22,7 @@
 // (#876, insideLinks). The caller names each line (LineName), so the page names a group's own
 // line as its build-plan step does, "Wire for Alpha" (#896). Everything in the model is data:
 // the page measures and draws it.
+import { stepOrder, type StepFloors, type StepFeed } from './flow-steps.ts';
 import { groupedRows, LINK_DUST, rowPlaces } from './group-order.ts';
 import {
   groupLinks,
@@ -506,9 +507,25 @@ function placeFlow(
   phase: PhaseBooks,
   belts: BeltsFor,
   carry: LinkWords = () => belts,
+  floors: StepFloors = {},
 ): { parts: GroupPart[]; ports: CrossingPorts; links: FlowLink[] } {
-  const parts = groupParts(stage, groups, placeId);
-  const inside = insideLinks(parts, phase.books, belts, placeId);
+  let parts = groupParts(stage, groups, placeId);
+  let inside = insideLinks(parts, phase.books, belts, placeId);
+  // Lines the user pushed to a later step (#1345) are built in that step's turn: the lines in the
+  // order of their steps, and the links between them worked out again for it (a link that was a
+  // loop may not be one any more).
+  const order = stepOrder(
+    parts.map(part => part.row.id),
+    inside.flatMap((link): StepFeed[] =>
+      link.from.kind === 'line' && link.to.kind === 'line' ? [[link.from.id, link.to.id]] : [],
+    ),
+    floors,
+  );
+  if (order.some((id, i) => id !== parts[i]!.row.id)) {
+    const byId = new Map(parts.map(part => [part.row.id, part]));
+    parts = order.map(id => byId.get(id)!);
+    inside = insideLinks(parts, phase.books, belts, placeId);
+  }
   const ports = crossingPorts(stage, groups, placeId, carry, phase.links);
   const links = [...inside, ...portLinks(parts, ports, belts, inside, phase.books.local, placeId)];
   return { parts, ports, links };
@@ -528,7 +545,8 @@ export const placeLinks = (
 // `belts` words the belts or pipes of a rate (BeltsFor), `name` names a line (LineName),
 // `planned` is the plan's settings.onSite, the items made on site for each group (itemBooks), and
 // `carry` words how each link into or out of the group travels (LinkWords, #1067), on `belts`
-// without one. Deterministic: it reads only its arguments.
+// without one. `floors` are the lines the user pushed to a later step (#1345, flow-steps.ts): the
+// lines come in the order of their steps. Deterministic: it reads only its arguments.
 export function groupFlow(
   stage: StoredStage,
   groups: FactoryGroups,
@@ -537,6 +555,7 @@ export function groupFlow(
   name: LineName = rowName,
   planned?: OnSiteSettings,
   carry?: LinkWords,
+  floors?: StepFloors,
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
   const books = itemBooks(stage, groups, planned);
@@ -547,6 +566,7 @@ export function groupFlow(
     { books, links: groupLinks(stage, groups, planned) },
     belts,
     carry,
+    floors,
   );
   const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts, name));
   const folded = ports.outs.filter(port => FOLDED.has(port.place));

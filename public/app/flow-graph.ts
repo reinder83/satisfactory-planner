@@ -19,6 +19,7 @@
 // destination on their line's right edge instead ("▣ 2/min", "♻ 4.3/min"), and the two places'
 // boxes are left out; the edges stay in `edges` for the table. Every label sits at the middle of
 // its curve, slid along it where it would cover something (spreadLabels in graph-labels.ts).
+import type { StepFloors } from './flow-steps.ts';
 import type { FlowLine, FlowLink, GroupFlow, PortKind } from './group-flow.ts';
 import { OUTSIDE } from './group-links.ts';
 import {
@@ -144,11 +145,21 @@ export interface GraphTag {
   width: number;
 }
 
+// One step of the graph (FG-8, #1345): the column the lines of that step sit in, from step 1, with
+// where the column starts in the automatic layout.
+export interface GraphColumn {
+  step: number;
+  layer: number;
+  x: number;
+}
+
 export interface FlowGraph {
   group: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
   tags: GraphTag[];
+  // The steps, one per column of lines, left to right (none without a line).
+  columns: GraphColumn[];
   layers: number;
   // Crossings of the automatic layout's arrows (the forward ones, as laid out): every pair, and the
   // pairs of arrows that are not quiet (storage and sink arrows are thin and grey, FG-1).
@@ -163,6 +174,9 @@ export interface FlowGraph {
 // What a graph is drawn with: `tags` draws the storage and sink flows as tags on their lines.
 export interface GraphOptions {
   tags?: boolean;
+  // The lines pushed to a later step by plan row id (#1345, flow-steps.ts): a line sits in that
+  // step at the earliest, and steps nobody sits in are left out.
+  steps?: StepFloors;
   // How hard the order of the boxes in each column is worked at (FG-1, #1343): see Ordering.
   // Default ORDERING; a test passes PREVIOUS_ORDERING to count the crossings the layout had before.
   ordering?: Ordering;
@@ -249,6 +263,7 @@ export function flowGraph(
     edges.filter(edge => !edge.asTag),
     tags,
     options.ordering ?? ORDERING,
+    options.steps ?? {},
   );
   const byId = new Map(nodes.map(node => [node.id, node]));
   const width =
@@ -258,11 +273,27 @@ export function flowGraph(
     nodes,
     edges,
     tags,
+    columns: lineColumns(nodes),
     layers: Math.max(0, ...nodes.map(node => node.layer + 1)),
     crossings,
     width,
     height: graphHeight(bottom, edges),
   };
+}
+
+// The steps of the laid out graph (#1345): each layer holding a line is a step, numbered from 1,
+// starting at its left-most box.
+function lineColumns(nodes: readonly GraphNode[]): GraphColumn[] {
+  const layers = [...new Set(nodes.filter(node => node.kind === 'line').map(node => node.layer))];
+  return layers
+    .sort((a, b) => a - b)
+    .map((layer, i) => ({
+      step: i + 1,
+      layer,
+      x: Math.min(
+        ...nodes.filter(node => node.kind === 'line' && node.layer === layer).map(node => node.x),
+      ),
+    }));
 }
 
 // What a tag says for its destination, and the start of its name (#1231).
@@ -470,9 +501,10 @@ function layOut(
   edges: GraphEdge[],
   tags: readonly GraphTag[],
   ordering: Ordering,
+  floors: StepFloors,
 ): { bottom: number; crossings: { all: number; loud: number } } {
   const byId = new Map(nodes.map(node => [node.id, node]));
-  assignLayers(nodes, edges, byId);
+  assignLayers(nodes, edges, byId, floors);
   const forward = edges.filter(edge => edge.note !== 'self' && isForward(edge, byId));
   fitPorts(nodes, forward);
   const { layers, chains } = slotLayers(nodes, forward, byId);
@@ -506,22 +538,33 @@ const isForward = (edge: GraphEdge, byId: ReadonlyMap<string, GraphNode>) =>
   nodeOf(byId, edge.to).layer > nodeOf(byId, edge.from).layer;
 
 // Layer 0 for the places sending in (none: the lines start at 0), each line one past the furthest
-// line feeding it that is built before it, and the places receiving one past the last line.
+// line feeding it that is built before it, and the places receiving one past the last line. A line
+// the user pushed to a later step (`floors`, #1345) sits there at the earliest, and the layers
+// nobody sits in are closed up (the same steps as lineSteps in flow-steps.ts gives the build order).
 function assignLayers(
   nodes: GraphNode[],
   edges: GraphEdge[],
   byId: ReadonlyMap<string, GraphNode>,
+  floors: StepFloors = {},
 ) {
   const first = nodes.some(node => node.kind === 'in') ? 1 : 0;
   let last = first;
   for (const node of nodes) {
     if (node.kind !== 'line') continue;
-    let layer = first;
+    let layer = Math.max(first, first + Math.floor(floors[node.id.slice('line:'.length)] ?? 1) - 1);
     for (const edge of edges)
       if (edge.to === node.id && edge.note === '' && edge.from.startsWith('line:'))
         layer = Math.max(layer, nodeOf(byId, edge.from).layer + 1);
     node.layer = layer;
     last = Math.max(last, layer);
+  }
+  if (Object.keys(floors).length) {
+    const used = [
+      ...new Set(nodes.filter(node => node.kind === 'line').map(node => node.layer)),
+    ].sort((a, b) => a - b);
+    for (const node of nodes)
+      if (node.kind === 'line') node.layer = first + used.indexOf(node.layer);
+    last = first + Math.max(0, used.length - 1);
   }
   const out = nodes.some(node => node.kind === 'line') ? last + 1 : first;
   for (const node of nodes) if (node.kind === 'out') node.layer = out;

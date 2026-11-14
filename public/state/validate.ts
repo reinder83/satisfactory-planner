@@ -179,6 +179,12 @@ const hasOwners = (factoryGroups: FactoryGroups) => factoryGroups.groups.some(gr
 export const LAYOUT_LIMITS = {
   nodes: 1000,
   places: 500,
+  // Lines pushed to a later step (#1345), the highest step one may name, the named steps and the
+  // longest name.
+  steps: 1000,
+  stepMax: 100,
+  stepNames: 100,
+  stepNameChars: 40,
   coordinate: 100000,
   zoomMin: 0.1,
   zoomMax: 3,
@@ -255,6 +261,43 @@ export function groupLayout(value: unknown): GroupLayout | undefined {
     if (typeof value.tags !== 'boolean') fail('Invalid factory layout.');
     if (value.tags) layout.tags = true;
   }
+  // Lines pushed to a later step (#1345), by row id: the step each sits in at the earliest, from 2
+  // (step 1 is where every line may sit, so it says nothing and is left out).
+  if (value.steps !== undefined) {
+    if (!plain(value.steps) || Object.keys(value.steps).length > LAYOUT_LIMITS.steps)
+      fail('Invalid factory layout.');
+    const steps: Record<string, number> = {};
+    for (const [row, step] of Object.entries(value.steps)) {
+      if (
+        !safeKey(row) ||
+        typeof step !== 'number' ||
+        !Number.isSafeInteger(step) ||
+        step < 1 ||
+        step > LAYOUT_LIMITS.stepMax
+      )
+        fail('Invalid factory layout.');
+      if (step > 1) steps[row] = step;
+    }
+    if (Object.keys(steps).length) layout.steps = steps;
+  }
+  // The names the user gave the flow graph's steps (#1345), by step number ("1", "2", …): trimmed;
+  // a blank one is the default name again and is left out.
+  if (value.stepNames !== undefined) {
+    if (!plain(value.stepNames) || Object.keys(value.stepNames).length > LAYOUT_LIMITS.stepNames)
+      fail('Invalid factory layout.');
+    const names: Record<string, string> = {};
+    for (const [step, name] of Object.entries(value.stepNames)) {
+      if (
+        !/^[1-9][0-9]{0,2}$/.test(step) ||
+        Number(step) > LAYOUT_LIMITS.stepMax ||
+        typeof name !== 'string' ||
+        name.trim().length > LAYOUT_LIMITS.stepNameChars
+      )
+        fail('Invalid factory layout.');
+      if (name.trim()) names[step] = name.trim();
+    }
+    if (Object.keys(names).length) layout.stepNames = names;
+  }
   return Object.keys(layout).length ? layout : undefined;
 }
 // Whether any group has a flow graph layout: that state is version 22 (#1224).
@@ -266,6 +309,10 @@ const hasTagLayouts = (factoryGroups: FactoryGroups) =>
 // Whether any group's flow graph has a moved input or output: version 25 (#1240).
 const hasPlaceLayouts = (factoryGroups: FactoryGroups) =>
   factoryGroups.groups.some(group => group.layout?.places);
+// Whether any group's flow graph has a line pushed to a later step or a named step: version 32
+// (#1345).
+const hasStepLayouts = (factoryGroups: FactoryGroups) =>
+  factoryGroups.groups.some(group => group.layout?.steps || group.layout?.stepNames);
 const hasTaskEdits = (edits: TaskEdits) =>
   edits.removed.length ||
   Object.keys(edits.order).length +
@@ -1092,12 +1139,12 @@ export function validateState(state: unknown): ProgressState {
     !plain(state) ||
     ![
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-      27, 28, 29, 30, 31,
+      27, 28, 29, 30, 31, 32,
     ].includes(state.version as number)
   )
     fail(
       // Compared as the old code did, so a version given as "32" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 31
+      ((state as Raw | null | undefined)?.version as number) > 32
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -1301,6 +1348,12 @@ export function validateState(state: unknown): ProgressState {
   // instead. A state without one (every state before #1337, and a profile whose level was never
   // picked) keeps the version above.
   if (clean.detailLevel) clean.version = 31;
+  // A factory's flow graph with a line pushed to a later step or a named step
+  // (groups[].layout.steps and .stepNames, #1345) is 32: a version-31 release's lenient
+  // validation would drop them and put the lines back in their own steps, so it refuses the state
+  // with its update message instead. A state without any (every state before #1345, and a graph
+  // whose lines were all put back and names cleared) keeps the version above.
+  if (hasStepLayouts(clean.factoryGroups)) clean.version = 32;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
