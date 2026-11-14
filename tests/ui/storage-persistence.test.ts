@@ -113,7 +113,11 @@ test('persisted() false says the browser may clear the saves and offers "Keep my
   assert.equal(persistence.value, 'kept');
   assert.equal($('[data-persistence-status]')!.getAttribute('data-persistence-status'), 'kept');
   assert.equal($('[data-persist-storage]'), null);
-  assert.equal(document.activeElement, $('main h1'), 'focus moved to the heading when the button left');
+  assert.equal(
+    document.activeElement,
+    $('main h1'),
+    'focus moved to the heading when the button left',
+  );
 });
 
 test('a refused request keeps the warning and the button', async () => {

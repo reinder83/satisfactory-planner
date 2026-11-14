@@ -100,3 +100,26 @@ test('the flow graph list and its toggle are phone-only, rows are 44px targets (
   assert.match(rule(phone, '.fgraph-list-line'), /min-height:\s*44px/);
   assert.match(rule(phone, '.fgraph-list'), /display:\s*block/);
 });
+
+test('the controls measured under 44px on a phone grow their target without growing their row (A11Y-1)', () => {
+  // A step's title row is padded and pulled back by the same amount; the toggles and the map's
+  // corner switch have a floor; the header's profile link pads an inline box.
+  const row = rule(phone, '.task summary');
+  assert.match(row, /padding-block:\s*9px/);
+  assert.match(row, /margin-block:\s*-9px/);
+  assert.match(rule(phone, '.collapse-toggle'), /min-width:\s*44px/);
+  assert.match(rule(phone, '.map-layers.map-corner-tr .map-layer-toggle'), /min-height:\s*44px/);
+  const link = rule(phone, '.topbar .breadcrumbs .crumb-profile');
+  assert.match(link, /padding-block:\s*13px/);
+  assert.match(link, /margin-block:\s*-13px/);
+});
+
+test('the survey budgets table is one block per resource on a narrow phone (ONB-6 polish)', () => {
+  const narrow = blocks('@media (max-width: 560px)');
+  assert.match(rule(narrow, '.budget-table tr'), /display:\s*grid/);
+  assert.match(rule(narrow, '.budget-table td:last-child'), /grid-column:\s*1 \/ -1/);
+  assert.match(
+    rule(narrow, '.budget-table td[data-label]::before'),
+    /content:\s*attr\(data-label\)/,
+  );
+});

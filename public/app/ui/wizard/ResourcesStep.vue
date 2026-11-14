@@ -109,7 +109,9 @@ const overclock = ref(!!draft().settings.overclock);
       :checked="!!draft().settings.waterOverclock" /><span
       >Suggest overclocked Water Extractors<br /><small class="muted" data-explain
         >Picks which way is suggested first and counted in the power total.
-        <HelpPopover name="waterOverclock" topic="Suggest overclocked Water Extractors" /></small></span
+        <HelpPopover
+          name="waterOverclock"
+          topic="Suggest overclocked Water Extractors" /></small></span
   ></label>
   <div v-if="perPhase" class="table-wrap phase-budgets" data-phase-budgets>
     <table>

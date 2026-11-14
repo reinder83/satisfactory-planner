@@ -29,7 +29,7 @@ function contrast(a: string, b: string) {
 function mediaBlocks(source: string) {
   const blocks: { query: string; body: string }[] = [];
   const at = /@media([^{]*)\{/g;
-  for (let m; (m = at.exec(source)); ) {
+  for (let m; (m = at.exec(source));) {
     let depth = 1;
     let i = at.lastIndex;
     for (; i < source.length && depth; i++)
@@ -129,8 +129,7 @@ test('a literal text colour in a rule also reaches 4.5:1 (A11Y-1)', () => {
       luminance(hex) > 0.18 ? surfaces : [tokens.accent!, tokens.green!, tokens.gold!, '#ffffff'];
     for (const surface of against) {
       const ratio = contrast(hex, surface);
-      if (ratio < 4.5)
-        failures.push(`${selector}: ${hex} on ${surface}: ${ratio.toFixed(2)}:1`);
+      if (ratio < 4.5) failures.push(`${selector}: ${hex} on ${surface}: ${ratio.toFixed(2)}:1`);
     }
   }
   assert.deepEqual(failures, []);

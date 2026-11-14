@@ -94,7 +94,8 @@ export function useTipPopup() {
     const left = Math.max(TIP_MARGIN, Math.min(anchor.left, width - TIP_MARGIN - size.width));
     const roomBelow = height - TIP_MARGIN - (anchor.bottom + TIP_GAP),
       roomAbove = anchor.top - TIP_GAP - TIP_MARGIN;
-    const placeBelow = size.height <= roomBelow || (size.height > roomAbove && roomBelow >= roomAbove);
+    const placeBelow =
+      size.height <= roomBelow || (size.height > roomAbove && roomBelow >= roomAbove);
     const room = Math.max(0, placeBelow ? roomBelow : roomAbove);
     const shown = Math.min(size.height, room);
     if (size.height > room) box.style.maxHeight = `${Math.floor(room)}px`;

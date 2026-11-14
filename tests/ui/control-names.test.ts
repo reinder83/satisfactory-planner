@@ -121,3 +121,44 @@ test('under reduced motion the save dot and ADA’s mark, in every tone, do not 
   const fault = css.indexOf(".ada[data-tone='fault'] .ada-mark {");
   assert.ok(fault > 0 && fault < css.indexOf('@media (prefers-reduced-motion: reduce)'));
 });
+
+// A11Y-1 (#1355): an icon button (a cross, a question mark, an arrow) is named for a screen reader.
+// A control's name is its aria-label, its aria-labelledby text, its label, its own text, an image's
+// alt inside it, or its title; one with none of them is read out as just "button".
+test('every button, link, field and disclosure on the pages has a name (A11Y-1)', async () => {
+  const named = (el: Element) => {
+    if (el.getAttribute('aria-label')?.trim()) return true;
+    const by = el.getAttribute('aria-labelledby');
+    if (by && by.split(/\s+/).some(id => document.getElementById(id)?.textContent?.trim()))
+      return true;
+    if ((el as HTMLInputElement).labels?.length) return true;
+    if (el.closest('label')?.textContent?.trim()) return true;
+    if (el.textContent?.replace(/\s+/g, '').length) return true;
+    if (el.querySelector('img[alt]:not([alt=""])')) return true;
+    return !!el.getAttribute('title')?.trim();
+  };
+  openMigrated();
+  const unnamed: string[] = [];
+  const routes = [
+    'plan',
+    'factories',
+    'logistics',
+    'storage',
+    'map',
+    'notes',
+    'backup',
+    'profiles',
+  ];
+  for (const route of routes) {
+    go(route);
+    render();
+    await settle();
+    const controls = $$(
+      '#app button, #app a[href], #app input:not([type=hidden], [type=file]), #app select, #app textarea, #app summary',
+    );
+    assert.ok(controls.length > 3, route + ' has controls to check');
+    for (const el of controls)
+      if (!named(el)) unnamed.push(route + ': ' + el.outerHTML.slice(0, 100));
+  }
+  assert.deepEqual(unnamed, []);
+});

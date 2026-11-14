@@ -184,6 +184,11 @@ test('a committed count updates its total, and the budgets take off what is comm
   const left = copper()!.querySelectorAll('td')[1]!;
   assert.equal(left.firstChild!.textContent!.trim(), '0/min', 'nothing is left');
   assert.ok(left.classList.contains('warn'), 'over the pool');
+  assert.match(
+    left.textContent!,
+    /More committed than the nodes give/,
+    'said in words, not by colour alone',
+  );
 });
 
 test('an unsurveyed resource is called out on the budgets screen, a complete survey is not', async () => {

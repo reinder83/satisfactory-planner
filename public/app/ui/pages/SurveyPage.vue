@@ -277,6 +277,9 @@ function submit() {
                       data-budget-breakdown
                       >{{ budget.breakdown }}</small
                     >
+                    <small v-if="budget.over" class="budget-breakdown" data-budget-over
+                      ><span aria-hidden="true">⚠ </span>More committed than the nodes give</small
+                    >
                   </td>
                   <td data-label="Already committed">
                     <span class="used-field"
