@@ -131,7 +131,7 @@ const view = computed(() =>
     <span data-explain
       >Whole machines cost more buildings, power and raw resources than exact clocks (the last
       machine of each line <Term term="underclock" text="underclocked" /> to the exact remainder).
-      <HelpPopover name="wholeMachinesCost" topic="what whole machines cost" /></span
+      <HelpPopover name="wholeMachinesCost" topic="Whole machines" /></span
     ><template v-if="view.cost"
       >{{ ' ' }}<span data-whole-machines-cost>{{ view.cost }}</span></template
     >

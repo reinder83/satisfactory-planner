@@ -92,6 +92,11 @@ test('every long explanation keeps all its words in the help texts (ONB-5)', () 
   // the visible summary.
   assert.match(helpText.surveyBudgets!, /free for this plan to use/);
   assert.match(helpText.surveySource!, /never sends your save anywhere/);
+  // The whole paragraph as it was, in its own order (#1355), not reworded around the link.
+  assert.match(
+    helpText.surveySource!,
+    /^Open the Satisfactory Calculator interactive map, upload your save file there, and it lists every resource node your world holds — including which are impure, normal and pure, and which resource wells you have found. Copy those counts into the next two screens. Uploading a save to that site is your decision and happens entirely between you and them; this planner never sends your save anywhere. If you would rather not, the map also works without a save and shows the default world's nodes.$/,
+  );
   assert.match(helpText.portals!, /the Satellite Portal does not consume cells/);
   assert.match(helpText.samConversion!, /Pure recipes still need unlocking/);
 });

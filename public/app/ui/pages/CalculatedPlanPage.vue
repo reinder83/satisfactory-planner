@@ -320,7 +320,7 @@ function tabKey(event: KeyboardEvent) {
               <HelpPopover
                 v-if="!page.guided && !page.milestones"
                 name="buildIntro"
-                topic="the build sequence"
+                topic="Build sequence"
             /></span>
             <span class="head-actions"
               ><a

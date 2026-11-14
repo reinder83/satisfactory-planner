@@ -72,7 +72,7 @@ const overclock = ref(!!draft().settings.overclock);
   <p data-explain>
     Enter the extraction you can allocate to this new plan, per minute, after existing factories and
     power fuel.
-    <HelpPopover name="resourceBudgets" topic="resource budgets" />
+    <HelpPopover name="resourceBudgets" topic="Available resource budgets" />
   </p>
   <div class="notice info">
     {{ view.description }}
@@ -109,14 +109,16 @@ const overclock = ref(!!draft().settings.overclock);
       :checked="!!draft().settings.waterOverclock" /><span
       >Suggest overclocked Water Extractors<br /><small class="muted" data-explain
         >Picks which way is suggested first and counted in the power total.
-        <HelpPopover name="waterOverclock" topic="overclocked Water Extractors" /></small></span
+        <HelpPopover
+          name="waterOverclock"
+          topic="Suggest overclocked Water Extractors" /></small></span
   ></label>
   <div v-if="perPhase" class="table-wrap phase-budgets" data-phase-budgets>
     <table>
       <caption class="small muted">
         These budgets are the most any phase draws; each phase gets what its miner, clock and belts
         take from the same nodes.
-        <HelpPopover name="phaseBudgets" topic="the budgets per phase" />
+        <HelpPopover name="phaseBudgets" topic="Budgets per phase" />
       </caption>
       <thead>
         <tr>

@@ -113,6 +113,11 @@ test('persisted() false says the browser may clear the saves and offers "Keep my
   assert.equal(persistence.value, 'kept');
   assert.equal($('[data-persistence-status]')!.getAttribute('data-persistence-status'), 'kept');
   assert.equal($('[data-persist-storage]'), null);
+  assert.equal(
+    document.activeElement,
+    $('main h1'),
+    'focus moved to the heading when the button left',
+  );
 });
 
 test('a refused request keeps the warning and the button', async () => {
@@ -216,4 +221,20 @@ test('a write that makes the first save (a new profile, an import) asks once, as
   await settle();
   assert.equal(calls.persist, 1, 'asked once, after the first write');
   assert.equal(calls.persisted, 1);
+});
+
+test('a preview, an estimate or a profile switch writes nothing and does not use up the ask', async () => {
+  vi.resetModules();
+  const { post } = await import('../../public/app/api.ts');
+  localStorage.clear();
+  const calls = stub(false, true);
+  await post('/api/preview', { settings: {} });
+  await post('/api/preview?estimate=1', { settings: {} });
+  await post('/api/select', { saveId: 'a', profileId: 'b' });
+  await settle();
+  assert.equal(calls.persist, 0, 'no save yet, so no ask');
+  assert.equal(localStorage.getItem(ASKED_KEY), null, 'and the ask is not marked as used');
+  await post('/api/import-saves', {}, false);
+  await settle();
+  assert.equal(calls.persist, 1, 'the first real save still asks');
 });

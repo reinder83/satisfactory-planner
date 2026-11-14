@@ -51,13 +51,16 @@
   --muted: #8a949c;
   /* Also every text field's border: at least 3:1 against each surface (#1256, WCAG 1.4.11);
      --line, the border before, was 1.4:1 (tests/field-contrast.test.ts). */
-  --dim: #7d878f;
+  /* Text too (#1355, WCAG 1.4.3): 4.5:1 against every surface it sits on, down to the bar
+     gradient's lighter stop (tests/text-contrast.test.ts); it was #7d878f, 4.1:1 on a bar. */
+  --dim: #868f97;
   --kicker: #8a949c;
   --accent: #f89c1c;
   --accent-hi: #ffb143;
   --accent-sh: #8a5507;
   --green: #6ee7a8;
-  --red: #e2593f;
+  /* Text and a status mark: 4.5:1 on every surface (#1355); it was #e2593f, 4.1:1 on a bar. */
+  --red: #ea6a52;
   --blue: #8fb7e8;
   --gold: #ffd79b;
   --warm-border: #4a3a1c;
@@ -1588,7 +1591,7 @@ p[data-proposal-rates] {
   }
 }
 .task:has(input:checked) summary {
-  color: #74837b;
+  color: var(--dim);
   text-decoration: line-through;
   text-decoration-color: #3c4449;
 }
@@ -6641,8 +6644,10 @@ button.rail-tile:hover {
     right: 16px;
     max-width: none;
   }
+  /* Under the one-row header while it shows (app/toast-place.ts sets --toast-top), so the Undo
+     toast does not cover the profile name and the phase select (#1355). */
   #toast[data-place='top'] {
-    top: 16px;
+    top: var(--toast-top, 16px);
   }
 }
 .completion-grid {
@@ -9534,6 +9539,54 @@ th.resource-cell {
   font-weight: 400;
   white-space: normal;
 }
+/* The budgets table on a phone (ONB-6 polish, #1355): it was 371px wide and scrolled inside its box,
+   clipping the committed field. Each resource is one block instead: its name and budget on a row,
+   the committed field under them with its column's name above it (the data-label of the cell). */
+@media (max-width: 560px) {
+  .budget-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .budget-table,
+  .budget-table tbody {
+    display: block;
+  }
+  .budget-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line2);
+  }
+  .budget-table td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .budget-table td.resource-name {
+    display: flex;
+  }
+  .budget-table td.budget-cell {
+    text-align: right;
+  }
+  .budget-table td:last-child {
+    grid-column: 1 / -1;
+  }
+  .budget-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
 .extraction-panel h3 {
   font-family: var(--head);
   font-size: 15px;
@@ -10618,5 +10671,29 @@ th.resource-cell {
   .fgraph-list-rates .muted {
     display: inline-block;
     min-width: 2.4em;
+  }
+}
+
+/* ── Touch targets on a phone (A11Y-1, #1355) ──────────── */
+/* 44px, measured in a real browser at 390px: the controls that were smaller. A build-plan step's
+   title row, a collapse toggle and the map's corner layer switches are made 44px. The padding
+   a row gets is cancelled by a negative margin, so no row grows, and its taps count in the padded
+   edge; the header's profile link takes its hit area from padding on an inline link in the same
+   way. The 40px steps of a factory's built counter at 400px and narrower stay (a 220px card needs
+   its one row), and inline text controls (a glossary term in a sentence) are exempt. */
+@media (max-width: 720px) {
+  .task summary {
+    padding-block: 9px;
+    margin-block: -9px;
+  }
+  .collapse-toggle {
+    min-width: 44px;
+  }
+  .map-layers.map-corner-tr .map-layer-toggle {
+    min-height: 44px;
+  }
+  .topbar .breadcrumbs .crumb-profile {
+    padding-block: 13px;
+    margin-block: -13px;
   }
 }

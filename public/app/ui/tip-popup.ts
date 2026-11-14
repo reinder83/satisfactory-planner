@@ -78,19 +78,28 @@ export function useTipPopup() {
   }
 
   // Place the open tooltip under the trigger (above it when it does not fit below but does
-  // above), shifted sideways by what would stick out of the window.
+  // above), shifted sideways by what would stick out of the window. A tooltip that fits on
+  // neither side (a long help with its button halfway down a phone) takes the roomier side and
+  // is capped to it, scrolling inside itself, so no line is cut off by the window's edge.
   function place() {
     const box = tip.value,
       anchorButton = button.value;
     if (!box || !anchorButton) return;
+    // Measured at its natural height, not the cap of an earlier placement.
+    box.style.maxHeight = '';
     const anchor = anchorButton.getBoundingClientRect(),
       width = document.documentElement.clientWidth || window.innerWidth,
       height = document.documentElement.clientHeight || window.innerHeight,
       size = box.getBoundingClientRect();
     const left = Math.max(TIP_MARGIN, Math.min(anchor.left, width - TIP_MARGIN - size.width));
-    const below = anchor.bottom + TIP_GAP,
-      above = anchor.top - TIP_GAP - size.height;
-    const top = below + size.height > height - TIP_MARGIN && above >= TIP_MARGIN ? above : below;
+    const roomBelow = height - TIP_MARGIN - (anchor.bottom + TIP_GAP),
+      roomAbove = anchor.top - TIP_GAP - TIP_MARGIN;
+    const placeBelow =
+      size.height <= roomBelow || (size.height > roomAbove && roomBelow >= roomAbove);
+    const room = Math.max(0, placeBelow ? roomBelow : roomAbove);
+    const shown = Math.min(size.height, room);
+    if (size.height > room) box.style.maxHeight = `${Math.floor(room)}px`;
+    const top = placeBelow ? anchor.bottom + TIP_GAP : anchor.top - TIP_GAP - shown;
     box.style.left = `${Math.round(left)}px`;
     box.style.top = `${Math.round(top)}px`;
   }

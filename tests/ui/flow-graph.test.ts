@@ -486,7 +486,7 @@ test('the instructions are behind a "?" button, not a paragraph over the graph',
   assert.equal($('#detail [data-flow-graph-help]'), null, 'no paragraph or fold over the graph');
   const help = $<HTMLButtonElement>('#detail [data-flow-graph-tools] [data-help="flowGraphHelp"]')!;
   assert.ok(help, 'the "?" is in the toolbar');
-  assert.equal(help.getAttribute('aria-label'), 'Help: the flow graph');
+  assert.equal(help.getAttribute('aria-label'), 'Help: Flow graph');
   assert.equal(help.getAttribute('aria-expanded'), 'false');
   assert.equal($('[data-help-tip]'), null, 'the text is not in the page while closed');
   help.click();

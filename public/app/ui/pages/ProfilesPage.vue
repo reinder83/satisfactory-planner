@@ -450,7 +450,7 @@ async function rename(
     }}</a>
     <!-- What the page's actions do, as a "?" (X-3, helpText.profilesHelp) rather than a paragraph
          at the bottom (PRO-4). -->
-    <HelpPopover name="profilesHelp" topic="saves and profiles" />
+    <HelpPopover name="profilesHelp" topic="Saves & profiles" />
   </div>
   <div v-if="page.imported.length" class="notice info import-notice" data-import-notice>
     <p>

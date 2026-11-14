@@ -27,7 +27,7 @@ onMounted(() => heading.value?.focus());
   >
     <h2 id="restore-changes-title" ref="heading" tabindex="-1">
       What the restore changed
-      <HelpPopover name="restoreChangesHelp" topic="the restore summary" />
+      <HelpPopover name="restoreChangesHelp" topic="What the restore changed" />
     </h2>
     <ul v-if="lines.length" class="restore-changes-list" data-restore-changes-list>
       <li v-for="line in lines" :key="line">{{ line }}</li>
