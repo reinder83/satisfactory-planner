@@ -67,6 +67,7 @@ import {
   trickleItems,
   transportFuel,
 } from '../../logistics.ts';
+import { estimateText, tripFromMap } from '../../train-proposal.ts';
 import { calcStage, calculated, stage as stageKey, state, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
@@ -94,6 +95,11 @@ const view = computed(() =>
         carrier = linkCarrier(groupsState.links, link.from, link.to),
         transport = carrierTransport(carrier),
         extract = carrier.kind === 'extract';
+      // The round trip a train between the two factories takes by the map when both have a place
+      // (LOG-2, #1347): a link switched to train starts with it (linkTransportUpdate). The round
+      // trip saved on the link always wins, 5 minutes included, for the box, the load and the fuel.
+      const places = state.factoryPlaces,
+        mapTrip = tripFromMap(undefined, [places?.[link.from], places?.[link.to]]).estimate;
       const mode: 'belt' | LinkMode = transport?.mode ?? 'belt';
       const vehicle = transport
         ? linkVehicleText(
@@ -133,6 +139,14 @@ const view = computed(() =>
         // page has one By, Round trip and Fuel per link, so their names tell them apart.
         between: `${name(link.from)} to ${name(link.to)}`,
         transport,
+        // What a switch to train starts the round trip with (linkTransportUpdate).
+        mapTrip: mapTrip?.minutes,
+        // The note under the round trip, "≈ 4.2 min estimate", while the train's saved round trip
+        // is the map's estimate, else none.
+        estimate:
+          transport?.mode === 'train' && mapTrip && transport.roundTripMin === mapTrip.minutes
+            ? { text: estimateText(mapTrip.minutes), km: num(mapTrip.km) }
+            : null,
         mode,
         modes: linkModeOptions(link.items, FLUIDS, mode, stageKey()),
         // A link saved on Fluid Trucks shown in a phase before them (#1177).
@@ -295,6 +309,7 @@ async function setTransport(
     link,
     change,
     linkSiblings(calculated?.stages, factoryGroupsState(), link, calculated?.settings.onSite),
+    link.mapTrip,
   );
   // Busy while it saves (app/busy.ts, #299). A select changed by a key meanwhile saves nothing and
   // shows the saved choice again.
@@ -550,12 +565,23 @@ function recalculate(event: Event) {
                         step="0.1"
                         :data-link-trip="link.key"
                         :aria-label="`Round trip in minutes: ${link.between}`"
+                        :aria-describedby="
+                          link.estimate ? `trip-estimate-${slug(link.key)}` : undefined
+                        "
                         :value="trips[link.key]"
                         @input="trips[link.key] = ($event.target as HTMLInputElement).value"
                         @change="setTrip($event, link)"
                         @blur="leaveDraft(trips, link.key, $event)"
                       />
-                      min</label
+                      min
+                      <span
+                        v-if="link.estimate"
+                        :id="`trip-estimate-${slug(link.key)}`"
+                        class="trip-estimate"
+                        :title="`The stations are about ${link.estimate.km} km apart on the map. Type your own round trip to replace it.`"
+                        data-link-trip-estimate
+                        >{{ link.estimate.text }}</span
+                      ></label
                     >
                     <label v-if="link.fuelled"
                       >Fuel

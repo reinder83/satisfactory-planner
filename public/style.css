@@ -2242,6 +2242,54 @@ p.eyebrow {
 .proposal-estimate {
   color: var(--ink);
 }
+/* A card's three columns (LOG-3, #1347): pick-up, drop-off, train with its round trip. One column
+   at the phone breakpoint. */
+.proposal-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.proposal-column {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.proposal-column p {
+  margin: 2px 0;
+}
+.proposal-column-title {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.proposal-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+.proposal-wagons {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+.proposal-column .proposal-trip {
+  margin-top: 8px;
+}
+@media (max-width: 720px) {
+  .proposal-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* "≈ 4.2 min estimate" beside a link's round trip (LOG-2, #1347). */
+.trip-estimate {
+  margin-left: 6px;
+  color: var(--muted);
+  font-style: italic;
+  white-space: nowrap;
+}
 /* Train stations on the Logistics page (#1284, ui/factories/TrainStations.vue): a card per
    station, its platforms numbered in order, and "+ Add train station" under them. */
 .train-stations {

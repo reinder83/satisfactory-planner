@@ -511,11 +511,14 @@ export function linkSiblings(
 
 // The factoryLinkTransport update that saves `link`'s transport with `change` applied: a new
 // vehicle starts with DEFAULT_TRIP_MIN and, when it burns fuel, DEFAULT_FUEL, unless the link
-// already had them.
+// already had them. A new train starts with `mapTrip` instead when there is one: the round trip
+// estimated from the factories' places on the map (LOG-2, #1347). From then on the round trip saved
+// on the link is the link's, 5 minutes included; nothing is ever read as "still the default".
 export function linkTransportUpdate(
   link: { from: string; to: string; mode: 'belt' | LinkMode; transport: LinkTransport | undefined },
   change: { mode?: 'belt' | LinkMode; roundTripMin?: number; fuel?: string },
   siblings: string[] | undefined,
+  mapTrip?: number,
 ): UpdateOp {
   const mode = change.mode ?? link.mode;
   return mode === 'belt'
@@ -531,7 +534,10 @@ export function linkTransportUpdate(
         from: link.from,
         to: link.to,
         mode,
-        roundTripMin: change.roundTripMin ?? link.transport?.roundTripMin ?? DEFAULT_TRIP_MIN,
+        roundTripMin:
+          change.roundTripMin ??
+          link.transport?.roundTripMin ??
+          (mode === 'train' && mapTrip ? mapTrip : DEFAULT_TRIP_MIN),
         ...(fuelledModes.includes(mode)
           ? { fuel: change.fuel ?? link.transport?.fuel ?? DEFAULT_FUEL }
           : {}),

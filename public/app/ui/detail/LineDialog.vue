@@ -26,6 +26,7 @@ import { announce } from '../../announce.ts';
 import { whileBusy } from '../../busy.ts';
 import { required } from '../../format.ts';
 import { state } from '../../session.ts';
+import { estimateText, tripFromMap } from '../../train-proposal.ts';
 import { moveAt, removeAt } from '../../train-stations.ts';
 import {
   DIRECTION_TEXT,
@@ -63,7 +64,10 @@ const missing = ref(false);
 const cars = ref<TrainCar[]>([...(start?.cars ?? [])]);
 const direction = ref<TrainDirection>(start?.direction ?? 'oneWay');
 // The round trip as typed ('' for none entered).
-const trip = ref<number | ''>(start?.roundTrip ?? '');
+const trip = ref<number | string>(start?.roundTrip ?? '');
+// Whether the player has touched the box: until then it shows the map's estimate (LOG-2, #1347)
+// when there is no round trip saved and every stop has a place; typing, even clearing it, ends that.
+const tripTouched = ref(false);
 const badTrip = ref(false);
 // The stops being edited, each with a key of its own so a moved stop keeps its row.
 let nextKey = 0;
@@ -71,6 +75,29 @@ const stops = ref<{ key: number; station: string }[]>(
   (start?.stops ?? []).map(station => ({ key: nextKey++, station })),
 );
 const stationName = (id: string) => stations.value.find(station => station.id === id)?.name ?? id;
+// Where each stop stands on the world map: its station's place, else its factory's.
+const stopPlace = (id: string) => {
+  const station = stations.value.find(entry => entry.id === id);
+  if (station?.place) return station.place;
+  return station?.owner?.kind === 'factory' ? state.factoryPlaces?.[station.owner.id] : undefined;
+};
+const mapTrip = computed(() => {
+  if (trip.value !== '' || tripTouched.value) return null;
+  const found = tripFromMap(
+    undefined,
+    stops.value.map(stop => stopPlace(stop.station)),
+    direction.value,
+  );
+  return found.source === 'map' ? found : null;
+});
+// The minutes the box holds: what was typed, else the estimate shown.
+const tripShown = computed(() => mapTrip.value?.minutes ?? trip.value);
+// A text that is no number yet stays as typed, for the box and the error under it.
+function typeTrip(event: Event) {
+  const text = (event.target as HTMLInputElement).value.trim();
+  tripTouched.value = true;
+  trip.value = text !== '' && Number.isFinite(Number(text)) ? Number(text) : text;
+}
 const toAdd = ref(stations.value[0]?.id ?? '');
 
 const form = ref<HTMLFormElement | null>(null);
@@ -81,7 +108,7 @@ async function focusOn(selector: string) {
 
 // The line as the draft has it now, for the checks and the wagon table.
 const draftLine = computed<TrainLine>(() => {
-  const minutes = trip.value === '' ? null : roundTripOf(trip.value);
+  const minutes = tripShown.value === '' ? null : roundTripOf(tripShown.value);
   return {
     id: start?.id ?? 'tl-draft',
     name: name.value.trim() || (start?.name ?? ''),
@@ -158,8 +185,8 @@ async function submit(event: Event) {
     element.querySelector<HTMLInputElement>('[data-line-name]')?.focus();
     return;
   }
-  const minutes = trip.value === '' ? null : roundTripOf(trip.value);
-  badTrip.value = trip.value !== '' && minutes === null;
+  const minutes = tripShown.value === '' ? null : roundTripOf(tripShown.value);
+  badTrip.value = tripShown.value !== '' && minutes === null;
   if (badTrip.value) {
     element.querySelector<HTMLInputElement>('[data-line-trip]')?.focus();
     return;
@@ -329,7 +356,7 @@ function typed() {
       </fieldset>
       <label class="field line-trip"
         >Round trip (minutes)<input
-          v-model.number="trip"
+          :value="tripShown"
           type="text"
           v-number
           inputmode="decimal"
@@ -339,7 +366,13 @@ function typed() {
           data-line-trip
           :aria-invalid="badTrip ? 'true' : undefined"
           aria-describedby="line-trip-help line-trip-error"
+          :data-trip-source="mapTrip ? 'map' : 'typed'"
+          @input="typeTrip"
       /></label>
+      <p v-if="mapTrip?.estimate" class="small" data-line-trip-estimate>
+        <strong class="proposal-estimate">{{ estimateText(mapTrip.estimate.minutes) }}</strong>
+        from the stops’ places on the world map. Edit it once you have timed a round in the game.
+      </p>
       <p id="line-trip-help" class="small muted">
         How long the train takes to come back to the first stop. Time one round in the game, or
         leave it empty for now.
