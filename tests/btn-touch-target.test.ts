@@ -265,7 +265,7 @@ test("a step's tick has a 24px label around its 18px box, 44px on a phone, in th
 test('check box rows, a slot tick and the links on a line of their own are 44px on a phone (#1256)', () => {
   assert.equal(px(phoneRule('.check-row'), 'min-height'), 44);
   assert.equal(px(phoneRule('.slot-complete'), 'min-height'), 44);
-  for (const selector of ['.plan-summary a', '[data-session-link]', '[data-phase-notes-link]']) {
+  for (const selector of ['.plan-summary a', '[data-phase-notes-link]']) {
     // A 24px box around the text on wider screens, the text and its underline unmoved.
     const after = outsideRule(selector + '::after');
     assert.equal(px(after, 'height'), 24, selector);

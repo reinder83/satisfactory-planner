@@ -1,20 +1,16 @@
-// "Expert mode" (#1197, app/expert.ts): a view preference remembered in this browser, never in a
-// profile, and never on together with "New to Satisfactory". Switched on, a new plan opens on All
-// settings, which takes three denser screens without the explanatory paragraphs (the same fields,
-// so the same answers give the same settings and the same plan), and the build plan groups its HUB
-// milestones by tier and its MAM research, with a tick per group that writes exactly the per-item
-// ticks. Switching it never calculates or saves anything.
+// The Expert detail level (#1337; "Expert mode" before it, #1197, app/expert.ts). Picked, a new
+// plan opens on All settings, which takes three denser screens without the explanatory paragraphs
+// (the same fields, so the same answers give the same settings and the same plan), and the build
+// plan groups its HUB milestones by tier and its MAM research, with a tick per group that writes
+// exactly the per-item ticks. Picking a level in the wizard never calculates or saves anything.
+// The level itself, its storage and the control are tested in detail-level.test.ts.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
-import { afterEach, beforeEach, test, vi } from 'vitest';
+import { afterEach, beforeEach, test } from 'vitest';
 import { carryOptions } from '../../public/state.ts';
-import { BEGINNER_KEY, beginnerMode, setBeginnerMode } from '../../public/app/beginner.ts';
-import {
-  EXPERT_KEY,
-  expertMode,
-  setExpertMode,
-  switchBeginnerMode,
-} from '../../public/app/expert.ts';
+import { beginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
+import { expertMode } from '../../public/app/expert.ts';
 import { setHideDone, setQuery, setWizard, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { startWizard } from '../../public/app/wizard/wizard.ts';
@@ -32,7 +28,7 @@ import {
   unstamped,
 } from './setup.ts';
 import type { WizardSettings } from '../../public/app/wizard/wizard.ts';
-import type { UpdateOp } from '../../public/types/index.ts';
+import type { DetailLevel, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
   for (let i = 0; i < 3; i++) {
@@ -48,105 +44,28 @@ const click = async (selector: string) => {
   el.click();
   await settle();
 };
-const flip = async (selector: string, value: boolean) => {
-  const box = $<HTMLInputElement>(selector);
-  assert.ok(box, selector + ' is on screen');
-  box.checked = value;
-  box.dispatchEvent(new Event('change', { bubbles: true }));
+// Picks a level on the detail level control on screen, as a click or an arrow key does.
+const pick = async (level: DetailLevel) => {
+  const radio = $<HTMLInputElement>(`#main [data-detail-option="${level}"]`);
+  assert.ok(radio, 'the detail level is on screen');
+  radio.checked = true;
+  radio.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
 };
 
 beforeEach(() => {
   page();
-  setBeginnerMode(false);
-  setExpertMode(false);
+  setBrowserDetail('standard');
   setQuery('');
   setHideDone(false);
   HTMLFormElement.prototype.reportValidity = () => true;
 });
-afterEach(() => {
-  setBeginnerMode(false);
-  setExpertMode(false);
-});
-
-test('the preference is remembered in this browser, off by default and when unreadable', async () => {
-  localStorage.removeItem(EXPERT_KEY);
-  vi.resetModules();
-  assert.equal((await import('../../public/app/expert.ts')).expertMode(), false, 'off by default');
-  setExpertMode(true);
-  assert.equal(localStorage.getItem(EXPERT_KEY), 'on');
-  vi.resetModules();
-  assert.equal((await import('../../public/app/expert.ts')).expertMode(), true, 'read back');
-  setExpertMode(false);
-  assert.equal(localStorage.getItem(EXPERT_KEY), 'off');
-  vi.resetModules();
-  assert.equal((await import('../../public/app/expert.ts')).expertMode(), false);
-  localStorage.setItem(EXPERT_KEY, 'on');
-  // Storage that refuses to be read, as blocked site data does.
-  const stored = localStorage;
-  vi.stubGlobal('localStorage', {
-    getItem: () => {
-      throw Error('refused');
-    },
-    setItem: () => {
-      throw Error('refused');
-    },
-  });
-  try {
-    vi.resetModules();
-    const refused = await import('../../public/app/expert.ts');
-    assert.equal(refused.expertMode(), false, 'unreadable');
-    refused.setExpertMode(true);
-    assert.equal(refused.expertMode(), true, 'switching still works for this page');
-  } finally {
-    vi.unstubAllGlobals();
-    stored.removeItem(EXPERT_KEY);
-  }
-  // A browser that somehow has both stored reads as a beginner.
-  localStorage.setItem(EXPERT_KEY, 'on');
-  localStorage.setItem(BEGINNER_KEY, 'on');
-  vi.resetModules();
-  const both = await import('../../public/app/expert.ts');
-  assert.equal(both.expertMode(), false);
-  localStorage.removeItem(EXPERT_KEY);
-  localStorage.removeItem(BEGINNER_KEY);
-});
-
-test('switching one mode on switches the other off, in storage too', () => {
-  setBeginnerMode(true);
-  setExpertMode(true);
-  assert.equal(expertMode(), true);
-  assert.equal(beginnerMode(), false, 'expert on: beginner off');
-  assert.equal(localStorage.getItem(BEGINNER_KEY), 'off');
-  switchBeginnerMode(true);
-  assert.equal(beginnerMode(), true);
-  assert.equal(expertMode(), false, 'beginner on: expert off');
-  assert.equal(localStorage.getItem(EXPERT_KEY), 'off');
-  switchBeginnerMode(false);
-  assert.equal(expertMode(), false, 'and it stays off');
-});
-
-test('the build plan offers both switches beside Hide completed, never both ticked', async () => {
-  open({ calculated: generated(), phase: '1' });
-  go('plan');
-  render();
-  await settle();
-  const requests = stubFetch({});
-  await flip('#main [data-beginner-switch]', true);
-  await flip('#main [data-expert-switch]', true);
-  assert.equal($<HTMLInputElement>('#main [data-expert-switch]')!.checked, true);
-  assert.equal($<HTMLInputElement>('#main [data-beginner-switch]')!.checked, false);
-  assert.ok($('#main [data-expert-note]'));
-  await flip('#main [data-beginner-switch]', true);
-  assert.equal($<HTMLInputElement>('#main [data-expert-switch]')!.checked, false);
-  assert.equal($('#main [data-unlock-groups]'), null, 'no groups outside expert mode');
-  assert.equal(requests.length, 0, 'nothing saved or calculated');
-});
+afterEach(() => setBrowserDetail('standard'));
 
 test('a new plan opens on All settings in three screens without the explanations', async () => {
   useStylesheet();
   open({ workspace: { catalog: catalog(), saves: [] } });
-  setExpertMode(true);
+  setBrowserDetail('expert');
   startWizard();
   render();
   await settle();
@@ -180,22 +99,22 @@ test('a new plan opens on All settings in three screens without the explanations
   assert.equal(text($('#wizard-form button[type=submit]')), 'Calculate plan');
   await click('[data-wizard-back]');
   assert.ok($('#wizard-form [name=saveName]'), 'Back lands on the first screen');
-  // Switched off on the screen: the five steps again, the draft as it was.
-  await flip('#wizard-form [data-expert-switch]', false);
+  // Standard picked on the screen: the five steps again, the draft as it was.
+  await pick('standard');
   assert.equal($$('#main [data-wizard-step]').length, 5);
   assert.equal($('#wizard-form [name=saveName]'), null, 'step 2 alone');
 });
 
-test('the guided start offers expert mode; on, it goes on to All settings as a non-beginner', async () => {
+test('the guided start offers Expert; picked, it goes on to All settings as a non-beginner', async () => {
   open({ workspace: { catalog: catalog(), saves: [] } });
   startWizard();
   render();
   await settle();
   assert.equal(wizard!.mode, 'guided');
-  await flip('#main [data-beginner-switch]', true);
+  await pick('beginner');
   assert.equal(wizard!.settings.storage, 'none', 'the beginner stock');
   $<HTMLInputElement>('#main [name=saveName]')!.value = 'Typed world';
-  await flip('#main [data-expert-switch]', true);
+  await pick('expert');
   assert.equal(beginnerMode(), false);
   assert.equal(expertMode(), true);
   assert.equal(wizard!.mode, 'advanced');
@@ -229,7 +148,7 @@ function answerOnScreen() {
 }
 async function settingsSent(expert: boolean, moves: string[]) {
   page();
-  setExpertMode(expert);
+  setBrowserDetail(expert ? 'expert' : 'standard');
   setWizard({
     step: 1,
     saveId: null,
@@ -272,7 +191,7 @@ test('the same answers give the same settings, and so the same plan, on either l
 let updates: [string, UpdateOp][];
 async function unlocksPage(checks: Record<string, boolean> = {}) {
   open({ calculated: generated(), phase: '1', state: { version: 3, checks } });
-  setExpertMode(true);
+  setBrowserDetail('expert');
   go('plan');
   render();
   await settle();
@@ -341,7 +260,7 @@ test('a group tick’s Undo puts each item back as it was', async () => {
 test('Hide completed and the search show only some items; the group tick still covers its tier', async () => {
   const plan = generated();
   open({ calculated: plan, phase: '1', state: { version: 3, checks: {} } });
-  setExpertMode(true);
+  setBrowserDetail('expert');
   go('plan');
   render();
   await settle();

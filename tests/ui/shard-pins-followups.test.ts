@@ -9,7 +9,7 @@ import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { calcFlowModel } from '../../public/app/flow.ts';
 import * as model from '../../public/app/group-flow.ts';
 import { flowRoute, setQuery, setWizard, viewOf } from '../../public/app/session.ts';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { render } from '../../public/app/shell.ts';
 import { machineLine } from '../../public/app/views/factories.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
@@ -37,7 +37,7 @@ const open3 = (plan: CurrentCalculatedPlan) => {
 
 beforeEach(() => {
   setWizard(null);
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
   setQuery('');
 });
 

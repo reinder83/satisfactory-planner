@@ -1049,6 +1049,14 @@ p[data-proposal-rates] {
 .section-head h2 {
   margin: 0;
 }
+/* The buttons at the end of a section heading, such as Today's session and Edit steps (BP-11). */
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
 /* A heading with its "?" beside it (X-3, ui/HelpPopover.vue). */
 .head-with-help {
   display: flex;
@@ -1085,6 +1093,13 @@ p[data-proposal-rates] {
 .task.lead .task-link {
   display: inline-flex;
   margin: 12px 12px 0 0;
+}
+/* "Then: <next step>" after the lead step's buttons (BP-6); a block of its own on a phone. */
+.task.lead .lead-then {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .task.lead.is-complete {
   grid-template-columns: minmax(0, 1fr);
@@ -1128,10 +1143,6 @@ p[data-proposal-rates] {
   flex: 1;
   min-width: 160px;
   padding: 9px 12px;
-}
-.checklist-tools .check-row {
-  white-space: nowrap;
-  color: var(--muted);
 }
 .checklist {
   display: grid;
@@ -1330,6 +1341,13 @@ p[data-proposal-rates] {
     border-top: 0;
   }
 }
+/* A long table's hidden rows and its "Show all" button (BP-5). */
+.step-table tr[hidden] {
+  display: none;
+}
+.step-table-more {
+  margin: 8px 0;
+}
 /* A step's body as a list (#1136, StepList.vue): a production line's byproduct advice, one
    paragraph per byproduct or input, or the hand-fed constructors. Long words wrap, so a phone
    never scrolls sideways. */
@@ -1345,6 +1363,56 @@ p[data-proposal-rates] {
 }
 .step-list li + li {
   margin-top: 5px;
+}
+/* A production line's step as the dialog's structure (BP-5, StepFacts.vue): the machine count, what
+   each machine makes, and the inputs and outputs, a rate to the right of each item. */
+.step-facts-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.step-facts-grid dt {
+  color: var(--muted);
+  font-family: var(--head);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.step-facts-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.step-rates {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step-rates li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 28em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--warm-border);
+}
+.step-rates li b {
+  flex: none;
+  color: var(--blue);
+  font-family: var(--mono);
+  font-weight: 400;
+}
+@media (max-width: 560px) {
+  .step-facts-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .step-facts-grid dd {
+    margin-bottom: 8px;
+  }
 }
 .task:has(input:checked) summary {
   color: #74837b;
@@ -1530,12 +1598,10 @@ p[data-proposal-rates] {
    apart, more than the 8px the boxes add. On a phone each is a 44px row instead, the underline
    moving from the box's edge to the text as for the quiet links (#832). */
 .plan-summary a,
-[data-session-link],
 [data-phase-notes-link] {
   position: relative;
 }
 .plan-summary a::after,
-[data-session-link]::after,
 [data-phase-notes-link]::after {
   content: '';
   position: absolute;
@@ -1545,7 +1611,6 @@ p[data-proposal-rates] {
 }
 @media (max-width: 720px) {
   .plan-summary a,
-  [data-session-link],
   [data-phase-notes-link] {
     display: inline-flex;
     align-items: center;
@@ -1555,7 +1620,6 @@ p[data-proposal-rates] {
     text-underline-offset: 4px;
   }
   .plan-summary a::after,
-  [data-session-link]::after,
   [data-phase-notes-link]::after {
     content: none;
   }
@@ -6585,22 +6649,8 @@ button.rail-tile:hover {
   display: block;
   margin-top: 6px;
 }
-.guided-beginner {
-  margin: 0 0 16px;
-}
-.guided-beginner p {
-  margin: 4px 0 0;
-}
-.guided-beginner .guided-expert {
-  margin-top: 12px;
-}
-/* "Expert mode" (#1197, app/expert.ts): All settings on denser screens without the explanatory
-   paragraphs (data-explain); labels and the ⓘ help tips stay. */
-.wizard-expert {
-  display: flex;
-  margin: 0 0 12px;
-  color: var(--muted);
-}
+/* The Expert detail level (#1197, app/expert.ts): All settings on denser screens without the
+   explanatory paragraphs (data-explain); labels and the ⓘ help tips stay. */
 .wizard-panel.compact [data-explain] {
   display: none;
 }
@@ -7407,6 +7457,11 @@ button.rail-tile:hover {
   color: var(--ink);
   font: inherit;
   resize: vertical;
+}
+/* "Copied" beside Copy note for a moment (BP-11). */
+.session-copied {
+  margin-left: 10px;
+  color: var(--green);
 }
 .session-builds {
   display: grid;
@@ -9196,5 +9251,155 @@ th.resource-cell {
 @media (max-width: 720px) {
   .settings-fold-toggle {
     min-height: 44px;
+  }
+}
+
+/* ── Detail level and the build plan's filters (ONB-2, BP-12, #1337) ── */
+/* The detail level (ui/DetailLevel.vue): "Detail level" and three segments in one bordered row,
+   native radio buttons kept in the Tab order but out of sight, the level picked lit with an
+   orange rule under it. The same on the guided start, above All settings' steps and on the build
+   plan, where it sits apart from the filters at the end of the tools row. */
+.detail-level {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+}
+.detail-level-label {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kicker);
+  white-space: nowrap;
+}
+.detail-level-option {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+.detail-level-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+.detail-level-option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.detail-level-option:hover span {
+  color: var(--bright);
+}
+.detail-level-option input:checked + span {
+  background: var(--line);
+  color: var(--bright);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.detail-level-option input:focus-visible + span {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: -2px;
+}
+.guided-detail,
+.wizard-detail {
+  margin: 0 0 16px;
+}
+.guided-detail p,
+.wizard-detail p {
+  margin: 8px 0 0;
+}
+/* The build plan's filters (Checklist.vue): toggle buttons, a pressed one orange with a tick. */
+.checklist-tools .plan-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.checklist-tools .filter-toggle {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.checklist-tools .filter-toggle:hover {
+  border-color: var(--accent);
+  color: var(--bright);
+}
+.checklist-tools .filter-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: #1e1a12;
+  color: var(--accent);
+}
+.checklist-tools .filter-toggle[aria-pressed='true']::before {
+  content: '✓ ';
+  content: '✓ ' / '';
+}
+.checklist-tools .detail-level {
+  margin-left: auto;
+}
+/* On a desktop the search, the filters and the level share one row, as in the mockup, even with
+   the right rail open: the search gives way first, and the row wraps only on narrow screens. */
+@media (min-width: 721px) {
+  .checklist-tools {
+    gap: 10px;
+  }
+  .checklist-tools .search {
+    flex: 1 1 120px;
+    min-width: 120px;
+  }
+  .checklist-tools .plan-filters {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}
+/* On a phone each is a 44px touch target, and the detail level takes a row of its own with its
+   three segments sharing it. */
+@media (max-width: 720px) {
+  .checklist-tools .filter-toggle,
+  .detail-level-option span {
+    min-height: 44px;
+  }
+  .detail-level {
+    width: 100%;
+  }
+  .detail-level-option {
+    flex: 1 1 0;
+  }
+  .detail-level-option span {
+    width: 100%;
+    padding: 0 8px;
+  }
+}
+/* Below about 420 px the label and three segments no longer fit one row: the label takes a row of
+   its own above them, inside the same border, so nothing scrolls sideways (320 px included). */
+@media (max-width: 420px) {
+  .detail-level {
+    flex-wrap: wrap;
+  }
+  .detail-level-label {
+    flex: 1 0 100%;
+    padding: 6px 10px 4px;
+  }
+  .detail-level-option span {
+    border-top: 1px solid var(--line);
+  }
+  .detail-level-option:first-of-type span {
+    border-left: 0;
   }
 }

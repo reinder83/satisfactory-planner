@@ -96,7 +96,7 @@ test('train stations are state version 29; every released format loads unchanged
   }
   // A newer planner's state is refused with the update message, never stripped.
   assert.throws(
-    () => validateState({ ...json(version29), version: 31 }),
+    () => validateState({ ...json(version29), version: 32 }),
     /newer planner version\. Update the app/,
   );
 });

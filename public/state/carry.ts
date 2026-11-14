@@ -53,6 +53,7 @@ import {
   validateTickedBy,
   validateFactoryPlaces,
   validateMapLayers,
+  detailLevelOf,
   validateMapMarkers,
 } from './validate.ts';
 import { validateTrainLayout, validateTrainLines, validateTrainStations } from './trains.ts';
@@ -675,6 +676,7 @@ export function calculatedProfile<P extends RowsPlan>(
   raw: unknown,
   built: unknown,
   book?: RecipeBook,
+  detail?: unknown,
 ) {
   const started = newProfileState(
     plan,
@@ -684,6 +686,10 @@ export function calculatedProfile<P extends RowsPlan>(
     built,
     book,
   );
+  // The detail level picked in the wizard (#1337) is the new profile's own; any other value is
+  // left out, so the profile follows the browser's level.
+  const level = detailLevelOf(detail);
+  if (level) started.state = validateState({ ...started.state, detailLevel: level });
   return {
     profile: {
       id,
@@ -844,6 +850,7 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   backupName: string,
   data?: Progression,
   book?: RecipeBook,
+  detail?: unknown,
 ) {
   const started = calculatedProfile(previous.id, name, plan, previous, raw, built, book);
   const state = started.profile.state;
@@ -855,6 +862,10 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
   keepAsked(state, previous.state, started.profile.plan, book);
   keepMap(state, previous.state);
+  // The detail level (#1337): the one Edit settings picked, else the profile's own.
+  const level = detailLevelOf(detail) ?? detailLevelOf(previous.state.detailLevel);
+  if (level) state.detailLevel = level;
+  else delete state.detailLevel;
   // The steps kept above keep who ticked them too (#1206), and the version follows.
   carryTickers(state, previous.state);
   state.revision = (previous.state.revision ?? 0) + 1;
@@ -1058,7 +1069,9 @@ export function shareState(state: SavedState): ProgressState {
   // And so are the machines that stand on a grown line (#1174), and who ticked what (#1206).
   delete clean.builtMachines;
   delete clean.tickedBy;
-  // The world map's hidden layers (#1283) are how the sharer looks at it; the markers stay.
+  // The world map's hidden layers (#1283) are how the sharer looks at it; the markers stay. So is
+  // the detail level (#1337): the copy follows the recipient's own level.
   delete clean.mapLayers;
+  delete clean.detailLevel;
   return validateState(clean);
 }

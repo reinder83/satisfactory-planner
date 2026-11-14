@@ -168,19 +168,23 @@ const withCoal = (count: number): CurrentCalculatedPlan =>
   generatedWith({ phase: '2', ownedGenerators: { 'Coal Generator': count } });
 
 test('the coal line’s build-plan step says how many you already have and how many to build', () => {
-  const step = () => plain($('[data-task="calc-2-power-coal"] p')?.textContent);
+  const step = () =>
+    plain($('[data-task="calc-2-power-coal"] [data-step-facts-note]')?.textContent);
+  const machines = () =>
+    plain($('[data-task="calc-2-power-coal"] [data-step-machines]')?.textContent);
   open({ calculated: withCoal(4), phase: '2' });
   go('plan');
   render();
-  assert.match(step(), /^You already have 4 of these 6 Coal Generators: build 2 more\. /);
+  assert.match(step(), /^You already have 4 of these 6 Coal Generators: build 2 more\.$/);
   page();
   open({ calculated: withCoal(8), phase: '2' });
   go('plan');
   render();
   assert.match(
     step(),
-    /^You already have 8 Coal Generators, enough for this line's 6: build none\. 6 Coal Generator total/,
+    /^You already have 8 Coal Generators, enough for this line's 6: build none\.$/,
   );
+  assert.match(machines(), /^6 Coal Generator total/);
   // "Power available now" counts them too.
   assert.match(
     plain($('[data-task="startup-2-power-review"] p')?.textContent),
@@ -201,8 +205,8 @@ test('the coal line’s build-plan step says how many you already have and how m
   render();
   for (const id of ['calc-4-power-fuel', 'calc-4-power-rocket-fuel'])
     assert.match(
-      plain($(`[data-task="${id}"] p`)?.textContent),
-      /^You already have 10 of the 30 Fuel Generators this phase's 2 Fuel Generator lines run: build 20 more between them\. /,
+      plain($(`[data-task="${id}"] [data-step-facts-note]`)?.textContent),
+      /^You already have 10 of the 30 Fuel Generators this phase's 2 Fuel Generator lines run: build 20 more between them\.$/,
       id,
     );
 });

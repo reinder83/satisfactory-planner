@@ -139,7 +139,8 @@ export function saveRoutes({
   // that profile type is retired (#387, #496). carryFrom names a sibling profile in the same save to start from
   // (copied, never moved) and built lists finished work; see newProfileState. The plan is the
   // one Review showed for these exact settings (reviewedPlans, #1060), else calculated, before the
-  // commit; the save lookup and limits are checked inside it.
+  // commit; the save lookup and limits are checked inside it. detailLevel is the level the wizard
+  // picked (#1337), stored as the profile's own (calculatedProfile).
   async function createProfile({ req, user, body }: UserRequest) {
     limits.throttle(req);
     const input = await body();
@@ -179,6 +180,7 @@ export function saveRoutes({
         input.carry,
         input.built,
         recipeBookData(),
+        input.detailLevel,
       );
       save.profiles.push(started.profile);
       save.activeProfile = profileId;

@@ -149,7 +149,10 @@ async function checkPerformance(browser: import('playwright').Browser) {
 // denser screens, none of which scrolls sideways; a Phase 3 profile opens on milestone-only Phase
 // 1, whose unlocks are grouped by tier. From the keyboard, Space on a group's tick ticks every
 // unlock in it and keeps focus there, a reload keeps the ticks (IndexedDB), and Space again
-// unticks that group's unlocks only.
+// unticks that group's unlocks only. The browser has only the old "Expert mode" switch stored
+// (`planner-expert`), so this is also the detail level's migration (#1337): it reads as Expert,
+// a new profile follows it without storing a level, and on the build plan the arrow keys pick another level,
+// which is saved with the profile and kept on a reload.
 async function checkExpertMode(browser: import('playwright').Browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
@@ -221,6 +224,33 @@ async function checkExpertMode(browser: import('playwright').Browser) {
       .getByText(/ not done: /)
       .waitFor();
     for (let i = 0; i < count; i++) assert.ok(!(await items.nth(i).isChecked()), 'each unticked');
+    // The detail level (#1337) from the keyboard: Tab reaches the level picked, an arrow key
+    // picks the next one.
+    const level = (value: string) => page.locator(`#main [data-detail-option="${value}"]`);
+    assert.ok(await level('expert').isChecked(), 'the old Expert mode switch reads as Expert');
+    assert.equal(
+      await page.getByRole('radiogroup', { name: 'Detail level' }).count(),
+      1,
+      'one radio group named Detail level',
+    );
+    await level('expert').focus();
+    await page.keyboard.press('ArrowLeft');
+    await page.locator('#main [data-detail-option="standard"]:checked').waitFor();
+    await groups.first().waitFor({ state: 'detached' });
+    assert.equal(
+      await level('standard').evaluate(radio => radio === document.activeElement),
+      true,
+      'focus stays on the level picked',
+    );
+    assert.equal(await sideways(), 0, 'the detail level does not scroll sideways at 390 px');
+    await page.reload();
+    await page.locator('[data-plan-progress]').waitFor();
+    assert.ok(await level('standard').isChecked(), 'saved with the profile');
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('planner-detail')),
+      'expert',
+      'this browser’s level stays',
+    );
     assert.deepEqual(pageErrors, []);
   } finally {
     await context.close();

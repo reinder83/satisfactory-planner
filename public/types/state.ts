@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–30). Later versions only add optional sections, so an older
+//                  version (1–31). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -31,7 +31,8 @@ import type { ExactClocks, LineClocks, SloopPins } from './calculated.ts';
 // stations and their platforms (trainStations, #1284), 30 train lines and their trains
 // (trainLines), the network diagram's layout (trainLayout), stations placed on the world map
 // (trainStations[].place), a platform's pipe (platforms[].pipe) and an outpost on oil or resource
-// wells (owner.resource Crude Oil, Nitrogen Gas or Water; owner.wells), #1284 slices 2 to 4.
+// wells (owner.resource Crude Oil, Nitrogen Gas or Water; owner.wells), #1284 slices 2 to 4, 31
+// the profile's detail level (detailLevel, #1337).
 // Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
 // 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
 // renames keys and adds no content, so it has no version of its own.
@@ -65,7 +66,8 @@ export type StateVersion =
   | 27
   | 28
   | 29
-  | 30;
+  | 30
+  | 31;
 
 // The world map (#1283, slice 2): a marker the user placed, at a point in the game's world (game
 // units, x east and y south, whole numbers; public/app/world-map.ts converts them to the image),
@@ -85,6 +87,10 @@ export interface MapMarker {
 // is stored (`false`); a layer shown again leaves the field.
 export type MapLayer = 'factories' | 'stations' | 'trainLines' | 'markers';
 export type MapLayers = Partial<Record<MapLayer, boolean>>;
+// A profile's detail level (ONB-2, #1337): Beginner is what "New to Satisfactory" was, Expert what
+// "Expert mode" was, Standard neither. A profile without one follows this browser's level
+// (app/detail-level.ts), which an older release's two switches decide.
+export type DetailLevel = 'beginner' | 'standard' | 'expert';
 // Where a factory stands on the world map (#1283, slice 3), by factory group id: a point in game
 // units as a marker's (whole numbers, x east, y south). A factory is placed at most once; one not
 // placed is not on the map. validateFactoryPlaces in state/validate.ts holds the limits.
@@ -381,6 +387,9 @@ export interface ProgressState {
   // The network diagram's layout (#1284); absent while it is drawn automatically at natural size
   // (version 30).
   trainLayout?: TrainLayout;
+  // The detail level picked for this profile (#1337); absent while none was picked, so the
+  // browser's level applies (version 31).
+  detailLevel?: DetailLevel;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -410,6 +419,7 @@ export interface SavedState {
   trainStations?: TrainStation[];
   trainLines?: TrainLine[];
   trainLayout?: TrainLayout;
+  detailLevel?: DetailLevel;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
@@ -486,6 +496,8 @@ export type UpdateOp =
   | { type: 'mapMarker'; id: string; value: Omit<MapMarker, 'id'> | null }
   // Shows or hides one layer of the world map (#1283), for this profile.
   | { type: 'mapLayer'; layer: MapLayer; value: boolean }
+  // The profile's detail level (#1337).
+  | { type: 'detailLevel'; value: DetailLevel }
   // Puts factory group `id` on the world map at `value` (#1283), or moves it there when it is
   // on the map already; null takes it off the map.
   | { type: 'mapFactory'; id: string; value: FactoryPlace | null }

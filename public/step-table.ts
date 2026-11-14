@@ -14,6 +14,8 @@ export interface StepTable {
   rows: string[][];
   total?: string[];
   after?: string;
+  // A long table shows its first `rows` rows and a "Show all N <noun>" button for the rest (BP-5).
+  fold?: { rows: number; noun: string };
   // The table's accessible name, for its <caption>.
   caption: string;
 }
@@ -43,3 +45,29 @@ export const tableText = (table: StepTable | undefined): string =>
 // Every word a list shows, for the step search. '' without one.
 export const listText = (list: StepList | undefined): string =>
   list ? [list.intro, ...list.items, list.after ?? ''].join(' ') : '';
+
+// One item and its rate in a production line's step, "Caterium Ore" and "240/min" (itemRate).
+export interface StepRate {
+  name: string;
+  rate: string;
+}
+
+// A production line's step text as the production-line dialog's structure (BP-5): the sentences
+// that open it, the machine count and what each machine makes, the inputs and outputs with their
+// rates, and the sentences that close it. The same words as the step's `body`, which stays for
+// "Find a step…" and copying (ui/plan/StepFacts.vue draws it). Worked out from the plan each time,
+// never stored, and dropped when the user edits the body.
+export interface StepFacts {
+  // What opens the step: what already runs, the generators the player has, a line made on site, a
+  // storage-only line.
+  notes: string[];
+  // "10 Refinery total: 10 at 100% (no underclock needed)."
+  machines: string;
+  // What each machine makes ("Each machine"), or the adjustable machine's clock and output, with
+  // the pointer to an easier rounded option where the dialog has one.
+  perMachine: { label: string; text: string; hint?: string };
+  inputs: StepRate[];
+  outputs: StepRate[];
+  // What closes it: somersloops, Power Shards and why spare coke is sunk.
+  extras: string[];
+}

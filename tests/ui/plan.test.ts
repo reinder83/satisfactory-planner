@@ -227,9 +227,13 @@ test('the checklist can be searched and can hide completed steps', async () => {
   assert.equal($('#main .empty-state')!.textContent, 'No steps match this search.');
   await findStep('');
   state.checks['phase-3-survey'] = true;
-  $<HTMLInputElement>('#hide-done')!.checked = true;
-  $('#hide-done')!.dispatchEvent(new Event('change'));
+  // A filter: a toggle button (BP-12, #1337), pressed.
+  const toggle = $('#hide-done')!;
+  assert.equal(toggle.tagName, 'BUTTON');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  toggle.click();
   await nextTick();
+  assert.equal($('#hide-done')!.getAttribute('aria-pressed'), 'true');
   assert.ok(!steps().includes('phase-3-survey'), 'completed steps are hidden');
   assert.ok(steps().includes('phase-3-iron'), 'unfinished steps stay visible');
   assert.equal($('.checklist-tools .muted')!.textContent, '8 of 9 steps');
@@ -242,13 +246,13 @@ test('the checklist can be searched and can hide completed steps', async () => {
   render();
   await nextTick();
   assert.match($('[data-phase-complete]')!.textContent, /Phase checklist complete/);
-  assert.match($('[data-phase-complete]')!.textContent, /Untick “Hide completed”/);
+  assert.match($('[data-phase-complete]')!.textContent, /Turn off “Hide completed”/);
   assert.equal($('#main .done-group'), null, 'hidden completed steps have no Done group');
   // The toggle is view state and stays on for the calculated plan.
   open({ calculated: generated });
   render();
   await nextTick();
-  assert.equal($<HTMLInputElement>('#hide-done')!.checked, true);
+  assert.equal($('#hide-done')!.getAttribute('aria-pressed'), 'true');
   // It is remembered in this browser, never in the profile.
   assert.equal(localStorage.getItem('planner-hide-done'), 'on');
   assert.equal('hideDone' in state.settings, false);
@@ -333,13 +337,11 @@ test('the lead step offers its factory; search, Hide completed and editing still
   assert.ok(doneIds().includes(ids[0]));
   await findStep('');
   // Hide completed drops the Done group and keeps the lead.
-  $<HTMLInputElement>('#hide-done')!.checked = true;
-  $('#hide-done')!.dispatchEvent(new Event('change'));
+  $('#hide-done')!.click();
   await nextTick();
   assert.equal($('#main .done-group'), null);
   assert.equal(leadId(), ids[linked]);
-  $<HTMLInputElement>('#hide-done')!.checked = false;
-  $('#hide-done')!.dispatchEvent(new Event('change'));
+  $('#hide-done')!.click();
   // While editing, the list is flat in the plan's order, with no lead and no Done group.
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();
@@ -864,22 +866,23 @@ test('a calculated step writes a fluid input or output in m³/min and a solid in
   render();
   await nextTick();
   const rows = generated.stages['3'].rows!;
-  const body = (id: string) =>
-    $(`[data-check="calc-3-${id}"]`)!
-      .closest('.task')!
-      .querySelector('p')!
-      .textContent.replace(/ /g, ' ');
+  // The step's inputs and outputs are lists of item and rate (StepFacts.vue, BP-5).
+  const facts = (id: string, side: 'inputs' | 'outputs') =>
+    [
+      ...$(`[data-check="calc-3-${id}"]`)!
+        .closest('.task')!
+        .querySelectorAll(`[data-step-${side}] li`),
+    ]
+      .map(li => li.textContent!.replace(/\s+/g, ' ').trim())
+      .join(', ');
   const fuel = rows.find(r => r.id === 'Recipe_ResidualFuel_C')!;
   assert.ok(fuel, 'the default plan makes Fuel from Heavy Oil Residue');
-  const text = body(fuel.id);
-  assert.match(text, /Inputs: Heavy Oil Residue [\d.,]+ m³\/min\./);
-  assert.match(text, /Outputs: Fuel [\d.,]+ m³\/min\./);
-  // The old headings ("Inputs /min: …"). The byproduct advice after them (#1022) leads with an
-  // item's rate and a colon, "Heavy Oil Residue 46.6 m³/min: …", so only the headings are looked for.
-  assert.doesNotMatch(text, /(Inputs|Outputs) \/min:/, 'no "Inputs /min:" heading any more');
+  assert.match(facts(fuel.id, 'inputs'), /^Heavy Oil Residue [\d.,]+ m³\/min$/);
+  assert.match(facts(fuel.id, 'outputs'), /^Fuel [\d.,]+ m³\/min$/);
   // A solid keeps /min.
   const iron = rows.find(r => r.id === 'Recipe_IngotIron_C')!;
-  assert.match(body(iron.id), /Inputs: Iron Ore [\d.,]+\/min\. Outputs: Iron Ingot [\d.,]+\/min\./);
+  assert.match(facts(iron.id, 'inputs'), /^Iron Ore [\d.,]+\/min$/);
+  assert.match(facts(iron.id, 'outputs'), /^Iron Ingot [\d.,]+\/min$/);
 });
 
 // A plan with a guide (#393, #466; a migrated handbook profile once #395 writes one) shows the

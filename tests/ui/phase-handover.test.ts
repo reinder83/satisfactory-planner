@@ -85,7 +85,10 @@ test('a Phase 1 line marked running says what Phase 2 adds to it', async () => {
   const extra = grown.machines - earlier.machines;
   assert.match(body, new RegExp(`Add ${extra} machines?[,.]`));
   // The whole line's setup still follows.
-  assert.match(body, new RegExp(`${grown.machines} ${grown.machine} total`));
+  assert.match(
+    text(step('calc-2-' + grown.id).querySelector('[data-step-machines]')),
+    new RegExp(`^${grown.machines} ${grown.machine} total`),
+  );
   // The summary at the top of the build plan.
   assert.match(
     text($('[data-handover]')),

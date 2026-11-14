@@ -470,7 +470,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.unlockGroups?.total ?? 0) > 0,
     text: facts =>
-      `Expert mode: ${facts.unlockGroups!.done} of ${plural(facts.unlockGroups!.total, 'unlock group')} done in this phase. Tick a tier and every unlock in it is ticked; untick it and only those are unticked. No hand-holding, as requested.`,
+      `Expert level: ${facts.unlockGroups!.done} of ${plural(facts.unlockGroups!.total, 'unlock group')} done in this phase. Tick a tier and every unlock in it is ticked; untick it and only those are unticked. No hand-holding, as requested.`,
   },
   {
     // The world map's markers (#1283, slice 2): hidden, none yet, or how many.
@@ -494,7 +494,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.optionalResearch ?? 0) > 0,
     text: facts =>
-      `${plural(facts.optionalResearch!, 'research step')} at the end of this phase ${facts.optionalResearch === 1 ? 'is' : 'are'} optional: only a later phase's lines need ${facts.optionalResearch === 1 ? 'it' : 'them'}. ${facts.requiredOnly ? 'Required steps only hides them for now.' : 'Tick Required steps only to hide them.'} Curiosity is allowed. It is just not on the critical path.`,
+      `${plural(facts.optionalResearch!, 'research step')} at the end of this phase ${facts.optionalResearch === 1 ? 'is' : 'are'} optional: only a later phase's lines need ${facts.optionalResearch === 1 ? 'it' : 'them'}. ${facts.requiredOnly ? 'Required steps only hides them for now.' : 'Press Required steps only to hide them.'} Curiosity is allowed. It is just not on the critical path.`,
   },
   {
     // The generators the phase before built stay and count first (#1064), as "Power available

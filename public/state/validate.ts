@@ -18,6 +18,7 @@ import {
 import type {
   BuiltMachines,
   CustomTask,
+  DetailLevel,
   ExactClocks,
   FactoryGroup,
   FactoryGroups,
@@ -813,6 +814,18 @@ export function validateMapLayers(raw: unknown): MapLayers | undefined {
   const hidden = MAP_LAYERS.filter(layer => raw[layer] === false);
   return hidden.length ? Object.fromEntries(hidden.map(layer => [layer, false])) : undefined;
 }
+// A profile's detail level (ONB-2, #1337): one of DETAIL_LEVELS. detailLevelOf reads one sent
+// with a request (a new profile, a recalculation in place), where anything else is left out;
+// validateDetailLevel reads a stored one, where anything else refuses the state as malformed.
+export const DETAIL_LEVELS: readonly DetailLevel[] = ['beginner', 'standard', 'expert'];
+export const detailLevelOf = (raw: unknown): DetailLevel | undefined =>
+  DETAIL_LEVELS.includes(raw as DetailLevel) ? (raw as DetailLevel) : undefined;
+export function validateDetailLevel(raw: unknown): DetailLevel | undefined {
+  if (raw === undefined) return undefined;
+  const level = detailLevelOf(raw);
+  if (!level) fail('Invalid detail level.');
+  return level;
+}
 // Factories on the world map (#1283, slice 3): each factory group placed at most once, so at most
 // as many places as there can be factories (validateGroups keeps 60), each at a spot in game units
 // within MAP_WORLD_LIMIT, as a marker's.
@@ -1079,12 +1092,12 @@ export function validateState(state: unknown): ProgressState {
     !plain(state) ||
     ![
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-      27, 28, 29, 30,
+      27, 28, 29, 30, 31,
     ].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "31" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 30
+      // Compared as the old code did, so a version given as "32" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 31
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -1155,6 +1168,8 @@ export function validateState(state: unknown): ProgressState {
   if (markers) clean.mapMarkers = markers;
   const layers = validateMapLayers(state.mapLayers);
   if (layers) clean.mapLayers = layers;
+  const level = validateDetailLevel(state.detailLevel);
+  if (level) clean.detailLevel = level;
   // Read against the factories as validated above: each place names one of them.
   const places = validateFactoryPlaces(state.factoryPlaces, clean.factoryGroups.groups);
   if (places) clean.factoryPlaces = places;
@@ -1281,6 +1296,11 @@ export function validateState(state: unknown): ProgressState {
   // version above.
   if (clean.trainLines || clean.trainLayout || clean.trainStations?.some(stationNeedsV30))
     clean.version = 30;
+  // The profile's detail level (detailLevel, #1337) is 31: a version-30 release would drop it and
+  // show the profile at its browser's level, so it refuses the state with its update message
+  // instead. A state without one (every state before #1337, and a profile whose level was never
+  // picked) keeps the version above.
+  if (clean.detailLevel) clean.version = 31;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

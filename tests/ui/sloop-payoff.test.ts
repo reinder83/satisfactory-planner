@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { setHideDone, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { sloopPayoffs } from '../../public/app/sloop-payoff.ts';
@@ -17,10 +17,10 @@ const words = (element: Element | null | undefined) =>
   (element?.textContent || '').replace(/\s+/g, ' ').trim();
 
 beforeEach(() => {
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
   page();
 });
-afterEach(() => setBeginnerMode(false));
+afterEach(() => setBrowserDetail('standard'));
 
 async function show(plan: CurrentCalculatedPlan, phase: Phase) {
   page();
@@ -208,10 +208,10 @@ test('nothing before Phase 3, nor in New to Satisfactory mode', async () => {
   await show(plan, '2');
   assert.equal($('[data-sloop-payoff]'), null, 'machines take no somersloops before Phase 3');
   assert.equal($('[data-plan-tab="somersloops"]'), null, 'and no tab for it');
-  setBeginnerMode(true);
+  setBrowserDetail('beginner');
   await show(plan, '4');
   assert.equal($('[data-sloop-payoff]'), null, 'New to Satisfactory hides it');
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
   await show(plan, '4');
   assert.ok($('[data-sloop-payoff]'));
 });

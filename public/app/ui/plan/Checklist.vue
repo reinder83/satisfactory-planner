@@ -20,20 +20,23 @@
   With every step done, a line says the phase checklist is complete. While editing, the list
   stays flat in the plan's order, since ↑ / ↓ move a step past its neighbour on screen.
   A step's text marks the glossary terms (#1076, ui/TermText.vue) the steps above it on screen have
-  not marked yet, so each term is explained once. "New to Satisfactory" (app/beginner.ts) is a
-  view preference beside "Hide completed": it hides the plan's hard-drive and clock details.
-  "Mine only" (#1199, ui/factories/MineOnly.vue) sits under them while a factory has an owner: it
-  keeps only the steps linked to production lines in factories owned by the name this device goes
-  by, and when that leaves no open step the list says so.
-  "Expert mode" (app/expert.ts, #1197) is the other view preference there, never on with it: outside
-  edit mode it takes the HUB milestones and MAM research out of the list and draws them grouped by
-  tier above it (ui/plan/UnlockGroups.vue), each group with its own tick.
+  not marked yet, so each term is explained once. "Hide completed" and "Required steps only" are
+  filters, toggle buttons (BP-12, #1337, aria-pressed) remembered in this browser; the detail level
+  (ONB-2, ui/DetailLevel.vue, app/detail-level.ts) is a setting of the profile beside them, saved
+  at once. Beginner (app/beginner.ts) hides the plan's hard-drive and clock details; Expert
+  (app/expert.ts, #1197), outside edit mode, takes the HUB milestones and MAM research out of the
+  list and draws them grouped by tier above it (ui/plan/UnlockGroups.vue), each group with its own
+  tick. "Mine only" (#1199, ui/factories/MineOnly.vue) sits under them while a factory has an
+  owner: it keeps only the steps linked to production lines in factories owned by the name this
+  device goes by, and when that leaves no open step the list says so.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted } from 'vue';
 import { firstTerms } from '../../../preferences.ts';
+import { save } from '../../api.ts';
 import { beginnerMode } from '../../beginner.ts';
-import { expertMode, setExpertMode, switchBeginnerMode } from '../../expert.ts';
+import { detailLevel } from '../../detail-level.ts';
+import { expertMode } from '../../expert.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import {
   calculated,
@@ -72,6 +75,7 @@ import { unlockGroups, type UnlockGroupView } from '../../unlock-groups.ts';
 import { legacy } from '../bridge.ts';
 import { searchField } from '../search-field.ts';
 import { activeMine } from '../../views/factories.ts';
+import DetailLevel from '../DetailLevel.vue';
 import MineOnly from '../factories/MineOnly.vue';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
@@ -79,6 +83,7 @@ import StepEditForm from './StepEditForm.vue';
 import UnlockGroups from './UnlockGroups.vue';
 import { dropHold, isHeld, isLeaving } from './tick-hold.ts';
 import type { PlanStepView, RemovedStepView, Step } from '../../tasks.ts';
+import type { DetailLevel as Level } from '../../../types/index.ts';
 
 // A production line's own step at exact clocks, or one whose clocks a recalculation would change
 // (lineClockNote, #1066); '' for any other step, a personal task linked to the line included.
@@ -107,6 +112,7 @@ const list = computed(() =>
         body: task.body,
         table: task.table,
         list: task.list,
+        facts: task.facts,
         built: task.built,
         spare: task.spare,
         done: checked(task.id),
@@ -144,12 +150,19 @@ const list = computed(() =>
         : [...groups.flatMap(group => group.items), ...unfinished, ...finished],
       marks = firstTerms(
         order.map(s =>
-          s.table ? `${s.table.intro} ${s.table.after ?? ''}` : s.list ? '' : s.body || '',
+          s.table
+            ? `${s.table.intro} ${s.table.after ?? ''}`
+            : s.facts
+              ? [...s.facts.notes, ...s.facts.extras].join(' ')
+              : s.list
+                ? ''
+                : s.body || '',
         ),
       );
     order.forEach((s, i) => (s.terms = marks[i]));
     return {
       total: tasks.length,
+      detail: detailLevel(),
       beginner: beginnerMode(),
       expert: expertMode(),
       query,
@@ -162,7 +175,7 @@ const list = computed(() =>
         ? emptyPhase(removed.length > 0)
         : query.trim()
           ? 'No steps match this search.'
-          : 'Every step of this phase is completed. Untick “Hide completed” to review them.',
+          : 'Every step of this phase is completed. Turn off “Hide completed” to review them.',
       steps,
       groups,
       open: unfinished,
@@ -260,27 +273,27 @@ const { typed: typedQuery, input: search } = searchField(
   },
 );
 
-function toggleHideDone(event: Event) {
-  setHideDone((event.target as HTMLInputElement).checked);
+// "Hide completed": a filter, remembered in this browser (session.ts).
+function toggleHideDone() {
+  setHideDone(!hideDone);
   render();
 }
 
-// "New to Satisfactory" (#1076): a view preference like Hide completed, remembered in this browser.
-// On, it switches expert mode off (#1197).
-function toggleBeginner(event: Event) {
-  switchBeginnerMode((event.target as HTMLInputElement).checked);
+// "Required steps only" (#1070): hides the optional steps, a filter like Hide completed.
+function toggleRequiredOnly() {
+  setRequiredOnly(!requiredOnly);
   render();
 }
 
-// "Expert mode" (#1197): the same kind of preference; on, it switches New to Satisfactory off.
-function toggleExpert(event: Event) {
-  setExpertMode((event.target as HTMLInputElement).checked);
-  render();
-}
-
-// "Required steps only" (#1070): hides the optional steps, a view preference like Hide completed.
-function toggleRequiredOnly(event: Event) {
-  setRequiredOnly((event.target as HTMLInputElement).checked);
+// The detail level (#1337): this profile's, saved at once. A refused save (save() says why) shows
+// the saved level again.
+async function pickDetail(level: Level, _form: HTMLFormElement | null, restore: () => void) {
+  try {
+    await save({ type: 'detailLevel', value: level });
+  } catch {
+    restore();
+    return;
+  }
   render();
 }
 </script>
@@ -294,38 +307,33 @@ function toggleRequiredOnly(event: Event) {
       aria-label="Find a step"
       :value="typedQuery"
       @input="search"
-    /><label class="check-row small"
-      ><input
-        type="checkbox"
+    /><span class="plan-filters" role="group" aria-label="Filters"
+      ><button
+        type="button"
         id="hide-done"
-        :checked="list.hideDone"
-        @change="toggleHideDone"
-      />Hide completed</label
-    ><label v-if="list.optional || list.requiredOnly" class="check-row small"
-      ><input
-        type="checkbox"
+        class="filter-toggle"
+        :aria-pressed="list.hideDone"
+        @click="toggleHideDone"
+      >
+        Hide completed</button
+      ><button
+        v-if="list.optional || list.requiredOnly"
+        type="button"
         id="required-only"
+        class="filter-toggle"
         data-required-only
-        :checked="list.requiredOnly"
-        @change="toggleRequiredOnly"
-      />Required steps only</label
-    ><label class="check-row small"
-      ><input
-        type="checkbox"
-        data-beginner-switch
-        :checked="list.beginner"
-        :aria-describedby="list.beginner ? 'beginner-note' : undefined"
-        @change="toggleBeginner"
-      />New to Satisfactory</label
-    ><label class="check-row small"
-      ><input
-        type="checkbox"
-        data-expert-switch
-        :checked="list.expert"
-        :aria-describedby="list.expert ? 'expert-note' : undefined"
-        @change="toggleExpert"
-      />Expert mode</label
-    ><span class="small muted">{{ list.count }}</span>
+        :aria-pressed="list.requiredOnly"
+        @click="toggleRequiredOnly"
+      >
+        Required steps only
+      </button></span
+    ><span class="small muted">{{ list.count }}</span
+    ><DetailLevel
+      :level="list.detail"
+      name="planDetail"
+      :describedby="list.beginner ? 'beginner-note' : list.expert ? 'expert-note' : undefined"
+      @pick="pickDetail"
+    />
   </div>
   <MineOnly v-if="list.total > 0" where="plan" />
   <p
@@ -334,12 +342,12 @@ function toggleRequiredOnly(event: Event) {
     class="small muted"
     data-beginner-note
   >
-    New to Satisfactory: the hard-drive payoff and what whole machines cost are hidden. Untick it to
-    see them.
+    Beginner: the hard-drive payoff and what whole machines cost are hidden. Pick Standard to see
+    them.
   </p>
   <p v-if="list.total > 0 && list.expert" id="expert-note" class="small muted" data-expert-note>
-    Expert mode: HUB milestones and MAM research are grouped by tier. Tick a group to tick each of
-    its unlocks.
+    Expert: HUB milestones and MAM research are grouped by tier. Tick a group to tick each of its
+    unlocks.
   </p>
   <div v-if="list.editing" class="checklist">
     <template v-if="list.steps.length">
@@ -363,6 +371,7 @@ function toggleRequiredOnly(event: Event) {
         :key="step.id"
         :step="step"
         :lead="i === 0 && !step.idle"
+        :then="i === 0 ? list.open[1]?.title : undefined"
         :held="step.done && isHeld(step.id)"
         :leaving="step.done && isLeaving(step.id)"
       />
@@ -381,13 +390,13 @@ function toggleRequiredOnly(event: Event) {
               Verify the delivery, then choose your next phase using the selector above.
             </p></template
           >
-          <p v-if="list.hideDone">Untick “Hide completed” to review the steps.</p>
+          <p v-if="list.hideDone">Turn off “Hide completed” to review the steps.</p>
         </div>
       </div>
     </div>
     <div v-else-if="list.optionalLeft && !list.query.trim()" class="checklist">
       <div class="empty-state" data-optional-left>
-        Only optional steps are left. Untick “Required steps only” to see them.
+        Only optional steps are left. Turn off “Required steps only” to see them.
       </div>
     </div>
     <div v-else-if="list.mine && !list.query.trim()" class="checklist">

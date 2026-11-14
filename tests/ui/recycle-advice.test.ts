@@ -213,10 +213,11 @@ test('the build plan shows the advice in the step, and a step the user rewrote k
     body(`calc-4-${scrap}`),
     /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\. Byproduct Water 116\.18 m³\/min: send all of it back to Alumina Solution, which feeds this line\.$/,
   );
-  // The step draws the advice as a list (#1136): the line's text, then a paragraph per byproduct.
+  // The step draws the line's text as its facts (BP-5) and the advice as a list (#1136): a
+  // paragraph per byproduct.
   assert.match(
-    text(step.querySelector('[data-step-list] p')),
-    /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\.$/,
+    [...step.querySelectorAll('[data-step-outputs] li')].map(plainText).join(', '),
+    /^Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min$/,
   );
   assert.deepEqual([...step.querySelectorAll('[data-step-list-item]')].map(text), [
     'Byproduct Water 116.18 m³/min: send all of it back to Alumina Solution, which feeds this line.',
