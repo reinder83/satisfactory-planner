@@ -25,6 +25,7 @@ import PhaseCaps from './PhaseCaps.vue';
 import SelectField from '../form/SelectField.vue';
 import StepHeading from '../form/StepHeading.vue';
 import Term from '../Term.vue';
+import HelpPopover from '../HelpPopover.vue';
 
 const PHASE_TIME = [
   ['every', 'Every phase'],
@@ -128,12 +129,9 @@ const view = computed(() =>
   >
   <p id="whole-machines-cost" class="small muted">
     <span data-explain
-      >Whole machines have a cost: every machine runs at 100%, so the lines that feed it run at full
-      speed too, which takes more buildings, power and raw resources than exact clocks (the last
+      >Whole machines cost more buildings, power and raw resources than exact clocks (the last
       machine of each line <Term term="underclock" text="underclocked" /> to the exact remainder).
-      Fluid, generator and nuclear lines always run at exact clocks, and single production lines can
-      be set to exact clocks later, in their dialog. Recipe choices are selected first, then
-      whole-machine counts are fitted within your budgets.</span
+      <HelpPopover name="wholeMachinesCost" topic="what whole machines cost" /></span
     ><template v-if="view.cost"
       >{{ ' ' }}<span data-whole-machines-cost>{{ view.cost }}</span></template
     >

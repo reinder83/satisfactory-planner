@@ -12,6 +12,7 @@ import { distributions, purities, recipeCostChoices } from '../../../preferences
 import { draft } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
+import HelpPopover from '../HelpPopover.vue';
 import InputField from '../form/InputField.vue';
 import NameField from '../form/NameField.vue';
 import SelectField from '../form/SelectField.vue';
@@ -144,15 +145,14 @@ const view = computed(() =>
     />Count what buildings cost to build</label
   >
   <p id="build-cost-note" class="small muted">
-    Each phase must then also make the parts its production lines, generators, miners and extractors
-    cost to build, within its time and budgets; a phase that can't is a draft that says so. Not with
-    maximum output, which has no time to count them in.
+    Each phase must then also make the parts its buildings cost, or it is a draft that says so.
+    <HelpPopover name="buildCostNote" topic="counting what buildings cost" />
   </p>
   <h3>Production you already run <HelpTip name="existingSupply" /></h3>
   <SupplyRows />
   <p class="small muted" data-explain>
-    Other settings are notes only. Modified recipes, production boosts and modded items are not
-    simulated. Phase plans assume the necessary milestones and
-    <Term term="mam" text="MAM" /> research are unlocked by commissioning.
+    Other settings are notes only; phase plans assume the necessary milestones and
+    <Term term="mam" text="MAM" /> research are unlocked.
+    <HelpPopover name="settingsNotes" topic="other settings" />
   </p>
 </template>

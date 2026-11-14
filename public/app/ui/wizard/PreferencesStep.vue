@@ -29,6 +29,7 @@ import OwnedAlternates from './OwnedAlternates.vue';
 import SloopLedger from './SloopLedger.vue';
 import StorageRates from './StorageRates.vue';
 import StepHeading from '../form/StepHeading.vue';
+import HelpPopover from '../HelpPopover.vue';
 
 const RECIPES = [
   ['standard', 'Standard recipes'],
@@ -282,16 +283,15 @@ function reveal() {
   </section>
   <MamRecipes /><AltPicker v-if="settings.recipes === 'custom'" /><OwnedAlternates v-else />
   <div class="notice info" data-explain>
-    SAM conversion controls raw resource conversion, not SAM ingredients required by late-game
-    parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have
-    an unlimited automatic source.
+    SAM conversion controls raw resource conversion, not the SAM ingredients late-game parts need.
+    <HelpPopover name="samConversion" topic="SAM conversion" />
   </div>
   <p class="small muted" data-explain>
-    Each Main Portal consumes <b>2 Singularity Cells/min</b> to maintain its connection; the
-    Satellite Portal does not consume cells. <b>10/min supplies five connections</b> (the standard
-    recipe produces 10/min). Reserve portal operating power separately.
+    Each Main Portal consumes <b>2 Singularity Cells/min</b>;
+    <b>10/min supplies five connections</b>.
     <a href="https://satisfactory.wiki.gg/wiki/Portal" target="_blank" rel="noreferrer"
       >Portal reference</a
-    >. Nuclear waste and unpackaged fluids stay outside the storage room.
+    >.
+    <HelpPopover name="portals" topic="portals and storage" />
   </p>
 </template>

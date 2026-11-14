@@ -95,6 +95,30 @@ export const helpText: Record<string, string> = {
     'Extraction already committed to factories that are not part of this plan. It is taken off the pool, because the planner’s budgets mean what is free for this plan to use.',
   extractionLeftOut:
     'Nodes this plan must not use: one far from where you build, or one already feeding a factory the plan does not include. Leave out at most the nodes counted above. The budgets come from the other nodes, the plan never draws more than they give, and the build plan only taps them. Leaving out every node of a resource means the plan cannot mine it at all. Already committed, on the last screen, takes a rate off what is left instead.',
+  // The long explanations the wizard steps used to print under their headings (ONB-5, #1341): each
+  // step keeps a one-line summary and a "?" (ui/HelpPopover.vue) with the whole text.
+  wholeMachinesCost:
+    'Whole machines have a cost: every machine runs at 100%, so the lines that feed it run at full speed too, which takes more buildings, power and raw resources than exact clocks (the last machine of each line underclocked to the exact remainder). Fluid, generator and nuclear lines always run at exact clocks, and single production lines can be set to exact clocks later, in their dialog. Recipe choices are selected first, then whole-machine counts are fitted within your budgets.',
+  resourceBudgets:
+    'Enter the extraction you can allocate to this new plan, per minute, after existing factories and power fuel. Starter values are full-map estimates at endgame extraction, not resources already connected.',
+  waterOverclock:
+    'The build plan always shows both ways to build them: at 100%, and overclocked up to 250% with Power Shards. This only picks the one suggested first and counted in the power total: 100% when off, overclocked when on (from Phase 2, or once you can overclock).',
+  phaseBudgets:
+    "These budgets are the most any phase draws. Each phase gets what its miner, clock and belts take from the same nodes: crude oil from Phase 3 and resource wells from Phase 4. Miners and extractors run up to 250% from Phase 2, after the Power Shards research the build plan schedules before the nodes are tapped, never more than their belt or pipe carries; in Phase 1 only once you can overclock. A miner or belt you already have raises every phase's to its mark; a node survey's miner and clock cap every phase's.",
+  buildCostNote:
+    "Each phase must then also make the parts its production lines, generators, miners and extractors cost to build, within its time and budgets; a phase that can't is a draft that says so. Not with maximum output, which has no time to count them in.",
+  settingsNotes:
+    'Other settings are notes only. Modified recipes, production boosts and modded items are not simulated. Phase plans assume the necessary milestones and MAM research are unlocked by commissioning.',
+  samConversion:
+    'SAM conversion controls raw resource conversion, not SAM ingredients required by late-game parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have an unlimited automatic source.',
+  portals:
+    'Each Main Portal consumes 2 Singularity Cells/min to maintain its connection; the Satellite Portal does not consume cells. 10/min supplies five connections (the standard recipe produces 10/min). Reserve portal operating power separately. Nuclear waste and unpackaged fluids stay outside the storage room.',
+  surveySource:
+    "The Satisfactory Calculator interactive map lists every resource node your world holds once you upload your save file there, including which are impure, normal and pure, and which resource wells you have found. Copy those counts into the next two screens. Uploading a save to that site is your decision and happens entirely between you and them; this planner never sends your save anywhere. If you would rather not, the map also works without a save and shows the default world's nodes.",
+  surveyBudgets:
+    'What those nodes yield, less the nodes you leave out of this plan and anything already committed to factories this plan does not include. That deduction is what makes a budget mean free for this plan to use.',
+  surveyAlreadyRun:
+    'Production you already run is a different question, asked separately: that one credits finished parts, this one takes raw extraction off the top. Use this for ore feeding factories the plan will not rebuild, and the other for parts the plan would otherwise make again.',
   // The node presets (presets.ts).
   nodePresets:
     'The two World Randomization settings you chose when you created the save. Node counts are known for the default distribution, and for Random too — Random shuffles which resource sits where, not how many of each there are — so picking a purity fills the counts in. Random does shuffle the purities as well, so under Random only the uniform purities (All Pure, Average, All Impure) are complete. A resource-rich distribution changes how many nodes each resource has, by an amount that depends on your seed, so there is no table for those. Nitrogen wells are filled only on the default distribution: well randomization applies to a whole well, and the map’s wells hold different numbers of satellites, so a shuffle can still leave you more or less nitrogen than the default map.',

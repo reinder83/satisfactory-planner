@@ -10,6 +10,7 @@ import { beforeEach, test } from 'vitest';
 import { setView, setWizard, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
+import { helpText } from '../../public/preferences.ts';
 import { carryOptions } from '../../public/state.ts';
 import { $, $$, catalog, generated, generatedWith, go, open, page } from './setup.ts';
 import type { CurrentCalculatedPlan } from '../../public/types/index.ts';
@@ -59,6 +60,11 @@ test('step 1 has the box, unticked for a plan without it, and ticking it keeps i
   assert.equal(plain(box().closest('label')!.textContent), 'Count what buildings cost to build');
   assert.equal(
     plain($(`#${box().getAttribute('aria-describedby')}`)!.textContent),
+    'Each phase must then also make the parts its buildings cost, or it is a draft that says so. ?',
+  );
+  // ONB-5 (#1341): the rest of the sentence is behind the "?", in full.
+  assert.equal(
+    helpText.buildCostNote,
     "Each phase must then also make the parts its production lines, generators, miners and extractors cost to build, within its time and budgets; a phase that can't is a draft that says so. Not with maximum output, which has no time to count them in.",
   );
   box().click();

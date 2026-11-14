@@ -97,14 +97,15 @@ test('the survey has four screens as tabs and links to the map', async () => {
   assert.equal(tabs[0]!.getAttribute('aria-current'), 'step');
   assert.ok(tabs[0]!.classList.contains('current'));
   assert.equal(tabs[1]!.getAttribute('aria-current'), null);
-  assert.ok($('#wizard-form.extraction-panel'));
+  assert.ok($('#wizard-form .extraction-panel'), 'the form wraps the tabs and the panel (ONB-3)');
   // Where the numbers come from, and that uploading a save is the user's call.
   assert.equal(
     $('#main a[target=_blank]')!.getAttribute('href'),
     'https://satisfactory-calculator.com/en/interactive-map',
   );
   assert.match(main(), /upload your save/i);
-  assert.match(main(), /never sends your save anywhere/i);
+  assert.match(helpText.surveySource!, /never sends your save anywhere/i, 'behind the "?"');
+  assert.ok($('#main [data-help="surveySource"]'));
   assert.ok($('select[name=mark]') && $('select[name=clock]'));
   // Their help is keyed by what they are, not by the field names (#1021): the clock's text is the
   // one that explains the 250% default.
@@ -180,8 +181,9 @@ test('a committed count updates its total, and the budgets take off what is comm
   const pool = Number(copper()!.querySelectorAll('td')[1]!.textContent.replace(/\D/g, ''));
   await change('input[name="used:Copper Ore"]', String(pool + 1));
   assert.equal(wizard!.extraction!.used!['Copper Ore'], pool + 1);
-  assert.equal(copper()!.querySelectorAll('td')[3]!.textContent, '0/min', 'nothing is left');
-  assert.ok(copper()!.querySelectorAll('td')[3]!.classList.contains('warn'), 'over the pool');
+  const left = copper()!.querySelectorAll('td')[1]!;
+  assert.equal(left.firstChild!.textContent!.trim(), '0/min', 'nothing is left');
+  assert.ok(left.classList.contains('warn'), 'over the pool');
 });
 
 test('an unsurveyed resource is called out on the budgets screen, a complete survey is not', async () => {
@@ -535,7 +537,7 @@ test('the budgets screen writes each rate with its own unit, and a unit beside e
   survey(4, { purity: 'vanilla', distribution: 'original' }, { extraction: defaultSurvey() });
   assert.deepEqual(
     $$('#main thead th').map(th => th.textContent),
-    ['Resource', 'Whole pool', 'Already committed', 'Budget'],
+    ['Resource', 'Budget', 'Already committed'],
     'no header names a unit',
   );
   const row = (name: string) =>
@@ -544,10 +546,8 @@ test('the budgets screen writes each rate with its own unit, and a unit beside e
     [...row(name).querySelectorAll('td')].map(td => td.textContent.trim());
   // Fluids in m³/min, joined by a no-break space; ores in /min.
   assert.match(cells('Crude Oil')[1]!, /^[\d.,]+ m³\/min$/);
-  assert.match(cells('Crude Oil')[3]!, /^[\d.,]+ m³\/min$/);
   assert.match(cells('Nitrogen Gas')[1]!, /^[\d.,]+ m³\/min$/);
   assert.match(cells('Iron Ore')[1]!, /^[\d.,]+\/min$/);
-  assert.match(cells('Iron Ore')[3]!, /^[\d.,]+\/min$/);
   // The input holds the number only; the unit sits beside it and in its accessible name.
   const input = (name: string) => row(name).querySelector<HTMLInputElement>('input.used-input')!;
   const suffix = (name: string) => row(name).querySelector('.used-field .used-unit')!;
@@ -575,4 +575,82 @@ test('the budgets screen writes each rate with its own unit, and a unit beside e
   assert.equal(wizard!.settings.limits!['Crude Oil'], 9750);
   assert.equal(wizard!.settings.limits!['Iron Ore'], 91620);
   assert.equal(wizard!.settings.limits!['Nitrogen Gas'], 12000);
+});
+
+// ONB-3 (#1341): the world settings were drawn on both counting screens. Now one block sits above
+// the counting screens, between the step tabs and the panel, and stays as the screen changes.
+test('the world settings are shown once, above the counts, and work on both counting screens (ONB-3)', async () => {
+  survey(2, { purity: 'vanilla', distribution: 'original' }, { extraction: defaultSurvey() });
+  const block = () => $$('#main .node-presets');
+  assert.equal(block().length, 1);
+  assert.equal($$('#main select[name=purity]').length, 1);
+  assert.equal($$('#main [data-node-reset]').length, 1);
+  assert.equal(block()[0]!.closest('.extraction-panel'), null, 'outside the panel');
+  const tabs = $('#main .wizard-progress')!;
+  assert.ok(
+    block()[0]!.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'above the tabs',
+  );
+  // It works on the ore screen: a purity refills the counts.
+  await change('select[name=purity]', 'pure');
+  assert.equal(wizard!.settings.purity, 'pure');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 127);
+  // The same one block on the wells screen, and the reset there clears every count.
+  await click('[data-extraction-step="3"]');
+  assert.equal(block().length, 1, 'still one, not a second copy');
+  await click('[data-node-reset]');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore'], undefined, 'reset clears every ore too');
+  await click('[data-node-undo]');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 127);
+  // The screens that count nothing do not show it.
+  await click('[data-extraction-step="1"]');
+  assert.equal(block().length, 0);
+  await click('[data-extraction-step="4"]');
+  assert.equal(block().length, 0);
+});
+
+// ONB-6 (#1341): one number column; the sum behind a budget only where something is taken off.
+test('the budgets screen has one number column and shows the sum only where committed > 0 (ONB-6)', async () => {
+  survey(4, { purity: 'vanilla', distribution: 'original' }, { extraction: defaultSurvey() });
+  const row = (name: string) =>
+    $$('#main tbody tr').find(r => r.querySelector('.resource-name span')!.textContent === name)!;
+  assert.deepEqual(
+    $$('#main thead th').map(th => th.textContent),
+    ['Resource', 'Budget', 'Already committed'],
+  );
+  assert.equal($$('#main [data-budget-breakdown]').length, 0, 'nothing committed, no sum');
+  const budget = (name: string) => row(name).querySelector('.budget-cell')!.firstChild!.textContent;
+  const before = budget('Iron Ore')!.trim();
+  await change('input[name="used:Iron Ore"]', '1000');
+  assert.equal(wizard!.extraction!.used!['Iron Ore'], 1000, 'typed numbers parse as before');
+  const sums = $$('#main [data-budget-breakdown]');
+  assert.equal(sums.length, 1, 'one row only');
+  assert.ok(row('Iron Ore').contains(sums[0]!));
+  assert.match(sums[0]!.textContent, /^[\d.,]+\/min − 1,000\/min committed$/);
+  assert.notEqual(budget('Iron Ore')!.trim(), before, 'the budget figure is the remainder');
+  assert.match(
+    row('Iron Ore').querySelector<HTMLInputElement>('input.used-input')!.value,
+    /^1,?000$/,
+    'the input keeps its value and format',
+  );
+  await change('input[name="used:Iron Ore"]', '');
+  assert.equal($$('#main [data-budget-breakdown]').length, 0, 'cleared, the sum goes again');
+});
+
+// ONB-5 (#1341): each long explanation is a one-line summary and a "?" holding the whole text.
+test('the survey steps keep a one-line summary and the rest behind a "?" (ONB-5)', async () => {
+  survey(1);
+  const summary = $('#main .notice.info')!;
+  assert.ok(summary.textContent.replace(/\s+/g, ' ').trim().length < 200, 'a short summary');
+  assert.ok(summary.querySelector('[data-help="surveySource"]'), 'with its "?"');
+  assert.match(helpText.surveySource!, /including which are impure, normal and pure/);
+  await click('[data-extraction-step="4"]');
+  for (const key of ['surveyBudgets', 'surveyAlreadyRun'])
+    assert.ok($(`#main [data-help="${key}"]`), key + ' has a "?"');
+  assert.doesNotMatch(main(), /free for this plan to use/, 'the long text is not on the page');
+  assert.match(helpText.surveyBudgets!, /free for this plan to use/);
+  const help = $<HTMLButtonElement>('#main [data-help="surveyBudgets"]')!;
+  help.click();
+  await nextTick();
+  assert.match($('[data-help-tip]')!.textContent, /free for this plan to use/);
 });
