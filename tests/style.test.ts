@@ -532,3 +532,10 @@ test('paragraphs read in the sans token; numbers, tables and code keep mono (X-1
     'tables and code never take the sans',
   );
 });
+
+test('a table wrapper is positioned, so hidden headers stay inside its scroll box (#1375)', () => {
+  const css = fs.readFileSync('public/style.css', 'utf8');
+  const wrap = css.match(/(?:^|\n)\.table-wrap \{([^}]*)\}/);
+  assert.ok(wrap, 'a .table-wrap rule');
+  assert.match(wrap[1]!, /position:\s*relative/);
+});

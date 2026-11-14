@@ -3018,6 +3018,42 @@ p.eyebrow {
   margin: 4px 0;
   overflow-wrap: anywhere;
 }
+/* The somersloop table (BP-8, #1340): numbers right-aligned and tabular, the line's name and its
+   raw resources in the first column, which wraps rather than stretching the table on a phone. */
+.sloop-table th button.link {
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+}
+.sloop-table th.number {
+  text-align: right;
+}
+.sloop-table td.number {
+  text-align: right;
+}
+.sloop-table th[scope='row'] {
+  background: transparent;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: inherit;
+  color: inherit;
+  font-weight: 400;
+  min-width: 150px;
+}
+.sloop-table .sloop-raw {
+  display: block;
+  margin-top: 2px;
+}
+.sloop-table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .sloop-table th button.link {
+    min-height: 44px;
+  }
+}
 .sloop-payoff button.link {
   background: none;
   border: 0;
@@ -3076,7 +3112,10 @@ p.eyebrow {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
+/* Positioned, so a visually hidden header (position: absolute) stays inside the scroll box
+   and never widens the page on a phone (#1375 review). */
 .table-wrap {
+  position: relative;
   overflow: auto;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -7260,16 +7299,35 @@ button.rail-tile:hover {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-/* ↑ and ↓ are at least 24px wide (#1256, WCAG 2.5.8): 14px before. */
+/* ↑ ↓ and ⋯ are 36px boxes (BP-9, #1340; 20px before, 24px since #1256), 44px on a phone and
+   under a coarse pointer, below. Edit and Remove are in the ⋯ menu (ui/ActionMenu.vue); Remove
+   in it is red. */
 .task-tools .btn.quiet {
-  min-width: 24px;
-  padding: 2px 4px;
-  font-size: 11px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 2px 6px;
+  font-size: 14px;
 }
-.task-tools .btn.quiet.danger {
+.task-tools .action-menu-button {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 2px 6px;
+}
+.task-tools .action-menu-button svg {
+  margin: 0;
+}
+.task-tools .action-menu-list .btn.danger {
   color: var(--red);
-  border-bottom-color: rgba(224, 85, 58, 0.5);
-  background: transparent;
+}
+.task-tools .action-menu-list .btn {
+  min-height: 44px;
+}
+@media (pointer: coarse) {
+  .task-tools .btn.quiet,
+  .task-tools .action-menu-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 /* On a phone the step tools take their own row under the title, so the title keeps the row's
    full width instead of wrapping in a narrow column beside ↑ ↓ Edit Remove (#613). The tools
@@ -7284,7 +7342,8 @@ button.rail-tile:hover {
     justify-content: flex-start;
     margin-top: -8px;
   }
-  .task-tools .btn.quiet {
+  .task-tools .btn.quiet,
+  .task-tools .action-menu-button {
     min-width: 44px;
     min-height: 44px;
   }

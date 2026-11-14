@@ -970,16 +970,22 @@ try {
   const longStep = page.locator('#main .task', { hasText: longTitle });
   await longStep.waitFor();
   await page.locator('[data-toggle-plan-edit]').first().click();
+  // Edit and Remove are in each step's ⋯ menu (BP-9, #1340): open it, then press the item.
+  const stepMenuItem = async (stepId: string, item: 'edit-task' | 'remove-step') => {
+    await page.locator(`#main [data-step-menu="${stepId}"]`).click();
+    await page.locator(`#main [data-${item}="${stepId}"]`).click();
+  };
+  await longStep.locator('[data-step-menu]').click();
   await longStep.locator('[data-edit-task]').click();
   await page
     .locator('[data-task-edit] [name=body]')
     .fill('See https://satisfactory.wiki.gg/wiki/Supercalifragilisticexpialidocious_Plate_Factory');
   await page.locator('[data-task-edit] button[type=submit]').click();
-  await longStep.locator('[data-edit-task]').waitFor();
+  await longStep.locator('[data-edit-task]').waitFor({ state: 'attached' });
   await page.setViewportSize({ width: 320, height: 720 });
   for (const mode of ['edit mode', 'view mode']) {
     if (mode === 'view mode') {
-      await page.locator('[data-toggle-plan-edit]').first().click();
+      await page.locator('[data-edit-bar-done]').click();
       await longStep.locator('[data-edit-task]').waitFor({ state: 'detached' });
     }
     const overflow = await longStep.evaluate(row => {
@@ -1008,14 +1014,14 @@ try {
     await page.locator(`#main [data-task="${builtInId}"] summary`).textContent()
   )?.trim() as string;
   const renameStep = async (title: string) => {
-    await page.locator(`#main [data-edit-task="${builtInId}"]`).click();
+    await stepMenuItem(builtInId, 'edit-task');
     await page.locator(`#main [data-task-edit="${builtInId}"] [name=title]`).fill(title);
     await page.locator(`#main [data-task-edit="${builtInId}"] button[type=submit]`).click();
-    await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor();
+    await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor({ state: 'attached' });
   };
   await renameStep(longTitle);
   // Removing a plan step asks nothing and offers Undo instead (X-4, #1334).
-  await page.locator(`#main [data-remove-step="${builtInId}"]`).click();
+  await stepMenuItem(builtInId, 'remove-step');
   const restoreButton = page.locator(`#main [data-restore-task="${builtInId}"]`);
   await page.setViewportSize({ width: 320, height: 720 });
   await page.locator('#main .removed-steps').evaluate(panel => {
@@ -1037,9 +1043,9 @@ try {
   );
   await page.setViewportSize({ width: 1280, height: 720 });
   await restoreButton.click();
-  await page.locator(`#main [data-remove-step="${builtInId}"]`).waitFor();
+  await page.locator(`#main [data-remove-step="${builtInId}"]`).waitFor({ state: 'attached' });
   await renameStep(builtInTitle);
-  await page.locator('[data-toggle-plan-edit]').first().click();
+  await page.locator('[data-edit-bar-done]').click();
   await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor({ state: 'detached' });
   // Back and Forward start each page at its top, also while focus stays on the sidebar link
   // that was followed (#925): with the browser's own scroll restoration, Chrome put back part of

@@ -2,7 +2,7 @@
 // one amplified machine saves on each line of the phase, best first by raw resources per
 // somersloop, every line in the build plan's Somersloops tab (#1243), each name opening its line's
 // dialog. Nothing before Phase 3 or in New to Satisfactory mode, and nothing is stored or
-// recalculated.
+// recalculated. It is a sortable table (BP-8, #1340).
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
@@ -91,10 +91,10 @@ test('each line says what one amplified machine saves, best first', async () => 
   assert.ok(panel, 'the ranking shows in Phase 3');
   assert.equal(words(panel.querySelector('h2')), 'Where a somersloop pays off most');
   assert.deepEqual($$('[data-sloop-line]').map(words), [
-    '1 somersloop on Iron Plate: −1 Constructor, −30 Iron Ore/min, +1 MW',
-    '1 somersloop on Iron Ingot: −1 Smelter, −30 Iron Ore/min, +5 MW',
-    '1 somersloop on Iron Rod: −1 Constructor, −15 Iron Ore/min, +4.5 MW',
-    '2 somersloops on Reinforced Iron Plate (one Assembler): −22.5 Iron Ore/min, +6.75 MW · 11.3 raw resources/min per somersloop',
+    'Iron Plate −30 Iron Ore/min 1 −1 Constructor 30/min +1 MW Pin',
+    'Iron Ingot −30 Iron Ore/min 1 −1 Smelter 30/min +5 MW Pin',
+    'Iron Rod −15 Iron Ore/min 1 −1 Constructor 15/min +4.5 MW Pin',
+    'Reinforced Iron Plate (one Assembler) −22.5 Iron Ore/min 2 none 11.25/min +6.75 MW Pin',
   ]);
   assert.equal(
     words($('[data-sloop-budget]')),
@@ -102,7 +102,7 @@ test('each line says what one amplified machine saves, best first', async () => 
   );
   assert.equal($('[data-sloop-more]'), null, 'four lines need no "Show all"');
   // A name opens its production line's dialog.
-  const name = $<HTMLButtonElement>('[data-sloop-line="Iron Rod"] button')!;
+  const name = $<HTMLButtonElement>('[data-sloop-line="Iron Rod"] th button')!;
   assert.equal(name.dataset.calcFactory, 'Iron Rod');
   name.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, true);
@@ -110,16 +110,70 @@ test('each line says what one amplified machine saves, best first', async () => 
   assert.deepEqual(plan, before, 'the plan is not changed');
 });
 
-test('a count stays with its machine, a rate with its whole item name, at 390 px (#1020, #1019)', async () => {
+test('a rate keeps its whole item name at 390 px (#1019)', async () => {
   await show(ironPlan(), '3');
   // Ordinary spaces and the template's line breaks collapse; the non-breaking ones stay.
-  const text = $('[data-sloop-line="Iron Plate"]')!
+  const raw = $('[data-sloop-line="Iron Plate"] [data-sloop-raw]')!
     .textContent!.replace(/[ \t\r\n]+/g, ' ')
     .trim();
-  assert.equal(
-    text,
-    '1\u00a0somersloop on Iron Plate: −1\u00a0Constructor, −30\u00a0Iron\u00a0Ore/min, +1\u00a0MW',
-  );
+  assert.equal(raw, '−30\u00a0Iron\u00a0Ore/min');
+  assert.equal(words($('[data-sloop-line="Iron Plate"] [data-sloop-cell="power"]')), '+1 MW');
+});
+
+test('the table has its columns, sorts by a header and says so with aria-sort (BP-8)', async () => {
+  await show(ironPlan(), '3');
+  const headers = () => $$('[data-sloop-table] thead th');
+  assert.deepEqual(headers().map(words), [
+    'Line',
+    'Somersloops',
+    'Machines saved',
+    'Raw resources saved per somersloop ▼',
+    'Power change',
+    'Action',
+  ]);
+  const sorts = () => headers().map(th => th.getAttribute('aria-sort'));
+  const order = () => $$<HTMLElement>('[data-sloop-line]').map(row => row.dataset.sloopLine);
+  // The ranking is the default order, and its column says so.
+  assert.deepEqual(sorts(), ['none', 'none', 'none', 'descending', 'none', null]);
+  assert.deepEqual(order(), ['Iron Plate', 'Iron Ingot', 'Iron Rod', 'Reinforced Iron Plate']);
+  const sort = async (key: string) => {
+    $<HTMLButtonElement>(`[data-sloop-sort="${key}"]`)!.click();
+    await nextTick();
+  };
+  // The line's name sorts A to Z, and a second press reverses it.
+  await sort('line');
+  assert.deepEqual(order(), ['Iron Ingot', 'Iron Plate', 'Iron Rod', 'Reinforced Iron Plate']);
+  assert.equal(sorts()[0], 'ascending');
+  assert.equal(sorts()[3], 'none');
+  await sort('line');
+  assert.deepEqual(order(), ['Reinforced Iron Plate', 'Iron Rod', 'Iron Plate', 'Iron Ingot']);
+  assert.equal(sorts()[0], 'descending');
+  // Somersloops: the line that takes the most first.
+  await sort('sloops');
+  assert.equal(order()[0], 'Reinforced Iron Plate');
+  assert.equal(sorts()[1], 'descending');
+  // Power change: the biggest saving (the smallest increase) first.
+  await sort('power');
+  assert.deepEqual(order(), ['Iron Plate', 'Iron Rod', 'Iron Ingot', 'Reinforced Iron Plate']);
+  assert.equal(sorts()[4], 'ascending');
+  // Back to the ranking.
+  await sort('perSloop');
+  assert.deepEqual(order(), ['Iron Plate', 'Iron Ingot', 'Iron Rod', 'Reinforced Iron Plate']);
+  assert.equal(sorts()[3], 'descending');
+});
+
+test('Pin on a row opens the line’s dialog with its pin field focused (BP-8)', async () => {
+  const plan = ironPlan();
+  plan.settings.amplifySloops = 8;
+  const before = structuredClone(plan);
+  await show(plan, '3');
+  $<HTMLButtonElement>('[data-sloop-line="Iron Rod"] [data-sloop-pin-open]')!.click();
+  await new Promise(resolve => setTimeout(resolve, 120));
+  await nextTick();
+  assert.equal($<HTMLDialogElement>('#detail')!.open, true);
+  assert.ok($('#detail [data-sloop-pin-choice]'), 'the dialog has the pin control');
+  assert.equal(document.activeElement?.id, 'sloop-pin-Iron Rod', 'focus is on its field');
+  assert.deepEqual(plan, before, 'opening it changes nothing');
 });
 
 test('a real plan shows every line in the Somersloops tab, in the ranking’s order', async () => {
