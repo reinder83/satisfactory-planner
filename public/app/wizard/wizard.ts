@@ -20,7 +20,7 @@ import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../prog
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { beginnerMode, beginnerStock } from '../beginner.ts';
-import { detailLevel, profileDetail } from '../detail-level.ts';
+
 import { expertMode } from '../expert.ts';
 import { catalogRecipeBook, sourceBuiltLines, withBuiltLines } from '../built-capacity.ts';
 import { announce } from '../announce.ts';
@@ -123,9 +123,10 @@ export interface WizardDraft {
   // they were read from. Review then lists what changes, and its button recalculates that
   // profile in place. Draft only, never stored.
   edit?: EditTarget | null;
-  // The detail level the wizard shows (#1337, detail-level.ts): the level shown when it opened, or
-  // the edited profile's. Its control changes it; Create profile and Recalculate in place store it
-  // as the profile's own.
+  // The detail level the user picked in the wizard (#1337, detail-level.ts). Unset until they pick
+  // one, so an untouched draft stores none: Create profile and Recalculate in place send it only
+  // when set, and the profile keeps following the browser's level (or its own stored one).
+  // Until then the control shows the edited profile's level, or the browser's.
   detail?: DetailLevel;
 }
 
@@ -237,7 +238,6 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
     found ? withOwnedFound(settings, found) : settings,
   );
   wizardDraft.name = context.profile.name;
-  wizardDraft.detail = profileDetail(context.state);
   wizardDraft.carryFrom = profileId;
   wizardDraft.mode = 'advanced';
   wizardDraft.step = Math.min(Math.max(step, 1), 4);
@@ -364,7 +364,6 @@ function newDraft(
     guidedStep: 1,
     guidedAsk: null,
     tutorial: 'doing',
-    detail: detailLevel(),
   };
 }
 
@@ -791,7 +790,7 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
       carryFrom: wizardDraft.saveId ? wizardDraft.carryFrom : null,
       carry: wizardDraft.carry,
       built: [...guidedBuiltKeys(wizardDraft), ...alreadyHaveKeys(wizardDraft)],
-      detailLevel: wizardDraft.detail,
+      ...(wizardDraft.detail ? { detailLevel: wizardDraft.detail } : {}),
     },
     true,
     calcProgress(button, 'Saving profile…'),
@@ -848,7 +847,7 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
       planCreatedAt: edit.plan.createdAt,
       carry: wizardDraft.carry,
       built: [...guidedBuiltKeys(wizardDraft), ...alreadyHaveKeys(wizardDraft)],
-      detailLevel: wizardDraft.detail,
+      ...(wizardDraft.detail ? { detailLevel: wizardDraft.detail } : {}),
     },
     calcProgress(button, 'Recalculating…'),
   );

@@ -362,7 +362,7 @@ test('Create profile sends the wizard’s level; Edit settings starts from the p
   await settle();
   render();
   await settle();
-  assert.equal(wizard!.detail, 'expert');
+  assert.equal(wizard!.detail, undefined, 'nothing picked yet');
   checkControl('#wizard-form', 'expert');
   await pick('standard', '#wizard-form');
   $<HTMLElement>('[data-wizard-step="5"]')!.click();
@@ -371,4 +371,93 @@ test('Create profile sends the wizard’s level; Edit settings starts from the p
   await settle();
   await settle();
   assert.equal(edits.find(([path]) => path === '/api/recalculate')![1].detailLevel, 'standard');
+});
+
+// A new wizard profile or an Edit settings recalculation writes the level (and so state version 31)
+// only when the user picked one for that profile: the draft starts without one.
+const submitWizard = async () => {
+  $('#wizard-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  await settle();
+};
+const newWizard = async (picked: DetailLevel | null) => {
+  open({ workspace: { catalog: catalog(), saves: [] } });
+  setBrowserDetail('expert');
+  const plan = generated();
+  startWizard();
+  wizard!.mode = 'advanced';
+  wizard!.step = 1;
+  go('wizard');
+  render();
+  await settle();
+  if (picked) await pick(picked, '#wizard-form');
+  Object.assign(wizard!, {
+    step: 5,
+    saveName: evil,
+    settings: structuredClone(plan.settings),
+    preview: plan,
+  });
+  render();
+  await settle();
+  const calls = stubFetch<{ detailLevel?: DetailLevel }>({
+    '/api/profiles': { workspace, saveId: 's', profileId: 'p', carriedChecks: 0 },
+    '/api/context': {
+      save: { id: 's', name: 'World' },
+      profile: { id: 'p', kind: 'calculated', name: 'New' },
+      state: { version: 30, settings: { phase: '3' }, checks: {}, notes: {}, deliveries: {} },
+      plan,
+    },
+  });
+  await submitWizard();
+  return calls.find(([path]) => path === '/api/profiles')![1];
+};
+
+test('an untouched new wizard profile sends no level, so it keeps its content version', async () => {
+  const body = await newWizard(null);
+  assert.equal('detailLevel' in body, false, 'no detailLevel in the request');
+});
+
+test('picking a level in the wizard sends it for the new profile', async () => {
+  assert.equal((await newWizard('beginner')).detailLevel, 'beginner');
+});
+
+const recalculation = async (picked: DetailLevel | null, own?: DetailLevel) => {
+  page();
+  const plan = generated();
+  open({ calculated: plan, state: own ? { version: 31, detailLevel: own } : { version: 30 } });
+  setWorkspace({ ...workspace, catalog: catalog() });
+  go('plan');
+  render();
+  await settle();
+  const calls = stubFetch<{ detailLevel?: DetailLevel }>({
+    '/api/preview': generated(),
+    '/api/recalculate': { workspace, saveId: 's', profileId: 'p', backupId: 'b', reviewCount: 0 },
+    '/api/context': {
+      save: { id: 's', name: 'World' },
+      profile: { id: 'p', kind: 'calculated', name: 'Edited' },
+      state: { version: 30, settings: { phase: '3' }, checks: {}, notes: {}, deliveries: {} },
+      plan: generated(),
+    },
+  });
+  $('button[data-profile-switcher]')!.click();
+  await settle();
+  $('[data-edit-open-profile]')!.click();
+  await settle();
+  render();
+  await settle();
+  if (picked) await pick(picked, '#wizard-form');
+  $<HTMLElement>('[data-wizard-step="5"]')!.click();
+  await settle();
+  await submitWizard();
+  return calls.find(([path]) => path === '/api/recalculate')![1];
+};
+
+test('Recalculate in place of a v30 profile sends no level unless one is picked', async () => {
+  assert.equal('detailLevel' in (await recalculation(null)), false);
+  assert.equal((await recalculation('beginner')).detailLevel, 'beginner');
+});
+
+test('Recalculate in place keeps a stored level without sending it again', async () => {
+  const body = await recalculation(null, 'expert');
+  assert.equal('detailLevel' in body, false, 'the profile keeps its own level server-side');
 });

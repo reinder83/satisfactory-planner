@@ -87,6 +87,10 @@ export const profileDetail = (progress: { detailLevel?: DetailLevel } | null | u
 // The level shown now: the wizard's while it is on screen (its draft's, started from the profile it
 // edits or the level shown before it opened), else the open profile's.
 export function detailLevel(): DetailLevel {
-  if (view === 'wizard' && wizard?.detail) return wizard.detail;
+  if (view === 'wizard' && wizard) {
+    return (
+      wizard.detail ?? (wizard.edit ? profileDetail(stateLoaded ? state : null) : browserLevel)
+    );
+  }
   return profileDetail(stateLoaded ? state : null);
 }

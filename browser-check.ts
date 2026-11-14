@@ -151,7 +151,7 @@ async function checkPerformance(browser: import('playwright').Browser) {
 // unlock in it and keeps focus there, a reload keeps the ticks (IndexedDB), and Space again
 // unticks that group's unlocks only. The browser has only the old "Expert mode" switch stored
 // (`planner-expert`), so this is also the detail level's migration (#1337): it reads as Expert,
-// the new profile is made at Expert, and on the build plan the arrow keys pick another level,
+// a new profile follows it without storing a level, and on the build plan the arrow keys pick another level,
 // which is saved with the profile and kept on a reload.
 async function checkExpertMode(browser: import('playwright').Browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -500,9 +500,7 @@ async function checkMapMarkers(page: Page, stored: () => Promise<ProgressState>)
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   const placed = (await stored()).mapMarkers;
   assert.equal(placed?.length, 1);
-  // 27, or the version the profile had already: one made in the wizard has its detail level
-  // (#1337, version 31) from the start.
-  assert.equal((await stored()).version, Math.max(27, before));
+  assert.equal((await stored()).version, 27);
   // A drag of 60 px to the right moves it there and saves it once.
   const pin = await marker.locator('.map-marker-pin').boundingBox();
   assert.ok(pin);
@@ -564,7 +562,7 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   assert.equal(await factory.evaluate(el => el === document.activeElement), true, 'focused');
   const placed = (await stored()).factoryPlaces?.[id];
   assert.ok(placed);
-  assert.equal((await stored()).version, Math.max(28, before));
+  assert.equal((await stored()).version, 28);
   const pin = await factory.locator('.map-factory-pin').boundingBox();
   assert.ok(pin);
   // Placed in the middle of the view, the map drawn in its room past the edges (#1289).
@@ -688,14 +686,7 @@ async function checkGraphLayout(
   };
   let layout = await waitFor(stored => !!stored?.nodes?.[row]);
   assert.deepEqual(layout?.nodes?.[row], line.spot, 'the spot is stored with the factory');
-  // A profile made in the wizard has its detail level (#1337, version 31) from the start, which
-  // outranks the layout's versions.
-  const versionFor = async (layoutVersion: number) => {
-    const now = await stored();
-    return { version: now.version, expected: now.detailLevel ? 31 : layoutVersion };
-  };
-  let versions = await versionFor(22);
-  assert.equal(versions.version, versions.expected);
+  assert.equal((await stored()).version, 22);
   // An input and an output move the same way (#1240), stored by node id as version 25.
   const input = await firstNode('in:');
   const output = await firstNode('out:');
@@ -704,8 +695,7 @@ async function checkGraphLayout(
   layout = await waitFor(stored => !!stored?.places?.[input] && !!stored?.places?.[output]);
   assert.deepEqual(layout?.places?.[input], inputMove.spot, 'the input is stored');
   assert.deepEqual(layout?.places?.[output], outputMove.spot, 'the output is stored');
-  versions = await versionFor(25);
-  assert.equal(versions.version, versions.expected);
+  assert.equal((await stored()).version, 25);
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   await page.reload();

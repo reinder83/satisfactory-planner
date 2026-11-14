@@ -9163,6 +9163,21 @@ th.resource-cell {
 .checklist-tools .detail-level {
   margin-left: auto;
 }
+/* On a desktop the search, the filters and the level share one row, as in the mockup, even with
+   the right rail open: the search gives way first, and the row wraps only on narrow screens. */
+@media (min-width: 721px) {
+  .checklist-tools {
+    gap: 10px;
+  }
+  .checklist-tools .search {
+    flex: 1 1 120px;
+    min-width: 120px;
+  }
+  .checklist-tools .plan-filters {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}
 /* On a phone each is a 44px touch target, and the detail level takes a row of its own with its
    three segments sharing it. */
 @media (max-width: 720px) {
