@@ -67,6 +67,7 @@ import {
   trickleItems,
   transportFuel,
 } from '../../logistics.ts';
+import { estimateText, tripFromMap } from '../../train-proposal.ts';
 import { calcStage, calculated, stage as stageKey, state, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
@@ -92,8 +93,19 @@ const view = computed(() =>
       // needs none, a saved vehicle, or belts and pipes.
       const key = link.from + ':' + link.to,
         carrier = linkCarrier(groupsState.links, link.from, link.to),
-        transport = carrierTransport(carrier),
+        saved = carrierTransport(carrier),
         extract = carrier.kind === 'extract';
+      // A train link still on the default round trip shows the map's estimate when both
+      // factories have a place (LOG-2, #1347); a figure saved on the link wins. Display only.
+      const places = state.factoryPlaces,
+        tripMap =
+          saved?.mode === 'train'
+            ? tripFromMap(saved.roundTripMin, [places?.[link.from], places?.[link.to]])
+            : null;
+      const transport =
+        saved && tripMap?.source === 'map' && tripMap.minutes
+          ? { ...saved, roundTripMin: tripMap.minutes }
+          : saved;
       const mode: 'belt' | LinkMode = transport?.mode ?? 'belt';
       const vehicle = transport
         ? linkVehicleText(
@@ -133,6 +145,13 @@ const view = computed(() =>
         // page has one By, Round trip and Fuel per link, so their names tell them apart.
         between: `${name(link.from)} to ${name(link.to)}`,
         transport,
+        // What is saved on the link, which an update starts from (the estimate is not saved).
+        saved,
+        // The note under the round trip: "≈ 4.2 min estimate" from the map, else none.
+        estimate:
+          tripMap?.source === 'map' && tripMap.estimate
+            ? { text: estimateText(tripMap.estimate.minutes), km: num(tripMap.estimate.km) }
+            : null,
         mode,
         modes: linkModeOptions(link.items, FLUIDS, mode, stageKey()),
         // A link saved on Fluid Trucks shown in a phase before them (#1177).
@@ -292,7 +311,7 @@ async function setTransport(
   change: { mode?: 'belt' | LinkMode; roundTripMin?: number; fuel?: string },
 ) {
   const update = linkTransportUpdate(
-    link,
+    { ...link, transport: link.saved },
     change,
     linkSiblings(calculated?.stages, factoryGroupsState(), link, calculated?.settings.onSite),
   );
@@ -550,12 +569,23 @@ function recalculate(event: Event) {
                         step="0.1"
                         :data-link-trip="link.key"
                         :aria-label="`Round trip in minutes: ${link.between}`"
+                        :aria-describedby="
+                          link.estimate ? `trip-estimate-${slug(link.key)}` : undefined
+                        "
                         :value="trips[link.key]"
                         @input="trips[link.key] = ($event.target as HTMLInputElement).value"
                         @change="setTrip($event, link)"
                         @blur="leaveDraft(trips, link.key, $event)"
                       />
-                      min</label
+                      min
+                      <span
+                        v-if="link.estimate"
+                        :id="`trip-estimate-${slug(link.key)}`"
+                        class="trip-estimate"
+                        :title="`The stations are about ${link.estimate.km} km apart on the map. Type your own round trip to replace it.`"
+                        data-link-trip-estimate
+                        >{{ link.estimate.text }}</span
+                      ></label
                     >
                     <label v-if="link.fuelled"
                       >Fuel

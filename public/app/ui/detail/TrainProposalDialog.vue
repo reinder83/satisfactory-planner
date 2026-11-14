@@ -1,11 +1,12 @@
 <!--
-  Create stations from train links (#1301), in #detail (kind 'trains'): the preview of what the
+  Create stations from train links (#1301, cards LOG-3 #1347), in #detail (kind 'trains'): the preview of what the
   Logistics page's Trains tab proposes for each link of the phase shown that goes by train
   (proposeTrains in app/train-proposal.ts): a pick-up station at the supplying factory or a mining
   outpost, a drop-off station at the receiving factory, their platforms with the cargo, and a line
   between them with the wagons its rate and round trip need. Each proposed link has a checkbox,
-  ticked to start with, and its round trip, which the player may edit: the map's estimate where
-  both ends have a place on the world map (marked as an estimate), else the link's own. A link
+  ticked to start with, as a card of three columns (pick-up, drop-off, train with its round trip),
+  and its round trip, which the player may edit: the map's estimate where both ends have a place
+  on the world map (marked as an estimate), else the link's own. A link
   whose items a line already carries is listed as served, and one with an end that cannot have a
   station says why; neither has a checkbox. Nothing is saved before Create, which adds the ticked
   links' new stations and lines in one write with Undo in the toast (ui/train-proposal-actions.ts);
@@ -22,6 +23,7 @@ import { newLineId, DIRECTION_TEXT } from '../../train-lines.ts';
 import { newStationId, ownerText, platformCounts } from '../../train-stations.ts';
 import {
   createdEntries,
+  estimateText,
   proposeTrains,
   ratesText,
   STOP_DWELL,
@@ -99,17 +101,18 @@ const createText = computed(() => {
 const figure = (value: number) => localeNumber(value, 1);
 // Line names in a sentence: “Ore run” and “Plate run”.
 const lineNames = (names: string[]) => listNames(names.map(name => `“${name}”`));
-function stationText(role: 'Pick-up' | 'Drop-off', pick: StationPick): string {
-  const owner = ownerText(pick.station.owner, groups.value);
-  return pick.reused
-    ? `${role}: your station “${pick.station.name}” (${owner}), as it is: ${platformCounts(pick.station.platforms)}.`
-    : `${role}: new station “${pick.station.name}” (${owner}), ${platformCounts(pick.station.platforms)}.`;
+// One station column of a card: whether it is new or the player's own, its name, owner and
+// platforms.
+function stationFacts(pick: StationPick) {
+  return {
+    kind: pick.reused ? 'Your station, as it is' : 'New station',
+    name: `“${pick.station.name}”`,
+    owner: ownerText(pick.station.owner, groups.value),
+    platforms: platformCounts(pick.station.platforms),
+  };
 }
-function lineText(proposal: LinkProposal): string {
-  const line = proposal.line!;
-  const wagons = proposal.wagons.map(wagonText).join('; ');
-  return `Line: “${line.name}”, ${DIRECTION_TEXT[line.direction].label.toLowerCase()}, ${trainText(proposal)}: ${wagons}.`;
-}
+const directionText = (proposal: LinkProposal) =>
+  DIRECTION_TEXT[proposal.line!.direction].label.toLowerCase();
 const ASSUMED = `about ${figure(TRAIN_SPEED * 3.6)} km/h on track ${figure(TRACK_FACTOR)} times the straight line and ${figure(STOP_DWELL * 60)} seconds at each stop`;
 function tripNote(proposal: LinkProposal): string {
   const apart = proposal.estimate
@@ -135,6 +138,7 @@ function typeTrip(key: string, event: Event) {
     bad.value = next;
   }
 }
+const roles = ['pickup', 'dropoff'] as const;
 const domKey = (key: string) => key.replace(/[^a-zA-Z0-9-]/g, '_');
 
 async function create(event: Event) {
@@ -208,57 +212,104 @@ async function create(event: Event) {
             >
             <div :id="`proposal-${domKey(proposal.key)}`" class="proposal-parts">
               <p class="small" data-proposal-rates>{{ ratesText(proposal.missing, facts) }}</p>
-              <ul class="small">
-                <li data-proposal-pickup>{{ stationText('Pick-up', proposal.pickup!) }}</li>
-                <li data-proposal-dropoff>{{ stationText('Drop-off', proposal.dropoff!) }}</li>
-                <li data-proposal-line>{{ lineText(proposal) }}</li>
-                <li v-if="proposal.servedBy.length" data-proposal-partly>
-                  {{
-                    ratesText(
-                      proposal.items.filter(entry => !proposal.missing.includes(entry)),
-                      facts,
-                    )
-                  }}
-                  already goes by {{ lineNames(proposal.servedBy) }}, so only the rest is proposed.
-                </li>
-              </ul>
+              <p v-if="proposal.servedBy.length" class="small" data-proposal-partly>
+                {{
+                  ratesText(
+                    proposal.items.filter(entry => !proposal.missing.includes(entry)),
+                    facts,
+                  )
+                }}
+                already goes by {{ lineNames(proposal.servedBy) }}, so only the rest is proposed.
+              </p>
+              <div class="proposal-columns">
+                <section
+                  v-for="role in roles"
+                  :key="role"
+                  class="proposal-column"
+                  :data-proposal-pickup="role === 'pickup' ? '' : undefined"
+                  :data-proposal-dropoff="role === 'dropoff' ? '' : undefined"
+                  :aria-labelledby="`proposal-${role}-${domKey(proposal.key)}`"
+                >
+                  <h4
+                    :id="`proposal-${role}-${domKey(proposal.key)}`"
+                    class="proposal-column-title"
+                  >
+                    {{ role === 'pickup' ? 'Pick-up' : 'Drop-off' }}
+                  </h4>
+                  <template
+                    v-for="fact in [
+                      stationFacts(role === 'pickup' ? proposal.pickup! : proposal.dropoff!),
+                    ]"
+                    :key="role"
+                  >
+                    <p class="small proposal-kind">{{ fact.kind }}</p>
+                    <p class="small proposal-name">{{ fact.name }}</p>
+                    <p class="small muted">{{ fact.owner }}</p>
+                    <p class="small">{{ fact.platforms }}</p>
+                  </template>
+                </section>
+                <section
+                  class="proposal-column"
+                  data-proposal-line
+                  :aria-labelledby="`proposal-train-${domKey(proposal.key)}`"
+                >
+                  <h4 :id="`proposal-train-${domKey(proposal.key)}`" class="proposal-column-title">
+                    Train
+                  </h4>
+                  <p class="small proposal-name">“{{ proposal.line!.name }}”</p>
+                  <p class="small muted">{{ directionText(proposal) }}</p>
+                  <p class="small">{{ trainText(proposal) }}</p>
+                  <ul class="small proposal-wagons">
+                    <li v-for="wagon in proposal.wagons" :key="wagon.item">
+                      {{ wagonText(wagon) }}
+                    </li>
+                  </ul>
+                  <label class="field proposal-trip"
+                    >Round trip (minutes)<input
+                      type="text"
+                      v-number
+                      inputmode="decimal"
+                      min="0.1"
+                      :max="ROUND_TRIP_MAX"
+                      step="0.1"
+                      :value="tripValue(proposal)"
+                      :data-proposal-trip="proposal.key"
+                      :data-trip-source="proposal.tripSource"
+                      :aria-invalid="bad.has(proposal.key) ? 'true' : undefined"
+                      :aria-describedby="`trip-${domKey(proposal.key)} trip-error-${domKey(proposal.key)}`"
+                      @input="typeTrip(proposal.key, $event)"
+                  /></label>
+                  <p
+                    :id="`trip-${domKey(proposal.key)}`"
+                    class="small muted"
+                    data-proposal-trip-note
+                  >
+                    <strong
+                      v-if="proposal.tripSource === 'map'"
+                      class="proposal-estimate"
+                      data-proposal-estimate
+                      >{{ estimateText(proposal.roundTrip) }}.</strong
+                    >
+                    {{ tripNote(proposal) }}
+                  </p>
+                  <p
+                    :id="`trip-error-${domKey(proposal.key)}`"
+                    class="form-error"
+                    role="alert"
+                    v-text="
+                      bad.has(proposal.key)
+                        ? `Give the round trip in minutes, above 0 and at most ${ROUND_TRIP_MAX}.`
+                        : ''
+                    "
+                  ></p>
+                </section>
+              </div>
               <p v-if="proposal.wanted" class="notice warn" data-proposal-long>
                 The rate needs {{ proposal.wanted }} wagons, more than one train pulls: this line
                 has {{ proposal.wagons.reduce((sum, wagon) => sum + wagon.wagons, 0) }}. Add a
                 second line for the rest.
               </p>
             </div>
-            <label class="field proposal-trip"
-              >Round trip (minutes)<input
-                type="text"
-                v-number
-                inputmode="decimal"
-                min="0.1"
-                :max="ROUND_TRIP_MAX"
-                step="0.1"
-                :value="tripValue(proposal)"
-                :data-proposal-trip="proposal.key"
-                :data-trip-source="proposal.tripSource"
-                :aria-invalid="bad.has(proposal.key) ? 'true' : undefined"
-                :aria-describedby="`trip-${domKey(proposal.key)} trip-error-${domKey(proposal.key)}`"
-                @input="typeTrip(proposal.key, $event)"
-            /></label>
-            <p :id="`trip-${domKey(proposal.key)}`" class="small muted" data-proposal-trip-note>
-              <strong v-if="proposal.tripSource === 'map'" class="proposal-estimate"
-                >Estimate.</strong
-              >
-              {{ tripNote(proposal) }}
-            </p>
-            <p
-              :id="`trip-error-${domKey(proposal.key)}`"
-              class="form-error"
-              role="alert"
-              v-text="
-                bad.has(proposal.key)
-                  ? `Give the round trip in minutes, above 0 and at most ${ROUND_TRIP_MAX}.`
-                  : ''
-              "
-            ></p>
           </template>
           <template v-else>
             <h3 class="proposal-title">{{ proposal.fromName }} to {{ proposal.toName }}</h3>

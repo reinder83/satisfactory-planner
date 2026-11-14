@@ -27,6 +27,9 @@ import {
   maxWagons,
   proposeTrains,
   roundTripEstimate,
+  routeEstimate,
+  tripFromMap,
+  estimateText,
   ownerMatches,
   suggestWagons,
   wagonText,
@@ -266,6 +269,33 @@ test('the wagon suggestion agrees with the Between-factories card', () => {
           assert.equal(wagon.wagons, card.freightCars + card.fluidCars, label);
         }
       }
+});
+
+test('the round trip a link or line shows: the estimate for the default or none, else the saved one (#1347)', () => {
+  const a = { x: 0, y: 0 },
+    b = { x: 100_000, y: 0 },
+    c = { x: 100_000, y: 100_000 };
+  // Two places: out and back, the roundTripEstimate figure.
+  assert.deepEqual(routeEstimate([a, b]), roundTripEstimate(a, b));
+  // Three stops of a loop: 1 km, 1 km and 1.41 km of track, three stops.
+  assert.equal(routeEstimate([a, b, c]).minutes, 4.5);
+  // Back and forth through three: out and back, 2 × 2 km.
+  assert.equal(routeEstimate([a, b, c], 'backAndForth').minutes, 5);
+  // The default 5, or none: the estimate when every end is placed.
+  assert.deepEqual(tripFromMap(5, [a, b]), {
+    minutes: 2.8,
+    source: 'map',
+    estimate: { minutes: 2.8, km: 1 },
+  });
+  assert.equal(tripFromMap(undefined, [a, b]).minutes, 2.8);
+  // Another saved figure wins, and the estimate stays beside it.
+  assert.equal(tripFromMap(8, [a, b]).minutes, 8);
+  assert.equal(tripFromMap(8, [a, b]).source, 'link');
+  // An end without a place: the saved one (the caller's fallback is 5), no estimate.
+  assert.deepEqual(tripFromMap(5, [a, undefined]), { minutes: 5, source: 'link' });
+  assert.deepEqual(tripFromMap(undefined, [a]), { minutes: undefined, source: 'link' });
+  assert.equal(estimateText(4), '≈ 4 min estimate');
+  assert.equal(estimateText(4.25), '≈ 4.3 min estimate');
 });
 
 test('the round trip: the map estimate replaces the default; the link’s own or a typed one wins', () => {
