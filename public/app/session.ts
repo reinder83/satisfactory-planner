@@ -190,6 +190,13 @@ export let editOpenFactory: string | null = null;
 export let importedSaves: string[] = [];
 // The last merge of a friend's progress on the Backup page (#1160): how many steps it ticked, from
 // which file and into which profile, for ADA's `progress-merged` line; null when that page goes.
+// What the last restore of a progress backup on the Backup page changed, in ADA's words, and the
+// profile it was restored into, for her `progress-restored` line (X-6, #1352); null when that page goes.
+export let restoredProgress: {
+  words: string;
+  good: boolean;
+  profileId: string;
+} | null = null;
 export let mergedProgress: { count: number; fileName: string; profileId: string } | null = null;
 
 // Other modules cannot assign imported bindings, so they change these through setters.
@@ -419,6 +426,11 @@ export function setEditOpenFactory(value: string | null) {
 }
 export function setImportedSaves(value: string[]) {
   importedSaves = value;
+}
+export function setRestoredProgress(
+  value: { words: string; good: boolean; profileId: string } | null,
+) {
+  restoredProgress = value;
 }
 export function setMergedProgress(
   value: { count: number; fileName: string; profileId: string } | null,

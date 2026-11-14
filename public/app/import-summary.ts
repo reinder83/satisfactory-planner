@@ -77,7 +77,7 @@ const otherWords = (other: number) => (other ? ` + ${plural(other, 'other tick')
 
 // The build-plan steps of `plan` done in `state`, over every phase the profile offers: the counts
 // of profilePhases with no phase worked on, which gives every phase its steps.
-function stepsDone(
+export function stepsDone(
   plan: StoredCalculatedPlan | null | undefined,
   state: SavedState,
   progression: Progression | null | undefined,
