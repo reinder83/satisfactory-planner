@@ -36,6 +36,14 @@ test('power: kW below 1 MW, MW to 1,000, GW above', () => {
   assert.equal(show(displayPower(0)), '0 MW');
 });
 
+test('power: 999.5 kW and up reads as 1 MW, never "1,000 kW" (#1355)', () => {
+  assert.equal(show(displayPower(0.9995)), '1 MW');
+  assert.equal(show(displayPower(0.99999)), '1 MW');
+  assert.equal(show(displayPower(0.9994)), '999 kW');
+  assert.equal(show(displayPower(-0.9996)), '-1 MW');
+  assert.equal(displayPower(0.9996).exact, '0.9996 MW');
+});
+
 test('percent: one decimal', () => {
   assert.equal(show(displayPercent(4.59)), '4.6%');
   assert.equal(displayPercent(4.59).exact, '4.59%');

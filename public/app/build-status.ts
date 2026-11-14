@@ -64,6 +64,9 @@ export interface BuildStatus {
   rows: RowStatus[];
   // Per minute, per item: what the built rows (plus raw and supplied) make now.
   produced: ItemRates;
+  // Per minute, per item: what everything the built rows feed asks for at full inputs (built
+  // consumers, storage, drone fuel, the elevator). `produced` over it is the share each gets.
+  demand: ItemRates;
   delivery: DeliveryStatus[];
   // The mean of now/planned over the delivered parts: 0 with nothing flowing, 1 when finished.
   deliveryShare: number;
@@ -411,6 +414,7 @@ export function buildStatus(
   return {
     rows: statusRows,
     produced: perItem(produced),
+    demand: perItem(demand),
     delivery,
     deliveryShare,
     power: { drawMW, supplyMW, short },

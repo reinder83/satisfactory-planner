@@ -590,7 +590,7 @@ export function groupFlow(
 // Each row's place down the one-column cards, from 0: each card's input rows, then its output
 // rows. A lane's trunk spans the places of its output row and of the input rows it feeds, so two
 // lanes overlap on the page exactly where their spans of places do.
-export function rowSlots(lines: readonly FlowLine[]): Map<string, number> {
+function rowSlots(lines: readonly FlowLine[]): Map<string, number> {
   const slot = new Map<string, number>();
   for (const line of lines)
     for (const row of [...line.inputs, ...line.outputs]) slot.set(row.id, slot.size);
@@ -737,24 +737,3 @@ function closestFirst(lanes: readonly Trunk[][]): Trunk[][] {
   }
   return order;
 }
-
-// The lane geometry, in px: lanes `step` apart, the innermost `inner` from the cards and the
-// outermost `outer` from the gutter's left edge. `narrow` is for a phone-width page.
-export interface LaneMetrics {
-  step: number;
-  inner: number;
-  outer: number;
-}
-export const LANE_METRICS: { wide: LaneMetrics; narrow: LaneMetrics } = {
-  wide: { step: 10, inner: 18, outer: 4 },
-  narrow: { step: 8, inner: 14, outer: 4 },
-};
-
-// The gutter's width for `count` lanes: none without lanes, else outer + (count − 1) × step +
-// inner, so it is sized to the lanes the group needs.
-export const laneGutter = (count: number, metrics: LaneMetrics): number =>
-  count > 0 ? metrics.outer + (count - 1) * metrics.step + metrics.inner : 0;
-
-// How far lane `lane` runs to the left of the cards' border.
-export const laneOffset = (lane: number, metrics: LaneMetrics): number =>
-  metrics.inner + lane * metrics.step;

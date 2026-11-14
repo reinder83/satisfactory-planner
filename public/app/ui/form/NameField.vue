@@ -27,7 +27,7 @@ function typed(event: Event) {
 
 <template>
   <label class="field"
-    >{{ label }} <HelpTip :name="name" /><input
+    >{{ label }} <HelpTip :name="name" :topic="label" /><input
       :name="name"
       type="text"
       v-value="value"

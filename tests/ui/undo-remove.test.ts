@@ -238,7 +238,8 @@ test('Remove on a factory asks nothing and keeps its lines; Undo restores it exa
   );
   assert.deepEqual(headings(), order, 'same place in the list');
   assert.match(text($('#toast')), /“Beta” is back/);
-  assert.equal(document.activeElement, $(`#section-${B} [data-section-heading]`));
+  assert.equal(document.activeElement, $(`#section-${B} [data-collapse]`));
+  assert.ok(!(document.activeElement instanceof HTMLInputElement), 'not a text field');
 });
 
 test('Ctrl+Z restores a removed factory too, from the middle of the list', async () => {
@@ -251,14 +252,15 @@ test('Ctrl+Z restores a removed factory too, from the middle of the list', async
   assert.deepEqual(state.factoryGroups, before);
 });
 
-test('after Remove on a factory focus goes to the next factory’s name', async () => {
+test('after Remove on a factory focus goes to the next factory’s fold button, not a text field (#1355)', async () => {
   await showFactories();
   const remove = $<HTMLElement>(`[data-remove-group="${A}"]`)!;
   remove.focus();
   remove.click();
   await settle();
   const now = document.activeElement as HTMLElement;
-  assert.ok(now.matches('[data-section-heading]') || now.closest('[data-section-heading]'));
+  assert.ok(now.matches('[data-collapse]'), 'the fold button, where Ctrl+Z is the toast’s');
+  assert.ok(!(now instanceof HTMLInputElement) && !(now instanceof HTMLTextAreaElement));
   assert.equal(now.closest('.user-group')?.id, `section-${B}`);
 });
 

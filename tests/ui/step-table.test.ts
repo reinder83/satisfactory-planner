@@ -56,7 +56,8 @@ test('the mining step shows a table: a row per resource, a total row, the intro 
   assert.equal(cells[2]!.dataset.label, 'Machines', 'a phone shows each cell under its column');
   assert.match(plain(cells[4]!.textContent), /MW$/);
   const total = table.querySelector('[data-step-table-total]')!;
-  assert.equal(plain(total.querySelector('th')?.textContent), 'Total');
+  // Folded behind "Show all N resources", the total says it sums all N (#1355).
+  assert.equal(plain(total.querySelector('th')?.textContent), `Total (all ${rows.length})`);
   // Since #1169 Phase 3 taps its nodes overclocked: the shards are in the table, and the research
   // is its own step right before this one, not advice under the table.
   assert.match(plain(cells[3]!.textContent), /^\d+$/);

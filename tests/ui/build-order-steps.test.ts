@@ -283,6 +283,33 @@ test('BO-3: what arrives of the rate is 0, part of it, or the held item flagged 
   assert.equal(all!.arriving, first.rate, 'never more than the rate asked');
 });
 
+test('BO-3: with other consumers the factory gets its share, production over demand (#1355)', () => {
+  const [first, second] = flowOf().ins;
+  assert.ok(first && second);
+  const held = new Set([first.item, second.item]);
+  // 100 made, 200 asked in all: every consumer gets half of what it asks, not "all 80 of 80".
+  const [a, b] = comesIn(
+    [first, second],
+    held,
+    { [first.item]: 100, [second.item]: 100 },
+    {
+      [first.item]: 200,
+      [second.item]: second.rate * 4,
+    },
+  );
+  assert.equal(a!.arriving, first.rate / 2, 'half of the rate asked');
+  assert.equal(a!.state, 'short');
+  assert.equal(b!.arriving, Math.min(second.rate, (second.rate * 100) / (second.rate * 4)));
+  // More made than asked: the whole rate.
+  const [all] = comesIn(
+    [first],
+    new Set([first.item]),
+    { [first.item]: 500 },
+    { [first.item]: 200 },
+  );
+  assert.equal(all!.arriving, first.rate);
+});
+
 test('BO-4: the open card has the Built counter and Mark running, saved as the factories card does', async () => {
   const lines = flowOf().lines;
   await show(IRON);

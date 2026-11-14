@@ -32,6 +32,10 @@ const folded = (index: number) =>
 const foldable = computed(
   () => !!props.table.fold && props.table.rows.length > props.table.fold.rows,
 );
+// While rows are hidden the total still sums all of them: its label says so ("Total (all 7)"),
+// so the rows in view are not added up by eye (#1355).
+const totalLabel = (cell: string) =>
+  foldable.value && !expanded.value ? `${cell} (all ${props.table.rows.length})` : cell;
 // Whether the table is wider than its box (ui/scroll-box.ts).
 const { scrollAttrs } = useScrollBox('box');
 // An empty cell hides on a phone; a short one (a rate, a count, an amount) never wraps.
@@ -68,7 +72,7 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
       <tfoot v-if="table.total">
         <tr data-step-table-total>
           <template v-for="(cell, index) in table.total" :key="index">
-            <th v-if="index === 0" scope="row">{{ cell }}</th>
+            <th v-if="index === 0" scope="row">{{ totalLabel(cell) }}</th>
             <td v-else :data-label="table.columns[index]" :class="cellClass(cell)">{{ cell }}</td>
           </template>
         </tr>

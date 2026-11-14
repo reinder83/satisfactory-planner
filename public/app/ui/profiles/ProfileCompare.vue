@@ -15,7 +15,8 @@
 import { vNumber } from '../form/number-input.ts';
 import { computed, ref } from 'vue';
 import { compareView, type ComparedProfile } from '../../profile-compare.ts';
-import { BUILD_MINUTES_MAX, buildMinutes, setBuildMinutes } from '../../session.ts';
+import { profileLabel } from '../../profile-edit.ts';
+import { BUILD_MINUTES_MAX, buildMinutes, setBuildMinutes, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { useScrollBox } from '../scroll-box.ts';
 
@@ -42,9 +43,15 @@ function changeMinutes(event: Event) {
   input.value = String(buildMinutes);
   render();
 }
-const baselineName = computed(
-  () => view.value?.rows.find(row => row.id === view.value?.baselineId)?.name ?? '',
-);
+// A kept version is named with the profile it is a version of (profileLabel, #1355).
+const nameOf = (id: string, own: string) => {
+  const save = workspace.saves?.find(each => each.id === props.saveId);
+  return (save && profileLabel(save.profiles, id)) || own;
+};
+const baselineName = computed(() => {
+  const row = view.value?.rows.find(each => each.id === view.value?.baselineId);
+  return row ? nameOf(row.id, row.name) : '';
+});
 const phaseBox = useScrollBox('phaseTable'),
   timeBox = useScrollBox('timeTable');
 const id = (what: string) => `compare-${what}-${props.saveId}`;
@@ -68,7 +75,9 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
       <label
         >Baseline
         <select v-model="chosenBaseline" data-compare-baseline>
-          <option v-for="row in view.rows" :key="row.id" :value="row.id">{{ row.name }}</option>
+          <option v-for="row in view.rows" :key="row.id" :value="row.id">
+            {{ nameOf(row.id, row.name) }}
+          </option>
         </select>
       </label>
       <label
@@ -115,7 +124,7 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
             :data-compare-row="row.id"
           >
             <th scope="row">
-              {{ row.name }}
+              {{ nameOf(row.id, row.name) }}
               <span v-if="row.baseline" class="compare-tag" data-compare-baseline-tag
                 >Baseline</span
               >
@@ -192,7 +201,7 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
             :data-compare-time="row.id"
           >
             <th scope="row">
-              {{ row.name }}
+              {{ nameOf(row.id, row.name) }}
               <span v-if="row.baseline" class="compare-tag">Baseline</span>
             </th>
             <td v-for="(cell, index) in row.phases" :key="index" :data-compare-time-cell="index">

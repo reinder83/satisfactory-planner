@@ -174,3 +174,28 @@ test('only the columns that differ are highlighted, and rates are rounded for di
   assert.equal(cellTexts('r')[4]!.split(' ')[0], '7,997/min');
   assert.ok(!$('[data-profile-compare]')!.textContent!.includes('.88/min'));
 });
+
+// #1355 (PRO-3 polish): two profiles' backups can both be "Nov 14 · backup 1"; the picker and the
+// table follow a kept version's name with the profile it is a version of.
+test('a kept version is named with its profile in the pickers and the table', () => {
+  const backup = (id: string, name: string, of: string): ProfileSummary => ({
+    ...card(id, name, minimal),
+    backupOf: of,
+  });
+  draw([
+    card('p', 'Iron run'),
+    card('q', 'Copper run'),
+    backup('b1', 'Nov 14 · backup 1', 'p'),
+    backup('b2', 'Nov 14 · backup 1', 'q'),
+  ]);
+  const options = $$<HTMLOptionElement>('[data-compare-baseline] option').map(option =>
+    option.textContent!.trim(),
+  );
+  assert.deepEqual(options, [
+    'Iron run',
+    'Copper run',
+    'Nov 14 · backup 1 (of Iron run)',
+    'Nov 14 · backup 1 (of Copper run)',
+  ]);
+  assert.match($('[data-compare-row="b2"] th')!.textContent!, /backup 1 \(of Copper run\)/);
+});

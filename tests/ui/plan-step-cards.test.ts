@@ -209,6 +209,8 @@ test('"Tap the resource nodes" folds its long table behind "Show all N resources
   assert.ok(rows.length > 4, 'the phase has more resources than the fold');
   assert.equal(rows.filter(row => !row.hidden).length, 4, 'the first four show');
   assert.ok(table.querySelector('[data-step-table-total]'), 'the total row always shows');
+  const totalHead = () => text(table.querySelector('[data-step-table-total] th'));
+  assert.equal(totalHead(), `Total (all ${rows.length})`, 'folded: the total sums all (#1355)');
   const more = table.querySelector<HTMLButtonElement>('[data-step-table-more]')!;
   assert.equal(text(more), `Show all ${rows.length} resources`);
   assert.equal(more.getAttribute('aria-expanded'), 'false');
@@ -217,6 +219,7 @@ test('"Tap the resource nodes" folds its long table behind "Show all N resources
   assert.equal(rows.filter(row => row.hidden).length, 0);
   assert.equal(text(more), 'Show fewer');
   assert.equal(more.getAttribute('aria-expanded'), 'true');
+  assert.equal(totalHead(), 'Total', 'every row in view: the plain label (#1355)');
 });
 
 test('each input row says how many belts or pipes carry it, and outputs do not (BP-5)', () => {

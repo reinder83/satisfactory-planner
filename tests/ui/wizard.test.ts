@@ -1747,3 +1747,25 @@ test('the carry panel warns when the source profile is a transcribed plan (#480)
   await nextTick();
   assert.equal($('.carry-panel [data-resolve-warning]')!.textContent, RESOLVE_WARNING);
 });
+
+// #1355: an ⓘ is named by the words beside it ("Help: Caps per phase"), not made from its text key
+// ("Help: phase caps"), so a screen reader says what a sighted user reads.
+test('every ⓘ in the settings and the guided start is named by words on its screen', () => {
+  const check = (where: string) => {
+    const screen = main();
+    for (const tip of $$<HTMLButtonElement>('.help-btn-info')) {
+      const topic = tip.getAttribute('aria-label')!.replace(/^Help: /, '');
+      assert.ok(screen.includes(topic), `${where}: "${topic}" is on the screen`);
+    }
+  };
+  for (const step of [1, 2, 3, 4, 5]) {
+    wizardAt(step);
+    check(`step ${step}`);
+  }
+  for (const guided of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    guidedAt(guided);
+    check(`guided ${guided}`);
+  }
+  wizardAt(3);
+  assert.equal($('[data-help="phaseCaps"]')?.getAttribute('aria-label'), 'Help: Caps per phase');
+});

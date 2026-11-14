@@ -535,6 +535,9 @@ function onNodeKey(e: KeyboardEvent, node: GraphNode) {
 // Null when there is nothing to undo.
 const tidied = ref<{
   text: string;
+  // A move of one line: its words are made when shown, from the line's number as the graph shows
+  // it now (the move renumbers the lines, #1355), so Undo never names its old number.
+  moved?: { row: string; step: number };
   spots: Record<string, [number, number]>;
   places: Record<string, [number, number]>;
   steps: Record<string, number>;
@@ -589,7 +592,8 @@ function moveToStep(row: string, step: number | 'own'): boolean {
   }
   stepNote.value = '';
   tidied.value = {
-    text: `Moved ${lineName(row)} to ${stepWords(result.get(row) ?? target)}.`,
+    text: '',
+    moved: { row, step: result.get(row) ?? target },
     spots: { ...layout.spots.value },
     places: { ...layout.places.value },
     steps: { ...layout.steps.value },
@@ -750,6 +754,14 @@ async function tidyUp() {
   const viewed = before.view.zoom !== 1 || before.view.left !== 0 || before.view.top !== 0;
   tidied.value = moved || viewed ? { text: 'Tidied up.', ...before } : null;
 }
+// What Undo says was done, with the line's name and the step's as they read now.
+const undoText = computed(() => {
+  const back = tidied.value;
+  if (!back) return '';
+  return back.moved
+    ? `Moved ${lineName(back.moved.row)} to ${stepWords(back.moved.step)}.`
+    : back.text;
+});
 // Undo of Tidy up: the boxes and the view back as they were, saved.
 async function undoTidy() {
   const back = tidied.value;
@@ -897,7 +909,7 @@ function onPanelKey(e: KeyboardEvent) {
           </button>
           <span class="fgraph-undo small muted" role="status">
             <template v-if="tidied && !readonly">
-              <span data-flow-undo-text>{{ tidied.text }}</span>
+              <span data-flow-undo-text>{{ undoText }}</span>
               <button class="btn" type="button" data-flow-tidy-undo @click="undoTidy">Undo</button>
               <kbd>Ctrl+Z</kbd>
             </template>
@@ -923,7 +935,7 @@ function onPanelKey(e: KeyboardEvent) {
             aria-hidden="true"
           >
             <strong>New step</strong>
-            <span>Drop here to build this line after step {{ stepFacts?.count ?? 1 }}</span>
+            <span>Drop here to build this line later</span>
           </div>
           <div
             ref="box"
@@ -1124,7 +1136,7 @@ function onPanelKey(e: KeyboardEvent) {
           :moves="moveChoices.moves"
           :own="moveChoices.own"
           :note="stepNote"
-          :undo-text="tidied?.text ?? ''"
+          :undo-text="undoText"
           @undo="undoTidy"
           @move="moveToStep(selection.row, $event)"
           @own="moveToStep(selection.row, 'own')"

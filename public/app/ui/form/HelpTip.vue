@@ -5,9 +5,11 @@
 import { computed } from 'vue';
 import HelpPopover from '../HelpPopover.vue';
 
-const props = defineProps<{ name: string }>();
+// `topic` is the visible text the ⓘ belongs to (the field's label, the heading), so the button's
+// name is "Help: Phase caps", the words on screen (#1355). Without one it is made from the key.
+const props = defineProps<{ name: string; topic?: string }>();
 // "phaseCaps" -> "phase caps".
-const topic = computed(() => props.name.replace(/([A-Z])/g, ' $1').toLowerCase());
+const topic = computed(() => props.topic || props.name.replace(/([A-Z])/g, ' $1').toLowerCase());
 </script>
 
 <template>

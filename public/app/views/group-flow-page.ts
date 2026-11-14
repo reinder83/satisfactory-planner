@@ -154,7 +154,9 @@ export function linkChips(
 
 // One input of the "Comes in" row (BO-3, #1346). `held` is what the factory's running lines are
 // short of (heldBack, the factories page's "short of", #1342) and `produced` what the built lines
-// make now per item (buildStatus): a held-back item arrives in part, or not at all.
+// make now per item (buildStatus): a held-back item arrives in part, or not at all. `demand` is
+// what the plan asks of the item in all (buildStatus): with other consumers the factory gets its
+// share, production over demand, not all that is made (#1355).
 export interface ComesIn {
   port: FlowPort;
   // What arrives of the rate asked, when the item is held back; else null.
@@ -165,10 +167,16 @@ export function comesIn(
   ports: readonly FlowPort[],
   held: ReadonlySet<string>,
   produced: Readonly<Record<string, number>>,
+  demand: Readonly<Record<string, number>> = {},
 ): ComesIn[] {
   return ports.map(port => {
     if (!held.has(port.item)) return { port, arriving: null, state: 'ok' };
-    const arriving = Math.min(port.rate, Math.max(0, produced[port.item] ?? 0));
+    const made = Math.max(0, produced[port.item] ?? 0),
+      asked = demand[port.item] ?? 0;
+    // Everything asked for is served in proportion; with no demand known, what is made, capped at
+    // the rate asked.
+    const arriving =
+      asked > 1e-6 ? port.rate * Math.min(1, made / asked) : Math.min(port.rate, made);
     return { port, arriving, state: arriving > 1e-6 ? 'short' : 'none' };
   });
 }

@@ -21,7 +21,7 @@ withDefaults(
 
 <template>
   <label class="field"
-    >{{ label }} <HelpTip :name="help ?? name" /><input
+    >{{ label }} <HelpTip :name="help ?? name" :topic="label" /><input
       :name="name"
       :type="type === 'number' ? 'text' : type"
       v-number="type === 'number'"

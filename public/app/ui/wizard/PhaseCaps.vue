@@ -39,7 +39,7 @@ const BELT_CAPS = [
 
 <template>
   <fieldset class="phase-caps" data-phase-caps>
-    <legend>Caps per phase <HelpTip name="phaseCaps" /></legend>
+    <legend>Caps per phase <HelpTip name="phaseCaps" topic="Caps per phase" /></legend>
     <p class="small muted" data-explain>
       Leave a box blank for no cap. With a cap the plan stays within it, or the phase's draft says
       how much it needs.
@@ -64,7 +64,8 @@ const BELT_CAPS = [
         placeholder="No cap"
       />
       <label class="field belt-cap"
-        >Best belt the plan may use <HelpTip name="beltCap" /><select
+        >Best belt the plan may use
+        <HelpTip name="beltCap" topic="Best belt the plan may use" /><select
           name="beltCap"
           data-belt-cap
           :value="beltCap ? String(beltCap) : ''"

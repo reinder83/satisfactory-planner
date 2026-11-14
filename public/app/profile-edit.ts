@@ -195,6 +195,21 @@ export function backupName(
   }
 }
 
+// A profile's name where several profiles are listed together, the profile switcher and the compare
+// pickers (PRO-3 polish, #1355): a kept version's name says only "Oct 7 · backup 2", and two
+// profiles' backups can carry the same one, so it is followed by the profile it is a version of:
+// "Oct 7 · backup 2 (of Iron run)". Any other profile, and a copy whose profile is gone (backupOf
+// is only set while it exists), reads as its own name. Display only; the stored name is unchanged.
+export function profileLabel(
+  profiles: readonly { id: string; name: string; backupOf?: string }[],
+  id: string,
+): string {
+  const own = profiles.find(profile => profile.id === id);
+  if (!own) return '';
+  const original = own.backupOf ? profiles.find(profile => profile.id === own.backupOf) : undefined;
+  return original ? `${own.name} (of ${original.name})` : own.name;
+}
+
 // Two setting values differ: compared as JSON with the object keys sorted, so a map saved in
 // another order is the same value.
 function differs(a: unknown, b: unknown): boolean {

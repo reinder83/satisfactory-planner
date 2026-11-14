@@ -54,7 +54,10 @@ function shownParts(text: string) {
   for (const [, amount, unit] of text.matchAll(/([\d,.]+) ([MG]W) (?:at \d+% )?for /g)) {
     const scale = unit === 'GW' ? 1000 : 1;
     sum += Number(amount!.replace(/,/g, '')) * scale;
-    slack += 0.5 * 10 ** -(amount!.split('.')[1]?.length ?? 0) * scale;
+    // The digits are the rule's (GW two, MW from 100 whole, else two), not read from the text: a
+    // stripped trailing zero ("12.5" for 12.50) must not widen the tolerance tenfold (#1355).
+    const value = Number(amount!.replace(/,/g, '')) * scale;
+    slack += 0.5 * 10 ** -(unit === 'GW' || value < 100 ? 2 : 0) * scale;
     count++;
   }
   return { sum, slack, count };

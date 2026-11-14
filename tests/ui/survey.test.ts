@@ -654,3 +654,29 @@ test('the survey steps keep a one-line summary and the rest behind a "?" (ONB-5)
   await nextTick();
   assert.match($('[data-help-tip]')!.textContent, /free for this plan to use/);
 });
+
+// #1355: an ⓘ is named by words on the screen ("Help: Your ore nodes"), not made from its text key
+// ("Help: extraction nodes"), so the name a screen reader gives is the heading a sighted user sees.
+test('every ⓘ on the survey is named by words on its screen', async () => {
+  for (const step of [1, 2, 3, 4]) {
+    survey(step, {}, { extraction: defaultSurvey() });
+    await nextTick();
+    const screen = ($('#main')?.textContent ?? '').replace(/\s+/g, ' ');
+    for (const tip of $$<HTMLButtonElement>('.help-btn-info')) {
+      const topic = tip.getAttribute('aria-label')!.replace(/^Help: /, '');
+      assert.ok(screen.includes(topic), `step ${step}: "${topic}" is on the screen`);
+    }
+  }
+  survey(2, {}, { extraction: defaultSurvey() });
+  await nextTick();
+  assert.equal(
+    $('[data-help="extractionNodes"]')?.getAttribute('aria-label'),
+    'Help: Your ore nodes',
+  );
+  survey(3, {}, { extraction: defaultSurvey() });
+  await nextTick();
+  assert.equal(
+    $('[data-help="extractionWells"]')?.getAttribute('aria-label'),
+    'Help: Resource wells',
+  );
+});
