@@ -226,13 +226,46 @@ export function roundTripEstimate(
   a: FactoryPlace,
   b: FactoryPlace,
 ): { minutes: number; km: number } {
-  const metres = Math.hypot(a.x - b.x, a.y - b.y) / 100;
-  const minutes = (2 * metres * TRACK_FACTOR) / TRAIN_SPEED / 60 + 2 * STOP_DWELL;
+  return routeEstimate([a, b]);
+}
+// The same estimate for a train calling at several places in turn (a line's stops): the track
+// between each pair in order, and, for a loop, back to the first (for two places that is out and
+// back, as roundTripEstimate has it); a back-and-forth line goes out and back the same way. Each
+// call takes STOP_DWELL. `km` is half the route, the distance apart for two places.
+export function routeEstimate(
+  places: readonly FactoryPlace[],
+  direction: 'oneWay' | 'backAndForth' = 'oneWay',
+): { minutes: number; km: number } {
+  const leg = (from: FactoryPlace, to: FactoryPlace) =>
+    Math.hypot(from.x - to.x, from.y - to.y) / 100;
+  const legs = places.slice(1).reduce((sum, place, i) => sum + leg(places[i]!, place), 0);
+  const loop = places.length > 2 && direction === 'oneWay';
+  const route = loop ? legs + leg(places.at(-1)!, places[0]!) : 2 * legs;
+  const minutes = (route * TRACK_FACTOR) / TRAIN_SPEED / 60 + places.length * STOP_DWELL;
   return {
     minutes: Math.min(ROUND_TRIP_MAX, Math.max(0.1, Math.ceil(minutes * 10 - 1e-9) / 10)),
-    km: metres / 1000,
+    km: route / 2 / 1000,
   };
 }
+// The round trip a proposal or a new line shows (#1347): the map's estimate while there is no
+// saved one, or, for a proposal (#1304), the saved one is the default, and every end has a place;
+// else the saved one. Display only: nothing is saved until the player saves. `saved` undefined is
+// "no round trip yet". Between factories passes none and only takes the estimate: a link's saved
+// round trip always wins there, 5 minutes included.
+export function tripFromMap(
+  saved: number | undefined,
+  places: readonly (FactoryPlace | undefined)[],
+  direction: 'oneWay' | 'backAndForth' = 'oneWay',
+): { minutes: number | undefined; source: TripSource; estimate?: { minutes: number; km: number } } {
+  const placed = places.length >= 2 && places.every(place => place);
+  const estimate = placed ? routeEstimate(places as FactoryPlace[], direction) : undefined;
+  if (estimate && (saved === undefined || saved === DEFAULT_TRIP_MIN))
+    return { minutes: estimate.minutes, source: 'map', estimate };
+  return { minutes: saved, source: 'link', ...(estimate ? { estimate } : {}) };
+}
+// "≈ 4.2 min estimate".
+export const estimateText = (minutes: number): string =>
+  `≈ ${localeNumber(minutes, 1)} min estimate`;
 
 // A name of at most `max` characters: cut with an ellipsis when longer, and numbered (" 2", " 3")
 // when `taken` has it.
@@ -392,11 +425,10 @@ export function proposeTrains(
     const typed = roundTripOf(options.trips?.[key]);
     // The map's estimate replaces the default round trip; one the player saved on the link (any
     // other figure) or typed here wins.
+    const mapped = tripFromMap(roundTripOf(link.roundTripMin) ?? undefined, spots);
     const [roundTrip, tripSource]: [number, TripSource] = typed
       ? [typed, 'edited']
-      : estimate && link.roundTripMin === DEFAULT_TRIP_MIN
-        ? [estimate.minutes, 'map']
-        : [roundTripOf(link.roundTripMin) ?? DEFAULT_TRIP_MIN, 'link'];
+      : [mapped.minutes ?? DEFAULT_TRIP_MIN, mapped.source];
     const needed = missing.map(({ item, rate }) =>
       suggestWagons(item, rate, roundTrip, world.facts, world),
     );

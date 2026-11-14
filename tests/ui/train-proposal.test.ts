@@ -129,13 +129,15 @@ test('the preview lists each train link with its stations, train and round trip'
   }
   // The mined resource: a new mining outpost at the pick-up end.
   const ore = card(keys.ore);
+  const words = (selector: string) =>
+    ore.querySelector(selector)!.textContent!.replace(/\s+/g, ' ').trim();
   assert.match(
-    ore.querySelector('[data-proposal-pickup]')!.textContent!,
-    /^Pick-up: new station “.+ outpost pick-up for .+” \(Mining outpost: .+\), \d+ platforms?: \d+ load\.$/,
+    words('[data-proposal-pickup]'),
+    /^Pick-up New station “.+ outpost pick-up for .+” Mining outpost: .+ \d+ platforms?: \d+ load$/,
   );
   assert.match(
-    ore.querySelector('[data-proposal-line]')!.textContent!,
-    /one-way loop, 1 locomotive and \d+ wagons?: \d+ freight wagons? for /,
+    words('[data-proposal-line]'),
+    /one-way loop 1 locomotive and \d+ wagons? \d+ freight wagons? for /,
   );
   assert.equal(ore.querySelector<HTMLInputElement>('[data-proposal-trip]')!.value, '5');
   assert.equal(ore.querySelector<HTMLElement>('[data-proposal-trip]')!.dataset.tripSource, 'link');
@@ -146,7 +148,7 @@ test('the preview lists each train link with its stations, train and round trip'
   assert.equal(trip.dataset.tripSource, 'map');
   assert.match(
     first.querySelector('[data-proposal-trip-note]')!.textContent!.replace(/\s+/g, ' ').trim(),
-    /^Estimate\. The stations are 1 km apart on the map; this assumes about 90 km\/h on track 1\.3 times the straight line and 30 seconds at each stop\. Edit it/,
+    /^≈ 2\.8 min estimate\. The stations are 1 km apart on the map; this assumes about 90 km\/h on track 1\.3 times the straight line and 30 seconds at each stop\. Edit it/,
   );
   // The link's own round trip (not the default) is kept.
   assert.equal(
@@ -160,6 +162,56 @@ test('the preview lists each train link with its stations, train and round trip'
   await click('[data-proposal-cancel]');
   assert.equal(dialog().open, false);
   assert.deepEqual(sent, []);
+});
+
+test('each proposal is a card of pick-up, drop-off and train, with its tick and round trip inline', async () => {
+  await showTrains();
+  await click('[data-trains-from-links-open]');
+  for (const key of Object.values(keys)) {
+    const item = card(key);
+    // Three columns, each named by its heading, in the order pick-up, drop-off, train.
+    const columns = [...item.querySelectorAll<HTMLElement>('.proposal-columns > .proposal-column')];
+    assert.deepEqual(
+      columns.map(column => column.querySelector('h4')!.textContent!.trim()),
+      ['Pick-up', 'Drop-off', 'Train'],
+    );
+    assert.ok(columns[0]!.hasAttribute('data-proposal-pickup'));
+    assert.ok(columns[1]!.hasAttribute('data-proposal-dropoff'));
+    assert.ok(columns[2]!.hasAttribute('data-proposal-line'));
+    for (const column of columns) {
+      const heading = column.querySelector('h4')!;
+      assert.equal(column.getAttribute('aria-labelledby'), heading.id);
+    }
+    // The facts the prose had: the station kind, name, owner and platforms; the line name,
+    // direction, locomotives and wagons per item.
+    assert.match(columns[1]!.textContent!, /New station/);
+    assert.match(columns[1]!.textContent!, /drop-off from/);
+    assert.match(columns[1]!.textContent!, /Factory: /);
+    assert.match(columns[1]!.textContent!, /\d+ unload/);
+    assert.match(columns[2]!.textContent!, /one-way loop/);
+    assert.match(columns[2]!.textContent!, /1 locomotive and \d+ wagons?/);
+    assert.ok(columns[2]!.querySelectorAll('.proposal-wagons li').length >= 1);
+    // The tick is the card's, and the round trip lives in the train column.
+    assert.ok(item.querySelector('[data-proposal-pick]'));
+    assert.ok(columns[2]!.querySelector('[data-proposal-trip]'));
+    assert.equal(columns[0]!.querySelector('[data-proposal-trip]'), null);
+  }
+  // The inline edit: typing a round trip in the train column marks it as edited.
+  const trip = card(keys.first).querySelector<HTMLInputElement>('[data-proposal-trip]')!;
+  trip.value = '3.4';
+  trip.dispatchEvent(new Event('input'));
+  await settle();
+  assert.equal(trip.dataset.tripSource, 'edited');
+  assert.equal(card(keys.first).querySelector('[data-proposal-estimate]'), null);
+  // Unticking the card takes it out of Create.
+  const box = card(keys.first).querySelector<HTMLInputElement>('[data-proposal-pick]')!;
+  box.checked = false;
+  box.dispatchEvent(new Event('change'));
+  await settle();
+  assert.equal(
+    dialog().querySelector<HTMLButtonElement>('[data-proposal-create]')!.textContent!.trim(),
+    'Create 4 stations and 2 lines',
+  );
 });
 
 test('untick, Create, then a second and third run add only what is missing; Undo takes it out', async () => {

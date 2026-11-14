@@ -176,6 +176,30 @@ test('a transport choice builds the factoryLinkTransport update, fields in order
       roundTripMin: 5,
     }),
   );
+  // A new train starts with the map's estimate when there is one (LOG-2, #1347); another vehicle,
+  // or a link that already has a round trip, does not take it.
+  assert.equal(
+    json(linkTransportUpdate(belted, { mode: 'train' }, undefined, 2.8)),
+    json({
+      type: 'factoryLinkTransport',
+      from: 'fg-a',
+      to: 'fg-b',
+      mode: 'train',
+      roundTripMin: 2.8,
+    }),
+  );
+  const truckUpdate = linkTransportUpdate(belted, { mode: 'truck' }, undefined, 2.8);
+  assert.ok(truckUpdate.type === 'factoryLinkTransport');
+  assert.equal(truckUpdate.roundTripMin, DEFAULT_TRIP_MIN);
+  const railed = {
+    from: 'fg-a',
+    to: 'fg-b',
+    mode: 'train' as const,
+    transport: { mode: 'train' as const, roundTripMin: 5 },
+  };
+  const kept = linkTransportUpdate(railed, { mode: 'train' }, undefined, 2.8);
+  assert.ok(kept.type === 'factoryLinkTransport');
+  assert.equal(kept.roundTripMin, 5, 'a saved 5 is the link’s own, not the default');
   // A change keeps the rest of the saved choice.
   const trucked = {
     from: 'fg-a',
