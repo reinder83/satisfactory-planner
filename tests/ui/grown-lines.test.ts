@@ -66,8 +66,10 @@ test('a grown line says how many stand and how many to add, and stays unticked',
   );
   assert.deepEqual(rows[0], ['Refineries', '5', '6', '1']);
   assert.equal(rows[1]![0], 'Heavy Oil Residue');
-  // The line's own text follows under the table: its machines, inputs and outputs.
-  assert.match(text(table.querySelector('[data-step-table-after]')), /6 Refinery total/);
+  // The line's own facts follow under the table (BP-5), as rows: its machines, inputs and outputs.
+  assert.equal(table.querySelector('[data-step-table-after]'), null, 'no prose under the table');
+  assert.match(text(task.querySelector('[data-step-machines]')), /6 Refinery total/);
+  assert.ok(task.querySelector('[data-step-inputs] li'), 'inputs are rows');
   // "Built so far" counts the built part.
   assert.match(
     text($('[data-build-grown]')),

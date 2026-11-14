@@ -50,6 +50,8 @@ export const listText = (list: StepList | undefined): string =>
 export interface StepRate {
   name: string;
   rate: string;
+  // The belts or pipes that carry an input at this phase, "2 × Mk.3 belts" (BP-5).
+  belts?: string;
 }
 
 // A production line's step text as the production-line dialog's structure (BP-5): the sentences

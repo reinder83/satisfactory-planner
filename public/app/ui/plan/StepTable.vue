@@ -15,9 +15,10 @@ import type { StepTable } from '../../../step-table.ts';
 import { useScrollBox } from '../scroll-box.ts';
 import TermText from '../TermText.vue';
 
-const props = withDefaults(defineProps<{ table: StepTable; terms?: readonly string[] }>(), {
-  terms: () => [],
-});
+const props = withDefaults(
+  defineProps<{ table: StepTable; terms?: readonly string[]; hideAfter?: boolean }>(),
+  { terms: () => [], hideAfter: false },
+);
 // The terms the line after the table marks: those the line above it has not.
 const afterTerms = computed(() => {
   const above = termParts(props.table.intro, props.terms).map(part => part.term);
@@ -83,7 +84,7 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
     >
       {{ expanded ? 'Show fewer' : `Show all ${table.rows.length} ${table.fold!.noun}` }}
     </button>
-    <p v-if="table.after" data-step-table-after>
+    <p v-if="table.after && !hideAfter" data-step-table-after>
       <TermText :text="table.after" :terms="afterTerms" />
     </p>
   </div>

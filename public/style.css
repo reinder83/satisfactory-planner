@@ -1405,6 +1405,10 @@ p[data-proposal-rates] {
   padding-bottom: 4px;
   border-bottom: 1px solid var(--warm-border);
 }
+.step-rate-end {
+  flex: none;
+  text-align: right;
+}
 .step-rates li b {
   flex: none;
   color: var(--blue);

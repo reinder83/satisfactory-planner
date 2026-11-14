@@ -66,7 +66,7 @@ test('a shrunk line stays ticked and says how many machines are spare', async ()
       '6 to share the work.',
   );
   assert.deepEqual(tableRows(table), [['Refineries', '6', '5', '1']]);
-  assert.match(text(table.querySelector('[data-step-table-after]')), /5 Refinery total/);
+  assert.match(text(task.querySelector('[data-step-machines]')), /5 Refinery total/);
   assert.deepEqual(state.checks, before.checks);
   assert.deepEqual(state.builtMachines, before.builtMachines);
 });
