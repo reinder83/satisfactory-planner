@@ -184,8 +184,9 @@ test('a drag, the arrow keys, Tidy up, the tags, a zoom and a scroll never write
   const [first] = lineIds(graphOf('5')).filter(id => SPOTS[rowOf(id)]) as [string];
   const line = $(`#detail [data-node="${first}"]`)!;
   const at = drawnAt(first);
-  assert.equal(line.getAttribute('role'), 'img', 'a line is no button here');
-  assert.doesNotMatch(line.getAttribute('aria-label')!, /Enter opens it|arrow keys move/);
+  assert.equal(line.getAttribute('role'), 'button', 'a line can be selected here');
+  assert.match(line.getAttribute('aria-label')!, /Enter selects it.$/);
+  assert.doesNotMatch(line.getAttribute('aria-label')!, /arrow keys move/);
   // A drag past the threshold moves no box and ends with no save.
   line.dispatchEvent(pointer('pointerdown', 100, 100));
   line.dispatchEvent(pointer('pointermove', 160, 150));
@@ -197,6 +198,7 @@ test('a drag, the arrow keys, Tidy up, the tags, a zoom and a scroll never write
   assert.deepEqual(drawnAt(first), at, 'the box stays');
   assert.equal(box.classList.contains('moving'), false);
   assert.ok($('#detail [data-flow-graph]'), 'a press opens no line');
+  assert.equal($('#detail [data-flow-graph-selection]'), null, 'a drag selects nothing');
   // The arrow keys move nothing and are left to the page.
   line.focus();
   const key = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
@@ -206,6 +208,11 @@ test('a drag, the arrow keys, Tidy up, the tags, a zoom and a scroll never write
   assert.equal(key.defaultPrevented, false);
   assert.deepEqual(drawnAt(first), at);
   assert.ok($('#detail [data-flow-graph]'), 'Enter opens no line');
+  // It selects the line, though: the panel shows its facts and none of the actions (FG-5).
+  assert.ok($('#detail [data-flow-graph-selection]'), 'Enter selects the line');
+  assert.equal($('#detail [data-selection-running]'), null);
+  assert.equal($('#detail [data-selection-line]'), null);
+  assert.equal($('#detail [data-selection-order]'), null);
   // Tidy up (FG-3) and the tags switch are not offered, nor its Undo.
   assert.equal($('#detail [data-flow-tidy]'), null);
   assert.equal($('#detail [data-flow-tidy-undo]'), null);
