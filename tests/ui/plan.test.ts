@@ -351,7 +351,7 @@ test('the lead step offers its factory; search, Hide completed and editing still
     steps(),
     planTasks().map(t => t.id),
   );
-  $('[data-toggle-plan-edit]')!.click();
+  $('[data-edit-bar-done]')!.click();
   await nextTick();
 });
 
@@ -433,7 +433,12 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();
   assert.equal(planEditing, true);
-  assert.equal($('[data-toggle-plan-edit]')!.textContent.trim(), 'Done editing');
+  assert.equal($('[data-toggle-plan-edit]'), null, 'the toggle is gone while editing');
+  assert.equal(
+    $$('#main button').filter(b => b.textContent.trim() === 'Done editing').length,
+    1,
+    'one Done editing (BP-9)',
+  );
   assert.ok($('[data-move-task="phase-3-iron"][data-dir="-1"]'));
   assert.equal($('[data-remove="custom-1"]'), null, 'edit mode removes it with Remove instead');
   assert.equal($('.removed-steps summary')!.textContent, 'Removed steps in this phase (1)');
@@ -593,7 +598,8 @@ test('a cleared step title restores the original, and an automatic link can be r
     id = 'calc-3-' + row.id;
   open({ calculated: generated });
   render();
-  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  if (!planEditing) $('[data-toggle-plan-edit]')!.click();
   await nextTick();
   form = await editStep(id);
   form.querySelector<HTMLSelectElement>('[name=link]')!.value = '';

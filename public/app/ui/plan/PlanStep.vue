@@ -47,6 +47,7 @@ import TermText from '../TermText.vue';
 import StepIcon from './StepIcon.vue';
 import StepList from './StepList.vue';
 import StepTable from './StepTable.vue';
+import ActionMenu from '../ActionMenu.vue';
 import BuiltCounter, { type CounterHooks } from '../BuiltCounter.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
@@ -173,15 +174,40 @@ async function markDone(event: Event) {
 // re-inserted in its new place, which takes focus from the pressed arrow, so focus goes back to
 // the same arrow on the moved step (ui/refocus.ts, #656), and a second press moves it again.
 async function move(event: Event, direction: number) {
+  await moveFrom(event.currentTarget, direction);
+}
+
+// Alt+↑ / Alt+↓ on any control of a step in edit mode move it as ↑ / ↓ do (BP-9, #1340), for
+// whoever moves with the keyboard; focus stays on the control that had it, now on the moved step.
+function rowKey(event: KeyboardEvent) {
+  if (!props.editing || !event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented)
+    return;
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input:not([type="checkbox"]), textarea, select')) return;
+  event.preventDefault();
+  void moveFrom(target, event.key === 'ArrowUp' ? -1 : 1);
+}
+
+// The control a step's focus returns to after it moved: the one that had it, else its arrow.
+function movedFocus(from: EventTarget | null, direction: number) {
+  const id = CSS.escape(props.step.id),
+    target = from instanceof Element ? from : null,
+    arrow = target?.closest<HTMLElement>('[data-move-task]');
+  if (arrow) return `#main [data-move-task="${id}"][data-dir="${arrow.dataset.dir}"]`;
+  if (target?.closest('summary')) return `#main [data-task="${id}"] summary`;
+  if (target?.matches('input[data-check]')) return `#main input[data-check="${id}"]`;
+  if (target?.closest('[data-step-menu]')) return `#main [data-step-menu="${id}"]`;
+  return `#main [data-move-task="${id}"][data-dir="${direction}"]`;
+}
+
+async function moveFrom(from: EventTarget | null, direction: number) {
   const tasks = planTasks(),
     ids = tasks.map(t => t.id),
     shown = filteredPlanTasks(tasks).map(t => t.id),
     past = shown[shown.indexOf(props.step.id) + direction];
   if (!shown.includes(props.step.id) || !past) return;
-  const refocus = refocusOn(
-    event.currentTarget,
-    `#main [data-move-task="${CSS.escape(props.step.id)}"][data-dir="${direction}"]`,
-  );
+  const refocus = refocusOn(from, movedFocus(from, direction));
   ids.splice(ids.indexOf(props.step.id), 1);
   ids.splice(ids.indexOf(past) + (direction > 0 ? 1 : 0), 0, props.step.id);
   const listed = new Set(ids);
@@ -275,6 +301,7 @@ async function deletePersonal(event: Event) {
 
 <template>
   <article
+    @keydown="rowKey"
     :class="[
       'task',
       editing ? 'is-editing' : '',
@@ -384,36 +411,49 @@ async function deletePersonal(event: Event) {
     </details>
     <span v-if="editing" class="task-tools"
       ><button
-        class="btn quiet"
+        class="btn quiet task-move"
         :data-move-task="step.id"
         data-dir="-1"
         :aria-label="'Move up: ' + step.title"
+        aria-keyshortcuts="Alt+ArrowUp"
         @click="move($event, -1)"
       >
         ↑</button
       ><button
-        class="btn quiet"
+        class="btn quiet task-move"
         :data-move-task="step.id"
         data-dir="1"
         :aria-label="'Move down: ' + step.title"
+        aria-keyshortcuts="Alt+ArrowDown"
         @click="move($event, 1)"
       >
         ↓</button
-      ><button
-        class="btn quiet"
-        :data-edit-task="step.id"
-        :aria-label="'Edit: ' + step.title"
-        @click="edit"
-      >
-        Edit</button
-      ><button
-        class="btn quiet danger"
-        :data-remove-step="step.id"
-        :aria-label="'Remove: ' + step.title"
-        @click="remove"
-      >
-        Remove
-      </button></span
+      ><ActionMenu
+        :id="'step-menu-' + step.id"
+        :label="'More actions for ' + step.title"
+        :data-step-menu="step.id"
+        ><button
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          class="btn"
+          :data-edit-task="step.id"
+          :aria-label="'Edit: ' + step.title"
+          @click="edit"
+        >
+          Edit</button
+        ><button
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          class="btn danger"
+          :data-remove-step="step.id"
+          :aria-label="'Remove: ' + step.title"
+          @click="remove"
+        >
+          Remove
+        </button></ActionMenu
+      ></span
     >
   </article>
 </template>

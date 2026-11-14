@@ -215,7 +215,9 @@ const px = (body: string, property: string) =>
 test('quiet buttons, the step tools and the factory links reach 24px on every screen (#1256)', () => {
   // ADA's tools and the step tools were 21-22px tall, ↑ and ↓ 14px wide.
   assert.equal(px(outsideRule(':where(.btn.quiet)'), 'min-height'), 24);
-  assert.equal(px(outsideRule('.task-tools .btn.quiet'), 'min-width'), 24);
+  // ↑ and ↓ are 36px boxes since BP-9 (#1340), 44px on touch.
+  assert.equal(px(outsideRule('.task-tools .btn.quiet'), 'min-width'), 36);
+  assert.equal(px(outsideRule('.task-tools .btn.quiet'), 'min-height'), 36);
   assert.equal(px(outsideRule('.rail-link'), 'min-height'), 24);
   assert.equal(px(outsideRule('summary'), 'min-height'), 24);
 });

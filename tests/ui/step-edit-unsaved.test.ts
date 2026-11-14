@@ -1,6 +1,6 @@
 // A build-plan step's edit form with typed text not saved yet (#969, StepEditForm.vue). As for
 // the "Made on site" picker (#930), nothing that takes the form away may drop that text without a
-// word or save it by itself: Done editing (the page's toggle, the sticky bar's Done, Escape
+// word or save it by itself: Done editing (the sticky bar's one Done, BP-9; Escape
 // outside a field) keeps edit mode on and the form open, which says so in a live region and
 // focuses Save step, with Cancel beside it (holdUnsavedChoices in api.ts); leaving the page or
 // changing the phase asks first (allowSwitch); closing the tab warns (listeners.ts). A form whose
@@ -136,11 +136,11 @@ afterEach(() => {
 test('Done editing with typed text keeps edit mode and the form, and says so', async () => {
   type('title', 'Typed but not saved');
   assert.equal(text(heldRegion()), '', 'nothing to say before Done is pressed');
-  toggleButton().click();
-  await assertHeld('the page toggle');
+  barDone().click();
+  await assertHeld('the bar’s Done');
   // Pressed again while it is still unsaved: the same, and still nothing saved.
-  toggleButton().click();
-  await assertHeld('the page toggle again');
+  barDone().click();
+  await assertHeld('the bar’s Done again');
 });
 
 test('the sticky bar’s Done and Escape outside a field are held back the same way', async () => {
@@ -170,7 +170,7 @@ test('a form showing the saved step holds nothing back: Done closes it as before
 
 test('changed details or linked factory are held back too', async () => {
   type('body', 'New details');
-  toggleButton().click();
+  barDone().click();
   await settle();
   assert.equal(planEditing, true);
   assert.equal(document.activeElement, saveStep());
@@ -179,7 +179,7 @@ test('changed details or linked factory are held back too', async () => {
   const other = [...link.options].find(option => !option.selected)!;
   link.value = other.value;
   link.dispatchEvent(new Event('change', { bubbles: true }));
-  toggleButton().click();
+  barDone().click();
   await settle();
   assert.equal(planEditing, true, 'a new link is held back');
   assert.deepEqual(sent, []);
@@ -188,7 +188,7 @@ test('changed details or linked factory are held back too', async () => {
 test('a cleared title on a renamed step would restore the plan’s text: held back', async () => {
   await show('Renamed step');
   type('title', '');
-  toggleButton().click();
+  barDone().click();
   await settle();
   assert.equal(planEditing, true);
   assert.equal(document.activeElement, saveStep());
@@ -230,14 +230,14 @@ test('Save step from there saves the edit; then Done editing leaves', async () =
 
 test('Cancel from there drops the text and sends nothing; then Done editing leaves', async () => {
   type('title', 'Typed but not saved');
-  toggleButton().click();
+  barDone().click();
   await settle();
   cancelButton().focus();
   cancelButton().click();
   await settle();
   assert.equal(form(), null, 'the form closed');
   assert.equal(document.activeElement, editButton());
-  toggleButton().click();
+  barDone().click();
   await settle();
   assert.equal(planEditing, false);
   assert.deepEqual(sent, [], 'nothing was saved');
@@ -246,7 +246,7 @@ test('Cancel from there drops the text and sends nothing; then Done editing leav
 
 test('Escape in the form is still Cancel (#601), also once Done was held back', async () => {
   type('title', 'Typed but not saved');
-  toggleButton().click();
+  barDone().click();
   await settle();
   const title = field('title');
   title.focus();
