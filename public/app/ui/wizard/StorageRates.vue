@@ -92,7 +92,7 @@ const shown = (row: { name: string }) =>
   <details v-if="view" class="panel rate-picker" :open="view.set > 0">
     <summary>
       Per-item storage rates{{ view.set > 0 ? ' · ' + num(view.set) + ' set' : '' }}
-      <HelpTip name="storageOverrides" />
+      <HelpTip name="storageOverrides" topic="Per-item storage rates" />
     </summary>
     <p class="small muted" data-explain>
       Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container

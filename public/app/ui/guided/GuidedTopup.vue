@@ -33,7 +33,10 @@ const view = computed(() =>
 
 <template>
   <fieldset v-if="view" class="guided-topup">
-    <legend>Which of these do you keep running out of? <HelpTip name="guidedTopup" /></legend>
+    <legend>
+      Which of these do you keep running out of?
+      <HelpTip name="guidedTopup" topic="Which of these do you keep running out of?" />
+    </legend>
     <p class="small muted">
       Containers fill from the plan’s surplus on their own. These get a guaranteed {{ rate }}/min:
       what the surplus leaves of it comes from a storage-only line, optional and built last, 1 to 4

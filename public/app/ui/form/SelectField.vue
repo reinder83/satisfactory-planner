@@ -26,7 +26,7 @@ const shown = computed(() =>
 
 <template>
   <label class="field"
-    >{{ label }} <HelpTip :name="help ?? name" /><select :name="name" :value="shown">
+    >{{ label }} <HelpTip :name="help ?? name" :topic="label" /><select :name="name" :value="shown">
       <option v-for="[optionValue, optionLabel] in options" :key="optionValue" :value="optionValue">
         {{ optionLabel }}
       </option>

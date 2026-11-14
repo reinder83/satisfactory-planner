@@ -130,7 +130,9 @@ function undo(event: Event) {
 
 <template>
   <div v-if="view" class="node-presets">
-    <span class="eyebrow">Your world settings <HelpTip name="nodePresets" /></span>
+    <span class="eyebrow"
+      >Your world settings <HelpTip name="nodePresets" topic="Your world settings"
+    /></span>
     <div class="form-grid">
       <SelectField
         label="Resource node randomization"

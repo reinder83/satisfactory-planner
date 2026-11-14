@@ -211,9 +211,9 @@ function submit() {
           <h2>Your ore nodes</h2>
           <p>
             How many nodes of each purity your world holds for each ore.
-            <HelpTip name="extractionNodes" /> Zero means zero: a purity your world has none of, or
-            an ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter
-            everything you intend to work.
+            <HelpTip name="extractionNodes" topic="Your ore nodes" /> Zero means zero: a purity your
+            world has none of, or an ore you have not found. Whatever you leave at zero, the plan
+            cannot mine — so enter everything you intend to work.
           </p>
           <CountTable kind="node" :names="minedResources" />
           <LeaveOut :tables="[{ kind: 'node', names: minedResources }]" />
@@ -222,7 +222,7 @@ function submit() {
           <h2>Resource wells</h2>
           <p>
             Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells.
-            <HelpTip name="extractionWells" />
+            <HelpTip name="extractionWells" topic="Resource wells" />
           </p>
           <h3>Crude oil nodes</h3>
           <CountTable kind="node" :names="['Crude Oil']" />
@@ -249,8 +249,8 @@ function submit() {
           <h2>Your budgets</h2>
           <p>
             What those nodes yield, less the nodes you leave out and anything already committed.
-            <HelpPopover name="surveyBudgets" topic="the budgets" />
-            <HelpTip name="extractionUsed" />
+            <HelpPopover name="surveyBudgets" topic="Your budgets" />
+            <HelpTip name="extractionUsed" topic="Already committed" />
           </p>
           <div class="table-wrap">
             <table>

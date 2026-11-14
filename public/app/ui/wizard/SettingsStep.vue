@@ -148,7 +148,9 @@ const view = computed(() =>
     Each phase must then also make the parts its buildings cost, or it is a draft that says so.
     <HelpPopover name="buildCostNote" topic="counting what buildings cost" />
   </p>
-  <h3>Production you already run <HelpTip name="existingSupply" /></h3>
+  <h3>
+    Production you already run <HelpTip name="existingSupply" topic="Production you already run" />
+  </h3>
   <SupplyRows />
   <p class="small muted" data-explain>
     Other settings are notes only; phase plans assume the necessary milestones and
