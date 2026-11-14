@@ -93,19 +93,13 @@ const view = computed(() =>
       // needs none, a saved vehicle, or belts and pipes.
       const key = link.from + ':' + link.to,
         carrier = linkCarrier(groupsState.links, link.from, link.to),
-        saved = carrierTransport(carrier),
+        transport = carrierTransport(carrier),
         extract = carrier.kind === 'extract';
-      // A train link still on the default round trip shows the map's estimate when both
-      // factories have a place (LOG-2, #1347); a figure saved on the link wins. Display only.
+      // The round trip a train between the two factories takes by the map when both have a place
+      // (LOG-2, #1347): a link switched to train starts with it (linkTransportUpdate). The round
+      // trip saved on the link always wins, 5 minutes included, for the box, the load and the fuel.
       const places = state.factoryPlaces,
-        tripMap =
-          saved?.mode === 'train'
-            ? tripFromMap(saved.roundTripMin, [places?.[link.from], places?.[link.to]])
-            : null;
-      const transport =
-        saved && tripMap?.source === 'map' && tripMap.minutes
-          ? { ...saved, roundTripMin: tripMap.minutes }
-          : saved;
+        mapTrip = tripFromMap(undefined, [places?.[link.from], places?.[link.to]]).estimate;
       const mode: 'belt' | LinkMode = transport?.mode ?? 'belt';
       const vehicle = transport
         ? linkVehicleText(
@@ -145,12 +139,13 @@ const view = computed(() =>
         // page has one By, Round trip and Fuel per link, so their names tell them apart.
         between: `${name(link.from)} to ${name(link.to)}`,
         transport,
-        // What is saved on the link, which an update starts from (the estimate is not saved).
-        saved,
-        // The note under the round trip: "≈ 4.2 min estimate" from the map, else none.
+        // What a switch to train starts the round trip with (linkTransportUpdate).
+        mapTrip: mapTrip?.minutes,
+        // The note under the round trip, "≈ 4.2 min estimate", while the train's saved round trip
+        // is the map's estimate, else none.
         estimate:
-          tripMap?.source === 'map' && tripMap.estimate
-            ? { text: estimateText(tripMap.estimate.minutes), km: num(tripMap.estimate.km) }
+          transport?.mode === 'train' && mapTrip && transport.roundTripMin === mapTrip.minutes
+            ? { text: estimateText(mapTrip.minutes), km: num(mapTrip.km) }
             : null,
         mode,
         modes: linkModeOptions(link.items, FLUIDS, mode, stageKey()),
@@ -311,9 +306,10 @@ async function setTransport(
   change: { mode?: 'belt' | LinkMode; roundTripMin?: number; fuel?: string },
 ) {
   const update = linkTransportUpdate(
-    { ...link, transport: link.saved },
+    link,
     change,
     linkSiblings(calculated?.stages, factoryGroupsState(), link, calculated?.settings.onSite),
+    link.mapTrip,
   );
   // Busy while it saves (app/busy.ts, #299). A select changed by a key meanwhile saves nothing and
   // shows the saved choice again.

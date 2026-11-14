@@ -247,9 +247,11 @@ export function routeEstimate(
     km: route / 2 / 1000,
   };
 }
-// The round trip a link or line shows (#1347): the map's estimate while the saved one is the
-// default (or there is none) and every end has a place, else the saved one. Display only: nothing
-// is saved until the player saves. `saved` undefined is "no round trip yet".
+// The round trip a proposal or a new line shows (#1347): the map's estimate while there is no
+// saved one, or, for a proposal (#1304), the saved one is the default, and every end has a place;
+// else the saved one. Display only: nothing is saved until the player saves. `saved` undefined is
+// "no round trip yet". Between factories passes none and only takes the estimate: a link's saved
+// round trip always wins there, 5 minutes included.
 export function tripFromMap(
   saved: number | undefined,
   places: readonly (FactoryPlace | undefined)[],

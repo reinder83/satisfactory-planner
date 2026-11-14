@@ -1,11 +1,12 @@
 // The round trip estimated from the map (LOG-2, #1347). Factories and stations have places on the
-// world map, so a train link or line with no round trip of its own shows the map's estimate
+// world map, so a train link or line with no round trip of its own starts from the map's estimate
 // (the figure of "Create stations from train links", routeEstimate in app/train-proposal.ts),
 // labelled "estimate":
-// - Between factories: a train link still on the default 5 minutes, both factories placed, shows
-//   the estimate in the Round trip box and in "≈ 2.8 min estimate" beside it; with an end not
-//   placed the box says 5 and nothing is labelled; a figure saved on the link, or typed, wins;
-// - the estimate is display only: changing the link's fuel or By saves the 5 minutes it had;
+// - Between factories: a link switched to train with both factories placed saves the estimate as
+//   its round trip, shown in the Round trip box with "≈ 2.8 min estimate" beside it; with an end
+//   not placed it saves 5 minutes and nothing is labelled. From then on the round trip saved on
+//   the link wins, 5 minutes included: the box, the train's cars and the fuel all read it, and a
+//   typed 5 stays 5;
 // - the line editor prefills the box with the estimate while no round trip is saved and every
 //   stop has a place (its station's, else its factory's); typing, even clearing the box, ends it,
 //   and a line with a saved round trip shows that one.
@@ -13,6 +14,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { groupLinks } from '../../public/app/group-links.ts';
+import { roundTripEstimate } from '../../public/app/train-proposal.ts';
 import { calcStage, calculated, setLogisticsTab } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { factoryGroupsState } from '../../public/app/views/factories.ts';
@@ -49,14 +51,14 @@ const stub = () => {
   });
 };
 
-// A link between the two factories, on a train with `roundTripMin`, the factories 1 km apart on
-// the map unless `places` says otherwise.
+// A link between the two factories, on a train with `roundTripMin` (on belts for null), the
+// factories 1 km apart on the map unless `places` says otherwise.
+const NEAR = { 'fg-smelt1': { x: 0, y: 0 }, 'fg-parts1': { x: 100_000, y: 0 } };
+// 18 km apart, within the map's bounds (MAP_WORLD_LIMIT).
+const FAR = { 'fg-smelt1': { x: -900_000, y: 0 }, 'fg-parts1': { x: 900_000, y: 0 } };
 async function showLink(
-  roundTripMin: number,
-  places: Record<string, { x: number; y: number }> | null = {
-    'fg-smelt1': { x: 0, y: 0 },
-    'fg-parts1': { x: 100_000, y: 0 },
-  },
+  roundTripMin: number | null,
+  places: Record<string, { x: number; y: number }> | null = NEAR,
 ) {
   const rows = plan.stages['3'].rows!;
   const groups = {
@@ -75,7 +77,10 @@ async function showLink(
     calculated: structuredClone(plan),
     phase: '3',
     state: {
-      factoryGroups: { ...groups, links: { [key]: { mode: 'train', roundTripMin } } },
+      factoryGroups: {
+        ...groups,
+        ...(roundTripMin === null ? {} : { links: { [key]: { mode: 'train', roundTripMin } } }),
+      },
       ...(places
         ? { factoryPlaces: { [link.from]: places['fg-smelt1']!, [link.to]: places['fg-parts1']! } }
         : {}),
@@ -94,45 +99,79 @@ const estimateNote = (key: string) =>
 beforeEach(() => page());
 afterEach(() => $<HTMLDialogElement>('#detail')?.close());
 
-test('a train link on the default round trip shows the map estimate, labelled', async () => {
-  const key = await showLink(5);
+const loadText = () => [...document.querySelectorAll('[data-link-load]')].map(text).join(' | ');
+const pickMode = async (key: string, mode: string) => {
+  const select = $<HTMLSelectElement>(`[data-link-mode="${key}"]`)!;
+  select.value = mode;
+  select.dispatchEvent(new Event('change'));
+  await settle();
+};
+const typeTrip = async (key: string, value: string) => {
+  const box = tripBox(key);
+  type(box, value);
+  box.dispatchEvent(new Event('change'));
+  await settle();
+};
+const lastTransport = () => {
+  const update = sent.filter(entry => entry.type === 'factoryLinkTransport').at(-1);
+  assert.ok(update?.type === 'factoryLinkTransport');
+  return update;
+};
+
+test('a link switched to train starts with the map estimate as its round trip, labelled', async () => {
+  const key = await showLink(null);
+  await pickMode(key, 'train');
+  assert.equal(lastTransport().roundTripMin, 2.8, 'the estimate is saved, not 5');
   assert.equal(tripBox(key).value, '2.8');
   assert.equal(text(estimateNote(key)!), '≈ 2.8 min estimate');
   assert.equal(tripBox(key).getAttribute('aria-describedby'), estimateNote(key)!.id);
 });
 
-test('with an end not on the map the round trip stays 5 minutes and nothing is labelled', async () => {
-  const key = await showLink(5, null);
+test('with an end not on the map a link switched to train starts with 5 minutes, unlabelled', async () => {
+  const key = await showLink(null, null);
+  await pickMode(key, 'train');
+  assert.equal(lastTransport().roundTripMin, 5);
   assert.equal(tripBox(key).value, '5');
   assert.equal(estimateNote(key), null);
 });
 
-test('a round trip saved on the link wins over the estimate', async () => {
+test('a round trip of 5 minutes saved on the link wins over the estimate, cars included', async () => {
+  const far = roundTripEstimate(FAR['fg-smelt1'], FAR['fg-parts1']).minutes;
+  // The cars the train needs differ between 5 minutes and the far estimate.
+  await showLink(far, null);
+  const atEstimate = loadText();
+  const unplaced = await showLink(5, null);
+  const atFive = loadText();
+  assert.notEqual(atFive, atEstimate, 'the round trip changes the train');
+  // Placed far apart, the saved 5 is still what the box, the label and the cars say.
+  const key = await showLink(5, FAR);
+  assert.equal(key, unplaced);
+  assert.equal(tripBox(key).value, '5');
+  assert.equal(estimateNote(key), null);
+  assert.equal(loadText(), atFive);
+});
+
+test('another round trip saved on the link wins over the estimate', async () => {
   const key = await showLink(7);
   assert.equal(tripBox(key).value, '7');
   assert.equal(estimateNote(key), null);
 });
 
-test('a typed round trip replaces the estimate and is what is saved; the estimate alone saves nothing', async () => {
-  const key = await showLink(5);
-  // Changing something else saves the 5 minutes the link had, not the estimate.
-  const fuelled = $<HTMLSelectElement>(`[data-link-mode="${key}"]`)!;
-  fuelled.value = 'truck';
-  fuelled.dispatchEvent(new Event('change'));
-  await settle();
-  const changed = sent.filter(update => update.type === 'factoryLinkTransport');
-  assert.equal(changed.length, 1);
-  assert.ok(changed[0]!.type === 'factoryLinkTransport' && 'roundTripMin' in changed[0]!);
-  assert.equal(changed[0]!.roundTripMin, 5, 'the estimate is never saved on its own');
-  const box = tripBox(key);
-  type(box, '6.5');
-  box.dispatchEvent(new Event('change'));
-  await settle();
-  const saved = sent.filter(update => update.type === 'factoryLinkTransport').at(-1)!;
-  assert.ok(saved.type === 'factoryLinkTransport' && 'roundTripMin' in saved);
-  assert.equal(saved.roundTripMin, 6.5);
-  assert.equal(tripBox(key).value, '6.5');
+test('a typed 5 is saved, stays in the box and is what the train is worked out with', async () => {
+  await showLink(5, null);
+  const atFive = loadText();
+  const key = await showLink(7, FAR);
+  await typeTrip(key, '5');
+  assert.equal(lastTransport().roundTripMin, 5);
+  assert.equal(tripBox(key).value, '5', 'no snap back to the estimate');
   assert.equal(estimateNote(key), null);
+  assert.equal(loadText(), atFive);
+  // Another figure works the same way, and changing By keeps the saved round trip.
+  await typeTrip(key, '6.5');
+  assert.equal(lastTransport().roundTripMin, 6.5);
+  assert.equal(tripBox(key).value, '6.5');
+  await pickMode(key, 'truck');
+  assert.equal(lastTransport().roundTripMin, 6.5);
 });
 
 // The line editor.
