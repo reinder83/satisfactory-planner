@@ -235,7 +235,7 @@ test('a long name is cut in its box and kept whole for the table', () => {
 test('an alternate recipe line is drawn without its prefix and tagged ALT (FG-4)', () => {
   const stage: StoredStage = {
     ...iron,
-    rows: iron.rows.map(entry =>
+    rows: iron.rows!.map(entry =>
       entry.id === 'plate' ? { ...entry, name: 'Alternate: Coated Iron Plate' } : entry,
     ),
   };
