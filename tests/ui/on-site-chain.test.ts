@@ -15,6 +15,7 @@ import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import {
   calculated,
+  setEditOpenFactory,
   setFactoryEditing,
   setFactoryFilter,
   setQuery,
@@ -41,6 +42,7 @@ import {
   go,
   open,
   page,
+  unfoldFactories,
   stubFetch,
 } from './setup.ts';
 import type {
@@ -99,9 +101,16 @@ const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
-const show = async (plan: StoredCalculatedPlan, now: FactoryGroups, editing = false) => {
+// `editing` as a group id opens that factory: one is open at a time while editing (FAC-3, #1342).
+const show = async (
+  plan: StoredCalculatedPlan,
+  now: FactoryGroups,
+  editing: boolean | string = false,
+) => {
   open({ calculated: plan, phase: '3', state: { factoryGroups: now } });
-  setFactoryEditing(editing);
+  unfoldFactories();
+  setFactoryEditing(!!editing);
+  if (typeof editing === 'string') setEditOpenFactory(editing);
   render();
   await settle();
 };
@@ -270,7 +279,7 @@ test("#951: an input of a group's own line, for a part it no longer marks: picke
   const now = pair({ [MOTORS]: ['Wire'], [WIRING]: ['Copper Ingot'] });
   // The picker: Copper Ingot is no item Wiring uses, only a stale mark with the heading's note.
   assert.deepEqual(onSiteOffers(first, now, WIRING), ['Wire']);
-  await show(first, now, true);
+  await show(first, now, WIRING);
   assert.deepEqual(boxes(WIRING), ['Wire', 'Copper Ingot']);
   assert.ok(box(WIRING, 'Copper Ingot')!.checked);
   assert.equal(noteOf(WIRING, 'Copper Ingot'), UNUSED_NOTE);
@@ -294,14 +303,14 @@ test("#951: an input of a group's own line, for a part it no longer marks: picke
   assert.equal(made(WIRING), null);
   assert.equal(marked(WIRING), `Marked, not made on site: Copper Ingot ${UNUSED_NOTE}`);
   assert.equal(notice(), null);
-  await show(second, now, true);
+  await show(second, now, WIRING);
   assert.equal(noteOf(WIRING, 'Copper Ingot'), UNUSED_NOTE);
 });
 
 test('#951: while the part stays marked, its ingredient is offered for it, and the chain is planned', async () => {
   const first = recalculated(generated(), pair({ [MOTORS]: ['Wire'], [WIRING]: ['Wire'] }));
   const now = pair({ [MOTORS]: ['Wire'], [WIRING]: ['Copper Ingot', 'Wire'] });
-  await show(first, now, true);
+  await show(first, now, WIRING);
   assert.equal(noteOf(WIRING, 'Copper Ingot'), FOR_WIRE);
   assert.match(
     notice()!,

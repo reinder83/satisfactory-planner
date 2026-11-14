@@ -127,7 +127,7 @@ test('#1007: an item the plan makes only as a byproduct is not offered either', 
   assert.equal(noteOf(ALPHA, 'Heavy Oil Residue'), BYPRODUCT_NOTE);
 });
 
-test('#979: Done editing focuses the first unsaved picker on the page, also after a fold', async () => {
+test('#979: Done editing focuses the unsaved picker, also after a fold; another factory waits (FAC-3)', async () => {
   // Motors holds the Stator line (Wire in), Plates the Iron Plate line (Iron Ingot in).
   const groups: FactoryGroups = {
     groups: [
@@ -141,24 +141,26 @@ test('#979: Done editing focuses the first unsaved picker on the page, also afte
   };
   vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
   await show(generated(), groups, true);
-  // Folding Motors and unfolding it mounts its picker again, after Plates'.
+  // Folding Motors and unfolding it mounts its picker again.
   $<HTMLButtonElement>(`[data-collapse="${MOTORS}"]`)!.click();
   await settle();
   assert.equal(box(MOTORS, 'Wire'), null, 'folded');
+  assert.equal(box(PLATES, 'Iron Ingot'), null, 'only one factory is open while editing');
   $<HTMLButtonElement>(`[data-collapse="${MOTORS}"]`)!.click();
   await settle();
   tick(box(MOTORS, 'Wire')!, true);
-  tick(box(PLATES, 'Iron Ingot')!, true);
   await settle();
+  // Switching to Plates leaves the unsaved choice where it is, and says so.
+  $<HTMLButtonElement>(`[data-collapse="${PLATES}"]`)!.click();
+  await settle();
+  assert.equal(box(PLATES, 'Iron Ingot'), null, 'Plates stays folded');
+  assert.equal(
+    words(`[data-on-site-picker="${MOTORS}"] [data-on-site-held]`),
+    'This choice is not saved yet. Save it or discard it first.',
+  );
   $<HTMLButtonElement>('#main [data-toggle-factory-edit]')!.click();
   await settle();
-  for (const group of [MOTORS, PLATES])
-    assert.equal(
-      words(`[data-on-site-picker="${group}"] [data-on-site-held]`),
-      'This choice is not saved yet. Save it or discard it first.',
-      group,
-    );
-  assert.equal(document.activeElement, $(`[data-on-site-save="${MOTORS}"]`), 'Motors comes first');
+  assert.equal(document.activeElement, $(`[data-on-site-save="${MOTORS}"]`), 'Motors holds');
 });
 
 test('#978: a note after two or more marks in a heading reads plural, after one singular', () => {

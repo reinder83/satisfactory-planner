@@ -181,6 +181,10 @@ export let planEditing = false;
 // The id of the build-plan step whose edit form is open.
 export let editingTask: string | null = null;
 export let factoryEditing = false;
+// The one factory open while groups are edited (FAC-3, #1342): its id; null before one was chosen
+// (then the first factory is open), '' once the open one was folded. View state for this visit:
+// never saved, and gone when editing ends.
+export let editOpenFactory: string | null = null;
 // The saves the last import added while another save stayed open (#1052), by id, which Saves &
 // profiles names in a notice with a way to open each; emptied when that page goes. View state.
 export let importedSaves: string[] = [];
@@ -345,10 +349,16 @@ function collapsedStored(): string[] {
 }
 const sectionPath = (id: string) => `${currentSave?.id}/${currentProfile?.id}/${id}`;
 export const sectionCollapsed = (id: string) => collapsedSections.has(sectionPath(id));
+// The factories a visit unfolded although they are not started (FAC-4, #1342, groupFolded in
+// views/factories.ts): in memory only, so a fresh visit starts with them folded again.
+const visitOpened = new Set<string>();
+export const sectionVisitOpened = (id: string) => visitOpened.has(sectionPath(id));
 export function setSectionCollapsed(id: string, value: boolean) {
   const path = sectionPath(id);
   collapsedSections.delete(path);
+  visitOpened.delete(path);
   if (value) collapsedSections.add(path);
+  else visitOpened.add(path);
   // A Set keeps insertion order, so the oldest entries go first.
   for (const old of [...collapsedSections].slice(0, -COLLAPSED_MAX)) collapsedSections.delete(old);
   try {
@@ -402,6 +412,10 @@ export function setEditingTask(value: string | null) {
 }
 export function setFactoryEditing(value: boolean) {
   factoryEditing = value;
+  editOpenFactory = null;
+}
+export function setEditOpenFactory(value: string | null) {
+  editOpenFactory = value;
 }
 export function setImportedSaves(value: string[]) {
   importedSaves = value;
@@ -668,6 +682,8 @@ function endEditing() {
   planEditing = false;
   editingTask = null;
   factoryEditing = false;
+  editOpenFactory = null;
+  visitOpened.clear();
   layoutEditing = false;
 }
 

@@ -44,14 +44,16 @@ function move(event: KeyboardEvent, index: number) {
       :key="chip.value"
       type="button"
       role="radio"
-      :class="['tab', chip.value === active ? 'active' : '']"
+      :class="['tab', chip.value === active ? 'active' : '', chip.sub ? 'sub' : '']"
       :aria-checked="chip.value === active"
       :tabindex="chip.value === active ? 0 : -1"
       :data-filter="chip.value"
       @click="emit('pick', chip.value)"
       @keydown="move($event, i)"
     >
-      {{ chip.label }} <span class="count">{{ chip.count }}</span>
+      {{ chip.label }}
+      <span class="count">{{ chip.count }}</span
+      ><span v-if="chip.sub" class="sub-note"> of running</span>
     </button>
   </div>
 </template>

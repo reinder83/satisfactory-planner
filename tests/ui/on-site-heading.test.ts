@@ -10,7 +10,7 @@ import { setFactoryEditing, setFactoryFilter, setQuery } from '../../public/app/
 import { render } from '../../public/app/shell.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { onSiteSummaries } from '../../public/app/on-site-picker.ts';
-import { $, evil, generated, generatedWith, go, open, page } from './setup.ts';
+import { $, evil, generated, generatedWith, go, open, page, unfoldFactories } from './setup.ts';
 import type {
   CalcRow,
   FactoryGroups,
@@ -48,6 +48,7 @@ function recalculated(plan: StoredCalculatedPlan, now: FactoryGroups) {
 }
 const show = async (plan: StoredCalculatedPlan, now: FactoryGroups, phase: Phase = '3') => {
   open({ calculated: plan, state: { factoryGroups: now }, phase });
+  unfoldFactories();
   render();
   await nextTick();
 };

@@ -4,26 +4,23 @@
   2/5", groupJumps() and jumpEntry() in views/factories.ts). They are buttons rather than links
   because a hash link here would be a route. Pressing one brings that section to the top and
   focuses its heading (focusSection in ui/refocus.ts); a folded section is unfolded first, and
-  stays unfolded, since going there is asking to see it.
+  stays unfolded, since going there is asking to see it (showSection in ui/factories/reveal.ts).
+  While factories are edited only one is open (FAC-3, #1342) and this row is how to change it:
+  the button of the open factory has aria-current, and another one switches to its factory.
 -->
 <script setup lang="ts">
-import { nextTick } from 'vue';
-import { sectionCollapsed, setSectionCollapsed } from '../../session.ts';
-import { render } from '../../shell.ts';
-import { focusSection } from '../refocus.ts';
-import type { JumpEntry } from '../../views/factories.ts';
+import { computed } from 'vue';
+import { factoryEditing } from '../../session.ts';
+import { openFactoryId, type JumpEntry } from '../../views/factories.ts';
+import { legacy } from '../bridge.ts';
+import { showSection } from './reveal.ts';
 
 defineProps<{ entries: JumpEntry[] }>();
 
-async function jump(key: string) {
-  if (sectionCollapsed(key)) {
-    setSectionCollapsed(key, false);
-    render();
-    await nextTick();
-  }
-  const section = document.getElementById('section-' + key);
-  if (section) focusSection(section);
-}
+// The factory open while editing, '' outside edit mode.
+const current = computed(() => legacy(() => (factoryEditing ? openFactoryId() : '')));
+
+const jump = (key: string) => showSection(key);
 </script>
 
 <template>
@@ -34,6 +31,7 @@ async function jump(key: string) {
       type="button"
       class="btn"
       :data-jump="entry.key"
+      :aria-current="current && current === entry.key ? 'true' : undefined"
       @click="jump(entry.key)"
     >
       {{ entry.label }}

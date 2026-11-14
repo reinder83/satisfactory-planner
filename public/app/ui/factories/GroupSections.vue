@@ -43,7 +43,6 @@ import {
   flowRoute,
   onProfile,
   profileScope,
-  sectionCollapsed,
   stage,
   state,
   type ProfileScope,
@@ -54,7 +53,8 @@ import { groupCountText } from '../../built-lines.ts';
 import { rowPlaces } from '../../group-order.ts';
 import type { FactoryGroups } from '../../../types/index.ts';
 import { render } from '../../shell.ts';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { factoryGroupsState, groupFolded, membershipsOf } from '../../views/factories.ts';
+import { factoryWaiting } from '../../factory-waiting.ts';
 import { groupBuiltCount } from '../../views/calculated.ts';
 import { openFlowGraph } from '../../factory-detail.ts';
 import { exportGroupToSft } from '../../sft-download.ts';
@@ -64,6 +64,7 @@ import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
 import FactoryHandover from './FactoryHandover.vue';
+import FactoryWaiting from './FactoryWaiting.vue';
 import GroupRunning from './GroupRunning.vue';
 import OnSitePicker from './OnSitePicker.vue';
 import { onSiteEntriesText, onSiteSummaries } from '../../on-site-picker.ts';
@@ -86,7 +87,11 @@ const sections = computed(() =>
         members: props.items.filter(item =>
           membershipsOf(props.keyOf(item)).some(m => m.group === group.id),
         ),
-        collapsed: sectionCollapsed(group.id),
+        // Folded by groupFolded (views/factories.ts): not started factories (FAC-4), and all but
+        // one while editing (FAC-3).
+        collapsed: groupFolded(group.id),
+        // The held-back lines banner (FAC-2), over every line of the factory in this phase.
+        waiting: factoryEditing ? null : waitingOf(group.id),
         // What it makes on site (#877) and the marks that give it no line (#931), under its heading,
         // the items that share a note under it once (#955): "Iron Rod and Steel Pipe (needs a
         // recalculation); Water (can't be made on site)".
@@ -106,6 +111,18 @@ const sections = computed(() =>
   }),
 );
 const editing = computed(() => legacy(() => factoryEditing));
+
+// The held-back banner of a factory: its lines in the phase shown, whatever the search and the
+// chips show (app/factory-waiting.ts).
+function waitingOf(groupId: string) {
+  const rows = (calcStage()?.rows || []).filter(row =>
+    membershipsOf(row.id).some(m => m.group === groupId),
+  );
+  return factoryWaiting(
+    groupId,
+    rows.map(row => row.id),
+  );
+}
 
 // A factory's size now and in the later phases of the plan (groupGrowth in later-phases.ts,
 // #1299), '' while editing or when it has no machine in any of them.
@@ -310,6 +327,7 @@ async function undoRemove(update: FactoryRestore, name: string, profile: Profile
         </a>
       </div>
     </header>
+    <FactoryWaiting v-if="section.waiting" :waiting="section.waiting" :group-id="section.id" />
     <template v-if="!section.collapsed">
       <OnSitePicker v-if="editing" :group-id="section.id" :group-name="section.name" />
       <p

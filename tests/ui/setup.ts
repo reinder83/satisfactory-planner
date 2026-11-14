@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { afterEach } from 'vitest';
 import {
   setContext,
+  setSectionCollapsed,
   setProgressionData,
   setView,
   setWizard,
@@ -182,6 +183,12 @@ interface OpenOptions {
   workspace?: Partial<WorkspaceSummary>;
   state?: Partial<ProgressState>;
 }
+// The factories page folds the factories with no line running (FAC-4, #1342): a test of what a
+// factory's section shows outside edit mode unfolds them, as the user would.
+export function unfoldFactories() {
+  for (const group of state.factoryGroups?.groups ?? []) setSectionCollapsed(group.id, false);
+}
+
 export function open({
   name = evil,
   calculated = migratedPlan(),

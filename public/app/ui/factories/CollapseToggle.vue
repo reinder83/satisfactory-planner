@@ -13,16 +13,33 @@ import { computed } from 'vue';
 import { holdUnsavedChoices } from '../../api.ts';
 import { sectionCollapsed, setSectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { factoryGroupsState, groupFolded, setGroupFolded } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import { revealSection } from './reveal.ts';
 
 const props = defineProps<{ sectionKey: string; label: string }>();
 
-const open = computed(() => legacy(() => !sectionCollapsed(props.sectionKey)));
+// A factory folds by groupFolded (not started ones, one open while editing); a shared site by its
+// remembered choice alone.
+const isFactory = () => factoryGroupsState().groups.some(group => group.id === props.sectionKey);
+const open = computed(() =>
+  legacy(() => !(isFactory() ? groupFolded(props.sectionKey) : sectionCollapsed(props.sectionKey))),
+);
 
-function toggle(event: Event) {
+async function toggle(event: Event) {
   const section = (event.currentTarget as HTMLElement).closest('.site-group');
-  if (open.value && section && holdUnsavedChoices(section)) return;
-  setSectionCollapsed(props.sectionKey, open.value);
+  if (!open.value) {
+    // Unfolding while editing switches the open factory (reveal.ts holds an unsaved choice).
+    if (isFactory()) await revealSection(props.sectionKey);
+    else {
+      setSectionCollapsed(props.sectionKey, false);
+      render();
+    }
+    return;
+  }
+  if (section && holdUnsavedChoices(section)) return;
+  if (isFactory()) setGroupFolded(props.sectionKey, true);
+  else setSectionCollapsed(props.sectionKey, true);
   render();
 }
 </script>
