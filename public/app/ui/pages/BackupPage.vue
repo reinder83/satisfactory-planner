@@ -6,7 +6,7 @@
   #243); the server version points there where it used to be.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   labelImport,
@@ -267,6 +267,12 @@ async function restoreProgress(event: Event) {
 // Nothing is saved; keepSaves never throws.
 async function persistStorage() {
   const granted = await keepSaves();
+  // When the browser agreed the button goes away, and focus with it: put it on the page heading
+  // (tabindex -1) so a keyboard or screen reader user keeps their place.
+  if (granted) {
+    await nextTick();
+    document.querySelector<HTMLElement>('main h1')?.focus();
+  }
   toast(
     granted
       ? 'Your browser will keep these saves.'

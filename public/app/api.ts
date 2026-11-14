@@ -391,6 +391,14 @@ export function scopeHeaders(): { 'X-Save-Id': string; 'X-Profile-Id': string } 
   return { 'X-Save-Id': currentSave?.id || '', 'X-Profile-Id': currentProfile?.id || '' };
 }
 
+// The POST endpoints whose reply means a save now exists. The caller refreshes the workspace
+// summary only after post() returns, so its save list cannot be checked here.
+const SAVE_WRITING_ENDPOINTS = new Set([
+  '/api/import-saves',
+  '/api/profiles',
+  '/api/duplicate-profile',
+]);
+
 // JSON POST outside the save queue (profiles, rename, import, account, preview...).
 // Pass scope=false for workspace-wide calls, or a save and profile to act on one other than the
 // open one (renaming any save or profile in place, SP-31); `extra` adds request options (such as
@@ -416,9 +424,10 @@ export async function post<T = unknown>(
     body: JSON.stringify(data),
     ...extra,
   });
-  // A write that made the first save (a new profile, an import) is the moment to ask the
-  // browser to keep the saves (#1368); askAfterSave asks at most once and only once there is one.
-  askAfterSave(true);
+  // A write that made a save (a new profile, an import) is the moment to ask the browser to keep
+  // the saves (#1368). Only those endpoints: the wizard's preview and estimate and /api/select
+  // write nothing, and asking there would use up the one automatic ask before a save exists.
+  if (SAVE_WRITING_ENDPOINTS.has(endpoint)) askAfterSave(true);
   return reply;
 }
 
