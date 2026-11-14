@@ -4,7 +4,7 @@
 // arrow per flow the group's flow figures give (flowGraph of shownGroupFlow), and "The graph as
 // a table" lists every one of them, self links included. Pan and zoom (#1223): the wheel over the
 // drawing zooms it, a drag on its background moves it while a press on a line's box without a
-// drag opens that line, and − / + / Fit zoom it. Rearranging (#1224): a drag of a line's box moves
+// drag selects that line (FG-5, #1344: flow-graph-selection.test.ts), and − / + / Fit zoom it. Rearranging (#1224): a drag of a line's box moves
 // it and saves the layout once it ends, an arrow key moves a focused line, Tidy up (FG-3, #1343) goes back
 // to the automatic layout, and the graph opens again as it was left. Storage and the sink (#1231):
 // their arrows are quiet until lit, a box pointed at or focused lights up its own arrows with
@@ -248,7 +248,7 @@ test('the wheel over the drawing zooms it, and a sideways wheel still scrolls it
   assert.equal(outside.defaultPrevented, false, 'the wheel outside the drawing scrolls');
 });
 
-test('a drag on the background moves the drawing; a press on a line without a drag opens it', async () => {
+test('a drag on the background moves the drawing; a press on a line without a drag selects it', async () => {
   await openGraph();
   const box = sizedBox();
   const svg = box.querySelector('svg')!;
@@ -270,7 +270,8 @@ test('a drag on the background moves the drawing; a press on a line without a dr
   line.querySelector('rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await settle();
   assert.ok($('#detail [data-flow-graph]'), 'the graph is still shown after a drag');
-  // A press on a line's box that hardly moves, then its click: the line's dialog in its place.
+  // A press on a line's box that hardly moves, then its click: the line is selected (FG-5), the
+  // graph stays and the panel under it opens.
   const rect = line.querySelector('rect')!;
   rect.dispatchEvent(pointer('pointerdown', 150, 150));
   rect.dispatchEvent(pointer('pointermove', 152, 151));
@@ -278,14 +279,15 @@ test('a drag on the background moves the drawing; a press on a line without a dr
   rect.dispatchEvent(pointer('pointerup', 152, 151));
   rect.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await settle();
-  assert.equal($('#detail [data-flow-graph]'), null, 'the graph made way');
+  assert.ok($('#detail [data-flow-graph]'), 'the graph stays');
   assert.ok(dialog().open, 'the dialog stays open');
   const row = line.dataset.node!.slice('line:'.length);
   assert.ok(
     plan.stages['3']!.rows!.some(r => r.id === row),
     row + ' is a row of the plan',
   );
-  assert.notEqual($('#detail .eyebrow')!.textContent, 'FACTORY · FLOW GRAPH');
+  assert.equal($('#detail .eyebrow')!.textContent, 'FACTORY · FLOW GRAPH');
+  assert.ok($('#detail [data-flow-graph-selection]'), 'the panel opens');
 });
 
 test('− / + / Fit zoom the drawing, Fit to the whole graph', async () => {
@@ -404,7 +406,7 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
   const [first] = lineIds(graph) as [string];
   const line = $(`#detail [data-node="${first}"]`)!;
   assert.equal(line.getAttribute('role'), 'button');
-  assert.ok(line.getAttribute('aria-label')!.endsWith('Enter opens it, the arrow keys move it.'));
+  assert.ok(line.getAttribute('aria-label')!.endsWith('Enter selects it, the arrow keys move it.'));
   const start = drawnAt(first);
   line.focus();
   const key = (name: string, shiftKey = false) => {
@@ -435,10 +437,11 @@ test('the arrow keys move a focused line, Shift by a bigger step, in the automat
   const saves = layoutSaves(calls) as { layout: GroupLayout }[];
   assert.equal(saves.length, 1);
   assert.deepEqual(saves[0]!.layout.nodes![rowOf(first)], nudged);
-  // Enter opens the line, as a press does.
+  // Enter selects the line, as a press does: the graph stays and the panel opens.
   key('Enter');
   await settle();
-  assert.equal($('#detail [data-flow-graph]'), null, 'the line opened');
+  assert.ok($('#detail [data-flow-graph]'), 'the graph stays');
+  assert.ok($('#detail [data-flow-graph-selection]'), 'the line is selected');
 });
 
 // The default groups with `layout` stored for the iron group.
@@ -473,27 +476,26 @@ test('the graph opens as it was left: the lines where they were put, the zoom an
   assert.deepEqual(layoutSaves(calls), [], 'opening and closing saves nothing');
 });
 
-// #1280: the help over the graph is a paragraph where there is room, and a "How to use" line that
-// opens on a phone, so it does not take the screen from the graph.
-test('the help over the graph is open with room and folded on a phone', async () => {
+// FG-6 (#1344): the instructions are behind a "?" at the end of the toolbar, not a paragraph over
+// the graph; the popup holds the whole text and is in the page only while open.
+test('the instructions are behind a "?" button, not a paragraph over the graph', async () => {
   await showFactories();
   await openGraph();
-  const help = $<HTMLDetailsElement>('#detail [data-flow-graph-help]')!;
-  assert.equal(help.querySelector('summary')!.textContent, 'How to use');
-  assert.equal(help.open, true, 'open where there is room');
-  assert.match(help.querySelector('p')!.textContent!, /Drag the background to move the graph/);
-  dialog().close();
+  assert.equal($('#detail [data-flow-graph-help]'), null, 'no paragraph or fold over the graph');
+  const help = $<HTMLButtonElement>('#detail [data-flow-graph-tools] [data-help="flowGraphHelp"]')!;
+  assert.ok(help, 'the "?" is in the toolbar');
+  assert.equal(help.getAttribute('aria-label'), 'Help: the flow graph');
+  assert.equal(help.getAttribute('aria-expanded'), 'false');
+  assert.equal($('[data-help-tip]'), null, 'the text is not in the page while closed');
+  help.click();
   await settle();
-  const real = globalThis.matchMedia;
-  globalThis.matchMedia = ((query: string) => ({
-    matches: query === '(max-width: 720px)',
-  })) as typeof matchMedia;
-  try {
-    await openGraph();
-    assert.equal($<HTMLDetailsElement>('#detail [data-flow-graph-help]')!.open, false);
-  } finally {
-    globalThis.matchMedia = real;
-  }
+  assert.equal(help.getAttribute('aria-expanded'), 'true');
+  const tip = $('[data-help-tip]')!;
+  assert.match(tip.textContent!, /Drag the background to move the graph/);
+  assert.match(tip.textContent!, /Press a production line, or press Enter on it, to select it/);
+  assert.equal(help.getAttribute('aria-describedby'), tip.id);
+  // A modal dialog hides what is drawn in <body> behind it: the popup goes into the dialog.
+  assert.equal(tip.closest('dialog'), dialog(), 'the popup is inside the open dialog');
 });
 
 test('Tidy up lays the graph out again at 100%, saves it like a drag, and Undo or Ctrl+Z puts the boxes back (FG-3)', async () => {
@@ -544,15 +546,24 @@ test('Tidy up lays the graph out again at 100%, saves it like a drag, and Undo o
   assert.equal(key.defaultPrevented, true);
   assert.deepEqual(drawnAt(first), moved);
   assert.deepEqual(storedLayout(), { nodes: { [rowOf(first)]: [900, 30] }, zoom: 1.5 });
-  // With only a zoom to undo there is nothing to take back, so no Undo.
+  // With nothing moved and nothing zoomed there is nothing to take back, so no Undo: the first press
+  // resets the 150% the Undo above put back, the second finds nothing to do.
   tidy.click();
   await settle();
+  tidy.click();
+  await settle();
+  assert.equal($('#detail [data-flow-tidy-undo]'), null);
+  // With only a zoom to undo, Undo is offered for it (#1344) and puts the zoom back.
   $<HTMLButtonElement>('#detail [data-flow-zoom="in"]')!.click();
   await settle();
+  const zoomed = zoomLevel();
+  assert.notEqual(zoomed, '100%');
   tidy.click();
   await settle();
   assert.equal(zoomLevel(), '100%');
-  assert.equal($('#detail [data-flow-tidy-undo]'), null);
+  $<HTMLButtonElement>('#detail [data-flow-tidy-undo]')!.click();
+  await settle();
+  assert.equal(zoomLevel(), zoomed);
 });
 
 test('a move of a box after Tidy up is newer than its Undo, which is withdrawn', async () => {
@@ -1074,7 +1085,7 @@ test('every box says what it makes, draws or receives, with the edge labels’ n
     const height = Number(el.querySelector('rect')!.getAttribute('height'));
     assert.ok(height >= 48 + node.rateLines.length * 16);
     if (node.kind === 'line')
-      assert.match(el.getAttribute('aria-label')!, /\. Makes .+\. Enter opens it/);
+      assert.match(el.getAttribute('aria-label')!, /\. Makes .+\. Enter selects it/);
   }
   assert.ok(withRates > 5, 'the iron works’ boxes show rates');
   // A fluid is in m³/min as on the labels: the oil campus draws crude oil.
@@ -1166,4 +1177,26 @@ test('a layout saved before the boxes showed rates opens with no box on another,
     );
     assert.deepEqual(drawnAt(line.id), before[line.id], line.id);
   }
+});
+
+// Escape on the "?" closes its popup and leaves the dialog the button sits in open (#1344).
+test('Escape on the open "?" closes only the popup, not the graph', async () => {
+  await showFactories();
+  await openGraph();
+  const help = $<HTMLButtonElement>('#detail [data-help="flowGraphHelp"]')!;
+  help.focus();
+  help.click();
+  await settle();
+  assert.ok($('[data-help-tip]'));
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  help.dispatchEvent(escape);
+  await settle();
+  assert.equal(escape.defaultPrevented, true, 'the dialog’s own Escape is cancelled');
+  assert.equal($('[data-help-tip]'), null, 'the popup closed');
+  assert.ok(dialog().open);
+  assert.equal(document.activeElement, help, 'focus stays on the button');
+  // With the popup closed, Escape is left to the dialog.
+  const second = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  help.dispatchEvent(second);
+  assert.equal(second.defaultPrevented, false);
 });

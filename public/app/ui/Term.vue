@@ -44,7 +44,7 @@ const { open, press, pointerEnter, pointerLeave, focus, blur, click, close } = p
       @keydown.esc="close"
     >
       {{ text ?? entry.label }}</button
-    ><Teleport to="body"
+    ><Teleport :to="popup.host.value"
       ><span
         v-if="open"
         :id="tipId"

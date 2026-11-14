@@ -326,11 +326,21 @@ async function checkGraphPanZoom(page: Page, graphButton: import('playwright').L
     const rect = el.querySelector('[data-node^="line:"] rect')!.getBoundingClientRect();
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   });
+  // A press on a line selects it (FG-5, #1344): the graph stays and the panel under it opens.
   await page.mouse.click(line.x, line.y);
+  await page.locator('#detail [data-flow-graph-selection]').waitFor();
+  assert.ok(await page.locator('#detail [data-flow-graph]').count(), 'the graph stays');
+  assert.ok(
+    await page.locator('#detail [data-selection-in] li').count(),
+    'what comes in is listed',
+  );
+  assert.ok(await page.locator('#detail [data-edge].hl').count(), 'its arrows are lit');
+  // "Open line" opens the production line in place of the graph.
+  await page.locator('#detail [data-selection-line]').click();
   await page.waitForFunction(() => !document.querySelector('#detail [data-flow-graph]'));
   assert.ok(
     await page.evaluate(() => document.querySelector<HTMLDialogElement>('#detail')!.open),
-    'a press on a line opens it in place of the graph',
+    '"Open line" opens it in place of the graph',
   );
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);

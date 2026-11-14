@@ -9,7 +9,12 @@
   its own box (focusable, so the keyboard scrolls it too) and never widens the dialog; the wheel
   over it zooms around the pointer, a drag on its background moves it, two fingers pinch, and
   − / + / Fit zoom it (useGraphPanZoom, graph-pan-zoom.ts). A press on a line's box without a
-  drag opens that production line's dialog in this one's place.
+  drag, or Enter on it, selects it (FG-5, #1344): its arrows stay lit and a panel under the graph
+  (FlowGraphPanel.vue) lists what comes in (rate, belts, source) and what leaves (rate, belts,
+  consumer), with Mark running, "Open line" (that production line's dialog in this one's place) and
+  "Open in build order" (the factory's flow page for the phase on screen, the line's card focused,
+  focusFlowLine). A press on the background or "Clear selection" clears it. The instructions are
+  behind the "?" at the end of the toolbar (FG-6, `flowGraphHelp`, HelpPopover.vue).
   Rearranging (#1224): a drag of a line's box moves it and its arrows follow (placedGraph,
   graph-layout.ts); a line's box takes focus in the automatic order wherever it sits, Enter opens
   it and the arrow keys move it (Shift: bigger steps). Where the lines sit, the zoom and the
@@ -41,7 +46,8 @@
   Another phase's graph is the stored layout applied to the boxes it has in common with the phase
   on screen (the spots are by row id and node id) and the automatic layout for the rest
   (placedGraph), and is read-only: a drag of a box pans the drawing, the arrow keys do not move a
-  box, a press on a line opens nothing (it would open the phase on screen's line), "Tidy up"
+  box, a press on a line selects it and the panel shows its facts only (Mark running, Open line and Open in
+  build order would reach the phase on screen's line), "Tidy up"
   and the tags switch are left out, and the layout is never saved while such a tab is open
   (useGraphLayout's `readonly`: not the spots, the tags, the zoom or the scroll). Switching tab
   first saves what a zoom or scroll of the phase on screen's tab was still waiting to save.
@@ -49,6 +55,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { openCalculatedFactory } from '../../factory-detail.ts';
+import { closeDetail } from '../actions.ts';
+import { focusFlowLine } from '../flow-line-focus.ts';
+import FlowGraphPanel from './FlowGraphPanel.vue';
+import HelpPopover from '../HelpPopover.vue';
 import { itemRate } from '../../flow.ts';
 import {
   flowGraph,
@@ -64,7 +74,7 @@ import { spreadLabels, type PlacedLabel } from '../../graph-labels.ts';
 import type { FlowLine } from '../../group-flow.ts';
 import { num } from '../../format.ts';
 import { openTab, phaseTabs, tabId } from '../../phase-tabs.ts';
-import { phase, phaseLabel, stage } from '../../session.ts';
+import { flowRoute, phase, phaseLabel, stage } from '../../session.ts';
 import { shownGroupFlow } from '../../shown-group-flow.ts';
 import type { StageKey } from '../../../types/index.ts';
 import PhaseTabs from '../PhaseTabs.vue';
@@ -114,6 +124,7 @@ function pickTab(key: StageKey) {
   layout.now();
   tidied.value = null;
   activeNode.value = null;
+  selected.value = null;
   hoveredEdge.value = null;
   const leaving = !readonly.value;
   if (leaving && box.value)
@@ -181,6 +192,9 @@ const drawn = computed(() => {
 
 // The box under the pointer or with keyboard focus, and the arrow under the pointer (#1231).
 const activeNode = ref<string | null>(null);
+// The line selected by a press or Enter (FG-5): its arrows stay lit and the panel below describes
+// it, until another is selected, a press on the background or "Clear selection".
+const selected = ref<string | null>(null);
 const hoveredEdge = ref<string | null>(null);
 const leaveNode = (id: string) => {
   if (activeNode.value === id) activeNode.value = null;
@@ -193,7 +207,7 @@ const leaveEdge = (id: string) => {
 // arrows to storage and the sink too (#1242), and on storage or the sink every arrow in.
 const lit = computed(() => {
   const graph = placed.value,
-    id = activeNode.value;
+    id = activeNode.value ?? selected.value;
   if (!graph || !id || !graph.nodes.some(node => node.id === id)) return null;
   const edges = new Set(
     drawn.value.filter(edge => edge.from === id || edge.to === id).map(edge => edge.id),
@@ -319,16 +333,58 @@ onMounted(async () => {
 // A zoom or a scroll is saved once it has rested.
 watch(zoom, () => layout.later());
 
-// A press on a line's box without a drag (a drag or pinch swallows its click, onClickCapture).
-const openNode = (id: string) => {
-  const row = lineRowOf(id);
-  if (row !== null && !readonly.value) openCalculatedFactory(row);
+// A press on a line's box without a drag (a drag or pinch swallows its click, onClickCapture), or
+// Enter on it, selects it (FG-5): its arrows stay lit and the panel under the graph opens. It works
+// on another phase's tab too, which only looks.
+const selectNode = (id: string) => {
+  if (lineRowOf(id) === null) return;
+  const opening = selected.value === null;
+  selected.value = id;
+  if (opening) void nextTick().then(() => panel.value?.$el.scrollIntoView?.({ block: 'nearest' }));
 };
+// A press on the drawing's background (not on a box, a tag or an arrow) clears the selection.
+function onBackground(e: MouseEvent) {
+  if ((e.target as Element).closest('[data-node], [data-tag], [data-edge-hit]')) return;
+  selected.value = null;
+}
+const panel = ref<InstanceType<typeof FlowGraphPanel> | null>(null);
+// What the panel shows: the selected line's box and its arrows in and out, from every arrow of the
+// graph (the quiet ones and the tags' too), and the plan row.
+const selection = computed(() => {
+  const id = selected.value,
+    graph = view.value.graph,
+    node = id && graph?.nodes.find(known => known.id === id);
+  const row = id ? lineRowOf(id) : null;
+  if (!node || !graph || row === null) return null;
+  return {
+    node,
+    row,
+    ins: graph.edges.filter(edge => edge.to === node.id),
+    outs: graph.edges.filter(edge => edge.from === node.id),
+  };
+});
+// "Open line": the production line's own dialog, in the graph's place.
+const openLine = () => {
+  const row = selection.value?.row;
+  if (row && !readonly.value) openCalculatedFactory(row);
+};
+// "Open in build order": the factory's flow page for the phase on screen, with the line's card in
+// focus. The dialog closes first (it may ask about a note); it stays if the user keeps the note.
+async function openOrder() {
+  const row = selection.value?.row,
+    group = props.id;
+  if (!row || readonly.value) return;
+  await closeDetail();
+  if (document.querySelector<HTMLDialogElement>('#detail')?.open) return;
+  location.hash = '#' + flowRoute(group);
+  focusFlowLine(row);
+}
 // A line's box takes focus: its name, and what Enter and the arrow keys do.
 const lineAttrs = (node: GraphNode) => ({
   tabindex: 0,
-  role: readonly.value ? 'img' : 'button',
-  'aria-label': `${node.label}, ${node.caption}.${node.rateTitle ? ' Makes ' + node.rateTitle + '.' : ''}${readonly.value ? '' : ' Enter opens it, the arrow keys move it.'}`,
+  role: 'button',
+  'aria-pressed': selected.value === node.id,
+  'aria-label': `${node.label}, ${node.caption}.${node.rateTitle ? ' Makes ' + node.rateTitle + '.' : ''} Enter selects it${readonly.value ? '.' : ', the arrow keys move it.'}`,
 });
 // A place's box takes focus too (#1231), so the keyboard lights up its arrows: named with what
 // comes in from it or goes out to it.
@@ -379,14 +435,14 @@ function onNodeFocus(e: FocusEvent, node: GraphNode) {
   activeNode.value = node.id;
   if ((e.currentTarget as Element).matches(':focus-visible')) void keepInView(node.id);
 }
-// Enter or Space opens a focused line; an arrow key moves a focused box (a line's, an input's or an
-// output's, #1240) a grid step, Shift by a bigger one.
+// Enter or Space selects a focused line (on another phase's tab too, FG-5); an arrow key moves a
+// focused box (a line's, an input's or an output's, #1240) a grid step, Shift by a bigger one.
 function onNodeKey(e: KeyboardEvent, node: GraphNode) {
-  if (readonly.value) return;
   if (lineRowOf(node.id) !== null && (e.key === 'Enter' || e.key === ' ')) {
     e.preventDefault();
-    return openNode(node.id);
+    return selectNode(node.id);
   }
+  if (readonly.value) return;
   // Where it is now: a key held down repeats before the drawing is redrawn.
   const at = nodeAt(node.id) ?? node;
   const to = nudgedSpot([at.x, at.y], e.key, e.shiftKey);
@@ -397,9 +453,6 @@ function onNodeKey(e: KeyboardEvent, node: GraphNode) {
   layout.later();
   void keepInView(node.id);
 }
-// The help over the graph is open where there is room for it and a "How to use" line on a phone,
-// where it would take most of the screen from the graph (#1280).
-const roomy = globalThis.matchMedia?.('(max-width: 720px)').matches !== true;
 // What Tidy up replaced, for Undo (FG-3): the spots of the lines, inputs and outputs and the view.
 // Null when there is nothing to undo.
 const tidied = ref<{
@@ -423,7 +476,9 @@ async function tidyUp() {
   layout.places.value = {};
   await show({ zoom: 1, left: 0, top: 0 });
   layout.now();
-  tidied.value = moved ? before : null;
+  // Undo is offered when something was replaced: a moved box, or a zoom or scroll the reset undid.
+  const viewed = before.view.zoom !== 1 || before.view.left !== 0 || before.view.top !== 0;
+  tidied.value = moved || viewed ? before : null;
 }
 // Undo of Tidy up: the boxes and the view back as they were, saved.
 async function undoTidy() {
@@ -476,26 +531,6 @@ function onPanelKey(e: KeyboardEvent) {
           Viewing {{ view.phase }} — switch phase to tick or edit. Your phase is {{ view.working }};
           the layout can only be changed there.
         </p>
-        <details class="fgraph-help small muted" :open="roomy" data-flow-graph-help>
-          <summary>How to use</summary>
-          <p>
-            What comes in on the left, this factory's production lines from left to right in the
-            order they feed each other, and what leaves on the right. Each arrow is one item, per
-            minute. Drag the background to move the graph, drag a production line, an input or an
-            output to move it (or the arrow keys on a focused box; not on another phase's tab), zoom
-            with the mouse wheel, a pinch or the buttons, and press a production line to open it.
-            Moved boxes snap to a 5 px grid, so they line up. The graph opens as you left it, until
-            you tidy it up: that lays everything out again, and Ctrl+Z brings your layout back.
-            <template v-if="view.quiet && !layout.tags.value">
-              What goes to Protected storage and the AWESOME Sink is drawn as thin grey arrows.
-            </template>
-            <template v-else-if="view.quiet">
-              What goes to Protected storage (▣) and the AWESOME Sink (♻) is shown as tags on each
-              production line.
-            </template>
-            Point at a box or focus it to light up its arrows.
-          </p>
-        </details>
         <div class="fgraph-tools" data-flow-graph-tools>
           <button
             class="btn"
@@ -544,6 +579,7 @@ function onPanelKey(e: KeyboardEvent) {
               <kbd>Ctrl+Z</kbd>
             </template>
           </span>
+          <HelpPopover name="flowGraphHelp" topic="the flow graph" />
           <label v-if="view.quiet && !readonly" class="fgraph-switch">
             <input
               type="checkbox"
@@ -563,6 +599,7 @@ function onPanelKey(e: KeyboardEvent) {
           data-flow-graph
           v-on="handlers"
           @click.capture="onClickCapture"
+          @click="onBackground"
           @scroll="layout.later()"
         >
           <svg
@@ -606,11 +643,15 @@ function onPanelKey(e: KeyboardEvent) {
             </template>
             <template v-for="node in placed.nodes" :key="node.id">
               <g
-                :class="['fgraph-node', node.kind, { on: lit?.node === node.id }]"
+                :class="[
+                  'fgraph-node',
+                  node.kind,
+                  { on: lit?.node === node.id, sel: selected === node.id },
+                ]"
                 :data-node="node.id"
                 :transform="`translate(${node.x},${node.y})`"
                 v-bind="node.kind === 'line' ? lineAttrs(node) : placeAttrs(node)"
-                @click="openNode(node.id)"
+                @click="selectNode(node.id)"
                 @keydown="onNodeKey($event, node)"
                 @pointerenter="activeNode = node.id"
                 @pointerleave="leaveNode(node.id)"
@@ -674,6 +715,18 @@ function onPanelKey(e: KeyboardEvent) {
             </g>
           </svg>
         </div>
+        <FlowGraphPanel
+          v-if="selection"
+          ref="panel"
+          :node="selection.node"
+          :ins="selection.ins"
+          :outs="selection.outs"
+          :row="selection.row"
+          :readonly="readonly"
+          @clear="selected = null"
+          @line="openLine"
+          @order="openOrder"
+        />
         <details class="gf-text" data-flow-graph-table>
           <summary>The graph as a table</summary>
           <div class="table-wrap">

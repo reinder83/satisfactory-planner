@@ -5203,20 +5203,9 @@ button.rail-tile:hover {
 }
 /* "Show storage and sink as tags" (#1231): a checkbox beside the zoom buttons, wrapping under
    them on a phone, its whole label a 44px-high target there. */
-/* The help over the graph (#1280): a "How to use" line that opens on a phone, where the
-   paragraph would take most of the screen; where there is room it stays open and the line is
-   left out. */
-.fgraph-help > summary {
-  min-height: 24px;
-  cursor: pointer;
-}
-.fgraph-help p {
-  margin: 4px 0 0;
-}
-@media (min-width: 721px) {
-  .fgraph-help[open] > summary {
-    display: none;
-  }
+/* The "?" beside the zoom buttons (FG-6) holds the instructions; it sits at the end of the row. */
+.fgraph-tools .help-pop {
+  margin-left: auto;
 }
 .fgraph-switch {
   display: inline-flex;
@@ -5303,13 +5292,68 @@ button.rail-tile:hover {
   display: block;
   user-select: none;
 }
-/* A line's box opens its production line on a press without a drag, and moves with a drag or the
+/* A line's box selects the line on a press without a drag, and moves with a drag or the
    arrow keys once focused (#1224): the focus ring is its box's outline, drawn thicker. */
 .fgraph-node.line {
   cursor: pointer;
 }
 .fgraph-node {
   outline: none;
+}
+/* The selected line (FG-5): its box keeps the accent outline while its arrows stay lit, and the
+   panel under the graph describes it. */
+.fgraph-node.sel rect {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.fgraph-panel {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+}
+.fgraph-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fgraph-panel h3,
+.fgraph-panel h4,
+.fgraph-panel p {
+  margin: 0;
+}
+.fgraph-panel-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px 24px;
+  margin: 10px 0 0;
+}
+.fgraph-panel h4 {
+  margin-bottom: 4px;
+}
+.fgraph-panel ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.fgraph-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 12px 0 0;
+}
+@media (max-width: 720px) {
+  .fgraph-panel .btn,
+  .fgraph-panel .check-row {
+    min-height: 44px;
+  }
 }
 .fgraph-node.line:hover rect {
   stroke: var(--accent);

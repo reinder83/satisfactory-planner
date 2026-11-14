@@ -2,7 +2,8 @@
 // #1333): one trigger button and one tooltip, so both open, close, place and focus the same way.
 // It opens on hover, on keyboard focus and on a tap or click (which keeps it open until the next
 // tap, a tap elsewhere or Escape); Escape closes it without moving focus. The tooltip is drawn at
-// the end of <body> (the component Teleports it), fixed under the trigger, so a box that scrolls
+// the end of <body> (the component Teleports it; into the open <dialog> when the trigger sits in
+// one, which a <body> tooltip would hide behind), fixed under the trigger, so a box that scrolls
 // or clips never cuts it off; it follows the trigger when the page or a box scrolls, goes above it
 // when there is no room below, and moves left or right to stay inside the window. The mouse may
 // move from the trigger onto the tooltip without closing it.
@@ -18,6 +19,10 @@ export function useTipPopup() {
   const root = ref<HTMLElement | null>(null);
   const button = ref<HTMLButtonElement | null>(null);
   const tip = ref<HTMLElement | null>(null);
+  // Where the component Teleports the tooltip: the end of <body>, or the <dialog> the trigger sits in.
+  // A modal dialog is in the browser's top layer, above everything in <body>, so a tooltip drawn
+  // there stays hidden behind it (#1344).
+  const host = computed<HTMLElement | 'body'>(() => root.value?.closest('dialog') ?? 'body');
   const hovered = ref(false),
     focused = ref(false),
     pinned = ref(false);
@@ -60,6 +65,8 @@ export function useTipPopup() {
   }
   function close(event: KeyboardEvent) {
     if (!open.value) return;
+    // Escape closes the tooltip only: not the dialog the button may sit in (#1344).
+    event.preventDefault();
     event.stopPropagation();
     clearTimeout(leaving);
     pinned.value = hovered.value = focused.value = false;
@@ -114,6 +121,7 @@ export function useTipPopup() {
 
   return {
     root,
+    host,
     button,
     tip,
     open,

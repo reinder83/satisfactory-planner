@@ -110,6 +110,8 @@ export interface GraphEdge {
   rate: number;
   // The rate as the pages write it (`rateText`), and how the flow page's table names the two ends.
   rateText: string;
+  // The belts or pipes that carry it, as the flow page words them ("2 × Mk.3 belts").
+  belts: string;
   fromText: string;
   toText: string;
   // 'loop' for a link to a line built earlier (a recycling loop needs a starter batch), 'self' for
@@ -220,6 +222,7 @@ export function flowGraph(
       item: link.item,
       rate: link.rate,
       rateText: rateText(link.item, link.rate),
+      belts: link.belts,
       fromText: connection.from,
       toText: connection.to,
       note: self ? 'self' : link.loop ? 'loop' : '',
@@ -568,6 +571,15 @@ export interface Ordering {
   transpose: boolean;
 }
 export const ORDERING: Ordering = { passes: 10, restarts: 8, transpose: true };
+// Each restart costs about the square of the most arrows between two columns, so a big graph gets
+// fewer of them (never fewer than two, the given order and one shuffle): `RESTART_BUDGET` over that
+// square, as far as `wanted` allows. It depends only on the graph, so the layout stays the same
+// every time. A graph of 28 arrows between columns keeps all 8 restarts; 46 get 3 (368 ms → 141 ms
+// on a 45-line factory); 57 and more get 2.
+const RESTART_BUDGET = 7000;
+export const restartsFor = (wanted: number, widest: number): number =>
+  Math.max(1, Math.min(wanted, Math.max(2, Math.floor(RESTART_BUDGET / Math.max(1, widest ** 2)))));
+
 // The layout before #1343: four sweeps from the one start. The tests count its crossings to show
 // what the new one saves.
 export const PREVIOUS_ORDERING: Ordering = { passes: 4, restarts: 1, transpose: false };
@@ -697,7 +709,8 @@ function orderLayers(
   };
   let best = layers.map(layer => [...layer]);
   let bestFound = { all: Infinity, loud: Infinity };
-  for (let start = 0; start < Math.max(1, ordering.restarts); start++) {
+  const starts = restartsFor(ordering.restarts, Math.max(0, ...hopsFrom.map(list => list.length)));
+  for (let start = 0; start < starts; start++) {
     const order = layers.map(layer => (start === 0 ? [...layer] : shuffled(layer)));
     for (let pass = 0; pass < ordering.passes; pass++) {
       for (let i = 1; i < order.length; i++) sortBy(order[i]!, before, order[i - 1]!);
