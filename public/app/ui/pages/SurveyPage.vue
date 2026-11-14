@@ -12,7 +12,6 @@
 <script setup lang="ts">
 import { vNumber } from '../form/number-input.ts';
 import { computed } from 'vue';
-import { browserMode } from '../../../browser-api.ts';
 import {
   clockChoices,
   knownWorld,
@@ -38,7 +37,6 @@ import {
   refillExtraction,
 } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
-import BrowserNotice from '../BrowserNotice.vue';
 import HelpTip from '../form/HelpTip.vue';
 import SelectField from '../form/SelectField.vue';
 import ItemIcon from '../ItemIcon.vue';
@@ -147,7 +145,6 @@ function submit() {
 
 <template>
   <template v-if="page">
-    <BrowserNotice v-if="browserMode" />
     <PageHeader
       eyebrow="YOUR WORLD"
       title="Work out your resource budgets"

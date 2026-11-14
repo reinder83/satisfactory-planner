@@ -49,7 +49,6 @@ import { invalidate, legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import ActionMenu from '../ActionMenu.vue';
-import BrowserNotice from '../BrowserNotice.vue';
 import InlineName from '../InlineName.vue';
 import HelpPopover from '../HelpPopover.vue';
 import PageHeader from '../PageHeader.vue';
@@ -434,7 +433,6 @@ async function rename(
 </script>
 
 <template>
-  <BrowserNotice v-if="browserMode" />
   <PageHeader
     eyebrow="YOUR FACTORY WORLDS"
     title="Saves & profiles"

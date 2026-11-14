@@ -66,9 +66,9 @@ test('a profile opened on Phase 1 while saved on Phase 3 says why, above the bui
   assert.ok(open1 > 1, 'Phase 1 has open steps');
   assert.equal(
     shown.textContent?.replace(/\s+/g, ' ').trim(),
-    `You are working on Phase 3. Phase 1 still has ${open1} open steps, so the plan starts here. Go to Phase 3`,
+    `Viewing Phase 1 · you're working on Phase 3. Phase 1 still has ${open1} open steps, so the plan starts here. Back to Phase 3 Work on Phase 1 instead`,
   );
-  assert.equal(goButton()?.textContent?.trim(), 'Go to Phase 3');
+  assert.equal(goButton()?.textContent?.trim(), 'Back to Phase 3');
   assert.equal(goButton()?.type, 'button');
   // Above the build sequence: before the section with the "Build sequence" heading.
   const sequence = $('#main .split')!;
@@ -192,7 +192,7 @@ test('a profile migrated from the handbook, saved on Phase 5 and opened on Phase
   assert.equal(phase(), '3');
   assert.match(
     notice()!.textContent!.replace(/\s+/g, ' '),
-    new RegExp(`You are working on Phase 5\\. Phase 3 still has ${openSteps()} open steps`),
+    new RegExp(`you're working on Phase 5\\. Phase 3 still has ${openSteps()} open steps`),
   );
   goButton()!.click();
   await settle();

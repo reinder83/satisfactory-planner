@@ -79,7 +79,7 @@ test('on an earlier planned phase the profile opened on, the picker names the sa
     value: '3',
     marked: '4',
   });
-  assert.match(text($('[data-opened-earlier]')), /You are working on Phase 4\./);
+  assert.match(text($('[data-opened-earlier]')), /you're working on Phase 4\./);
 });
 
 test('picking a phase only shows it; "Work on Phase 2" saves it, and the picker says "Working on" again', async () => {

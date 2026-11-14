@@ -15,6 +15,15 @@
     groups' marks (factoryGroups.local, saved by OnSitePicker.vue) would give in a recalculation
     (onSiteChange in app/on-site-picker.ts, #877, #938, #970, #985).
 
+  On the build plan's Overview (`ticks`, BP-7) a fifth reason joins them, the ticks showing more than
+  the plan's "What you already have" settings count (#1068; ownedTicksNotice in views/calculated.ts,
+  withOwnedFound in owned-ticks.ts): a better miner or belt milestone ticked, a hard-drive
+  alternate's unlock the plan does not hold, or generators marked running beyond what some phase
+  from the working phase on runs. It was a card of its own under this one. Its words and its own
+  "Dismiss" stay with that reason (hidden in this browser until the ticks add something new,
+  setTicksNoticeDismissed in session.ts; focus then goes to the Overview tab), and the one button
+  raises those owned fields in the same recalculation.
+
   They used to be four notices, one above the other, each with its own button (#1280). Now there is
   one notice and one button: with one source it reads as that source's notice always did (its
   words, its label, its `data-*-recalc` and `data-recalc-*` hooks); with several it lists the
@@ -32,7 +41,10 @@ import { computed } from 'vue';
 import { exactClockNames, exactClocksChange } from '../../exact-clocks.ts';
 import { onSiteChange, onSiteRecalcSettings } from '../../on-site-picker.ts';
 import { clockChangeWords, lineClocksChange } from '../../shard-pins.ts';
-import { calculated, state } from '../../session.ts';
+import { foundList, foundWords, alternatesPhrase, withOwnedFound } from '../../owned-ticks.ts';
+import { calculated, setTicksNoticeDismissed, state, workspace } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { ownedTicksNotice } from '../../views/calculated.ts';
 import { pinChangeWords, pinsOverBudget, sloopPinsChange } from '../../sloop-pins.ts';
 import { catalogRecipeBook } from '../../built-capacity.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
@@ -40,9 +52,37 @@ import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { listNames, localeNumber } from '../../../wording.ts';
 import { legacy } from '../bridge.ts';
 import { IN_PLACE_NOTE, recalculateOffer } from '../recalc-offer.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 
-// `onSite`: the Factories page, which also asks for the items the groups make on site.
-const props = defineProps<{ onSite?: boolean }>();
+// `onSite`: the Factories page, which also asks for the items the groups make on site. `ticks`:
+// the build plan's Overview, which also offers what the ticks show you already have (BP-7).
+const props = defineProps<{ onSite?: boolean; ticks?: boolean }>();
+
+const owned = computed(() =>
+  legacy(() => {
+    const found = props.ticks ? ownedTicksNotice() : null;
+    if (!found) return null;
+    const words = foundWords(found, workspace.catalog?.alternates);
+    return {
+      found,
+      list: foundList(words),
+      unlocked: listNames(words.unlocked),
+      alternates: alternatesPhrase(words.alternates),
+      generators: listNames(words.generators),
+    };
+  }),
+);
+
+function dismissOwned(event: Event) {
+  const shown = owned.value;
+  if (!shown) return;
+  const refocus = refocusAfterRemoval(event.currentTarget, {
+    fallback: ['[data-plan-tab="overview"]', '#main h1'],
+  });
+  setTicksNoticeDismissed(shown.found);
+  render();
+  void refocus();
+}
 
 const exact = computed(() =>
   legacy(() => {
@@ -115,6 +155,12 @@ const reasons = computed(() => {
       change: 'the Power Shard pins you chose',
       label: 'Recalculate in place with Power Shard pins',
     });
+  if (owned.value)
+    found.push({
+      reason: 'Ticks show more than the plan counts',
+      change: `what your ticks show you already have: ${owned.value.list}`,
+      label: 'Recalculate in place with what you have',
+    });
   return found;
 });
 const many = computed(() => reasons.value.length > 1);
@@ -126,14 +172,18 @@ const label = computed(() =>
 // An empty attribute for a pending source, no attribute for the others.
 const flag = (on: unknown) => (on ? '' : null);
 
+// The plan's settings with the owned fields the ticks show raised, when that reason is pending.
+const ownedSettings = <S extends NonNullable<typeof calculated>['settings']>(settings: S): S =>
+  owned.value ? withOwnedFound(settings, owned.value.found) : settings;
+
 function recalculate(event: Event) {
   if (!calculated || !reasons.value.length) return;
   void recalculateOffer(event.currentTarget as HTMLButtonElement, {
     // The plan's own settings, with what the groups make on site when that is pending; the exact
     // clocks and the pins go in with every offer.
-    settings: site.value
-      ? onSiteRecalcSettings(calculated.settings, site.value)
-      : calculated.settings,
+    settings: ownedSettings(
+      site.value ? onSiteRecalcSettings(calculated.settings, site.value) : calculated.settings,
+    ),
     change: 'with ' + listNames(reasons.value.map(source => source.change)),
     label: label.value,
   });
@@ -151,6 +201,7 @@ function recalculate(event: Event) {
     :data-exact-clocks-recalc="flag(exact)"
     :data-sloop-pins-recalc="flag(sloops)"
     :data-shard-pins-recalc="flag(shards)"
+    :data-owned-ticks-recalc="flag(owned)"
   >
     <p>
       <strong>This plan needs a recalculation.</strong>
@@ -191,6 +242,32 @@ function recalculate(event: Event) {
           >Power Shard pins changed: {{ shards.lines }}.</span
         >{{ ' ' }}
       </template>
+      <template v-if="owned"
+        ><span class="recalc-part" data-owned-ticks
+          ><template v-if="owned.unlocked"
+            ><span data-owned-ticks-found="unlocked">You have unlocked {{ owned.unlocked }}.</span>
+          </template>
+          <template v-if="owned.alternates"
+            ><span data-owned-ticks-found="alternates">You own {{ owned.alternates }}.</span>
+          </template>
+          <template v-if="owned.generators"
+            ><span data-owned-ticks-found="generators">You run {{ owned.generators }}.</span>
+          </template>
+          The plan was calculated without them.
+          <button
+            type="button"
+            class="btn quiet"
+            data-owned-ticks-dismiss
+            aria-describedby="owned-ticks-dismiss-note"
+            @click="dismissOwned"
+          >
+            Dismiss
+          </button>
+          <span id="owned-ticks-dismiss-note" class="small muted"
+            >It comes back when your ticks show something new.</span
+          ></span
+        >{{ ' ' }}
+      </template>
       Nothing changes until you start it.
     </p>
     <p v-if="sloops?.over" data-sloop-pins-over>{{ sloops.over }}</p>
@@ -204,6 +281,7 @@ function recalculate(event: Event) {
         :data-recalc-exact-clocks="flag(exact)"
         :data-recalc-sloop-pins="flag(sloops)"
         :data-recalc-shard-pins="flag(shards)"
+        :data-recalc-owned-ticks="flag(owned)"
         @click="recalculate"
       >
         {{ label }}

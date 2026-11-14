@@ -11,7 +11,11 @@
   shown; the arrow keys, Home and End move focus between the phases, and Enter, Space or a click
   shows one. Both name the working phase (pickerWords), the track marks its segment, and while
   the tab shows another phase the label reads "Showing" rather than "Working on" (#992) and "Work
-  on Phase N" beside it saves the phase shown as the working phase (`save({ type: 'phase' })`).
+  on Phase N" saves the phase shown as the working phase (`save({ type: 'phase' })`, ui/work-on-phase.ts):
+  beside the track on the pages without a phase banner, and as "Work on Phase N instead" in the build
+  plan's one banner (BP-10). Each segment also gives its share as text, "42%" or a tick (BP-3).
+  The sidebar's one save-status card (BP-1, views/backup.ts saveCard) says where the saves live
+  and how old the last backup is; the page-top "saves stay in this browser" banner is only on Backup.
 
   The profile switcher (SP-07, #242) is the sidebar footer as a menu button (ui/ActionMenu.vue):
   the open profile's name and settings lines on the button, and in its menu the open save's
@@ -47,7 +51,7 @@ import {
   purities,
   recipeCostOf,
 } from '../../preferences.ts';
-import { allowSwitch, notesNotSaved, pending, save, toast } from '../api.ts';
+import { allowSwitch, notesNotSaved, pending, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
 import { PAGE_NAMES } from '../page-title.ts';
@@ -56,10 +60,10 @@ import {
   calculated,
   currentProfile,
   currentSave,
+  milestoneOnly,
   phase,
   phaseLabel,
   phaseOptions,
-  setOpenedPhase,
   setQuery,
   view,
   viewPhase,
@@ -70,16 +74,18 @@ import {
 import type { View } from '../session.ts';
 import type { Phase } from '../../types/index.ts';
 import { render } from '../shell.ts';
-import { backupAge } from '../views/backup.ts';
+import { saveCard } from '../views/backup.ts';
+import { onPersistenceChange, persistence } from '../storage-persistence.ts';
 import { factoryGroupsState } from '../views/factories.ts';
 import { phaseTrack } from '../views/phase-track.ts';
 import AdaPanel from './AdaPanel.vue';
 import GroupMovedNotice from './GroupMovedNotice.vue';
 import LiveChangeNotice from './LiveChangeNotice.vue';
-import { legacy } from './bridge.ts';
+import { invalidate, legacy } from './bridge.ts';
 import ActionMenu from './ActionMenu.vue';
 import { openProfile, signOut } from './actions.ts';
 import { reserveScrollbar } from './scroll-lock.ts';
+import { committing, workOnShown } from './work-on-phase.ts';
 
 // The sidebar's navigation: route, icon, label (the page's name, as its tab title has it, #1254).
 const NAV: [id: View, icon: string, label: string][] = (
@@ -94,6 +100,19 @@ const NAV: [id: View, icon: string, label: string][] = (
     ['backup', '⇅'],
   ] as const
 ).map(([id, icon]) => [id, icon, PAGE_NAMES[id]]);
+
+// A long save name cut in the middle, "Northern forest facto…ase 4 v2" style (BP-2): the first 20
+// and last 12 characters of a name over 36.
+function middleCut(name: string): string {
+  const chars = [...name];
+  return chars.length <= 36 ? name : chars.slice(0, 20).join('') + '…' + chars.slice(-12).join('');
+}
+function shortDate(iso: string | undefined): string {
+  const date = new Date(iso ?? '');
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
 
 // A notes box that says "Not saved" (a failed write, or a version to choose, #1052) is never
 // outshone by "Saved": the status says a note is not saved until the box saves it or goes.
@@ -114,10 +133,16 @@ const frame = computed(() =>
     } as Record<string, string>,
     // The empty workspace's placeholder save has no id; the breadcrumb says so as the status does.
     saveName: currentSave.id ? currentSave.name : 'No save yet',
+    // The save name cut in the middle when long (BP-2): the start tells saves apart and the end
+    // often holds the number or date; the whole name is in the link's title and accessible name.
+    saveCut: middleCut(currentSave.id ? currentSave.name : 'No save yet'),
+    // The profile's plan date for the chip beside its name, e.g. "12 Nov", of a calculated profile.
+    profileDate: currentSave.id ? shortDate(calculated?.createdAt) : '',
     // The open profile, after the save in the breadcrumb (#1071): one name everywhere.
     profileName: currentSave.id ? currentProfile?.name || '' : '',
     editable: !!(currentSave.id && calculated),
     canPickPhase: !!currentSave.id,
+    topWorkOn: topWorkOn(view),
     phase: phase(),
     phaseLabel: phaseLabel(phase()),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
@@ -145,9 +170,14 @@ const frame = computed(() =>
           : browserMode
             ? 'Saved in browser'
             : 'Saved',
-    // The browser edition's backup age under the save indicator (SP-40), worked out on every
-    // render; the Backup page shows it in full. The Docker edition keeps its saves on the server.
-    backup: browserMode && currentSave.id ? backupAge(workspace.lastBackup) : null,
+    // The one save-status card under the save indicator (BP-1), worked out on every render; the
+    // Backup page shows the age in full.
+    card: saveCard(
+      browserMode,
+      !!currentSave.id,
+      workspace.lastBackup,
+      persistence.value === 'not-kept' || persistence.value === 'unsupported',
+    ),
     footer: profileFooter(),
     // The open save's profiles, for the switcher. A signed-out workspace has no saves, and the
     // frame may redraw once more before the sign-in screen replaces it.
@@ -244,6 +274,8 @@ onMounted(() => {
   wide?.addEventListener?.('change', widened);
 });
 onBeforeUnmount(() => wide?.removeEventListener?.('change', widened));
+// The card says whether the browser keeps the saves (#1368); a change redraws it.
+onBeforeUnmount(onPersistenceChange(invalidate));
 
 // The top bar's short save status (shown at phone width, where the sidebar's is hidden)
 // reserves the width of its longest label in this edition, so it never shifts the bar.
@@ -365,32 +397,10 @@ function trackKey(event: KeyboardEvent) {
   tabs[next]?.focus();
 }
 
-// "Work on Phase N" (#1053): saves the phase shown as the profile's working phase, the one other
-// tabs, devices and a reload open. Busy while it saves (#299). The button goes once the phase
-// shown is the working phase, so focus moves to the phase picker that now says "Working on": the
-// track's segment, or the select at phone widths. A failed write reports through the error toast
-// and leaves everything as it was.
-const committing = ref(false);
-async function workOnShown() {
-  const target = phase();
-  if (committing.value || !workingPhaseNotShown()) return;
-  committing.value = true;
-  try {
-    await save({ type: 'phase', value: target });
-    setOpenedPhase(null);
-    render();
-    toast(`You are now working on ${phaseLabel(target)}.`);
-    await nextTick();
-    const picker = wide?.matches
-      ? document.querySelector<HTMLElement>('[data-phase-track] [aria-selected="true"]')
-      : document.querySelector<HTMLElement>('#phase-picker');
-    picker?.focus();
-  } catch {
-    // Reported by the error toast; the phase shown stays and so does the button.
-  } finally {
-    committing.value = false;
-  }
-}
+// The top bar's "Work on Phase N" (#1053) is only for the pages that have no phase banner (the
+// build plan's, ui/plan/OpenedEarlierNotice.vue, carries the same button, BP-10, so the two never
+// compete); a milestone-only phase has its own notice with no such button.
+const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
 </script>
 
 <template>
@@ -448,14 +458,20 @@ async function workOnShown() {
         <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
         ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
       </div>
-      <a
-        v-if="frame.backup"
-        href="#backup"
-        :class="['backup-age', frame.backup.stale ? 'is-stale' : '']"
-        data-backup-age
-        @click="navFollowed"
-        >{{ frame.backup.short }}</a
-      >
+      <div :class="['save-card', 'is-' + frame.card.tone]" data-save-card>
+        <span class="save-card-lead" data-save-card-lead>{{ frame.card.lead }}</span
+        ><span v-if="frame.card.age" class="save-card-age" data-backup-age>{{
+          frame.card.age
+        }}</span
+        ><a
+          v-if="frame.card.button"
+          href="#backup"
+          class="btn save-card-export"
+          data-export-backup
+          @click="navFollowed"
+          >Export backup</a
+        >
+      </div>
       <div class="sidebar-foot">
         <ActionMenu
           id="profile-switcher"
@@ -576,22 +592,28 @@ async function workOnShown() {
           ><img class="topbar-mark" src="./favicon.svg" alt="" />
         </div>
         <div class="breadcrumbs">
-          <a href="#profiles" class="crumb-save" :title="frame.saveName">{{ frame.saveName }}</a
+          <a
+            href="#profiles"
+            class="crumb-save"
+            :title="frame.saveName"
+            :aria-label="frame.saveCut === frame.saveName ? undefined : frame.saveName"
+            >{{ frame.saveCut }}</a
           ><template v-if="frame.profileName"
             ><span class="crumb-sep" aria-hidden="true">/</span
             ><a
               href="#profiles"
               class="crumb-profile"
               :title="frame.profileName"
+              :data-date="frame.profileDate || undefined"
               data-crumb-profile
-              >{{ frame.profileName }}</a
+              ><span class="crumb-profile-name">{{ frame.profileName }}</span></a
             ></template
           >
         </div>
         <div class="topbar-tools">
           <!-- Before the track, so the track does not move under the pointer when it appears. -->
           <button
-            v-if="frame.canPickPhase && frame.picker.elsewhere"
+            v-if="frame.canPickPhase && frame.picker.elsewhere && frame.topWorkOn"
             type="button"
             class="btn work-on-phase"
             :aria-disabled="committing || undefined"
@@ -625,6 +647,12 @@ async function workOnShown() {
               @click="showPhase(segment.phase)"
             >
               <span class="phase-track-name">{{ segment.label }}</span
+              ><span
+                v-if="segment.pct !== null"
+                class="phase-track-pct"
+                aria-hidden="true"
+                data-phase-pct
+                >{{ segment.pct >= 100 ? '✓' : segment.pct + '%' }}</span
               ><span v-if="segment.pct !== null" class="visually-hidden"
                 >, {{ segment.pct }}% done</span
               ><span

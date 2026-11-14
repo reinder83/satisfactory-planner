@@ -48,6 +48,14 @@ test('the Docker edition shows no backup age: its saves are on the server (SP-40
   assert.equal($('[data-backup-age]'), null);
 });
 
+test('the Docker edition card names the server and never says "only in this browser" (BP-1)', () => {
+  render();
+  const card = $('.sidebar [data-save-card]')!;
+  assert.equal(card.querySelector('[data-save-card-lead]')!.textContent, 'Saved on server');
+  assert.doesNotMatch(card.textContent!, /browser/i);
+  assert.equal(card.querySelector('[data-export-backup]'), null);
+});
+
 test('the navigation lists Notes between Power & resources and Backup (#243)', () => {
   render();
   assert.deepEqual(
@@ -131,6 +139,9 @@ test('the phase track shows each phase’s progress and switches phases like the
     percent + '%',
   );
   assert.equal(segment('4').querySelector('.visually-hidden')!.textContent, `, ${percent}% done`);
+  // BP-3: the share is also text beside the label, and a done phase reads as a tick.
+  assert.equal(segment('4').querySelector('[data-phase-pct]')!.textContent, percent + '%');
+  assert.equal(segment('post').querySelector('[data-phase-pct]'), null, 'no checklist, no figure');
   assert.equal(
     segment('post').querySelector('.phase-track-bar'),
     null,

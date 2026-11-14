@@ -705,7 +705,7 @@ export function carriedCard(row: CalcRow): { from: string; text: string } | null
 }
 
 // The build plan's "Your ticks show more than this plan counts" notice (#1068,
-// ui/plan/OwnedTicksNotice.vue, ADA's owned-ticks line): what the open profile's ticks show
+// ui/plan/RecalcBanner.vue, ADA's owned-ticks line): what the open profile's ticks show
 // beyond its plan's settings (ownedFromTicks in owned-ticks.ts), while the page shows the saved
 // working phase (not an earlier phase it opened on, nor a milestone-only one), and only when it
 // holds something the user has not dismissed in this browser (ticksNoticeDismissed). Null

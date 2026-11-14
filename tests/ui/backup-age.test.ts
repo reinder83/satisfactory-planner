@@ -14,7 +14,8 @@ import { browserMode } from '../../public/browser-api.ts';
 import { setWorkspace, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { backupAge, STALE_BACKUP_DAYS } from '../../public/app/views/backup.ts';
-import { $, go, open, page } from './setup.ts';
+import { persistence } from '../../public/app/storage-persistence.ts';
+import { $, $$, go, open, page } from './setup.ts';
 
 const DAY = 86400000;
 const now = Date.parse('2026-09-28T12:00:00Z');
@@ -74,18 +75,73 @@ test('the Backup page shows the age as a status, warn-toned when stale (SP-40)',
   assert.equal(status().querySelector('b')!.textContent, 'Backed up 17 days ago');
 });
 
-test('the sidebar repeats a short backup age under the save indicator, linking to Backup', async () => {
+// BP-1 (#1338): one save-status card in the sidebar says where the saves live and how old the last
+// backup is; "Export backup" only shows when one is due.
+test('the sidebar card says where the saves live and how old the backup is, quiet after a backup', async () => {
   go('plan');
-  await withBackup(ago(2));
-  const link = () => $<HTMLAnchorElement>('.sidebar [data-backup-age]')!;
-  assert.equal(link().getAttribute('href'), '#backup');
-  assert.equal(link().textContent, 'Backed up 2d ago');
-  assert.ok(!link().classList.contains('is-stale'));
+  const card = () => $('.sidebar [data-save-card]')!;
+  const age = () => card().querySelector('[data-backup-age]')?.textContent;
+  const button = () => card().querySelector<HTMLAnchorElement>('[data-export-backup]');
+  await withBackup(null);
+  assert.equal(card().querySelector('[data-save-card-lead]')!.textContent, 'Only in this browser');
+  assert.equal(age(), 'Never backed up');
+  assert.ok(card().classList.contains('is-warn'));
+  assert.equal(button()!.getAttribute('href'), '#backup');
+  assert.equal(button()!.textContent, 'Export backup');
   assert.ok(
-    $('.sidebar .save-status')!.compareDocumentPosition(link()) & Node.DOCUMENT_POSITION_FOLLOWING,
+    $('.sidebar .save-status')!.compareDocumentPosition(card()) & Node.DOCUMENT_POSITION_FOLLOWING,
     'just after the save indicator',
   );
+  await withBackup(ago(0.2));
+  assert.equal(age(), 'Backed up today');
+  assert.ok(card().classList.contains('is-ok'), 'green after a backup');
+  assert.equal(button(), null, 'nothing to nudge');
+  await withBackup(ago(2));
+  assert.equal(age(), 'Backed up 2 days ago');
+  assert.ok(card().classList.contains('is-quiet'));
+  assert.equal(button(), null);
+  await withBackup(ago(15));
+  assert.ok(card().classList.contains('is-warn'), 'a warning again after a week');
+  assert.ok(button());
+  assert.equal($$('[data-save-card]').length, 1, 'one card, not three');
+});
+
+test('the card says the browser may clear the saves when it has not agreed to keep them', async () => {
+  go('plan');
+  persistence.value = 'not-kept';
+  try {
+    await withBackup(ago(0.2));
+    const card = $('.sidebar [data-save-card]')!;
+    assert.equal(
+      card.querySelector('[data-save-card-lead]')!.textContent,
+      'Your browser may clear these saves',
+    );
+    assert.equal(card.querySelector('[data-export-backup]'), null, 'backed up today: no nudge');
+    await withBackup(ago(3));
+    assert.ok($('.sidebar [data-export-backup]'), 'older than today: nudges an export');
+    persistence.value = 'kept';
+    await withBackup(ago(3));
+    assert.equal(
+      $('.sidebar [data-save-card-lead]')!.textContent,
+      'Only in this browser',
+      'kept: the plain lead',
+    );
+  } finally {
+    persistence.value = 'unknown';
+  }
+});
+
+test('no page but Backup carries the page-top banner that saves stay in this browser', async () => {
   await withBackup(null);
-  assert.equal(link().textContent, 'Never backed up');
-  assert.ok(link().classList.contains('is-stale'));
+  for (const page of ['plan', 'profiles', 'notes', 'factories'] as const) {
+    go(page);
+    render();
+    await nextTick();
+    assert.equal($('#main .notice.info [href="#backup"]'), null, page);
+    assert.doesNotMatch($('#main')!.textContent!, /saves stay in this browser/i, page);
+  }
+  go('backup');
+  render();
+  await nextTick();
+  assert.match($('#main')!.textContent!, /Your saves stay in this browser/);
 });

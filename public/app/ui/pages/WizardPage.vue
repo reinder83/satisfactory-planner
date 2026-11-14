@@ -20,7 +20,6 @@
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { browserMode } from '../../../browser-api.ts';
 import { expertMode } from '../../expert.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -43,7 +42,6 @@ import {
 import { scheduleEstimate } from '../../wizard/estimate.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
-import BrowserNotice from '../BrowserNotice.vue';
 import EstimatePanel from '../wizard/EstimatePanel.vue';
 import PageHeader from '../PageHeader.vue';
 import GoalStep from '../wizard/GoalStep.vue';
@@ -144,7 +142,6 @@ async function submit(event: Event) {
     ><a class="btn" href="#profiles">Existing saves</a>
   </template>
   <template v-else>
-    <BrowserNotice v-if="browserMode" />
     <PageHeader :eyebrow="page.eyebrow" :title="page.title" />
     <TicksPrefill />
     <div class="wizard-progress">
