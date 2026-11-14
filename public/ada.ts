@@ -92,6 +92,9 @@ export interface AdaFacts {
   // many steps it ticked and the file's name; absent when there was none since the page opened.
   merged?: number;
   mergedFrom?: string;
+  // What the last restore of a progress backup on the Backup page changed (X-6, #1352), in her
+  // words (restore-changes.ts adaWords), and whether it took nothing back; absent when there was none.
+  restored?: { words: string; good: boolean };
   // The Backup page's activity log (#1214): how many ticks it lists, and the names in it as a list
   // in quotes ('' when no tick has a name); absent elsewhere and while it lists none.
   activity?: { ticks: number; people: string };
@@ -887,6 +890,27 @@ const RULES: AdaRule[] = [
     // Only after when() found a backup age.
     text: facts =>
       `Last full backup: ${plural(facts.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
+  },
+  // Both editions: the progress backup just restored on this page (X-6, #1352). One that only
+  // added is approved, one that took something back is only reported. An event the user just made,
+  // so it leads, as the ranking finished does, until the page is left or the summary dismissed.
+  {
+    id: 'progress-restored',
+    lead: true,
+    on: ['backup'],
+    tone: 'praise',
+    when: facts => facts.restored?.good,
+    // Only after when() found a restore.
+    text: facts => facts.restored!.words,
+  },
+  {
+    id: 'progress-restored-back',
+    lead: true,
+    on: ['backup'],
+    tone: 'calm',
+    when: facts => facts.restored && !facts.restored.good,
+    // Only after when() found a restore.
+    text: facts => facts.restored!.words,
   },
   // Both editions: the merge of a friend's progress just made on this page (#1160).
   {
