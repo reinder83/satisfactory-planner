@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { calculated, setWizard, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import {
@@ -58,7 +58,7 @@ function openPlan(progress: Partial<ProgressState>) {
 
 beforeEach(() => {
   setWizard(null);
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
 });
 
 test('the notice names a stale Power Shard pin, and the recalculation leaves it out', async () => {

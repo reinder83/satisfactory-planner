@@ -13,7 +13,7 @@ import {
   state,
   workspace,
 } from '../../public/app/session.ts';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { render } from '../../public/app/shell.ts';
 import { onSiteChange } from '../../public/app/on-site-picker.ts';
 import {
@@ -78,7 +78,7 @@ function show(view: 'plan' | 'factories', progress = {}) {
 }
 
 beforeEach(() => setWizard(null));
-afterEach(() => setBeginnerMode(false));
+afterEach(() => setBrowserDetail('standard'));
 
 test('Power Shard pins and Made on site pending: one notice, one button, the reasons listed', async () => {
   show('factories', {

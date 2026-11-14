@@ -157,7 +157,7 @@ test('train lines are state version 30; every released format loads unchanged', 
   for (const [what, extra] of parts) assert.equal(withTrains(version28, extra).version, 30, what);
   // A newer planner's state is refused with the update message, never stripped.
   assert.throws(
-    () => validateState({ ...json(version30), version: 31 }),
+    () => validateState({ ...json(version30), version: 32 }),
     /newer planner version\. Update the app/,
   );
 });

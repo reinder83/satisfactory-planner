@@ -227,9 +227,13 @@ test('the checklist can be searched and can hide completed steps', async () => {
   assert.equal($('#main .empty-state')!.textContent, 'No steps match this search.');
   await findStep('');
   state.checks['phase-3-survey'] = true;
-  $<HTMLInputElement>('#hide-done')!.checked = true;
-  $('#hide-done')!.dispatchEvent(new Event('change'));
+  // A filter: a toggle button (BP-12, #1337), pressed.
+  const toggle = $('#hide-done')!;
+  assert.equal(toggle.tagName, 'BUTTON');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  toggle.click();
   await nextTick();
+  assert.equal($('#hide-done')!.getAttribute('aria-pressed'), 'true');
   assert.ok(!steps().includes('phase-3-survey'), 'completed steps are hidden');
   assert.ok(steps().includes('phase-3-iron'), 'unfinished steps stay visible');
   assert.equal($('.checklist-tools .muted')!.textContent, '8 of 9 steps');
@@ -242,13 +246,13 @@ test('the checklist can be searched and can hide completed steps', async () => {
   render();
   await nextTick();
   assert.match($('[data-phase-complete]')!.textContent, /Phase checklist complete/);
-  assert.match($('[data-phase-complete]')!.textContent, /Untick “Hide completed”/);
+  assert.match($('[data-phase-complete]')!.textContent, /Turn off “Hide completed”/);
   assert.equal($('#main .done-group'), null, 'hidden completed steps have no Done group');
   // The toggle is view state and stays on for the calculated plan.
   open({ calculated: generated });
   render();
   await nextTick();
-  assert.equal($<HTMLInputElement>('#hide-done')!.checked, true);
+  assert.equal($('#hide-done')!.getAttribute('aria-pressed'), 'true');
   // It is remembered in this browser, never in the profile.
   assert.equal(localStorage.getItem('planner-hide-done'), 'on');
   assert.equal('hideDone' in state.settings, false);
@@ -333,13 +337,11 @@ test('the lead step offers its factory; search, Hide completed and editing still
   assert.ok(doneIds().includes(ids[0]));
   await findStep('');
   // Hide completed drops the Done group and keeps the lead.
-  $<HTMLInputElement>('#hide-done')!.checked = true;
-  $('#hide-done')!.dispatchEvent(new Event('change'));
+  $('#hide-done')!.click();
   await nextTick();
   assert.equal($('#main .done-group'), null);
   assert.equal(leadId(), ids[linked]);
-  $<HTMLInputElement>('#hide-done')!.checked = false;
-  $('#hide-done')!.dispatchEvent(new Event('change'));
+  $('#hide-done')!.click();
   // While editing, the list is flat in the plan's order, with no lead and no Done group.
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();

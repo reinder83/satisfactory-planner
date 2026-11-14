@@ -144,6 +144,7 @@ export function profileRoutes({
         backupName,
         progressionData(),
         recipeBookData(),
+        input.detailLevel,
       );
       carried = next;
       draftSave.profiles.splice(index, 1, next.profile, next.backup);

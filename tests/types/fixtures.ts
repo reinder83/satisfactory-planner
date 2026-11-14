@@ -526,6 +526,14 @@ export const version30 = {
   },
 } satisfies SavedState;
 
+// Version 31 (#1337): the profile's detail level, on top of version 30, picked as Expert (which
+// both of an older release's switches on map to). Synthetic.
+export const version31 = {
+  ...version30,
+  version: 31,
+  detailLevel: 'expert',
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -559,6 +567,7 @@ export const states: [SavedState, number][] = [
   [version28, 28],
   [version29, 29],
   [version30, 30],
+  [version31, 31],
 ];
 
 export const backup = {

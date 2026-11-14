@@ -1051,10 +1051,6 @@ p {
   min-width: 160px;
   padding: 9px 12px;
 }
-.checklist-tools .check-row {
-  white-space: nowrap;
-  color: var(--muted);
-}
 .checklist {
   display: grid;
   gap: 1px;
@@ -6471,22 +6467,8 @@ button.rail-tile:hover {
   display: block;
   margin-top: 6px;
 }
-.guided-beginner {
-  margin: 0 0 16px;
-}
-.guided-beginner p {
-  margin: 4px 0 0;
-}
-.guided-beginner .guided-expert {
-  margin-top: 12px;
-}
-/* "Expert mode" (#1197, app/expert.ts): All settings on denser screens without the explanatory
-   paragraphs (data-explain); labels and the ⓘ help tips stay. */
-.wizard-expert {
-  display: flex;
-  margin: 0 0 12px;
-  color: var(--muted);
-}
+/* The Expert detail level (#1197, app/expert.ts): All settings on denser screens without the
+   explanatory paragraphs (data-explain); labels and the ⓘ help tips stay. */
 .wizard-panel.compact [data-explain] {
   display: none;
 }
@@ -9059,5 +9041,140 @@ th.resource-cell {
 @media (max-width: 720px) {
   .settings-fold-toggle {
     min-height: 44px;
+  }
+}
+
+/* ── Detail level and the build plan's filters (ONB-2, BP-12, #1337) ── */
+/* The detail level (ui/DetailLevel.vue): "Detail level" and three segments in one bordered row,
+   native radio buttons kept in the Tab order but out of sight, the level picked lit with an
+   orange rule under it. The same on the guided start, above All settings' steps and on the build
+   plan, where it sits apart from the filters at the end of the tools row. */
+.detail-level {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+}
+.detail-level-label {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kicker);
+  white-space: nowrap;
+}
+.detail-level-option {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+.detail-level-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+.detail-level-option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.detail-level-option:hover span {
+  color: var(--bright);
+}
+.detail-level-option input:checked + span {
+  background: var(--line);
+  color: var(--bright);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.detail-level-option input:focus-visible + span {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: -2px;
+}
+.guided-detail,
+.wizard-detail {
+  margin: 0 0 16px;
+}
+.guided-detail p,
+.wizard-detail p {
+  margin: 8px 0 0;
+}
+/* The build plan's filters (Checklist.vue): toggle buttons, a pressed one orange with a tick. */
+.checklist-tools .plan-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.checklist-tools .filter-toggle {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.checklist-tools .filter-toggle:hover {
+  border-color: var(--accent);
+  color: var(--bright);
+}
+.checklist-tools .filter-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: #1e1a12;
+  color: var(--accent);
+}
+.checklist-tools .filter-toggle[aria-pressed='true']::before {
+  content: '✓ ';
+  content: '✓ ' / '';
+}
+.checklist-tools .detail-level {
+  margin-left: auto;
+}
+/* On a phone each is a 44px touch target, and the detail level takes a row of its own with its
+   three segments sharing it. */
+@media (max-width: 720px) {
+  .checklist-tools .filter-toggle,
+  .detail-level-option span {
+    min-height: 44px;
+  }
+  .detail-level {
+    width: 100%;
+  }
+  .detail-level-option {
+    flex: 1 1 0;
+  }
+  .detail-level-option span {
+    width: 100%;
+    padding: 0 8px;
+  }
+}
+/* Below about 420 px the label and three segments no longer fit one row: the label takes a row of
+   its own above them, inside the same border, so nothing scrolls sideways (320 px included). */
+@media (max-width: 420px) {
+  .detail-level {
+    flex-wrap: wrap;
+  }
+  .detail-level-label {
+    flex: 1 0 100%;
+    padding: 6px 10px 4px;
+  }
+  .detail-level-option span {
+    border-top: 1px solid var(--line);
+  }
+  .detail-level-option:first-of-type span {
+    border-left: 0;
   }
 }

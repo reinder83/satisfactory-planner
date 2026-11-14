@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { setHideDone, setQuery, setWorkspace, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { tabKeyTarget } from '../../public/app/ui/plan/plan-tabs.ts';
@@ -52,8 +52,8 @@ const keyOn = async (key: string) => {
   await nextTick();
 };
 
-beforeEach(() => setBeginnerMode(false));
-afterEach(() => setBeginnerMode(false));
+beforeEach(() => setBrowserDetail('standard'));
+afterEach(() => setBrowserDetail('standard'));
 
 test('the page opens on Build sequence; the other tabs hold the summary, the payoff and the somersloops', async () => {
   await show(generated(), '4');
@@ -142,7 +142,7 @@ test('tabs with nothing to show are left out, and an open one that empties hands
   assert.deepEqual(tabIds(), ['build', 'overview', 'hard-drives'], 'no somersloops before Phase 3');
   $<HTMLButtonElement>('[data-plan-tab="hard-drives"]')!.click();
   await nextTick();
-  setBeginnerMode(true);
+  setBrowserDetail('beginner');
   render();
   await nextTick();
   await nextTick();

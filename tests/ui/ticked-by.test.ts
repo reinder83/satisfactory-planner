@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test, vi } from 'vitest';
-import { setExpertMode } from '../../public/app/expert.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { reloadMine, setMeName } from '../../public/app/mine.ts';
 import { TICKS_FORMAT } from '../../public/app/progress-merge.ts';
 import {
@@ -72,12 +72,12 @@ beforeEach(() => {
   setRequiredOnly(false);
   setFactoryFilter('all');
   setFactoryEditing(false);
-  setExpertMode(false);
+  setBrowserDetail('standard');
 });
 afterEach(() => {
   setMeName('');
   reloadMine();
-  setExpertMode(false);
+  setBrowserDetail('standard');
 });
 
 test('a ticked step says who ticked it and when; a tick from before says nothing', async () => {
@@ -160,7 +160,7 @@ test('Mark all running records the same who and when for each line it ticks', as
 
 test('an unlock group’s tick records the same who and when for each unlock', async () => {
   setMeName('Bram');
-  setExpertMode(true);
+  setBrowserDetail('expert');
   await show('plan');
   const group = $<HTMLInputElement>('#main [data-unlock-group-tick]');
   assert.ok(group, 'the plan has a tier of unlocks');

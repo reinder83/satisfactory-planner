@@ -251,6 +251,7 @@ export function createBrowserApi(
         body.carry,
         body.built,
         book,
+        body.detailLevel,
       );
       save.profiles.push(started.profile);
       save.activeProfile = profileId;
@@ -373,6 +374,7 @@ export function createBrowserApi(
         backupName,
         progression,
         book,
+        body.detailLevel,
       );
       save.profiles.splice(save.profiles.indexOf(profile), 1, next.profile, next.backup);
       save.activeProfile = profile.id;

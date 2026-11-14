@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { calculated, draft, setWizard, state, workspace } from '../../public/app/session.ts';
 import { startEdit } from '../../public/app/wizard/wizard.ts';
@@ -62,9 +62,9 @@ const IRON_ROD = 'Recipe_IronRod_C';
 
 beforeEach(() => {
   setWizard(null);
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
 });
-afterEach(() => setBeginnerMode(false));
+afterEach(() => setBrowserDetail('standard'));
 
 test('a line’s dialog pins its somersloops without recalculating; the plan asks for one', async () => {
   const plan = sloopPlan();
@@ -172,12 +172,12 @@ test('no pin control without a budget, before Phase 3 or in New to Satisfactory 
     text('[data-sloop-pin-now]'),
     /no amplification budget, so a pin above 0 cannot be kept/,
   );
-  setBeginnerMode(true);
+  setBrowserDetail('beginner');
   openPlan(sloopPlan());
   openCalculatedFactory(IRON_ROD);
   await settle();
   assert.equal($('[data-sloop-pin-choice]'), null, 'not in New to Satisfactory mode');
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
   const plan = sloopPlan();
   openPlan(plan, {}, '2');
   const early = plan.stages['2'].rows!.find(row => row.machine === 'Constructor')!;
