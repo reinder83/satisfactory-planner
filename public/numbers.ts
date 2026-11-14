@@ -114,8 +114,10 @@ export function displayPower(mw: number): DisplayFigure {
 
 // A percentage (0-100 scale, not a share) with one decimal.
 export function displayPercent(percent: number): DisplayFigure {
+  // Below 100 it is floored at one decimal near the top, so 99.96 reads 99.9%, never 100%.
+  const shown = percent < 100 && percent >= 99.95 ? Math.floor(percent * 10) / 10 : percent;
   return {
-    value: roundedFigure(percent, 1),
+    value: roundedFigure(shown, 1),
     unit: '%',
     exact: formatNumber(percent, 4) + '%',
   };

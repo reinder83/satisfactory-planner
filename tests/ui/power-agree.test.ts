@@ -11,7 +11,6 @@ import { setWizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { power } from '../../public/app/wizard/fields.ts';
-import { displayPower, figureText } from '../../public/numbers.ts';
 import { powerView } from '../../public/power.ts';
 import { carryOptions } from '../../public/state.ts';
 import { $, $$, catalog, generated, generatedWith, go, open, page } from './setup.ts';
@@ -106,12 +105,7 @@ function checkPlan(plan: StoredCalculatedPlan, label: string) {
       where = `${label}, Phase ${phase}`;
     // The Resources page's bar.
     const bar = resourcesBar(plan, phase);
-    const shown = (mw: number) => plain(figureText(displayPower(mw)));
-    assert.equal(
-      bar.figures,
-      `${shown(view.needMW)} needed of ${shown(view.availableMW)} available`,
-      where,
-    );
+    assert.equal(bar.figures, `${need} needed of ${have} available`, where);
     assert.equal(bar.short, view.shortMW > 0, where);
     // The build plan: its notice asks for exactly the shortfall, its summary gives the same two
     // figures for a plan with its own power model.

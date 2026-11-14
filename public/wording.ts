@@ -4,7 +4,7 @@
 // public/app/ with the shared modules' exports supplied by hand (tests/helpers/app-source.ts),
 // and this one is followed and loaded with the app instead.
 
-import { formatNumber } from './numbers.ts';
+import { displayPower, formatNumber } from './numbers.ts';
 
 // "Heavy Modular Frame" -> "heavy-modular-frame". Used for icon file names and for some
 // saved keys (calculated delivery ids, deliveryKey in progression.ts), so its output must stay
@@ -46,8 +46,12 @@ const count = (value: number) => localeNumber(value);
 
 // A power figure as the pages show it: MW, or GW above 1,000 MW ("643.9 MW", "44.43 GW"). The
 // pages' power() (public/app/wizard/fields.ts) and the build plan's power step (#1048) use it.
-export const powerAmount = (mw: number): string =>
-  mw > 1000 ? count(mw / 1000) + ' GW' : count(mw) + ' MW';
+// Power with its unit, rounded by numbers.ts's one display rule (X-2, #1335): kW below 1 MW,
+// whole MW from 100 MW, GW above 1,000 MW. Every power figure on screen goes through it.
+export function powerAmount(mw: number): string {
+  const { value, unit } = displayPower(mw);
+  return value + ' ' + unit;
+}
 
 // A wait of `minutes` as a plain duration (#624): "less than a minute", "1 minute", "52 minutes",
 // then hours and whole minutes from an hour on ("about 7 h 52 min", "about 8 h").
