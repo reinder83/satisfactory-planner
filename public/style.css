@@ -5387,12 +5387,9 @@ button.rail-tile:hover {
    in it, so a drag moves the map at any zoom. Nothing in the box is selectable: a selection that
    held the map image was dragged by the browser instead of panning the map. */
 .map-scroll {
-  position: relative;
+  position: absolute;
+  inset: 0;
   overflow: auto;
-  width: 100%;
-  aspect-ratio: 1;
-  max-height: max(280px, calc(100vh - 360px));
-  margin: 8px 0;
   border: 1px solid var(--line);
   background: var(--bg2);
   touch-action: none;
@@ -5423,6 +5420,221 @@ button.rail-tile:hover {
   margin: 0;
 }
 /* The map's toolbar and, beside it, "Show on the map" (#1283, slice 2): one row that wraps. */
+/* The map fills the content area (MAP-1, #1348): the frame is as tall as the window leaves under
+   the heading and the toolbar, the map scrolls inside it, and the factory list (top left), the
+   layer switches (top right), the factory card and the zoom buttons (bottom) float on it. */
+.map-frame {
+  position: relative;
+  height: max(420px, calc(100dvh - 300px));
+  margin: 8px 0;
+}
+.map-corner {
+  position: absolute;
+  z-index: 3;
+}
+.map-corner-tl {
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-height: calc(100% - 100px);
+}
+.map-list-toggle {
+  background: rgb(18 21 24 / 0.95);
+}
+.map-list {
+  min-height: 0;
+  max-width: min(300px, calc(100vw - 190px));
+  min-width: 200px;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  background: rgb(18 21 24 / 0.96);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+.map-list-item {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.map-list-item:hover,
+.map-list-item.picked {
+  background: var(--bg2);
+}
+.map-list-item.picked {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.map-list-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.map-layers.map-corner-tr {
+  top: 8px;
+  right: 8px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: rgb(18 21 24 / 0.92);
+  font-size: 12px;
+}
+.map-layers.map-corner-tr .map-layer-toggle {
+  min-height: 30px;
+}
+.map-bottom {
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+.map-bottom > * {
+  pointer-events: auto;
+}
+.map-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  background: rgb(18 21 24 / 0.95);
+  text-align: center;
+}
+.map-controls .btn {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.map-controls .btn:first-child {
+  border-top: 0;
+}
+.map-controls .fgraph-zoom {
+  padding: 2px 0;
+  font-size: 11px;
+}
+.map-controls .help-pop {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+/* A factory's card (MAP-3, #1348), bottom left, beside the zoom buttons. */
+.map-card {
+  flex: 0 1 320px;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.55);
+}
+.map-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 6px;
+}
+.map-card-title {
+  margin: 2px 0 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.map-card-head .close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
+}
+.map-card-head .close:hover {
+  border-color: var(--red);
+  color: #ff7a5e;
+}
+.map-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0 12px 8px;
+}
+.map-card-facts dt {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.map-card-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.map-card-needs {
+  margin: 0;
+  padding: 0 12px 10px;
+}
+.map-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+.map-card-actions .btn {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+  min-height: 40px;
+}
+/* The marker dialog docks as a side panel on the side away from the spot it is for (MAP-4,
+   #1348; markerDock in map-markers.ts), a sheet along the bottom or the top on a phone, with no
+   dimming, so the spot stays in view. */
+#detail:has([data-marker-dock]) {
+  width: min(380px, calc(100% - 32px));
+  height: fit-content;
+  max-height: calc(100dvh - 32px);
+  margin: 0;
+}
+#detail:has([data-marker-dock])::backdrop {
+  background: transparent;
+}
+#detail:has([data-marker-dock='left']) {
+  inset: 16px auto auto 16px;
+}
+#detail:has([data-marker-dock='right']) {
+  inset: 16px 16px auto auto;
+}
+#detail:has([data-marker-dock='top']),
+#detail:has([data-marker-dock='bottom']) {
+  width: calc(100% - 16px);
+  max-width: none;
+  max-height: 46dvh;
+}
+#detail:has([data-marker-dock='top']) {
+  inset: 8px 8px auto 8px;
+}
+#detail:has([data-marker-dock='bottom']) {
+  inset: auto 8px 8px 8px;
+}
 .map-bar {
   display: flex;
   flex-wrap: wrap;
@@ -5440,10 +5652,12 @@ button.rail-tile:hover {
   border: 0;
 }
 .map-layers legend {
-  float: left;
-  margin-right: 10px;
-  font-size: 12px;
-  color: var(--muted);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .map-layer-toggle {
   display: inline-flex;
@@ -5724,6 +5938,33 @@ button.rail-tile:hover {
   .map-layer-toggle,
   .marker-type {
     min-height: 44px;
+  }
+  .map-layers.map-corner-tr .map-layer-toggle {
+    min-height: 40px;
+    font-size: 12px;
+  }
+  .map-frame {
+    height: max(420px, calc(100dvh - 330px));
+  }
+  .map-card {
+    flex-basis: auto;
+  }
+}
+/* On a 320px phone the layer switches share the top row with the factory list button: their counts
+   (which the page still holds) are left out so the two never meet. */
+@media (max-width: 400px) {
+  .map-layers.map-corner-tr .map-layer-toggle .muted {
+    display: none;
+  }
+  .map-list-toggle {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .map-layers.map-corner-tr {
+    padding: 2px 6px;
+  }
+  .map-layers.map-corner-tr .map-layer-toggle {
+    gap: 4px;
   }
 }
 .fgraph-node rect {

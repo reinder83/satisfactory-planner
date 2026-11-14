@@ -607,8 +607,12 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   await page.reload();
   await factory.waitFor();
   assert.deepEqual(await drawnAt(), spot, 'after a reload it is where it was put');
-  // A mouse click on the pin follows the link to the factory's build order (the map's own
-  // presses start no native drag, #1289, which leaves the pin's alone).
+  // A mouse click on the pin picks it and opens its card (MAP-3, #1348); a second click follows the
+  // link to the factory's build order (the map's own presses start no native drag, #1289, which
+  // leaves the pin's alone).
+  await factory.locator('.map-factory-pin').click();
+  await page.locator(`[data-map-card-for="${id}"]`).waitFor();
+  assert.equal(new URL(page.url()).hash, '#map', 'the first click follows no link');
   await factory.locator('.map-factory-pin').click();
   await page.waitForFunction(
     group => location.hash.startsWith(`#factories/${group}/flow`),
@@ -616,8 +620,10 @@ async function checkMapFactories(page: Page, stored: () => Promise<ProgressState
   );
   await page.goto(base + '#map');
   await factory.waitFor();
-  // Enter follows it too.
+  // Enter picks it and then follows it too.
   await factory.focus();
+  await page.keyboard.press('Enter');
+  await page.locator(`[data-map-card-for="${id}"]`).waitFor();
   await page.keyboard.press('Enter');
   await page.waitForFunction(
     group => location.hash.startsWith(`#factories/${group}/flow`),
