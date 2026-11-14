@@ -31,7 +31,7 @@
 
 :root {
   color-scheme: dark;
-  font-family: var(--mono);
+  font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
   font-size: 13px;
   line-height: 1.55;
   color: #dce3e8;
@@ -850,7 +850,11 @@ p,
 }
 p.eyebrow,
 table p,
-table .notice {
+table .notice,
+/* A paragraph that holds only a figure (a count, a peak, rates) is data, not prose. */
+p[data-station-count],
+p[data-power-peak],
+p[data-proposal-rates] {
   font-family: var(--mono);
 }
 /* A page's subtitle can be a profile's name (the build plan's), so a long word breaks too (#976). */

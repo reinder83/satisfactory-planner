@@ -513,7 +513,14 @@ test('paragraphs read in the sans token; numbers, tables and code keep mono (X-1
   assert.equal(family('p'), 'var(--sans)', 'a paragraph is sans');
   assert.equal(family('.notice'), 'var(--sans)', 'a notice is prose');
   assert.equal(family('.subtitle'), 'var(--sans)', 'a page subtitle is prose');
-  assert.equal(family(':root'), 'var(--mono)', 'the default (numbers, labels, tables) is mono');
+  // :root keeps the literal stack (tests/ui/rate-placeholder.test.ts measures its character width).
+  assert.match(
+    family(':root')!,
+    /^'IBM Plex Mono'/,
+    'the default (numbers, labels, tables) is mono',
+  );
+  for (const caption of ['p[data-station-count]', 'p[data-power-peak]', 'p[data-proposal-rates]'])
+    assert.equal(family(caption), 'var(--mono)', `${caption} holds a figure`);
   assert.equal(family('p.eyebrow'), 'var(--mono)', 'an eyebrow is a label');
   assert.equal(family('table p'), 'var(--mono)', 'a paragraph in a table cell is data');
   assert.doesNotMatch(
