@@ -496,3 +496,39 @@ test('a focused page heading has no outline, and controls keep theirs (#1326)', 
   assert.ok(control.length, 'buttons have a focus ring');
   assert.match(control[0]!.body, /outline:\s*2px solid/);
 });
+
+test('paragraphs read in the sans token; numbers, tables and code keep mono (X-1, #1336)', () => {
+  const css = fs
+    .readFileSync(new URL('../public/style.css', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const all = rules(screenCss());
+  const family = (selector: string) =>
+    all
+      .filter(r => r.selector.split(/\s*,\s*/).includes(selector))
+      .flatMap(r => decls(r.body, 'font-family'))
+      .at(-1);
+  assert.match(css, /--sans:\s*system-ui/, 'a sans token, from the system stack (no download)');
+  assert.match(css, /--mono:\s*'IBM Plex Mono'/, 'a mono token');
+  assert.doesNotMatch(css, /--sans:[^;]*(IBM|Saira)/);
+  assert.equal(family('p'), 'var(--sans)', 'a paragraph is sans');
+  assert.equal(family('.notice'), 'var(--sans)', 'a notice is prose');
+  assert.equal(family('.subtitle'), 'var(--sans)', 'a page subtitle is prose');
+  // :root keeps the literal stack (tests/ui/rate-placeholder.test.ts measures its character width).
+  assert.match(
+    family(':root')!,
+    /^'IBM Plex Mono'/,
+    'the default (numbers, labels, tables) is mono',
+  );
+  for (const caption of ['p[data-station-count]', 'p[data-power-peak]', 'p[data-proposal-rates]'])
+    assert.equal(family(caption), 'var(--mono)', `${caption} holds a figure`);
+  assert.equal(family('p.eyebrow'), 'var(--mono)', 'an eyebrow is a label');
+  assert.equal(family('table p'), 'var(--mono)', 'a paragraph in a table cell is data');
+  assert.doesNotMatch(
+    all
+      .filter(r => /^(table|th|td|code|kbd)$/.test(r.selector))
+      .map(r => r.body)
+      .join(';'),
+    /--sans/,
+    'tables and code never take the sans',
+  );
+});
