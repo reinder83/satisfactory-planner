@@ -6,6 +6,7 @@ import {
   adaChatterStored,
   adaEncore,
   adaEventLine,
+  adaHeldBack,
   adaMood,
   adaRemarks,
   adaStamp,
@@ -841,14 +842,15 @@ export function adaPoke() {
 
 // What the ADA panel shows, drawn by ui/AdaPanel.vue: the line's { tone, name, text } (name is set
 // only for a fault line), its mood and log stamp, its button and place in the cycle ("2 of 5").
-// With the chatter Off nothing speaks: `pending` counts the problems she is holding back and
-// holds the first, which the panel shows on request; the other fields are the flat panel's.
+// With the chatter Off nothing speaks: `pending` counts the essential lines she is holding back
+// (adaHeldBack: problems and warnings, not praise) and holds the first, which the panel shows on
+// request; the other fields are the flat panel's.
 // null when there is nothing to say. Any error yields null, so the assistant can never break the
 // page around it.
 export function adaView() {
   try {
     if (adaChatter === 'off') {
-      const problems = adaRemarks(adaFacts()).filter(line => line.tone === 'warn');
+      const problems = adaRemarks(adaFacts()).filter(adaHeldBack);
       return {
         chatter: adaChatter,
         tone: 'calm',

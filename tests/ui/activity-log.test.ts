@@ -14,7 +14,18 @@ import { render } from '../../public/app/shell.ts';
 import { jumpTarget } from '../../public/app/step-jump.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { tickedAt } from '../../public/app/ticked-by.ts';
-import { $, $$, applyUpdate, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  $$,
+  applyUpdate,
+  evil,
+  generated,
+  go,
+  open,
+  page,
+  stubFetch,
+  useChatty,
+} from './setup.ts';
 import type { ProgressState, TickRecord, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
@@ -56,6 +67,7 @@ afterEach(() => {
 });
 
 test('the log lists the recorded ticks newest first, and links each to its step', async () => {
+  useChatty();
   const [a, b, c, d] = [phase3[0]!, phase3[1]!, phase3[2]!, phase2[0]!];
   await backup({
     checks: { [a]: true, [b]: true, [c]: true, [d]: true, 'calc-9-gone': true },

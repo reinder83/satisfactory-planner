@@ -12,11 +12,12 @@ import {
   adaNote,
   adaResetEvents,
   adaStore,
+  adaView,
   setAdaChatter,
   setAdaIndex,
 } from '../../public/app/ada-panel.ts';
 import { render } from '../../public/app/shell.ts';
-import { setView } from '../../public/app/session.ts';
+import { setRestoredProgress, setView } from '../../public/app/session.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import { $, $$, generated, go, open, openMigrated, page, stubFetch } from './setup.ts';
 import { save } from '../../public/app/api.ts';
@@ -127,6 +128,23 @@ test('Off still shows a real problem as a dot she reads on request', async () =>
   render();
   await nextTick();
   assert.equal($('[data-ada-pending]'), null);
+});
+
+test('a restore that took steps back is said at Essential and waits behind the dot at Off', () => {
+  // A calm line, but the user just changed their progress: the default setting must say it.
+  const words = 'Restored from the backup: 3 steps unticked.';
+  setView('backup');
+  setRestoredProgress({ words, good: false, profileId: 'p' });
+  try {
+    setAdaChatter('essential');
+    assert.equal(adaCurrent()!.text, words);
+    setAdaChatter('off');
+    const held = adaView()!.pending!;
+    assert.ok(held.count >= 1);
+    assert.equal(held.text, words);
+  } finally {
+    setRestoredProgress(null);
+  }
 });
 
 test('an event adds one remark, once, with its mood, and Later drops it', async () => {

@@ -12,7 +12,18 @@ import { render } from '../../public/app/shell.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { readWizard } from '../../public/app/wizard/wizard.ts';
 import { carryOptions } from '../../public/state.ts';
-import { $, $$, catalog, evil, generated, generatedWith, go, open, page } from './setup.ts';
+import {
+  $,
+  $$,
+  catalog,
+  evil,
+  generated,
+  generatedWith,
+  go,
+  open,
+  page,
+  useChatty,
+} from './setup.ts';
 import type { Catalog, CurrentCalculatedPlan } from '../../public/types/index.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 
@@ -212,6 +223,7 @@ test('the coal line’s build-plan step says how many you already have and how m
 });
 
 test('the Resources page’s bar and ADA name the generators you already have', () => {
+  useChatty();
   const plan = withCoal(8);
   open({ calculated: plan, phase: '2' });
   go('resources');

@@ -22,6 +22,7 @@ import {
   open,
   page,
   stubFetch,
+  useChatty,
 } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
@@ -81,6 +82,7 @@ test('Export ticks downloads only the ticked step ids, with the save and profile
 });
 
 test('the preview counts per phase, names what is ticked and skipped, and Merge ticks only the new steps', async () => {
+  useChatty();
   state.checks = { [phaseOne[0]!]: true };
   const calls = stubFetch<UpdateOp>({ '/api/update': (body: UpdateOp) => applyUpdate(body) });
   const seen: {

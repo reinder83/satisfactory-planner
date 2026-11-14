@@ -291,6 +291,11 @@ interface AdaRule {
   id: string;
   on?: string[];
   tone: 'calm' | 'warn' | 'praise';
+  // Said at the Essential chatter level although its tone is calm (#1353): a line the user must
+  // know about, a backup growing old, a change waiting on a recalculation, a restore or import
+  // that did not do what one might assume, records that found no place. Warn and praise lines are
+  // always essential; any other calm line is said only at Chatty.
+  essential?: true;
   lead?: boolean;
   when: (facts: AdaFacts) => unknown;
   text: (facts: AdaFacts) => string;
@@ -376,6 +381,8 @@ const RULES: AdaRule[] = [
     id: 'no-save',
     lead: true,
     tone: 'calm',
+    // Without a save there is nothing else to say, at any level.
+    essential: true,
     when: facts => facts.kind === 'none',
     text: () =>
       `No save is open, so there is nothing for me to be disappointed about. Create one and I will find something.`,
@@ -634,6 +641,8 @@ const RULES: AdaRule[] = [
     id: 'build-dry',
     on: ['plan', 'factories'],
     tone: 'calm',
+    // Lines marked running deliver nothing at all: the same stall as build-waiting, which warns.
+    essential: true,
     when: facts => facts.build?.built && !facts.build.share && facts.build.next,
     text: facts =>
       `${facts.build!.built} ${facts.build!.built === 1 ? 'production line' : 'production lines'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
@@ -709,6 +718,8 @@ const RULES: AdaRule[] = [
     id: 'unplaced',
     on: ['plan', 'notes'],
     tone: 'calm',
+    // Progress that found no place in this plan: kept, but only where she points.
+    essential: true,
     when: facts => facts.unplaced > 0,
     text: facts =>
       `${plural(facts.unplaced, 'record')} from the original plan had no place in this one. They are listed at the foot of Notes, exactly as they were. I throw nothing away. It is policy.`,
@@ -717,6 +728,8 @@ const RULES: AdaRule[] = [
     id: 'site-review',
     on: ['plan', 'notes', 'factories'],
     tone: 'calm',
+    // Ticks held back for the user to place again.
+    essential: true,
     when: facts => (facts.siteReview ?? 0) > 0,
     text: facts =>
       `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines your factories make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
@@ -813,6 +826,8 @@ const RULES: AdaRule[] = [
     id: 'sloop-pins-pending',
     on: ['factories', 'plan'],
     tone: 'calm',
+    // Waiting on a recalculation, as exact-clocks-pending (warn) is.
+    essential: true,
     when: facts => (facts.sloopPinsPending ?? 0) > 0,
     text: facts =>
       `You pinned the somersloops of ${plural(facts.sloopPinsPending!, 'production line')} differently, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with somersloop pins plans ${facts.sloopPinsPending === 1 ? 'it' : 'them'} and keeps this version as a backup. The slugs can wait. They have waited this long.`,
@@ -831,6 +846,8 @@ const RULES: AdaRule[] = [
     id: 'shard-pins-pending',
     on: ['factories', 'plan'],
     tone: 'calm',
+    // Waiting on a recalculation, as exact-clocks-pending (warn) is.
+    essential: true,
     when: facts => (facts.shardPinsPending ?? 0) > 0,
     text: facts =>
       `You pinned the Power Shards of ${plural(facts.shardPinsPending!, 'production line')} differently, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with Power Shard pins plans ${facts.shardPinsPending === 1 ? 'it' : 'them'} and keeps this version as a backup. Faster machines, fewer of them. Same hunger for ore.`,
@@ -898,6 +915,8 @@ const RULES: AdaRule[] = [
     id: 'backup-old',
     on: ['backup'],
     tone: 'calm',
+    // The same data-loss warning as backup-never, only calmer.
+    essential: true,
     when: facts => facts.browserMode && (facts.backupDays ?? 0) >= 14,
     // Only after when() found a backup age.
     text: facts =>
@@ -920,11 +939,14 @@ const RULES: AdaRule[] = [
     lead: true,
     on: ['backup'],
     tone: 'calm',
+    // A restore that took progress back: the user must see what changed.
+    essential: true,
     when: facts => facts.restored && !facts.restored.good,
     // Only after when() found a restore.
     text: facts => facts.restored!.words,
   },
-  // Both editions: the merge of a friend's progress just made on this page (#1160).
+  // Both editions: the merge of a friend's progress just made on this page (#1160). Only ever adds
+  // ticks and asks nothing of the user, so it is said at Chatty only.
   {
     id: 'progress-merged',
     on: ['backup'],
@@ -965,6 +987,8 @@ const RULES: AdaRule[] = [
     id: 'imported',
     on: ['profiles'],
     tone: 'calm',
+    // The next ticks land in the open profile, not in the copy.
+    essential: true,
     when: facts => facts.imported,
     text: facts =>
       `The import added ${facts.imported} as a copy of its own. You are still on “${facts.profile}”, so your next ticks land there, not in the copy. Open the copy from the notice when you mean to. I will not ask whose factory it was.`,
@@ -1323,6 +1347,16 @@ const safe = (line: (facts: AdaFacts) => string, facts: AdaFacts) => {
   }
 };
 
+// Whether the Essential chatter level says a rule's line (#1353): every warning and praise, and a
+// calm line marked essential.
+const essentialRule = (rule: AdaRule) => rule.tone !== 'calm' || !!rule.essential;
+
+// Every remark's id, tone and whether Essential says it, in the order of RULES: for the tests that
+// pin which lines a user sees at the default setting, so a new line has to be decided.
+export function adaRuleLevels(): { id: string; tone: string; essential: boolean }[] {
+  return RULES.map(rule => ({ id: rule.id, tone: rule.tone, essential: essentialRule(rule) }));
+}
+
 // Facts in, remarks out. Never throws: a joke must not be able to break the
 // planner, so a rule that trips over unexpected data is skipped.
 // `facts` comes from adaFacts in app/ada-panel.ts. Returns every applicable rule as
@@ -1343,7 +1377,7 @@ export function adaRemarks(given: Partial<AdaFacts> = {}): AdaLine[] {
           id: rule.id,
           tone: rule.tone,
           text: rule.text(facts),
-          essential: rule.tone !== 'calm' || rule.id === 'no-save',
+          essential: essentialRule(rule),
         });
     } catch {}
   }
@@ -1398,6 +1432,12 @@ export function adaChatterFrom(stored: string | null | undefined): AdaChatter {
 }
 export function adaChatterStored(chatter: AdaChatter): string {
   return chatter === 'off' ? 'muted' : chatter === 'chatty' ? 'on' : 'essential';
+}
+
+// What the Off setting holds back behind its "● 1 essential" dot: every essential remark except
+// praise (a milestone can wait for her to be turned on) and the no-save line (nothing to hold).
+export function adaHeldBack(line: AdaLine): boolean {
+  return !!line.essential && line.tone !== 'praise' && line.id !== 'no-save';
 }
 
 // The mood label beside her name, from what she is saying.

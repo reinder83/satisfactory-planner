@@ -29,6 +29,7 @@ import {
   open,
   page,
   stubFetch,
+  useChatty,
 } from './setup.ts';
 import type {
   CalcRow,
@@ -94,6 +95,7 @@ beforeEach(() => {
 });
 
 test('the build plan shows what whole machines cost in the phase, beside exact clocks', async () => {
+  useChatty();
   const plan = wholePlan();
   openWhole(plan);
   await settle();

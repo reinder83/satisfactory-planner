@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach } from 'vitest';
 import { adaResetEvents, setAdaChatter } from '../../public/app/ada-panel.ts';
+import { ADA_CHATTER_DEFAULT } from '../../public/ada.ts';
 import {
   setContext,
   setSectionCollapsed,
@@ -337,12 +338,14 @@ globalThis.fetch = noFetch;
 afterEach(() => {
   globalThis.fetch = noFetch;
 });
-// ADA says everything her remarks cover (Chatty) unless a test picks another setting (#1353): the
-// tests of her remarks were written before Essential was the default.
+// ADA starts each test at the real default, Essential (#1353), with nothing said this session: a
+// test of a remark only Chatty says picks Chatty itself (useChatty below).
 beforeEach(() => {
   adaResetEvents();
-  setAdaChatter('chatty');
+  setAdaChatter(ADA_CHATTER_DEFAULT);
 });
+// For a test of a remark only the Chatty setting says (advice, trivia, the chatty events).
+export const useChatty = () => setAdaChatter('chatty');
 // The page a test went to and a wizard draft it opened are module state in session.ts that
 // outlives the test: a later test that opens a profile without go() would draw that page
 // (Saves & profiles asks for /api/workspace as it opens, #418) or the wizard. Each test starts

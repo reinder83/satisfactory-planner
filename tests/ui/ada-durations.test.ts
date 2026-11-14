@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
-import { generated, go, open, page } from './setup.ts';
+import { generated, go, open, page, useChatty } from './setup.ts';
 import type { CurrentStage } from '../../public/types/index.ts';
 
 beforeEach(() => {
@@ -29,10 +29,12 @@ function remark(id: string, stage: Partial<CurrentStage>) {
 }
 
 test('ADA gives the steady-state delivery time in hours and minutes', () => {
+  useChatty();
   assert.match(remark('hours', { hours: 7.86 }) ?? '', /: about 7 h 52 min\. /);
 });
 
 test('ADA compares a rounded phase with its target in the same words', () => {
+  useChatty();
   const text = remark('rounded-after-stop', { feasible: true, hours: 7.86, roundedAfterStop: 6 });
   assert.match(text ?? '', /it takes about 7 h 52 min instead of about 6 h\./);
 });

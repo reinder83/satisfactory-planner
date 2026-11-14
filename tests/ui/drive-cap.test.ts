@@ -11,7 +11,7 @@ import { setView, setWizard, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import { carryOptions } from '../../public/state.ts';
-import { $, catalog, generated, go, open, page } from './setup.ts';
+import { $, catalog, generated, go, open, page, useChatty } from './setup.ts';
 import type { CurrentCalculatedPlan } from '../../public/types/index.ts';
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 20)).then(() => nextTick());
@@ -104,6 +104,7 @@ test('the sidebar names the cap on hard drives a plan was calculated with, besid
 });
 
 test("ADA names a plan's cap on hard drives on the build plan", () => {
+  useChatty();
   const adaLine = (extra: object) => {
     page();
     const plan = generated();

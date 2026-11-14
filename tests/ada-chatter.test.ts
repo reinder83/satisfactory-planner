@@ -8,8 +8,10 @@ import {
   adaChatterFrom,
   adaChatterStored,
   adaEventLine,
+  adaHeldBack,
   adaMood,
   adaRemarks,
+  adaRuleLevels,
   adaStamp,
   type AdaEventKind,
   type AdaFacts,
@@ -79,6 +81,73 @@ test('problems, milestones and data loss are essential; plain observations and i
   assert.equal(calm.find(r => r.id === 'next')?.essential, false);
   assert.ok(calm.filter(r => r.id.startsWith('idle-')).every(r => !r.essential));
   assert.equal(adaRemarks(facts({ kind: 'none' })).find(r => r.id === 'no-save')?.essential, true);
+});
+
+// The calm lines Essential still says (#1353): a new calm line is said at Chatty only unless it is
+// added here, on purpose. Warnings and praise are always essential.
+const ESSENTIAL_CALM = [
+  'no-save',
+  'build-dry',
+  'unplaced',
+  'site-review',
+  'sloop-pins-pending',
+  'shard-pins-pending',
+  'backup-old',
+  'progress-restored-back',
+  'imported',
+];
+
+test('every warning and the important calm lines are said at Essential and held at Off', () => {
+  const levels = adaRuleLevels();
+  const warn = levels.filter(rule => rule.tone === 'warn');
+  assert.ok(warn.length >= 15, 'the warnings are all listed');
+  for (const rule of warn) {
+    assert.equal(rule.essential, true, rule.id);
+    assert.equal(
+      adaHeldBack({ ...rule, text: '' }),
+      true,
+      rule.id + ' waits behind the dot at Off',
+    );
+  }
+  assert.deepEqual(
+    levels.filter(rule => rule.tone === 'calm' && rule.essential).map(rule => rule.id),
+    ESSENTIAL_CALM,
+  );
+  for (const id of ESSENTIAL_CALM.filter(id => id !== 'no-save'))
+    assert.equal(adaHeldBack({ id, tone: 'calm', text: '', essential: true }), true, id);
+  // Praise is said at Essential, but a milestone does not wait behind Off's dot; nor does no-save.
+  for (const rule of levels.filter(rule => rule.tone === 'praise')) {
+    assert.equal(rule.essential, true, rule.id);
+    assert.equal(adaHeldBack({ ...rule, text: '' }), false, rule.id);
+  }
+  assert.equal(adaHeldBack({ id: 'no-save', tone: 'calm', text: '', essential: true }), false);
+});
+
+test('a backup growing old, a restore that took steps back, pending pins and an import are essential', () => {
+  const said = (over: Partial<AdaFacts>, id: string) =>
+    adaRemarks(facts(over)).find(line => line.id === id);
+  const lines = [
+    said({ view: 'backup', browserMode: true, backupDays: 30 }, 'backup-old'),
+    said(
+      { view: 'backup', restored: { words: 'Restored, 3 steps back.', good: false } },
+      'progress-restored-back',
+    ),
+    said({ sloopPinsPending: 2 }, 'sloop-pins-pending'),
+    said({ shardPinsPending: 1 }, 'shard-pins-pending'),
+    said({ view: 'profiles', imported: '“Friend”' }, 'imported'),
+  ];
+  for (const line of lines) {
+    assert.ok(line, 'the line applies');
+    assert.equal(line.essential, true, line.id);
+    assert.equal(line.tone, 'calm', line.id + ' keeps its calm tone');
+    assert.equal(adaHeldBack(line), true, line.id);
+  }
+  // A merge only adds ticks and asks nothing: Chatty only.
+  const merged = said(
+    { view: 'backup', merged: 3, mergedFrom: '“friend.json”' },
+    'progress-merged',
+  );
+  assert.equal(merged?.essential, false);
 });
 
 test('a mood follows the tone and a stamp the line', () => {
