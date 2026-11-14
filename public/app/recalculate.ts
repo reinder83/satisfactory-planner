@@ -11,7 +11,7 @@ import { plural } from './format.ts';
 import { recountedText } from './built-lines.ts';
 import { backupName } from './profile-edit.ts';
 import { workspace } from './session.ts';
-import type { WorkspaceSummary } from '../types/index.ts';
+import type { DetailLevel, WorkspaceSummary } from '../types/index.ts';
 
 // The reply of POST /api/recalculate: the profile's id stays, backupId is the previous version's.
 export interface RecalculatedProfile {
@@ -43,6 +43,8 @@ export interface Recalculation {
   planCreatedAt: string;
   carry?: Record<string, boolean> | undefined;
   built?: string[];
+  // The level Edit settings showed (#1337), stored as the profile's; absent keeps its own.
+  detailLevel?: DetailLevel | undefined;
 }
 
 // The name the previous version of profile `name` in save `saveId` is kept under now:

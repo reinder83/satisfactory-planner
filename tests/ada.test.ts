@@ -158,7 +158,7 @@ test('ADA counts the same progress the pages show', () => {
   assert.equal(research(1).tone, 'calm');
   assert.match(
     research(1).text,
-    /^1 research step at the end of this phase is optional: only a later phase's lines need it\. Tick Required steps only/,
+    /^1 research step at the end of this phase is optional: only a later phase's lines need it\. Press Required steps only/,
   );
   assert.match(
     research(7, true).text,
@@ -1090,8 +1090,8 @@ test('in expert mode ADA counts the unlock groups done in the phase (#1197)', ()
   const line = (done: number, total: number) =>
     adaRemarks(facts({ unlockGroups: { done, total } })).find(r => r.id === 'expert-unlocks')!;
   assert.equal(line(1, 4).tone, 'calm');
-  assert.match(line(1, 4).text, /^Expert mode: 1 of 4 unlock groups done in this phase\. Tick a/);
-  assert.match(line(0, 1).text, /^Expert mode: 0 of 1 unlock group done in this phase\./);
+  assert.match(line(1, 4).text, /^Expert level: 1 of 4 unlock groups done in this phase\. Tick a/);
+  assert.match(line(0, 1).text, /^Expert level: 0 of 1 unlock group done in this phase\./);
   assert.ok(!ids(facts({ unlockGroups: { done: 0, total: 0 } })).includes('expert-unlocks'));
 });
 

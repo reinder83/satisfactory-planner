@@ -14,26 +14,27 @@
   step, Review (ReviewStep.vue, as All settings shows it), whose Create profile ends the flow:
   one flow, with no second set of steps (#1072). The form is keyed by screen, so each starts from the draft. A
   missing Save name stops Continue and All settings with a message beside the box
-  (form/NameField.vue, #622). The first question offers "New to Satisfactory" (#1076, app/beginner.ts)
-  and "Expert mode" (#1197, app/expert.ts), never both on; switching expert mode on goes on to All
-  settings with every answer kept, and each question's lead marks its glossary terms (TermText.vue).
+  (form/NameField.vue, #622). The first question offers the detail level (ONB-2, #1337,
+  ui/DetailLevel.vue, app/detail-level.ts): Beginner (what "New to Satisfactory" was, #1076),
+  Standard or Expert (what "Expert mode" was, #1197), with a note on what the level picked does;
+  picking Expert goes on to All settings with every answer kept. Each question's lead marks its
+  glossary terms (TermText.vue).
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { beginnerMode } from '../../beginner.ts';
-import { expertMode } from '../../expert.ts';
+import { DETAIL_NOTES, detailLevel } from '../../detail-level.ts';
 import {
   guidedFlow,
   moveGuided,
+  pickDetail,
   readGuidedForm,
-  switchBeginner,
-  switchExpert,
   toAdvanced,
 } from '../../wizard/guided.ts';
 import { NAME_HINT, cancelWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import DetailLevel from '../DetailLevel.vue';
 import InputField from '../form/InputField.vue';
 import NameField from '../form/NameField.vue';
 import GuidedBudgets from '../guided/GuidedBudgets.vue';
@@ -96,10 +97,8 @@ const page = computed(() =>
       name: wizardDraft.saveId ? wizardDraft.name : wizardDraft.saveName,
       submit: topics ? 'Continue →' : submitLabel(wizardDraft),
       first: topics || wizardDraft.guidedStep <= 1,
-      // "New to Satisfactory" (#1076), offered on the first question.
-      beginner: !topics && !review && wizardDraft.guidedStep <= 1 ? beginnerMode() : null,
-      // "Expert mode" (#1197) beside it.
-      expert: expertMode(),
+      // The detail level (#1337), offered on the first question.
+      detail: !topics && !review && wizardDraft.guidedStep <= 1 ? detailLevel() : null,
       // Review's All settings is the five steps' Review, with this plan (#1072).
       advancedStep: review ? 5 : question?.step || 1,
     };
@@ -114,20 +113,8 @@ watch(() => page.value?.key, focusNewStep, { flush: 'post' });
 // is only recorded (wizard.guidedTopics): Continue applies them, so the topics screen stays.
 function changed(event: Event) {
   const name = String((event.target as HTMLInputElement).name);
-  if (name === 'beginner') {
-    switchBeginner(
-      event.currentTarget as HTMLFormElement,
-      (event.target as HTMLInputElement).checked,
-    );
-    return;
-  }
-  if (name === 'expert') {
-    switchExpert(
-      event.currentTarget as HTMLFormElement,
-      (event.target as HTMLInputElement).checked,
-    );
-    return;
-  }
+  // The detail level's own handler (DetailLevel.vue's pick) has it.
+  if (name === 'guidedDetail') return;
   if (name.startsWith('guided:') || name === 'topup' || name === 'topic') {
     readGuidedForm(event.currentTarget as HTMLFormElement);
     render();
@@ -198,33 +185,15 @@ async function submit(event: Event) {
           :placeholder="page.adding ? NAME_HINT : 'e.g. My Satisfactory save'"
         />
       </div>
-      <div v-if="page.beginner !== null" class="guided-beginner" data-guided-beginner>
-        <label class="check-row"
-          ><input
-            type="checkbox"
-            name="beginner"
-            data-beginner-switch
-            aria-describedby="guided-beginner-note"
-            :checked="page.beginner"
-          />New to Satisfactory</label
-        >
-        <p id="guided-beginner-note" class="small muted">
-          Keeps it simple: skips the questions on alternate recipes and clock speeds, hides the
-          hard-drive and clock details on the build plan, and starts a new save with nothing stocked
-          beyond the Space Elevator. All settings still has everything.
-        </p>
-        <label class="check-row guided-expert"
-          ><input
-            type="checkbox"
-            name="expert"
-            data-expert-switch
-            aria-describedby="guided-expert-note"
-            :checked="page.expert"
-          />Expert mode</label
-        >
-        <p id="guided-expert-note" class="small muted">
-          For players who know the game: skips these questions for All settings on three denser
-          screens, and groups the build plan's unlocks by tier with a tick per tier.
+      <div v-if="page.detail !== null" class="guided-detail" data-guided-detail>
+        <DetailLevel
+          :level="page.detail"
+          name="guidedDetail"
+          describedby="guided-detail-note"
+          @pick="(level, form) => pickDetail(form, level)"
+        />
+        <p id="guided-detail-note" class="small muted" data-detail-note>
+          {{ DETAIL_NOTES[page.detail] }}
         </p>
       </div>
       <ReviewStep v-if="page.review" />

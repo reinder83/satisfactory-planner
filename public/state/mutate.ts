@@ -22,6 +22,7 @@ import {
   type Raw,
   cleanFactoryPlace,
   cleanMapMarker,
+  detailLevelOf,
   mapMarkerId,
   validateFactoryPlaces,
   validateMapLayers,
@@ -287,6 +288,13 @@ function setMapLayer(state: SavedState, update: Raw) {
     [update.layer as MapLayer]: update.value,
   };
 }
+// The profile's detail level (#1337): Beginner, Standard or Expert. One value, so it is not
+// base-sensitive: a stale tab can only pick a level, never undo another change.
+function setDetailLevel(state: SavedState, update: Raw) {
+  const level = detailLevelOf(update.value);
+  if (!level) fail('Invalid detail level.');
+  state.detailLevel = level;
+}
 // One factory on the world map (#1283, slice 3): a place puts factory group `id` there, or moves
 // it there when it is on the map already, and null takes it off (a factory not on the map stays
 // off, so a repeated removal changes nothing). Only a factory of the profile can be placed. One
@@ -384,6 +392,7 @@ const recordEdits: Record<string, StateEdit> = {
   lineClocks: setLineClocks,
   mapMarker: setMapMarker,
   mapLayer: setMapLayer,
+  detailLevel: setDetailLevel,
   mapFactory: setMapFactory,
   factoryGroupRestore: restoreGroup,
   trainStation: setTrainStation,

@@ -59,6 +59,10 @@
 //                  absent when there are none; the trainLine update adds, replaces or removes one
 //   trainLayout    { stations?, zoom?, pan? } how the network diagram is drawn
 //                  (validateTrainLayout, #1284), version 30; the trainLayout update sets it
+//   detailLevel    'beginner' | 'standard' | 'expert' the level this profile is shown at
+//                  (validateDetailLevel, #1337), version 31; absent while none was picked, so
+//                  the browser's level applies (app/detail-level.ts); the detailLevel update
+//                  sets it, a new profile and a recalculation in place take the wizard's
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -91,6 +95,8 @@ export {
   bayCapacity,
   bayOfSlot,
   builtinFloors,
+  DETAIL_LEVELS,
+  detailLevelOf,
   FACTORY_PLACE_MAX,
   fuelledModes,
   handbookBay,

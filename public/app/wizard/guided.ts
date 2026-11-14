@@ -14,8 +14,8 @@ import {
   guidedTopupItems,
   tutorialKeys,
 } from '../../preferences.ts';
-import { beginnerMode, beginnerStock, setBeginnerMode } from '../beginner.ts';
-import { setExpertMode, switchBeginnerMode } from '../expert.ts';
+import { beginnerMode, beginnerStock } from '../beginner.ts';
+import { setBrowserDetail } from '../detail-level.ts';
 import { $ } from '../format.ts';
 import { draft, wizard } from '../session.ts';
 import { render } from '../shell.ts';
@@ -31,7 +31,7 @@ import {
   wizardBusy,
   type WizardDraft,
 } from './wizard.ts';
-import type { GuidedQuestion, ItemRates } from '../../types/index.ts';
+import type { DetailLevel, GuidedQuestion, ItemRates } from '../../types/index.ts';
 
 // --- The guided start -------------------------------------------------------
 // A short illustrated sequence that writes the same settings object the
@@ -101,8 +101,9 @@ export function guidedFlow(): GuidedQuestion[] {
     : list;
 }
 
-// The guided questions "New to Satisfactory" leaves out (#1076): alternate recipes while the plan
-// uses the standard ones, and exactness while it builds whole machines, the simple answers.
+// The guided questions Beginner ("New to Satisfactory", #1076) leaves out: alternate recipes while
+// the plan uses the standard ones, and exactness while it builds whole machines, the simple
+// answers.
 function beginnerSkips(id: string, settings: WizardDraft['settings']): boolean {
   if (!beginnerMode()) return false;
   if (id === 'recipes') return settings.recipes === 'standard';
@@ -110,37 +111,32 @@ function beginnerSkips(id: string, settings: WizardDraft['settings']): boolean {
   return false;
 }
 
-// "New to Satisfactory" on the guided start's first screen (#1076): remembers the choice and, for
-// a new save (whose settings are a fresh plan's), switches the stock question's default between
-// "Nothing" and "My building materials" while the user has not picked another stock. The screen is
-// read first, so nothing typed is lost, and redrawn; nothing is calculated. On, it switches expert
-// mode off (#1197).
-export function switchBeginner(form: HTMLFormElement | null, value: boolean) {
-  const wizardDraft = draft();
-  if (form) readGuidedForm(form);
-  switchBeginnerMode(value);
-  if (!wizardDraft.saveId && beginnerStock(wizardDraft.settings, value)) wizardDraft.preview = null;
-  render();
-}
-
-// "Expert mode" (#1197, expert.ts) on the guided start's first screen and above All settings'
-// steps: remembers the choice, after reading the screen so nothing typed is lost. On, it switches
-// New to Satisfactory off the way its own switch does (the stock default follows), and the guided
-// start gives way to All settings, every answer kept, as "All settings →" does. Nothing is
-// calculated.
-export function switchExpert(form: HTMLFormElement | null, value: boolean) {
+// The detail level picked on the guided start's first screen or above All settings' steps (#1337,
+// detail-level.ts), after reading the screen so nothing typed is lost; nothing is calculated. The
+// draft shows it, Create profile or Recalculate in place stores it as the profile's own, and this
+// browser remembers it for the next new plan.
+//   - Into or out of Beginner, for a new save (whose settings are a fresh plan's), the stock
+//     question's default switches between "Nothing" and "My building materials" while the user
+//     has not picked another stock (beginnerStock).
+//   - Expert on the guided start gives way to All settings, every answer kept, as "All settings →"
+//     does.
+export function pickDetail(form: HTMLFormElement | null, level: DetailLevel) {
   const wizardDraft = draft();
   if (form) {
     if (wizardDraft.mode === 'guided') readGuidedForm(form);
     else readWizard(form);
   }
-  if (value && beginnerMode()) {
-    setBeginnerMode(false);
-    if (!wizardDraft.saveId && beginnerStock(wizardDraft.settings, false))
-      wizardDraft.preview = null;
-  }
-  setExpertMode(value);
-  if (value && wizardDraft.mode === 'guided') {
+  const wasBeginner = beginnerMode();
+  wizardDraft.detail = level;
+  setBrowserDetail(level);
+  const beginner = level === 'beginner';
+  if (
+    beginner !== wasBeginner &&
+    !wizardDraft.saveId &&
+    beginnerStock(wizardDraft.settings, beginner)
+  )
+    wizardDraft.preview = null;
+  if (level === 'expert' && wizardDraft.mode === 'guided') {
     wizardDraft.mode = 'advanced';
     wizardDraft.step = 1;
   }

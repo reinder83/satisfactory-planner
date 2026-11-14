@@ -38,9 +38,11 @@ beforeEach(() => {
 
 test('"Required steps only" hides the optional research and is remembered in this browser', async () => {
   await show();
-  const toggle = $<HTMLInputElement>('[data-required-only]')!;
+  const toggle = $('[data-required-only]')!;
   assert.ok(toggle, 'the phase has optional steps, so the toggle is there');
-  assert.equal(toggle.checked, false);
+  // A filter: a toggle button (BP-12, #1337).
+  assert.equal(toggle.tagName, 'BUTTON');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
   assert.ok(listed().includes(CATERIUM));
   const all = listed().length;
   // Research only a later phase needs is marked so in its title.
@@ -49,9 +51,9 @@ test('"Required steps only" hides the optional research and is remembered in thi
     /MAM: Caterium \(optional\)/,
   );
   const before = JSON.stringify(state);
-  toggle.checked = true;
-  toggle.dispatchEvent(new Event('change'));
+  toggle.click();
   await nextTick();
+  assert.equal($('[data-required-only]')!.getAttribute('aria-pressed'), 'true');
   assert.ok(!listed().includes(CATERIUM));
   assert.equal(all - listed().length, 7, 'the seven optional research steps');
   assert.ok(listed().includes('calc-1-Recipe_IngotIron_C'));
@@ -62,7 +64,7 @@ test('"Required steps only" hides the optional research and is remembered in thi
   assert.equal(localStorage.getItem('planner-required-only'), 'on');
   assert.equal(JSON.stringify(state), before);
   await show();
-  assert.equal($<HTMLInputElement>('[data-required-only]')!.checked, true);
+  assert.equal($('[data-required-only]')!.getAttribute('aria-pressed'), 'true');
   assert.ok(!listed().includes(CATERIUM));
 });
 

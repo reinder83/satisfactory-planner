@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
-import { setBeginnerMode } from '../../public/app/beginner.ts';
+import { setBrowserDetail } from '../../public/app/detail-level.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { calculated, draft, setWizard, state, workspace } from '../../public/app/session.ts';
 import { startEdit } from '../../public/app/wizard/wizard.ts';
@@ -64,9 +64,9 @@ function openPlan(plan: StoredCalculatedPlan = plainPlan(), progress = {}, phase
 
 beforeEach(() => {
   setWizard(null);
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
 });
-afterEach(() => setBeginnerMode(false));
+afterEach(() => setBrowserDetail('standard'));
 
 test('a line’s dialog pins its Power Shards without recalculating; the plan asks for one', async () => {
   const plan = plainPlan();
@@ -135,12 +135,12 @@ test('a line’s dialog pins its Power Shards without recalculating; the plan as
 
 test('the pin is not offered in Phase 1 without overclocking, nor for beginners or generators', async () => {
   const plan = plainPlan();
-  setBeginnerMode(true);
+  setBrowserDetail('beginner');
   openPlan(plan);
   openCalculatedFactory(ROD);
   await settle();
   assert.equal($('[data-shard-pin-choice]'), null, 'not in New to Satisfactory mode');
-  setBeginnerMode(false);
+  setBrowserDetail('standard');
   const generator = plan.stages['3'].rows!.find(row => row.power < 0)!;
   openPlan(plan);
   openCalculatedFactory(generator.id);

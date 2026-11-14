@@ -12,18 +12,20 @@
   stops here, since nothing else handles the wizard form. Beside Goals and Resources is the live estimate
   (ui/wizard/EstimatePanel.vue, SP-33), which every edit there restarts; at 720px and below it
   sits under the form, with a one-line summary at the foot of the screen (#412).
-  In expert mode (#1197, app/expert.ts) the steps take three denser screens instead of five
-  (wizard/screens.ts): Game settings with Preferences, Goals with Resources, and Review, a tab
+  At the Expert detail level (#1197, app/expert.ts) the steps take three denser screens instead of
+  five (wizard/screens.ts): Game settings with Preferences, Goals with Resources, and Review, a tab
   each, without the explanatory paragraphs (`data-explain`, hidden by style.css under .compact;
-  the ⓘ help tips stay). "Expert mode" is offered above the steps before Review: switching it reads
-  the screen first, so nothing typed is lost.
+  the ⓘ help tips stay). The detail level (ONB-2, #1337, ui/DetailLevel.vue) is offered above the
+  steps before Review, as on the guided start: picking one reads the screen first, so nothing typed
+  is lost.
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
+import { DETAIL_NOTES, detailLevel } from '../../detail-level.ts';
 import { expertMode } from '../../expert.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { switchExpert, toGuided } from '../../wizard/guided.ts';
+import { pickDetail, toGuided } from '../../wizard/guided.ts';
 import {
   nextScreenStep,
   previousScreenStep,
@@ -42,6 +44,7 @@ import {
 import { scheduleEstimate } from '../../wizard/estimate.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
+import DetailLevel from '../DetailLevel.vue';
 import EstimatePanel from '../wizard/EstimatePanel.vue';
 import PageHeader from '../PageHeader.vue';
 import GoalStep from '../wizard/GoalStep.vue';
@@ -70,6 +73,7 @@ const page = computed(() =>
         current: screen.steps.includes(wizardDraft.step),
       })),
       expert: expertMode(),
+      detail: detailLevel(),
       eyebrow: wizardDraft.edit ? 'EDIT SETTINGS' : 'NEW PROFILE',
       title: wizardDraft.edit
         ? 'Edit the settings of ' + wizardDraft.edit.name
@@ -88,13 +92,8 @@ watch(() => page.value.draft && page.value.step, focusNewStep, { flush: 'post' }
 // Settings whose answer changes what the step shows: read the step and redraw.
 function changed(event: Event) {
   const name = (event.target as HTMLInputElement).name;
-  if (name === 'expert') {
-    switchExpert(
-      event.currentTarget as HTMLFormElement,
-      (event.target as HTMLInputElement).checked,
-    );
-    return;
-  }
+  // The detail level's own handler (DetailLevel.vue's pick) has it.
+  if (name === 'wizardDetail') return;
   if (['recipes', 'mainPower', 'pureIngots', 'droneFuel', 'nuclear'].includes(name)) {
     readWizard(event.currentTarget as HTMLFormElement);
     render();
@@ -107,6 +106,7 @@ const estimating = computed(
   () => page.value.draft && page.value.shown.some(step => step === 3 || step === 4),
 );
 function edited(event: Event) {
+  if ((event.target as HTMLInputElement).name === 'wizardDetail') return;
   if (estimating.value) scheduleEstimate(event.currentTarget as HTMLFormElement);
 }
 
@@ -167,10 +167,17 @@ async function submit(event: Event) {
         @input="edited"
         @submit.prevent.stop="submit"
       >
-        <label v-if="page.step < 5" class="check-row small wizard-expert" data-wizard-expert
-          ><input type="checkbox" name="expert" data-expert-switch :checked="page.expert" />Expert
-          mode<span class="muted" data-explain>: All settings on three denser screens</span></label
-        >
+        <div v-if="page.step < 5" class="wizard-detail" data-wizard-detail>
+          <DetailLevel
+            :level="page.detail"
+            name="wizardDetail"
+            describedby="wizard-detail-note"
+            @pick="(level, form) => pickDetail(form, level)"
+          />
+          <p id="wizard-detail-note" class="small muted" data-explain data-detail-note>
+            {{ DETAIL_NOTES[page.detail] }}
+          </p>
+        </div>
         <SettingsStep v-if="page.shown.includes(1)" />
         <PreferencesStep v-if="page.shown.includes(2)" />
         <GoalStep v-if="page.shown.includes(3)" />
