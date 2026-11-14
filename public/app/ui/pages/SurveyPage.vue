@@ -154,7 +154,6 @@ function submit() {
       subtitle="Count what your world holds; the planner turns it into the rates it plans against."
     />
     <form id="wizard-form" class="extraction-form" @change="changed" @submit.prevent.stop="submit">
-      <WorldSettings v-if="page.step === 2 || page.step === 3" class="extraction-world" />
       <div class="wizard-progress">
         <button
           v-for="(title, i) in EXTRACTION_STEPS"
@@ -168,6 +167,7 @@ function submit() {
           {{ i + 1 }}. {{ title }}
         </button>
       </div>
+      <WorldSettings v-if="page.step === 2 || page.step === 3" class="extraction-world" />
       <div class="panel wizard-panel extraction-panel">
         <template v-if="page.step === 1">
           <h2>Where your numbers come from</h2>
@@ -253,7 +253,7 @@ function submit() {
             <HelpTip name="extractionUsed" topic="Already committed" />
           </p>
           <div class="table-wrap">
-            <table>
+            <table class="budget-table">
               <thead>
                 <tr>
                   <th>Resource</th>
@@ -266,7 +266,10 @@ function submit() {
                   <td class="resource-name">
                     <ItemIcon :name="budget.name" /><span>{{ budget.name }}</span>
                   </td>
-                  <td :class="['number', 'budget-cell', budget.over ? 'warn' : '']">
+                  <td
+                    :class="['number', 'budget-cell', budget.over ? 'warn' : '']"
+                    data-label="Budget"
+                  >
                     {{ budget.left
                     }}<small
                       v-if="budget.breakdown"
@@ -275,7 +278,7 @@ function submit() {
                       >{{ budget.breakdown }}</small
                     >
                   </td>
-                  <td>
+                  <td data-label="Already committed">
                     <span class="used-field"
                       ><input
                         class="used-input"

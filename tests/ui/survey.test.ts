@@ -587,10 +587,13 @@ test('the world settings are shown once, above the counts, and work on both coun
   assert.equal($$('#main [data-node-reset]').length, 1);
   assert.equal(block()[0]!.closest('.extraction-panel'), null, 'outside the panel');
   const tabs = $('#main .wizard-progress')!;
+  // Below the tabs, so the tab bar is the same place on every screen and does not jump down by
+  // the block's height between screen 1 and 2 (#1355).
   assert.ok(
-    block()[0]!.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING,
-    'above the tabs',
+    tabs.compareDocumentPosition(block()[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'under the tabs',
   );
+  assert.equal(tabs.previousElementSibling, null, 'the tabs open the form on screen 2');
   // It works on the ore screen: a purity refills the counts.
   await change('select[name=purity]', 'pure');
   assert.equal(wizard!.settings.purity, 'pure');
@@ -605,6 +608,7 @@ test('the world settings are shown once, above the counts, and work on both coun
   // The screens that count nothing do not show it.
   await click('[data-extraction-step="1"]');
   assert.equal(block().length, 0);
+  assert.equal($('#main .wizard-progress')!.previousElementSibling, null, 'and on screen 1');
   await click('[data-extraction-step="4"]');
   assert.equal(block().length, 0);
 });

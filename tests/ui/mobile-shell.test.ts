@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { itemRate } from '../../public/app/flow.ts';
-import { flowGraph } from '../../public/app/flow-graph.ts';
+import { flowGraph, sumByItem } from '../../public/app/flow-graph.ts';
 import { setQuery, viewPhase } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { shownGroupFlow } from '../../public/app/shown-group-flow.ts';
@@ -135,7 +135,8 @@ test('on a phone the flow graph opens as a list of lines with their rates, and a
   const ins = graph.edges.filter(edge => edge.to === busy.id);
   const inText = text(row.querySelector('[data-flow-list-in]')!);
   assert.ok(inText.startsWith('In '), 'a line of what comes in');
-  assert.ok(inText.includes(`${ins[0]!.item} ${ins[0]!.rateText}`), 'with each item and rate');
+  const sums = sumByItem(ins, itemRate);
+  assert.ok(inText.includes(`${sums[0]!.item} ${sums[0]!.text}`), 'with each item and its rate');
   assert.ok(text(row.querySelector('[data-flow-list-out]')!).startsWith('Out '));
 
   // A press on a row selects the line: the same panel as the graph's.
@@ -152,6 +153,36 @@ test('on a phone the flow graph opens as a list of lines with their rates, and a
   assert.ok(hidden(list));
   assert.ok(!hidden($('#detail .fgraph-wrap')!));
   assert.equal($('#detail [data-flow-mode-set="graph"]')!.getAttribute('aria-pressed'), 'true');
+  dialog().close();
+  await settle();
+});
+
+// #1355: an item that comes from (or goes to) several lines is one figure, summed as the graph's
+// boxes sum it, not one figure per arrow.
+test('the list says each item once per line, its rates summed (MOB-3)', async () => {
+  screen(true);
+  await showFactories();
+  await openGraph();
+  const graph = flowGraph(shownGroupFlow(GROUP)!, itemRate, () => '');
+  let repeated = 0;
+  for (const node of graph.nodes.filter(node => node.kind === 'line')) {
+    const row = $(`#detail [data-flow-list-line="${node.id}"]`)!.closest('li')!;
+    for (const [selector, edges] of [
+      ['[data-flow-list-in]', graph.edges.filter(edge => edge.to === node.id)],
+      ['[data-flow-list-out]', graph.edges.filter(edge => edge.from === node.id)],
+    ] as const) {
+      const shown = text(row.querySelector(selector)!);
+      const sums = sumByItem(edges, itemRate);
+      if (sums.length < edges.length) repeated++;
+      for (const sum of sums) {
+        assert.ok(shown.includes(`${sum.item} ${sum.text}`), `the sum ${sum.item} ${sum.text}`);
+      }
+      // The figures are the sums: as many "/min" or "m³/min" as items, never one per arrow.
+      const figures = shown.match(/\d[\d,.]*\s?(?:m³\/min|\/min)/g) ?? [];
+      assert.equal(figures.length, sums.length, 'one figure per item: ' + shown);
+    }
+  }
+  assert.ok(repeated > 0, 'the plan has a line with an item on several arrows');
   dialog().close();
   await settle();
 });

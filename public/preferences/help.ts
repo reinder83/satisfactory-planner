@@ -122,7 +122,7 @@ export const helpText: Record<string, string> = {
   portals:
     'Each Main Portal consumes 2 Singularity Cells/min to maintain its connection; the Satellite Portal does not consume cells. 10/min supplies five connections (the standard recipe produces 10/min). Reserve portal operating power separately. Nuclear waste and unpackaged fluids stay outside the storage room.',
   surveySource:
-    "The Satisfactory Calculator interactive map lists every resource node your world holds once you upload your save file there, including which are impure, normal and pure, and which resource wells you have found. Copy those counts into the next two screens. Uploading a save to that site is your decision and happens entirely between you and them; this planner never sends your save anywhere. If you would rather not, the map also works without a save and shows the default world's nodes.",
+    "Open the Satisfactory Calculator interactive map, upload your save file there, and it lists every resource node your world holds — including which are impure, normal and pure, and which resource wells you have found. Copy those counts into the next two screens. Uploading a save to that site is your decision and happens entirely between you and them; this planner never sends your save anywhere. If you would rather not, the map also works without a save and shows the default world's nodes.",
   surveyBudgets:
     'What those nodes yield, less the nodes you leave out of this plan and anything already committed to factories this plan does not include. That deduction is what makes a budget mean free for this plan to use.',
   surveyAlreadyRun:

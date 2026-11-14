@@ -144,3 +144,30 @@ test('on a touch screen wider than a phone a focused form field puts the toast a
   }
   assert.equal(await show(field), undefined, 'with a mouse the same field leaves it at the bottom');
 });
+
+// #1355: the strip at the top of a phone sat over the one-row header (the profile name and the
+// phase select) while its Undo was on offer. It starts under the header while the header shows.
+test('on a phone the top strip starts under the header, not over it (#1355)', async () => {
+  const header = document.createElement('div');
+  header.className = 'topbar';
+  header.getBoundingClientRect = () => new DOMRect(0, 0, 375, 64);
+  document.body.append(header);
+  try {
+    phone = true;
+    field.getBoundingClientRect = () => new DOMRect(179, 140, 130, 33);
+    assert.equal(await show(field), 'top');
+    assert.equal(strip.style.getPropertyValue('--toast-top'), '72px', 'under the 64px header');
+    header.getBoundingClientRect = () => new DOMRect(0, -200, 375, 64);
+    assert.equal(await show(field), 'top');
+    assert.equal(strip.style.getPropertyValue('--toast-top'), '', 'scrolled past: the top edge');
+    phone = false;
+    header.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 64);
+    field.getBoundingClientRect = () => new DOMRect(179, 720, 130, 33);
+    assert.equal(await show(field), 'top');
+    assert.equal(strip.style.getPropertyValue('--toast-top'), '', 'a wide screen is as before');
+    assert.equal(await show(button), undefined);
+    assert.equal(strip.style.getPropertyValue('--toast-top'), '', 'and back at the bottom');
+  } finally {
+    header.remove();
+  }
+});

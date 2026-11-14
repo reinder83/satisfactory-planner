@@ -38,6 +38,7 @@ const keyboardMayShow = (focused: HTMLElement) =>
 // is under it there or, on a phone or tablet, is a form field. A hidden toast takes the bottom again.
 function placeToast(el: HTMLElement) {
   delete el.dataset.place;
+  el.style.removeProperty('--toast-top');
   if (!el.classList.contains('show')) return;
   const focused = document.activeElement;
   if (!(focused instanceof HTMLElement) || !focused.matches(CONTROL) || el.contains(focused))
@@ -45,8 +46,19 @@ function placeToast(el: HTMLElement) {
   if (
     keyboardMayShow(focused) ||
     overlaps(el.getBoundingClientRect(), focused.getBoundingClientRect())
-  )
+  ) {
     el.dataset.place = 'top';
+    belowHeader(el);
+  }
+}
+
+// On a phone the top strip would sit over the one-row header (MOB-1), hiding the profile name and
+// the phase select while its Undo is on offer. It starts under the header instead, as far down as
+// the header shows; scrolled past it, the strip keeps the window's top edge.
+function belowHeader(el: HTMLElement) {
+  if (globalThis.matchMedia?.('(max-width: 720px)').matches !== true) return;
+  const bottom = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
+  if (bottom > 0) el.style.setProperty('--toast-top', `${Math.ceil(bottom) + 8}px`);
 }
 
 // Places the toast each time toast() shows or hides it. The observer runs before the next

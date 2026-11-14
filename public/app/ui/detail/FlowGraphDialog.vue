@@ -81,6 +81,7 @@ import {
   GRAPH,
   labelObstacles,
   shortText,
+  sumByItem,
   tagBox,
   type GraphEdge,
   type GraphNode,
@@ -386,8 +387,12 @@ const phoneChanged = async (event: MediaQueryListEvent) => {
 const listed = computed(() => {
   const graph = placed.value;
   if (!graph) return [];
+  // One figure per item, summed over its arrows as the boxes' captions are: an item that comes
+  // from three lines reads "Steel Ingot 585/min", not three figures to add up.
   const words = (edges: typeof graph.edges) =>
-    edges.map(edge => `${edge.item} ${edge.rateText}`).join(', ');
+    sumByItem(edges, itemRate)
+      .map(rate => `${rate.item} ${rate.text}`)
+      .join(', ');
   return graph.nodes
     .filter(node => node.kind === 'line')
     .sort((a, b) => a.x - b.x || a.y - b.y)

@@ -469,17 +469,11 @@ function addRates(
   );
   for (const node of nodes) {
     const own = edges.filter(edge => (node.kind === 'out' ? edge.to : edge.from) === node.id);
-    const sums = new Map<string, number>();
-    for (const edge of own) sums.set(edge.item, (sums.get(edge.item) ?? 0) + edge.rate);
-    const items = [...sums.keys()];
+    const rates = sumByItem(own, rateText);
     const first = order.get(node.id) ?? [];
-    if (node.kind === 'line') items.sort((a, b) => rankOf(first, a) - rankOf(first, b));
-    else items.sort((a, b) => sums.get(b)! - sums.get(a)!);
-    node.rates = items.map(item => ({
-      item,
-      rate: sums.get(item)!,
-      text: rateText(item, sums.get(item)!),
-    }));
+    if (node.kind === 'line') rates.sort((a, b) => rankOf(first, a.item) - rankOf(first, b.item));
+    else rates.sort((a, b) => b.rate - a.rate);
+    node.rates = rates;
     // A line with more outputs than fit shows its main product and "+ N more".
     const shown =
       node.kind === 'line' && node.rates.length > GRAPH.rateLines
@@ -494,6 +488,16 @@ function addRates(
     node.height = node.baseHeight + node.rateLines.length * GRAPH.textLine;
   }
 }
+
+// The rates of `edges` added up per item, in the order the items first appear, each worded once by
+// `rateText`: a box's captions and the phone's list of lines (MOB-3) say one figure per item, not
+// one per arrow.
+export function sumByItem(edges: readonly GraphEdge[], rateText: GraphRate): NodeRate[] {
+  const sums = new Map<string, number>();
+  for (const edge of edges) sums.set(edge.item, (sums.get(edge.item) ?? 0) + edge.rate);
+  return [...sums].map(([item, rate]) => ({ item, rate, text: rateText(item, rate) }));
+}
+
 // Where `item` stands in a line's outputs; one it does not list (none) goes last.
 const rankOf = (order: readonly string[], item: string): number => {
   const at = order.indexOf(item);
