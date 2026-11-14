@@ -54,6 +54,8 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'window focus',
     // #1054: Ctrl+Z presses the toast's Undo.
     'document keydown',
+    // #1351: Ctrl+K or / opens the quick-jump search.
+    'document keydown',
     'rendered',
   ]);
   // Importing the entry point compiles every component through Vite, cold: no other test file

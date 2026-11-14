@@ -84,6 +84,7 @@ import LiveChangeNotice from './LiveChangeNotice.vue';
 import { invalidate, legacy } from './bridge.ts';
 import ActionMenu from './ActionMenu.vue';
 import { openProfile, signOut } from './actions.ts';
+import { openJump } from './jump.ts';
 import { reserveScrollbar } from './scroll-lock.ts';
 import { committing, workOnShown } from './work-on-phase.ts';
 
@@ -611,6 +612,17 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
           >
         </div>
         <div class="topbar-tools">
+          <button
+            v-if="frame.profileName"
+            type="button"
+            class="btn jump-open"
+            aria-label="Quick jump (Ctrl+K)"
+            title="Quick jump (Ctrl+K or /)"
+            data-jump-open
+            @click="openJump()"
+          >
+            <span aria-hidden="true">⌕</span>
+          </button>
           <!-- Before the track, so the track does not move under the pointer when it appears. -->
           <button
             v-if="frame.canPickPhase && frame.picker.elsewhere && frame.topWorkOn"
