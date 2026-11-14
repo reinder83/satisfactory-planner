@@ -8605,8 +8605,8 @@ th.resource-cell {
 .extraction-panel {
   max-width: 1000px;
 }
-/* ONB-3: the world settings sit once above the counting screens, between the step tabs' form and
-   the panel, as wide as the panel. */
+/* ONB-3: the world settings sit once above the step tabs on the counting screens, as wide as the
+   panel below them. */
 .extraction-world {
   max-width: 1000px;
   margin-bottom: 14px;
