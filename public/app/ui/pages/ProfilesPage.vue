@@ -21,6 +21,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { localStamp } from '../../../transfer.ts';
+import { adaNote } from '../../ada-panel.ts';
 import {
   allowSwitch,
   downloadJson,
@@ -361,6 +362,7 @@ async function remove(event: Event, save: SaveCard, profile: ProfileCard) {
     await boot();
     if (workspace.saves.length) navigate('profiles');
     toast('Profile removed.');
+    adaNote('profile-removed');
     await refocus();
   } catch (error) {
     toast((error as Error).message, true);

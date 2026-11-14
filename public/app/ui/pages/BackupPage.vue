@@ -14,6 +14,7 @@ import {
   transferFileSize,
   transferImportLimit,
 } from '../../../transfer.ts';
+import { adaNote } from '../../ada-panel.ts';
 import { confirmAction } from '../confirm.ts';
 import {
   downloadJson,
@@ -104,6 +105,8 @@ async function exportSaves(selection?: string[]) {
       );
     downloadJson(data, selection ? 'satisfactory-saves.json' : 'satisfactory-full-saves.json');
     setWorkspace(await request('/api/workspace'));
+    // A full backup is what ADA notes (#1353); a selection is not one.
+    if (!selection) adaNote('backup');
     invalidate();
     toast(
       selection

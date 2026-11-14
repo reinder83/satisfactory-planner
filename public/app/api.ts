@@ -23,6 +23,7 @@ import {
 } from './session.ts';
 import { render } from './shell.ts';
 import { tickStamped } from './ticked-by.ts';
+import { savedHooks } from './saved-hooks.ts';
 import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
@@ -239,10 +240,16 @@ const refusedStatuses = [400, 409];
 // it shows an error toast and rejects, and callers usually just restore their control
 // instead of rendering. A tick carries who ticked and when (tickStamped, #1206).
 export function save(operation: UpdateOp): Promise<ProgressState> {
-  return queuedWrite('/api/update', tickStamped(operation)).catch((error: Error) => {
-    toast(error.message, true);
-    throw error;
-  });
+  const before = state;
+  return queuedWrite('/api/update', tickStamped(operation))
+    .then(after => {
+      for (const hook of savedHooks) hook(operation, before, after);
+      return after;
+    })
+    .catch((error: Error) => {
+      toast(error.message, true);
+      throw error;
+    });
 }
 
 // A write that replies with the profile's full new state: save() and restoring a progress

@@ -2,14 +2,28 @@
 // This module gathers facts about the open profile and renders the panel; the remark
 // texts themselves are chosen in ../ada.ts. The panel and its buttons are ui/AdaPanel.vue.
 import {
+  adaChatterFrom,
+  adaChatterStored,
   adaEncore,
+  adaEventLine,
+  adaMood,
   adaRemarks,
+  adaStamp,
+  ADA_MOODS,
   adaFault as makeFault,
+  type AdaChatter,
+  type AdaEventKind,
+  type AdaEventParams,
   type AdaFacts,
   type AdaLine,
+  type AdaMood,
 } from '../ada.ts';
+import { adaEventsOf, adaPhaseEvents } from './ada-events.ts';
+import { deliveredParts } from './delivered.ts';
+import type { Phase, ProgressState, UpdateOp } from '../types/index.ts';
 import { browserMode } from '../browser-api.ts';
 import { noteConflicts } from './api.ts';
+import { savedHooks } from './saved-hooks.ts';
 import { ownedBeyondKept, powerView } from '../power.ts';
 import { deliveryKey } from '../progression.ts';
 import { durationOfHours, num, plural } from './format.ts';
@@ -93,20 +107,25 @@ import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.
 import type { Step } from './tasks.ts';
 import { mapLayerShown } from './map-markers.ts';
 
-// localStorage key for the mute switch ('muted' or 'on').
+// localStorage key for the chatter setting (#1353): 'muted' (Off), 'essential' or 'on' (Chatty),
+// the first and last being what the Mute switch stored before.
 const ADA_KEY = 'planner-ada';
 // Position in the remark cycle ("Another remark" advances it) and the ids of the remarks
 // it was counted against, so a changed situation starts the cycle over.
 export let adaIndex = 0;
 let adaSignature = '';
-export let adaMuted = adaStored();
+export let adaChatter: AdaChatter = adaStored();
 
 // Other modules cannot assign imported bindings, so they change these through setters.
 export function setAdaIndex(value: number) {
   adaIndex = value;
 }
-export function setAdaMuted(value: boolean) {
-  adaMuted = value;
+export function setAdaChatter(value: AdaChatter) {
+  adaChatter = value;
+  // The remarks she holds were chosen for the old setting.
+  adaEvent = null;
+  adaSignature = '';
+  adaIndex = 0;
 }
 
 export type { AdaLine };
@@ -121,20 +140,87 @@ let adaPokedAt = 0;
 // ── ADA ────────────────────────────────────────────────
 // The assistant reads the same counters the pages show; it is a voice over the
 // plan, never a second source of truth for it.
-// The mute switch is a view preference rather than progress, so it stays in
-// this browser and never touches a saved profile.
-function adaStored() {
+// The chatter setting is a view preference rather than progress, so it stays in this browser (like
+// the Mute switch it replaces) and never touches a saved profile or the server.
+function adaStored(): AdaChatter {
   try {
-    return localStorage.getItem(ADA_KEY) === 'muted';
+    return adaChatterFrom(localStorage.getItem(ADA_KEY));
   } catch {
-    return false;
+    // No storage (a private window, a blocked one): the default, Essential.
+    return 'essential';
   }
 }
 
 export function adaStore() {
   try {
-    localStorage.setItem(ADA_KEY, adaMuted ? 'muted' : 'on');
+    localStorage.setItem(ADA_KEY, adaChatterStored(adaChatter));
   } catch {}
+}
+
+// ── Event remarks (#1353) ──────────────────────────────
+// An event (a backup filed, a first step ticked) adds one remark at the top of her list, for the
+// page it happened on. They never come on a timer: only the planner's own changes make one. At
+// most ADA_EVENT_CAP chatty ones a session, a kind once (a line or part once per name), Essential
+// only the essential kinds and Off none.
+export const ADA_EVENT_CAP = 4;
+type AdaEventHeld = AdaLine & { mood: AdaMood; view: string };
+let adaEvent: AdaEventHeld | null = null;
+const adaSaid = new Set<string>();
+let adaSpoken = 0;
+
+// Empties what she has said this session (the tests, and a fresh page load do the same).
+export function adaResetEvents() {
+  adaEvent = null;
+  adaSaid.clear();
+  adaSpoken = 0;
+}
+
+// Reports an event; true when she has something to say about it now.
+export function adaNote(kind: AdaEventKind, params: AdaEventParams = {}): boolean {
+  if (adaChatter === 'off') return false;
+  const line = adaEventLine(kind, params);
+  if (!line || (adaChatter === 'essential' && !line.essential)) return false;
+  const key = kind + (params.name ? ':' + params.name : '');
+  if (adaSaid.has(key) || (!line.essential && adaSpoken >= ADA_EVENT_CAP)) return false;
+  adaSaid.add(key);
+  if (!line.essential) adaSpoken++;
+  adaEvent = { ...line, view };
+  adaSignature = '';
+  adaIndex = 0;
+  return true;
+}
+
+// "Later": she drops the event remark.
+export function adaDismissEvent() {
+  adaEvent = null;
+  adaSignature = '';
+  adaIndex = 0;
+}
+
+// save() in api.ts calls this with each finished update (registered below).
+export function adaObserve(operation: UpdateOp, before: ProgressState, after: ProgressState) {
+  try {
+    for (const call of adaEventsOf(operation, before, after, new Date(), {
+      line: key => buildRowName(key.split('-').slice(2).join('-')),
+      parts: (was, now) => {
+        const stagePlan = calcStage(),
+          key = stage();
+        const earlier = deliveredParts(stagePlan, key, was.deliveries || {});
+        return [...deliveredParts(stagePlan, key, now.deliveries || {})]
+          .filter(item => !earlier.has(item))
+          .map(item => {
+            const target = stagePlan?.delivery?.[item]?.target ?? 0;
+            return { name: item, count: `${num(target)} of ${num(target)}` };
+          });
+      },
+    }))
+      adaNote(call.kind, call.params);
+  } catch {}
+}
+savedHooks.push(adaObserve);
+// A phase shown or worked on from another (the phase picker, "Work on Phase N").
+export function adaNotePhase(from: Phase, to: Phase) {
+  for (const call of adaPhaseEvents(from, to)) adaNote(call.kind, call.params);
 }
 
 // A snapshot of the open profile that ada.ts picks remarks from: page, phase, progress
@@ -682,14 +768,33 @@ function adaFacts(): AdaFacts {
   };
 }
 
+// The line she says when Essential has nothing to report: not a remark, so it is not counted.
+const ADA_QUIET: AdaLine = {
+  id: 'quiet',
+  tone: 'calm',
+  text: 'Nothing needs your attention. FICSIT considers that your personal achievement.',
+};
+
+// What she holds now, in the order she shows it: the event remark of this page first, then the
+// remarks the setting allows. Essential keeps only the essential ones (problems, milestones, data
+// loss); Chatty has them all and the idle lines.
+function adaList(facts: AdaFacts): AdaLine[] {
+  if (adaEvent && adaEvent.view !== view) adaEvent = null;
+  const remarks = adaRemarks(facts).filter(line => adaChatter === 'chatty' || line.essential);
+  if (!adaEvent) return remarks;
+  const held = adaEvent;
+  return [held, ...remarks.filter(line => line.id !== held.id)];
+}
+
 // A changed situation deserves the most relevant line, so the cycle restarts
 // whenever the set of applicable remarks changes. Cycling past the end of the
-// list is not an error: ADA has something to say about that too.
+// list is not an error: ADA has something to say about that too (Chatty; the other
+// settings go round again).
 export function adaCurrent(): AdaLine | null {
   if (adaFault) return adaFault;
   const facts = adaFacts(),
-    list = adaRemarks(facts);
-  if (!list.length) return null;
+    list = adaList(facts);
+  if (!list.length) return adaChatter === 'chatty' ? null : ADA_QUIET;
   const signature = list.map(r => r.id).join('|');
   if (signature !== adaSignature) {
     adaSignature = signature;
@@ -698,7 +803,7 @@ export function adaCurrent(): AdaLine | null {
   const lap = Math.floor(adaIndex / list.length),
     position = adaIndex % list.length;
   // position is below list.length, so list[position] is a remark.
-  return lap > 0 && !position ? adaEncore(lap, facts) : list[position]!;
+  return lap > 0 && !position && adaChatter === 'chatty' ? adaEncore(lap, facts) : list[position]!;
 }
 
 // Prodding the badge is the only way to reach these, and the last one restores
@@ -724,15 +829,50 @@ export function adaPoke() {
   render();
 }
 
-// What the ADA panel shows, drawn by ui/AdaPanel.vue: { muted: true } while muted,
-// otherwise the current remark's { tone, name, text } (name is set only for a fault line),
-// or null when there is nothing to say. Any error yields null, so the assistant can never
-// break the page around it.
+// What the ADA panel shows, drawn by ui/AdaPanel.vue: the line's { tone, name, text } (name is set
+// only for a fault line), its mood and log stamp, its button and place in the cycle ("2 of 5").
+// With the chatter Off nothing speaks: `pending` counts the problems she is holding back and
+// holds the first, which the panel shows on request; the other fields are the flat panel's.
+// null when there is nothing to say. Any error yields null, so the assistant can never break the
+// page around it.
 export function adaView() {
   try {
-    if (adaMuted) return { muted: true };
+    if (adaChatter === 'off') {
+      const problems = adaRemarks(adaFacts()).filter(line => line.tone === 'warn');
+      return {
+        chatter: adaChatter,
+        tone: 'calm',
+        name: '',
+        text: '',
+        mood: 'idle' as AdaMood,
+        moodLabel: ADA_MOODS.idle,
+        stamp: '',
+        action: null,
+        position: 0,
+        total: 0,
+        event: false,
+        pending: { count: problems.length, text: problems[0]?.text ?? '' },
+      };
+    }
     const remark = adaCurrent();
-    return remark ? { tone: remark.tone, name: remark.name || '', text: remark.text } : null;
+    if (!remark) return null;
+    const total = adaFault ? 1 : Math.max(1, adaList(adaFacts()).length);
+    const mood = adaMood(remark);
+    return {
+      chatter: adaChatter,
+      tone: remark.tone,
+      name: remark.name || '',
+      text: remark.text,
+      mood,
+      moodLabel: ADA_MOODS[mood],
+      stamp: adaStamp(remark),
+      action: remark.action ?? null,
+      // Whether this is an event remark, which "Later" drops.
+      event: remark.id.startsWith('event-'),
+      position: adaFault ? 1 : (adaIndex % total) + 1,
+      total,
+      pending: null,
+    };
   } catch {
     return null;
   }

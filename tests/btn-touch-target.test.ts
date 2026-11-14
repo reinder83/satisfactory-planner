@@ -86,7 +86,6 @@ const quietLinks = [
   '.guided-escape .btn.quiet',
   '.assign-row .btn.quiet',
   '.ada-tools .btn.quiet',
-  '.ada.is-muted .btn.quiet',
   '.alt-tools .btn.quiet',
   // A notice's (Round up production…) and the somersloop ranking's, 34-35px before (#1256).
   '.notice .btn.quiet',

@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { nextTick } from 'vue';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
+import { adaResetEvents, setAdaChatter } from '../../public/app/ada-panel.ts';
 import {
   setContext,
   setSectionCollapsed,
@@ -335,6 +336,12 @@ const noFetch: typeof fetch = async () =>
 globalThis.fetch = noFetch;
 afterEach(() => {
   globalThis.fetch = noFetch;
+});
+// ADA says everything her remarks cover (Chatty) unless a test picks another setting (#1353): the
+// tests of her remarks were written before Essential was the default.
+beforeEach(() => {
+  adaResetEvents();
+  setAdaChatter('chatty');
 });
 // The page a test went to and a wizard draft it opened are module state in session.ts that
 // outlives the test: a later test that opens a profile without go() would draw that page
