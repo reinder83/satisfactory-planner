@@ -54,7 +54,7 @@ import HelpPopover from '../HelpPopover.vue';
 import PageHeader from '../PageHeader.vue';
 import ProfileCompare from '../profiles/ProfileCompare.vue';
 import { newSave, openProfile } from '../actions.ts';
-import { profileSummary, renameOffers } from '../../profile-edit.ts';
+import { profileSummary, renameOffers, VARIANT_HINTS } from '../../profile-edit.ts';
 import {
   postRestore,
   restoreKeptName,
@@ -439,7 +439,9 @@ async function rename(
     subtitle="Each save keeps separate progress for every profile. Switching back restores its checklist, deliveries and notes."
   />
   <div class="toolbar">
-    <button class="btn primary" data-new-save @click="newSave">Create a save</button>
+    <button class="btn primary" data-new-save :title="VARIANT_HINTS.save" @click="newSave">
+      Create a save
+    </button>
     <a v-if="browserMode" class="btn" href="#backup">Backup</a>
     <a v-else class="btn" href="#account">{{
       page.accountsEnabled ? 'Your account' : 'Set up user accounts'
@@ -483,7 +485,12 @@ async function rename(
         :hook="{ 'data-rename-save': save.id }"
         :save="name => rename('save', save, save.profiles[0]!, name)"
       />
-      <button class="btn" :data-new-profile="save.id" @click="startWizard(save.id)">
+      <button
+        class="btn"
+        :data-new-profile="save.id"
+        :title="VARIANT_HINTS.profile"
+        @click="startWizard(save.id)"
+      >
         Try another profile
       </button>
     </div>
@@ -594,6 +601,7 @@ async function rename(
               class="btn"
               :data-duplicate-profile="profile.id"
               :data-duplicate-save="save.id"
+              :title="VARIANT_HINTS.duplicate"
               :aria-disabled="busy === key('duplicate', save, profile) || undefined"
               @click="duplicate(save, profile)"
             >

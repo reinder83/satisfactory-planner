@@ -10,6 +10,7 @@
 // building time is those buildings times the minutes per building the user sets (buildMinutes in
 // session.ts), which the page labels as an estimate. At 0 minutes it is the delivery time alone.
 import { durationOfHours, num } from './format.ts';
+import { displayRate } from '../numbers.ts';
 import { powerAmount } from '../wording.ts';
 import type { ComparedPhase, PlanFigures, StageKey } from '../types/index.ts';
 
@@ -64,6 +65,10 @@ export interface CompareView {
   // The phases any of the profiles plans, for the phase picker and the time table.
   phases: StageKey[];
   columns: string[];
+  // Per column: whether the profiles' figures differ in this phase (PRO-1). Only those cells are
+  // highlighted; when none does, `same` is true and the page says "No differences".
+  differing: boolean[];
+  same: boolean;
   rows: CompareRow[];
   time: TimeRow[];
   // The minutes per building the building time assumes; 0 is delivery time only.
@@ -82,7 +87,8 @@ type Metric = {
   // Below this, a difference is rounding dust and not shown.
   dust: number;
 };
-const perMinute = (unit: string) => (value: number) => `${num(value)}${unit}`;
+// Rates go through numbers.ts's display rule (X-2, #1335): 7,996.88/min reads 7,997/min.
+const perMinute = (unit: string) => (value: number) => `${displayRate(value).value}${unit}`;
 const METRICS: Metric[] = [
   { heading: 'Buildings', value: p => p.buildings, text: num, delta: num, dust: 0.005 },
   {
@@ -270,6 +276,13 @@ export function compareView(
   const shown = (
     phases.includes(phase as StageKey) ? phase : base.figures!.phases[0]!.phase
   ) as StageKey;
+  const entries = compared.map(profile => phaseOf(profile, shown));
+  const differing = METRICS.map(metric => {
+    const values = entries.map(entry => (entry ? metric.value(entry) : null));
+    if (values.some(value => value === null) && values.some(value => value !== null)) return true;
+    const known = values.filter((value): value is number => value !== null);
+    return known.length > 0 && Math.max(...known) - Math.min(...known) >= metric.dust;
+  });
   const totalOf = new Map(
     compared.map(profile => [profile.id, finishTotal(profile.figures!, minutes)]),
   );
@@ -286,6 +299,8 @@ export function compareView(
     phase: shown,
     phases,
     columns: METRICS.map(metric => metric.heading),
+    differing,
+    same: !differing.some(Boolean),
     rows: compared.map(profile => phaseRow(profile, base, shown)),
     time: compared.map(profile => {
       const total = totalOf.get(profile.id) ?? null;

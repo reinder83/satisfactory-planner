@@ -6857,6 +6857,18 @@ button.rail-tile:hover {
 .compare-table tbody tr.baseline td {
   background: var(--row);
 }
+.compare-table td.same {
+  color: var(--muted);
+}
+.compare-table td.differs {
+  background: var(--row);
+  color: var(--bright);
+  font-weight: 600;
+}
+.compare-same {
+  color: var(--muted);
+  margin: 8px 0;
+}
 .compare-value,
 .compare-note,
 .compare-table .delta {

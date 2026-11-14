@@ -60,7 +60,8 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
     <h3 :id="id('heading')">Compare profiles</h3>
     <p class="small muted">
       Figures from each profile's plan as it was calculated; nothing is recalculated. Differences
-      are against the baseline: <span class="delta lower">−</span> is fewer or sooner,
+      are against the baseline, and only the figures that differ are highlighted:
+      <span class="delta lower">−</span> is fewer or sooner,
       <span class="delta higher">+</span> more or later.
     </p>
     <div class="compare-pickers">
@@ -79,7 +80,11 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
         </select>
       </label>
     </div>
+    <p v-if="view.same" class="compare-same" data-compare-same>
+      No differences: these profiles have the same figures for Phase {{ view.phase }}.
+    </p>
     <div
+      v-else
       ref="phaseTable"
       class="compare-table"
       data-compare-phase-table
@@ -116,7 +121,12 @@ const id = (what: string) => `compare-${what}-${props.saveId}`;
               >
               <span v-if="row.note" class="compare-note">{{ row.note }}</span>
             </th>
-            <td v-for="(cell, index) in row.cells" :key="index" :data-compare-cell="index">
+            <td
+              v-for="(cell, index) in row.cells"
+              :key="index"
+              :class="view.differing[index] ? 'differs' : 'same'"
+              :data-compare-cell="index"
+            >
               <span class="compare-value">{{ cell.text }}</span>
               <span v-if="cell.delta" :class="['delta', cell.delta.trend]" data-compare-delta>{{
                 cell.delta.text

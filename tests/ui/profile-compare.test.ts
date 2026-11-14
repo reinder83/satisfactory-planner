@@ -150,3 +150,27 @@ test('the minutes per building set the estimated building time of the time to fi
   assert.equal(field.value, '0');
   setBuildMinutes(3);
 });
+
+// PRO-1 (#1350): identical profiles say "No differences", differing ones highlight only the
+// columns that differ, and rates read through the X-2 display rule.
+test('identical profiles say "No differences" instead of a table of equal rows', () => {
+  draw([card('p', 'Balanced'), card('q', 'Same again')]);
+  assert.ok($('[data-compare-same]'), 'the no-differences line is drawn');
+  assert.match($('[data-compare-same]')!.textContent!, /No differences/);
+  assert.equal($('[data-compare-phase-table]'), null, 'the equal rows are left out');
+});
+
+test('only the columns that differ are highlighted, and rates are rounded for display', () => {
+  const rich = structuredClone(balanced);
+  Object.assign(rich.phases[1]!, { ore: 7996.88, buildings: rich.phases[1]!.buildings! + 3 });
+  const base = structuredClone(balanced);
+  Object.assign(base.phases[1]!, { ore: 7500.1234 });
+  draw([card('p', 'Balanced', base), card('r', 'Rich', rich)]);
+  assert.equal($('[data-compare-same]'), null);
+  const cells = [...$$('[data-compare-row="r"] td')];
+  assert.ok(cells[0]!.classList.contains('differs'), 'buildings differ');
+  assert.ok(cells[4]!.classList.contains('differs'), 'ore differs');
+  assert.ok(cells[3]!.classList.contains('same'), 'power does not');
+  assert.equal(cellTexts('r')[4]!.split(' ')[0], '7,997/min');
+  assert.ok(!$('[data-profile-compare]')!.textContent!.includes('.88/min'));
+});
