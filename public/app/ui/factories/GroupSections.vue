@@ -193,8 +193,10 @@ function setOwner(event: Event, id: string) {
 // and keep their progress, and the toast offers Undo (Ctrl+Z or ⌘Z too, toastShortcut in api.ts),
 // which puts the factory back in the same place with its lines' shares, links, items made on site,
 // map pin and train stations in one factoryGroupRestore write (app/factory-restore.ts, #1334).
-// Focus then goes to the next factory's name, else the previous one's, else the new factory field
-// (ui/refocus.ts, #286); never to a Remove factory (#1255). Undo focuses the factory's name again.
+// Focus then goes to the next factory's fold button ("Production lines in …"), else the previous
+// one's, else the new factory field (ui/refocus.ts, #286); never to a Remove factory (#1255), and
+// never to a name field, where Ctrl+Z is the field's own undo and the toast's would do nothing
+// (#1355). Undo focuses the restored factory's fold button.
 async function remove(event: Event, id: string) {
   const name = state.factoryGroups?.groups.find(group => group.id === id)?.name;
   const undoUpdate = restoreUpdate(state, id);
@@ -202,7 +204,7 @@ async function remove(event: Event, id: string) {
   const profile = profileScope();
   const refocus = refocusAfterRemoval(event.currentTarget, {
     row: '#main .user-group',
-    control: '[data-section-heading]',
+    control: '[data-collapse]',
     fallback: ['#new-group-name'],
   });
   try {
@@ -236,7 +238,7 @@ async function undoRemove(update: FactoryRestore, name: string, profile: Profile
   const current = document.activeElement;
   if (current && current !== document.body && current.isConnected && !current.closest('#toast'))
     return;
-  document.querySelector<HTMLElement>(`#section-${CSS.escape(id)} [data-section-heading]`)?.focus();
+  document.querySelector<HTMLElement>(`#section-${CSS.escape(id)} [data-collapse]`)?.focus();
 }
 </script>
 
