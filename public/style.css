@@ -1399,14 +1399,22 @@ p[data-proposal-rates] {
 }
 .step-rates li {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   max-width: 28em;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--warm-border);
 }
+.step-rates li > span:first-child {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .step-rate-end {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
   text-align: right;
 }
 .step-rates li b {

@@ -566,3 +566,16 @@ test('a table wrapper is positioned, so hidden headers stay inside its scroll bo
   assert.ok(wrap, 'a .table-wrap rule');
   assert.match(wrap[1]!, /position:\s*relative/);
 });
+
+test('a step input row wraps its rate under the item name at phone width (#1390)', () => {
+  const css = screenCss();
+  const rule = (selector: string) => {
+    const start = css.indexOf('\n' + selector + ' {');
+    assert.ok(start >= 0, 'a ' + selector + ' rule');
+    return css.slice(start, css.indexOf('}', start));
+  };
+  assert.match(rule('.step-rates li'), /flex-wrap:\s*wrap/);
+  assert.doesNotMatch(rule('.step-rate-end'), /flex:\s*none/);
+  assert.match(rule('.step-rate-end'), /min-width:\s*0/);
+  assert.match(rule('.step-rates li > span:first-child'), /min-width:\s*0/);
+});
