@@ -39,6 +39,14 @@
   switcher. The open drawer is a modal dialog: Tab stays inside it, and Esc, its × or the
   backdrop close it and return focus to ☰. A followed link closes it and lets the opened page
   take focus. Wider, the button is hidden and the sidebar is as before.
+
+  The phone's top bar is one row (MOB-1, #1354): ☰, the open profile's name with the save status
+  in small type under it, and the phase select (its visible label is left out, the aria-label
+  names it; a dashed edge marks a phase shown but not worked on). Quick jump, the search button
+  of wider screens, is in the bottom bar's More menu; "Work on Phase N" keeps a row of its own
+  while it is offered. The bottom bar (MOB-2, nav "Quick navigation", data-bottom-bar) is Plan,
+  Factories, Map and More (an ActionMenu opening upward with the other pages and Quick jump); it
+  is left out of the wizard, which has its own bar, and only shows at 720px and below.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -103,6 +111,14 @@ const NAV: [id: View, icon: string, label: string][] = (
   ] as const
 ).map(([id, icon]) => [id, icon, PAGE_NAMES[id]]);
 
+// The phone's bottom bar (MOB-2, #1354): the three pages used most, then More, a menu of the others
+// and of Quick jump, which the one-row top bar no longer has room for.
+const SHORT: Partial<Record<View, string>> = { plan: 'Plan', map: 'Map' };
+const BOTTOM = NAV.filter(([id]) => id === 'plan' || id === 'factories' || id === 'map').map(
+  ([id, icon, label]): [View, string, string] => [id, icon, SHORT[id] ?? label],
+);
+const MORE = NAV.filter(([id]) => !BOTTOM.some(([known]) => known === id));
+
 // A long save name cut in the middle, "Northern forest facto…ase 4 v2" style (BP-2): the first 20
 // and last 12 characters of a name over 36.
 function middleCut(name: string): string {
@@ -145,6 +161,9 @@ const frame = computed(() =>
     editable: !!(currentSave.id && calculated),
     canPickPhase: !!currentSave.id,
     topWorkOn: topWorkOn(view),
+    // The bottom bar is for the pages of a save; the wizard has its own bar at the foot.
+    bottomBar: view !== 'wizard',
+    moreActive: MORE.some(([id]) => id === view),
     phase: phase(),
     phaseLabel: phaseLabel(phase()),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
@@ -684,6 +703,7 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
             ><span data-phase-picker-label>{{ frame.picker.label }}</span>
             <select
               id="phase-picker"
+              :class="{ 'is-elsewhere': frame.canPickPhase && frame.picker.elsewhere }"
               :aria-label="frame.picker.name"
               :disabled="!frame.canPickPhase"
               :value="frame.phase"
@@ -707,5 +727,51 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
       <LiveChangeNotice />
       <main id="main" class="workspace" tabindex="-1"></main>
     </div>
+    <nav v-if="frame.bottomBar" class="bottom-bar" aria-label="Quick navigation" data-bottom-bar>
+      <a
+        v-for="[id, icon, label] in BOTTOM"
+        :key="id"
+        :href="'#' + id"
+        :class="['bottom-link', frame.view === id ? 'active' : '']"
+        :aria-current="frame.view === id ? 'page' : undefined"
+        :data-bottom-link="id"
+        ><span class="navicon" aria-hidden="true">{{ icon }}</span
+        ><span class="bottom-label">{{ label }}</span></a
+      >
+      <ActionMenu
+        id="bottom-more"
+        :trigger-class="'bottom-link bottom-more' + (frame.moreActive ? ' active' : '')"
+        data-bottom-more
+      >
+        <template #trigger
+          ><span class="navicon" aria-hidden="true">⋯</span
+          ><span class="bottom-label">More</span></template
+        >
+        <button
+          v-for="[id, , label] in MORE"
+          :key="id"
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          class="btn"
+          :aria-current="frame.view === id ? 'page' : undefined"
+          :data-more-page="id"
+          @click="go(id)"
+        >
+          {{ label }}<small v-if="frame.needs[id]" class="nav-needs">{{ frame.needs[id] }}</small>
+        </button>
+        <button
+          v-if="frame.profileName"
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          class="btn"
+          data-more-jump
+          @click="openJump()"
+        >
+          Quick jump
+        </button>
+      </ActionMenu>
+    </nav>
   </div>
 </template>

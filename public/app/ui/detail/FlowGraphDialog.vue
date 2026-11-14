@@ -66,7 +66,7 @@
   a graph arranged by hand keeps its arrangement.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { openCalculatedFactory } from '../../factory-detail.ts';
 import { earliestStep, flowFeeds, lineSteps, movedFloors } from '../../flow-steps.ts';
 import { lineNumber } from '../../views/group-flow-page.ts';
@@ -348,12 +348,64 @@ const { zoom, panning, moving, show, zoomIn, zoomOut, fit, handlers, onClickCapt
   });
 const zoomText = computed(() => `${Math.round(zoom.value * 100)}%`);
 
+// On a phone the graph is mostly empty space (MOB-3, #1354), so the dialog opens on a list of the
+// lines with what comes in and what leaves each, and a toggle shows the graph. Wider than the
+// phone layout (720px, as style.css) there is only the graph, as before. Both stay mounted, one
+// hidden (the graph's box is zero-sized meanwhile), so the selection, the layout and the table
+// are the same in both; the graph's view (zoom and scroll) is put back when it is shown again.
+const phone = globalThis.matchMedia?.('(max-width: 720px)');
+const narrow = ref(phone?.matches === true);
+const mode = ref<'list' | 'graph'>(narrow.value ? 'list' : 'graph');
+const showList = computed(() => narrow.value && mode.value === 'list');
+let listView: GraphView | null = null;
+const wanted = (view: GraphView | null) => {
+  const stored = view ?? layout.storedView;
+  return stored.zoom !== 1 || stored.left || stored.top ? stored : null;
+};
+async function setMode(next: 'list' | 'graph') {
+  if (next === mode.value) return;
+  if (next === 'list' && box.value)
+    listView = { zoom: zoom.value, left: box.value.scrollLeft, top: box.value.scrollTop };
+  mode.value = next;
+  if (next === 'graph') {
+    await nextTick();
+    const view = wanted(listView);
+    if (view) await show(view);
+  }
+}
+const phoneChanged = async (event: MediaQueryListEvent) => {
+  narrow.value = event.matches;
+  if (!event.matches && mode.value === 'list') {
+    await nextTick();
+    const view = wanted(listView);
+    if (view) await show(view);
+  }
+};
+// The list's rows: the lines of the graph left to right, as the steps build them, with the
+// arrows into each and out of it as the flow page words them ("Iron Ore 315/min").
+const listed = computed(() => {
+  const graph = placed.value;
+  if (!graph) return [];
+  const words = (edges: typeof graph.edges) =>
+    edges.map(edge => `${edge.item} ${edge.rateText}`).join(', ');
+  return graph.nodes
+    .filter(node => node.kind === 'line')
+    .sort((a, b) => a.x - b.x || a.y - b.y)
+    .map(node => ({
+      node,
+      ins: words(graph.edges.filter(edge => edge.to === node.id)),
+      outs: words(graph.edges.filter(edge => edge.from === node.id)),
+    }));
+});
+
 // The stored view back on opening; neither it nor the scroll it causes is a change to save.
 onMounted(async () => {
-  const stored = layout.storedView;
-  if (stored.zoom !== 1 || stored.left || stored.top) await show(stored);
+  phone?.addEventListener?.('change', phoneChanged);
+  const view = showList.value ? null : wanted(null);
+  if (view) await show(view);
   layout.settled();
 });
+onBeforeUnmount(() => phone?.removeEventListener?.('change', phoneChanged));
 // A zoom or a scroll is saved once it has rested.
 watch(zoom, () => layout.later());
 
@@ -751,7 +803,58 @@ function onPanelKey(e: KeyboardEvent) {
           Viewing {{ view.phase }} — switch phase to tick or edit. Your phase is {{ view.working }};
           the layout can only be changed there.
         </p>
-        <div class="fgraph-tools" data-flow-graph-tools>
+        <div
+          v-if="narrow"
+          class="fgraph-mode"
+          role="group"
+          aria-label="Show the flow as"
+          data-flow-mode
+        >
+          <button
+            class="btn"
+            type="button"
+            :aria-pressed="showList"
+            data-flow-mode-set="list"
+            @click="setMode('list')"
+          >
+            List
+          </button>
+          <button
+            class="btn"
+            type="button"
+            :aria-pressed="!showList"
+            data-flow-mode-set="graph"
+            @click="setMode('graph')"
+          >
+            Graph
+          </button>
+        </div>
+        <ul
+          v-show="showList"
+          class="fgraph-list"
+          aria-label="Production lines of this factory"
+          data-flow-graph-list
+        >
+          <li v-for="item in listed" :key="item.node.id" class="fgraph-list-item">
+            <button
+              type="button"
+              :class="['fgraph-list-line', { selected: selected === item.node.id }]"
+              :aria-pressed="selected === item.node.id"
+              :data-flow-list-line="item.node.id"
+              @click="selectNode(item.node.id)"
+            >
+              <strong>{{ item.node.label }}</strong>
+              <span class="small muted">{{ item.node.caption }}</span>
+            </button>
+            <p class="fgraph-list-rates small" data-flow-list-in>
+              <span class="muted">In</span> {{ item.ins || 'Nothing comes in' }}
+            </p>
+            <p class="fgraph-list-rates small" data-flow-list-out>
+              <span class="muted">Out</span> {{ item.outs || 'Nothing leaves it' }}
+            </p>
+          </li>
+        </ul>
+        <div v-show="!showList" class="fgraph-tools" data-flow-graph-tools>
           <button
             class="btn"
             type="button"
@@ -811,7 +914,7 @@ function onPanelKey(e: KeyboardEvent) {
             Show storage and sink as tags
           </label>
         </div>
-        <div class="fgraph-wrap">
+        <div v-show="!showList" class="fgraph-wrap">
           <div
             v-if="dragging"
             ref="newStepZone"
