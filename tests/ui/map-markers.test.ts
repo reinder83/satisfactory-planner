@@ -462,11 +462,84 @@ test('a profile that hid its markers opens with them hidden; another shows its o
   await showMap({ version: 27, mapMarkers: [IRON], mapLayers: { markers: false } });
   assert.equal($<HTMLInputElement>('[data-map-layer-toggle="markers"]')!.checked, false);
   assert.equal($$('[data-map-marker]').length, 0);
-  assert.match($('.world-map > p.small')!.textContent!, /The markers are hidden\./);
+  assert.equal($('[data-map-add-marker]'), null, 'and nothing to add');
   await showMap({ version: 27, mapMarkers: [ARCH] });
   assert.equal($<HTMLInputElement>('[data-map-layer-toggle="markers"]')!.checked, true);
   assert.deepEqual(
     $$('[data-map-marker]').map(el => el.dataset.mapMarker),
     [ARCH.id],
   );
+});
+
+// MAP-4 (#1348): the dialog docks at the side away from the spot it is for, so it never covers
+// it, and the spot it names is the one clicked.
+const dockOf = () =>
+  document.querySelector('#detail [data-marker-dock]')?.getAttribute('data-marker-dock');
+const clickAt = (x: number, y: number) =>
+  layer().dispatchEvent(
+    new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+  );
+const spotWords = (x: number, y: number) => {
+  const spot = onMap(imageToWorld(onImage(x, y)));
+  const units = (value: number) => value.toLocaleString('en-US').replace('-', '−');
+  return `x ${units(spot.x)}, y ${units(spot.y)}`;
+};
+test('the marker dialog docks away from the click and names the clicked spot (not y 0)', async () => {
+  await showMap();
+  // A click in the left of the window docks the dialog on the right, and the other way round.
+  clickAt(120, 90);
+  await settle();
+  assert.equal(dockOf(), 'right', 'a click on the left: the panel is on the right');
+  const first = $('[data-marker-spot]')!.textContent!.replace(/\s+/g, ' ');
+  assert.ok(first.includes(spotWords(120, 90)), first);
+  assert.doesNotMatch(first, /y 0 /, 'a click above the middle is not at y 0');
+  dialog().close();
+  await settle();
+  clickAt(380, 280);
+  await settle();
+  // happy-dom's window is 1024 wide: the click's client x (380) is still the left half, so the
+  // dock follows the window, not the map's box.
+  assert.equal(dockOf(), 'right');
+  const second = $('[data-marker-spot]')!.textContent!.replace(/\s+/g, ' ');
+  assert.ok(second.includes(spotWords(380, 280)), second);
+  assert.notEqual(first, second, 'each click names its own spot');
+  dialog().close();
+  await settle();
+  clickAt(900, 90);
+  await settle();
+  assert.equal(dockOf(), 'left', 'a click on the right of the window: the panel is on the left');
+  dialog().close();
+});
+
+test('on a phone the marker dialog is a sheet along the bottom or the top', async () => {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  Object.assign(window, { innerWidth: 390, innerHeight: 800 });
+  try {
+    await showMap();
+    clickAt(100, 60);
+    await settle();
+    assert.equal(dockOf(), 'bottom', 'a click in the upper half: the sheet is below it');
+    dialog().close();
+    await settle();
+    clickAt(100, 600);
+    await settle();
+    assert.equal(dockOf(), 'top', 'a click in the lower half: the sheet is above it');
+    dialog().close();
+  } finally {
+    Object.assign(window, { innerWidth: width, innerHeight: height });
+  }
+});
+
+// The "y 0" of the review (#113, #114) is not a data bug: "Add marker" places the marker in the
+// middle of the view, which Fit puts in the middle of the map, and the middle of the game's map is
+// x 50,301, y 0 (the bounds run from y −375,000 to 375,000). A click elsewhere names its own y.
+test('Add marker names the middle of the map, which is y 0; a click elsewhere does not', async () => {
+  await showMap();
+  $<HTMLButtonElement>('[data-map-add-marker]')!.click();
+  await settle();
+  const text = $('[data-marker-spot]')!.textContent!.replace(/\s+/g, ' ');
+  assert.match(text, /In the game at x 50,30[12], y 0 /);
+  assert.ok(dockOf(), 'it docks too');
+  dialog().close();
 });

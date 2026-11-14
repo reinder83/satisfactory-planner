@@ -35,6 +35,14 @@
   (ui/train-station-actions.ts). The train lines are drawn between their placed stops in each
   line's colour: solid back and forth (⇄), dashed one-way (→), with the line's name.
 
+  Layout (MAP-1..4, #1348): the map fills the content area (.map-frame); the factory list floats
+  top left, collapsed unless this browser kept it open (localStorage, not the profile), the layer
+  switches top right, the zoom buttons, Fit and the "?" (HelpPopover, helpText.mapHelp, in place of
+  the paragraph of keys) bottom right. A press on a factory picks it (`selected`, also by mouse and
+  Enter) and opens its card beside the zoom buttons: status, lines, machines, power, what it needs,
+  Build order and Flow graph; the next press follows the link, a press on the map or Escape closes
+  the card. The marker dialog docks away from the click (markerDock, MarkerDialog.vue).
+
   "Show on the map" hides or shows the factories, the train stations, the train lines and the
   markers for this profile (`mapLayers`).
 -->
@@ -60,7 +68,10 @@ import {
   newMarkerTarget,
   nudgedMarker,
   onMap,
+  setMarkerAnchor,
 } from '../../map-markers.ts';
+import { STATUS_TEXT, countText, needsText, powerText } from '../../map-factory-card.ts';
+import { openFlowGraph } from '../../factory-detail.ts';
 import {
   mapLinePath,
   mapLines,
@@ -90,8 +101,10 @@ import {
   removeFactoryPlace,
   saveFactoryPlace,
 } from '../map-factory-actions.ts';
+import { liveFactoryFacts } from '../map-factory-card-live.ts';
 import { deleteMarker, saveMarker } from '../map-marker-actions.ts';
 import { focusStation, removeStationPlace, saveStationPlace } from '../train-station-actions.ts';
+import HelpPopover from '../HelpPopover.vue';
 import PageHeader from '../PageHeader.vue';
 
 // How far (px on screen) an arrow key moves the map, and with Shift.
@@ -342,13 +355,24 @@ function middleSpot(): WorldPoint | null {
     rect.top + el.clientTop + el.clientHeight / 2,
   );
 }
+// The middle of the map's view as a client point, where "Add marker" opens its dialog from.
+function middlePoint(): { x: number; y: number } | null {
+  const el = box.value;
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  return {
+    x: rect.left + el.clientLeft + el.clientWidth / 2,
+    y: rect.top + el.clientTop + el.clientHeight / 2,
+  };
+}
 // The marker dialog for a new marker at `spot`, while the map has room for one.
-function placeAt(spot: WorldPoint | null) {
+function placeAt(spot: WorldPoint | null, anchor: { x: number; y: number } | null) {
   if (!spot) return;
   if (markers.value.length >= MAP_MARKER_MAX) {
     toast(`The map holds at most ${MAP_MARKER_MAX} markers. Delete one to place another.`, true);
     return;
   }
+  setMarkerAnchor(anchor);
   showDetail({ kind: 'marker', id: newMarkerTarget(spot) });
 }
 // A click on the map (not on a marker or a factory, and not the end of a drag, which
@@ -362,11 +386,20 @@ function onMapClick(e: MouseEvent) {
     (e.target as Element).closest('[data-node], [data-map-factory-remove]')
   )
     return;
-  placeAt(spotAt(e.clientX, e.clientY));
+  placeAt(spotAt(e.clientX, e.clientY), { x: e.clientX, y: e.clientY });
 }
 // "Add marker": in the middle of the map's view.
-const addInMiddle = () => placeAt(middleSpot());
-const edit = (id: string) => showDetail({ kind: 'marker', id });
+const addInMiddle = () => placeAt(middleSpot(), middlePoint());
+const edit = (e: MouseEvent, id: string) => {
+  // A press by keyboard has no point: the pin's own middle stands in, so the dialog docks away.
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  setMarkerAnchor(
+    e.clientX || e.clientY
+      ? { x: e.clientX, y: e.clientY }
+      : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+  );
+  showDetail({ kind: 'marker', id });
+};
 
 // "Place factory": the factory picked beside it (the first one not on the map until another is
 // picked) goes in the middle of the map's view, or a step aside from it as far as a pin already
@@ -515,6 +548,51 @@ async function takeOff(id: string) {
 // device that cannot hover, only for the one factory a first tap picked (#1310: a pill for every
 // factory covered the pins beside it at Fit zoom); a second tap on it opens it. The pointer gets a
 // moment to cross from the pin to the button.
+// The card of the picked factory (MAP-3): its facts and where it leads. `selected` is the one pick:
+// it opens the card, shows the Remove button on a touch screen and is what the next press follows.
+const card = computed(() => {
+  const factory = showFactories.value
+    ? drawnFactories.value.find(item => item.factory.id === selected.value)
+    : undefined;
+  if (!factory) return null;
+  const facts = legacy(() => liveFactoryFacts(factory.factory.id));
+  return { ...factory, facts, needs: facts ? needsText(facts.needs) : '' };
+});
+const closeCard = () => {
+  const id = selected.value;
+  selected.value = '';
+  if (id) box.value?.querySelector<HTMLElement>(`[data-map-factory="${CSS.escape(id)}"]`)?.focus();
+};
+
+// The factory list (MAP-1): collapsed by default, its state kept for this viewer in this browser.
+const LIST_KEY = 'planner-map-list';
+const readListOpen = (): boolean => {
+  try {
+    return localStorage.getItem(LIST_KEY) === 'open';
+  } catch {
+    return false;
+  }
+};
+const listOpen = ref(readListOpen());
+function toggleList() {
+  listOpen.value = !listOpen.value;
+  try {
+    localStorage.setItem(LIST_KEY, listOpen.value ? 'open' : 'closed');
+  } catch {
+    // Private window or blocked storage: the list still opens, it is just not remembered.
+  }
+}
+// A factory picked in the list: its card opens and the map centres on its pin.
+async function pickFromList(id: string) {
+  selected.value = id;
+  await nextTick();
+  const el = box.value;
+  const item = drawnFactories.value.find(entry => entry.factory.id === id);
+  if (!el || !item) return;
+  el.scrollLeft = room.value.width + item.left - el.clientWidth / 2;
+  el.scrollTop = room.value.height + item.top - el.clientHeight / 2;
+}
+
 const hovered = ref('');
 const focused = ref('');
 const selected = ref('');
@@ -552,10 +630,11 @@ const removeShown = (id: string) =>
   cannotHover
     ? selected.value === id || focused.value === id
     : hovered.value === id || focused.value === id;
-// On a device that cannot hover a tap on an unpicked factory picks it and shows its button; the
-// next tap on it follows the link.
+// A press on an unpicked factory picks it and opens its card (MAP-3, #1348), by mouse, touch and
+// Enter alike; on a device that cannot hover it shows its button too. The next press on it follows
+// the link, as the card's Build order does.
 function onFactoryClick(e: MouseEvent, id: string) {
-  if (!cannotHover || selected.value === id) return;
+  if (selected.value === id) return;
   e.preventDefault();
   selected.value = id;
 }
@@ -608,6 +687,14 @@ async function toggleLayer(e: Event, layer: MapLayer) {
   render();
 }
 
+// Escape closes a factory's card, wherever focus is on the map or its controls (not in the "?"
+// popup, whose own Escape closes only that).
+function onFrameKey(e: KeyboardEvent) {
+  if (e.key !== 'Escape' || !selected.value || browserKey(e)) return;
+  if (e.target instanceof Element && e.target.closest('.help-pop')) return;
+  closeCard();
+}
+
 const ARROWS: Record<string, [x: number, y: number]> = {
   ArrowLeft: [1, 0],
   ArrowRight: [-1, 0],
@@ -642,69 +729,9 @@ function onKey(e: KeyboardEvent) {
     title="World map"
     subtitle="The whole map of the game, north up."
   />
-  <section class="panel world-map">
-    <p class="small muted">
-      Drag the map to move it, zoom with the mouse wheel, a pinch or the buttons. Once the map has
-      focus, the arrow keys move it (Shift: further) and + and − zoom it.
-      <template v-if="showFactories && toPlace.length">
-        Place factory puts the factory picked beside it in the middle of the view.
-      </template>
-      <template v-if="showFactories && factories.length">
-        Press a factory to open its build order, or drag it to move it; on a focused factory the
-        arrow keys move it, Enter opens it and Delete takes it off the map; the Remove from map
-        button beside a factory does the same for the mouse and the keyboard (Tab).
-      </template>
-      <template v-else-if="!showFactories && factories.length">The factories are hidden.</template>
-      <template v-if="showMarkers">
-        <template v-if="cannotHover"
-          >Press Add marker to place a marker in the middle of the view.</template
-        ><template v-else>Click the map to place a marker there, or press Add marker.</template>
-        Drag a marker to move it; on a focused marker the arrow keys move it, Enter edits it and
-        Delete removes it.
-      </template>
-      <template v-else-if="markers.length">The markers are hidden.</template>
-      <template v-if="showStations">
-        Add train station opens the station editor for a new station in the middle of the view.
-        Press a station to edit it, or drag it to move it; on a focused station the arrow keys move
-        it, Enter edits it and Delete takes it off the map.
-      </template>
-      <template v-else-if="onMapStations.length">The train stations are hidden.</template>
-      <template v-if="showLines && drawnLines.length">
-        Train lines run between their stations: solid back and forth, dashed one-way.
-      </template>
-    </p>
+  <section class="world-map">
     <div class="map-bar">
-      <div class="fgraph-tools" data-map-tools>
-        <button
-          class="btn"
-          type="button"
-          aria-label="Zoom out"
-          data-map-zoom="out"
-          :disabled="zoom <= GRAPH_ZOOM.min"
-          @click="zoomOut"
-        >
-          −
-        </button>
-        <span class="fgraph-zoom" data-map-zoom-level>{{ zoomText }}</span>
-        <button
-          class="btn"
-          type="button"
-          aria-label="Zoom in"
-          data-map-zoom="in"
-          :disabled="zoom >= GRAPH_ZOOM.max"
-          @click="zoomIn"
-        >
-          +
-        </button>
-        <button
-          class="btn"
-          type="button"
-          aria-label="Fit the whole map"
-          data-map-zoom="fit"
-          @click="fit"
-        >
-          Fit
-        </button>
+      <div class="fgraph-tools" data-map-actions>
         <button
           v-if="showMarkers"
           class="btn"
@@ -752,7 +779,189 @@ function onKey(e: KeyboardEvent) {
           </button></span
         >
       </div>
-      <fieldset class="map-layers" data-map-layers>
+    </div>
+    <div class="map-frame" data-map-frame @keydown="onFrameKey">
+      <div
+        ref="box"
+        :class="['map-scroll', { panning, moving }]"
+        tabindex="0"
+        role="group"
+        aria-label="World map. The arrow keys move it, + and − zoom it."
+        data-world-map
+        v-on="mapHandlers"
+        @click.capture="onClickCapture"
+        @keydown="onKey"
+        @scroll.passive="fitRemoves"
+      >
+        <div
+          class="map-room"
+          :style="{
+            width: natural.width * zoom + 2 * room.width + 'px',
+            height: natural.height * zoom + 2 * room.height + 'px',
+          }"
+          data-map-room
+        ></div>
+        <div
+          class="map-layer"
+          :style="{
+            left: room.width + 'px',
+            top: room.height + 'px',
+            width: natural.width * zoom + 'px',
+            height: natural.height * zoom + 'px',
+          }"
+          data-map-layer
+          @click="onMapClick"
+        >
+          <img
+            class="map-image"
+            :src="WORLD_MAP.src"
+            :width="natural.width"
+            :height="natural.height"
+            alt="The Satisfactory world map, north up"
+            draggable="false"
+            data-map-image
+          />
+          <svg
+            v-if="showLines && drawnLines.length"
+            class="map-lines"
+            :width="natural.width * zoom"
+            :height="natural.height * zoom"
+            aria-hidden="true"
+            data-map-lines
+          >
+            <g
+              v-for="line in drawnLines"
+              :key="line.id"
+              :class="['map-line', 'line-color-' + line.color, { dashed: line.dashed }]"
+              :data-map-line="line.id"
+            >
+              <path class="map-line-shadow" :d="line.d" />
+              <path class="map-line-path" :d="line.d" />
+              <text class="map-line-label" :x="line.labelX" :y="line.labelY" text-anchor="middle">
+                {{ line.label.text }}
+              </text>
+            </g>
+          </svg>
+          <template v-if="showFactories">
+            <template v-for="item in drawnFactories" :key="item.factory.id">
+              <a
+                class="map-factory"
+                :href="item.href"
+                draggable="false"
+                :style="{ left: item.left + 'px', top: item.top + 'px' }"
+                :data-node="'factory:' + item.factory.id"
+                :data-map-factory="item.factory.id"
+                :aria-label="item.aria"
+                @keydown="onFactoryKey($event, item.factory)"
+                @click="onFactoryClick($event, item.factory.id)"
+                @mouseenter="hoverOn(item.factory.id)"
+                @mouseleave="hoverOff(item.factory.id)"
+                @focus="focusOn(item.factory.id)"
+                @blur="
+                  saveSpot('factory:' + item.factory.id);
+                  focusOff($event, item.factory.id);
+                "
+              >
+                <span class="map-factory-pin" aria-hidden="true"
+                  ><svg viewBox="0 0 20 20"><path :d="FACTORY_ICON" fill-rule="evenodd" /></svg
+                ></span>
+                <span class="map-factory-label" aria-hidden="true">{{ item.factory.name }}</span>
+              </a>
+              <button
+                v-if="removeShown(item.factory.id)"
+                type="button"
+                class="map-factory-remove"
+                :style="{ left: item.left + 'px', top: item.top + 'px' }"
+                :ref="fitRemove"
+                :data-map-factory-remove="item.factory.id"
+                :aria-label="item.removeAria"
+                @click="takeOff(item.factory.id)"
+                @mouseenter="hoverOn(item.factory.id)"
+                @mouseleave="hoverOff(item.factory.id)"
+                @focus="focusOn(item.factory.id)"
+                @blur="focusOff($event, item.factory.id)"
+              >
+                <span aria-hidden="true">× Remove from map</span>
+              </button>
+            </template>
+          </template>
+          <template v-if="showStations">
+            <button
+              v-for="item in drawnStations"
+              :key="item.station.id"
+              type="button"
+              class="map-station"
+              :style="{ left: item.left + 'px', top: item.top + 'px' }"
+              :data-node="'station:' + item.station.id"
+              :data-map-station="item.station.id"
+              :aria-label="item.aria"
+              @click="editStation(item.station.id)"
+              @keydown="onStationKey($event, item.station.id)"
+              @blur="saveSpot('station:' + item.station.id)"
+            >
+              <span class="map-station-pin" aria-hidden="true"
+                ><svg viewBox="0 0 20 20"><path :d="STATION_ICON" fill-rule="evenodd" /></svg
+              ></span>
+              <span class="map-station-label" aria-hidden="true">{{ item.station.name }}</span>
+            </button>
+          </template>
+          <template v-if="showMarkers">
+            <button
+              v-for="item in drawn"
+              :key="item.marker.id"
+              type="button"
+              class="map-marker"
+              :style="{ left: item.left + 'px', top: item.top + 'px', '--marker': item.hex }"
+              :data-node="'marker:' + item.marker.id"
+              :data-map-marker="item.marker.id"
+              :data-marker-kind="item.marker.type"
+              :aria-label="item.aria"
+              @click="edit($event, item.marker.id)"
+              @keydown="onMarkerKey($event, item.marker)"
+              @blur="saveSpot('marker:' + item.marker.id)"
+            >
+              <span class="map-marker-pin" aria-hidden="true"
+                ><svg viewBox="0 0 20 20"><path :d="item.icon" /></svg
+              ></span>
+              <span class="map-marker-label" aria-hidden="true">{{ item.marker.name }}</span>
+            </button>
+          </template>
+        </div>
+      </div>
+      <div class="map-corner map-corner-tl">
+        <button
+          v-if="showFactories && factories.length"
+          type="button"
+          class="btn map-list-toggle"
+          :aria-expanded="listOpen ? 'true' : 'false'"
+          aria-controls="map-factory-list"
+          data-map-list-toggle
+          @click="toggleList"
+        >
+          {{ factories.length }} {{ factories.length === 1 ? 'factory' : 'factories' }}
+          <span aria-hidden="true">{{ listOpen ? '▴' : '▾' }}</span>
+        </button>
+        <ul
+          v-if="showFactories && factories.length && listOpen"
+          id="map-factory-list"
+          class="map-list"
+          aria-label="Factories on the map"
+          data-map-list
+        >
+          <li v-for="item in drawnFactories" :key="item.factory.id">
+            <button
+              type="button"
+              :class="['map-list-item', { picked: selected === item.factory.id }]"
+              :aria-pressed="selected === item.factory.id ? 'true' : 'false'"
+              :data-map-list-item="item.factory.id"
+              @click="pickFromList(item.factory.id)"
+            >
+              {{ item.factory.name }}
+            </button>
+          </li>
+        </ul>
+      </div>
+      <fieldset class="map-layers map-corner map-corner-tr" data-map-layers>
         <legend>Show on the map</legend>
         <label class="map-layer-toggle"
           ><input
@@ -794,152 +1003,98 @@ function onKey(e: KeyboardEvent) {
           <span class="muted" data-map-line-count>({{ drawnLines.length }})</span></label
         >
       </fieldset>
-    </div>
-    <div
-      ref="box"
-      :class="['map-scroll', { panning, moving }]"
-      tabindex="0"
-      role="group"
-      aria-label="World map. The arrow keys move it, + and − zoom it."
-      data-world-map
-      v-on="mapHandlers"
-      @click.capture="onClickCapture"
-      @keydown="onKey"
-      @scroll.passive="fitRemoves"
-    >
-      <div
-        class="map-room"
-        :style="{
-          width: natural.width * zoom + 2 * room.width + 'px',
-          height: natural.height * zoom + 2 * room.height + 'px',
-        }"
-        data-map-room
-      ></div>
-      <div
-        class="map-layer"
-        :style="{
-          left: room.width + 'px',
-          top: room.height + 'px',
-          width: natural.width * zoom + 'px',
-          height: natural.height * zoom + 'px',
-        }"
-        data-map-layer
-        @click="onMapClick"
-      >
-        <img
-          class="map-image"
-          :src="WORLD_MAP.src"
-          :width="natural.width"
-          :height="natural.height"
-          alt="The Satisfactory world map, north up"
-          draggable="false"
-          data-map-image
-        />
-        <svg
-          v-if="showLines && drawnLines.length"
-          class="map-lines"
-          :width="natural.width * zoom"
-          :height="natural.height * zoom"
-          aria-hidden="true"
-          data-map-lines
+      <div class="map-bottom">
+        <section
+          v-if="card"
+          class="map-card"
+          :aria-label="card.factory.name"
+          data-map-card
+          :data-map-card-for="card.factory.id"
         >
-          <g
-            v-for="line in drawnLines"
-            :key="line.id"
-            :class="['map-line', 'line-color-' + line.color, { dashed: line.dashed }]"
-            :data-map-line="line.id"
-          >
-            <path class="map-line-shadow" :d="line.d" />
-            <path class="map-line-path" :d="line.d" />
-            <text class="map-line-label" :x="line.labelX" :y="line.labelY" text-anchor="middle">
-              {{ line.label.text }}
-            </text>
-          </g>
-        </svg>
-        <template v-if="showFactories">
-          <template v-for="item in drawnFactories" :key="item.factory.id">
-            <a
-              class="map-factory"
-              :href="item.href"
-              draggable="false"
-              :style="{ left: item.left + 'px', top: item.top + 'px' }"
-              :data-node="'factory:' + item.factory.id"
-              :data-map-factory="item.factory.id"
-              :aria-label="item.aria"
-              @keydown="onFactoryKey($event, item.factory)"
-              @click="onFactoryClick($event, item.factory.id)"
-              @mouseenter="hoverOn(item.factory.id)"
-              @mouseleave="hoverOff(item.factory.id)"
-              @focus="focusOn(item.factory.id)"
-              @blur="
-                saveSpot('factory:' + item.factory.id);
-                focusOff($event, item.factory.id);
-              "
-            >
-              <span class="map-factory-pin" aria-hidden="true"
-                ><svg viewBox="0 0 20 20"><path :d="FACTORY_ICON" fill-rule="evenodd" /></svg
-              ></span>
-              <span class="map-factory-label" aria-hidden="true">{{ item.factory.name }}</span>
-            </a>
+          <header class="map-card-head">
+            <div>
+              <div class="eyebrow">
+                Factory<template v-if="card.facts">
+                  · {{ STATUS_TEXT[card.facts.status] }}</template
+                >
+              </div>
+              <h2 class="map-card-title">{{ card.factory.name }}</h2>
+            </div>
             <button
-              v-if="removeShown(item.factory.id)"
               type="button"
-              class="map-factory-remove"
-              :style="{ left: item.left + 'px', top: item.top + 'px' }"
-              :ref="fitRemove"
-              :data-map-factory-remove="item.factory.id"
-              :aria-label="item.removeAria"
-              @click="takeOff(item.factory.id)"
-              @mouseenter="hoverOn(item.factory.id)"
-              @mouseleave="hoverOff(item.factory.id)"
-              @focus="focusOn(item.factory.id)"
-              @blur="focusOff($event, item.factory.id)"
+              class="close"
+              aria-label="Close factory card"
+              data-map-card-close
+              @click="closeCard"
             >
-              <span aria-hidden="true">× Remove from map</span>
+              ×
             </button>
-          </template>
-        </template>
-        <template v-if="showStations">
+          </header>
+          <dl v-if="card.facts" class="map-card-facts">
+            <div>
+              <dt>Lines</dt>
+              <dd data-map-card-lines>{{ card.facts.running }} / {{ card.facts.lines }}</dd>
+            </div>
+            <div>
+              <dt>Machines</dt>
+              <dd data-map-card-machines>
+                {{ countText(card.facts.built) }} / {{ countText(card.facts.machines) }}
+              </dd>
+            </div>
+            <div>
+              <dt>Power</dt>
+              <dd data-map-card-power>{{ powerText(card.facts.powerMW) }}</dd>
+            </div>
+          </dl>
+          <p v-if="card.facts" class="small muted map-card-needs" data-map-card-needs>
+            {{ card.needs }}
+          </p>
+          <p v-else class="small muted">This phase has no calculated lines for it.</p>
+          <div class="map-card-actions">
+            <a class="btn primary" :href="card.href" data-map-card-order>Build order</a>
+            <button
+              type="button"
+              class="btn"
+              data-map-card-graph
+              @click="openFlowGraph(card.factory.id)"
+            >
+              Flow graph
+            </button>
+          </div>
+        </section>
+        <div class="map-controls" data-map-tools>
           <button
-            v-for="item in drawnStations"
-            :key="item.station.id"
+            class="btn"
             type="button"
-            class="map-station"
-            :style="{ left: item.left + 'px', top: item.top + 'px' }"
-            :data-node="'station:' + item.station.id"
-            :data-map-station="item.station.id"
-            :aria-label="item.aria"
-            @click="editStation(item.station.id)"
-            @keydown="onStationKey($event, item.station.id)"
-            @blur="saveSpot('station:' + item.station.id)"
+            aria-label="Zoom in"
+            data-map-zoom="in"
+            :disabled="zoom >= GRAPH_ZOOM.max"
+            @click="zoomIn"
           >
-            <span class="map-station-pin" aria-hidden="true"
-              ><svg viewBox="0 0 20 20"><path :d="STATION_ICON" fill-rule="evenodd" /></svg
-            ></span>
-            <span class="map-station-label" aria-hidden="true">{{ item.station.name }}</span>
+            +
           </button>
-        </template>
-        <template v-if="showMarkers">
+          <span class="fgraph-zoom" data-map-zoom-level>{{ zoomText }}</span>
           <button
-            v-for="item in drawn"
-            :key="item.marker.id"
+            class="btn"
             type="button"
-            class="map-marker"
-            :style="{ left: item.left + 'px', top: item.top + 'px', '--marker': item.hex }"
-            :data-node="'marker:' + item.marker.id"
-            :data-map-marker="item.marker.id"
-            :data-marker-kind="item.marker.type"
-            :aria-label="item.aria"
-            @click="edit(item.marker.id)"
-            @keydown="onMarkerKey($event, item.marker)"
-            @blur="saveSpot('marker:' + item.marker.id)"
+            aria-label="Zoom out"
+            data-map-zoom="out"
+            :disabled="zoom <= GRAPH_ZOOM.min"
+            @click="zoomOut"
           >
-            <span class="map-marker-pin" aria-hidden="true"
-              ><svg viewBox="0 0 20 20"><path :d="item.icon" /></svg
-            ></span>
-            <span class="map-marker-label" aria-hidden="true">{{ item.marker.name }}</span>
+            −
           </button>
-        </template>
+          <button
+            class="btn"
+            type="button"
+            aria-label="Fit the whole map"
+            data-map-zoom="fit"
+            @click="fit"
+          >
+            Fit
+          </button>
+          <HelpPopover name="mapHelp" topic="the world map" />
+        </div>
       </div>
     </div>
     <p class="small muted map-credit" data-map-attribution>Map: © Coffee Stain Studios</p>
