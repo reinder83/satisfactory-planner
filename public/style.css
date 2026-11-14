@@ -3764,8 +3764,56 @@ tr.muted td:first-child {
   gap: 12px;
   align-items: start;
 }
-.edit-grid .inline-form {
+/* One small card per layout action (LayoutEditor.vue, STO-1): a title, labelled fields that keep
+   their full placeholder, the rule as helper text, and the button. */
+.edit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
+  padding: 12px;
+  border: 1px solid var(--warm-border);
+  background: var(--panel2);
+}
+.edit-card h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.edit-card p {
+  margin: 0;
+}
+.edit-card .btn {
+  align-self: flex-start;
+  margin-top: auto;
+}
+.edit-fields {
+  display: flex;
+  gap: 9px;
+}
+.edit-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.edit-field > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.edit-field input {
+  min-width: 0;
+  border: 1px solid var(--dim);
+  background: #0b0d0e;
+  color: var(--ink);
+  padding: 10px 12px;
+}
+.edit-field-letter {
+  flex: 0 0 5em;
+}
+.edit-field-letter .new-bay-letter {
+  width: 100%;
+  text-transform: uppercase;
 }
 /* "Hidden bays and floors" while editing the layout (StoragePage.vue, #166, #168): each row names
    a bay or floor, and a long word in that name breaks inside the row, keeping its Restore in
@@ -8534,6 +8582,7 @@ button.rail-tile:hover {
   .built-counter .built-input,
   .notes,
   .inline-form input,
+  .edit-field input,
   .inline-form select,
   .field input,
   .field select,

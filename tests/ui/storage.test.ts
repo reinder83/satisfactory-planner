@@ -302,7 +302,8 @@ test('layout edits show custom floors, bays and assignments, escaped', async () 
     true,
     'not while it has bays',
   );
-  assert.equal($('[data-remove-floor="cf-abcd12"]')!.textContent.trim(), 'Remove its bays first');
+  assert.equal($('[data-remove-floor="cf-abcd12"]')!.textContent.trim(), 'Remove this floor');
+  assert.equal($('#floor-remove-rule')!.textContent.trim(), 'Remove its bays first.');
   useStylesheet();
   assert.equal(cursorOf($('[data-remove-floor="cf-abcd12"]')!), 'default', 'no wait cursor');
   assert.equal(
@@ -922,7 +923,8 @@ test('an empty built-in floor can be hidden and restored from the layout editor 
   // The ground floor still has its bays: hiding waits until they are gone.
   render();
   assert.equal($<HTMLButtonElement>('[data-hide-floor="ground"]')!.disabled, true);
-  assert.match($('[data-hide-floor="ground"]')!.textContent!, /Hide or remove its bays first/);
+  assert.equal($('[data-hide-floor="ground"]')!.textContent!.trim(), 'Hide this floor');
+  assert.match($('#floor-remove-rule')!.textContent!, /Hide or remove its bays first/);
   setFloor('workshop');
   render();
   await nextTick();
@@ -1073,18 +1075,20 @@ test('a hidden bay moved onto a floor keeps it from going, and the button says w
   assert.equal($$('.bay').length, 0, 'the annex shows no bay');
   const remove = $<HTMLButtonElement>('[data-remove-floor="cf-abcd"]')!;
   assert.equal(remove.disabled, true);
-  assert.match(remove.textContent!, /Restore and move hidden bay D first/);
+  assert.equal(remove.textContent!.trim(), 'Remove this floor');
+  assert.match($('#floor-remove-rule')!.textContent!, /Restore and move hidden bay D first/);
   setFloor('workshop');
   render();
   await nextTick();
   const hide = $<HTMLButtonElement>('[data-hide-floor="workshop"]')!;
   assert.equal(hide.disabled, true);
-  assert.match(hide.textContent!, /Restore and move hidden bay J first/);
+  assert.equal(hide.textContent!.trim(), 'Hide this floor');
+  assert.match($('#floor-remove-rule')!.textContent!, /Restore and move hidden bay J first/);
   // Restored, J shows on the workshop, so the button asks for the usual instead.
   $('[data-restore-bay="J"]')!.click();
   await settle();
   assert.ok($('[data-slot="J01"]'), 'J is back, on the floor it was moved to');
-  assert.match($('[data-hide-floor="workshop"]')!.textContent!, /Hide or remove its bays first/);
+  assert.match($('#floor-remove-rule')!.textContent!, /Hide or remove its bays first/);
   noMarkup();
 });
 
@@ -1708,4 +1712,27 @@ test('containers saved under a name that is not an item still show and open', as
   await nextTick();
   openSlot('A02');
   assert.equal($('#detail h2')!.textContent, 'Mystery crate');
+});
+
+// STO-1: each layout action is its own small form with a visible label, so no placeholder has to
+// carry the field's name, and the rule for hiding a floor is helper text, not a button label.
+test('the layout editor has one labelled form per action and the floor rule as helper text (STO-1)', async () => {
+  openMigrated();
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  for (const id of ['add-bay', 'add-floor', 'rename-floor']) {
+    const form = $('#' + id)!;
+    assert.ok(form.querySelector('h3'), id + ' has a title');
+    for (const field of Array.from(form.querySelectorAll('input'))) {
+      const label = form.querySelector('label[for="' + field.id + '"]');
+      assert.ok(label && label.textContent!.trim(), field.id + ' has a visible label');
+    }
+  }
+  assert.ok($('#floor-remove-rule'), 'the rule is helper text');
+  assert.equal(
+    $('[data-hide-floor="ground"]')!.getAttribute('aria-describedby'),
+    'floor-remove-rule',
+  );
+  noMarkup();
 });
