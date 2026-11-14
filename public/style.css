@@ -5470,7 +5470,7 @@ button.rail-tile:hover {
   display: block;
   margin-top: 2px;
   color: var(--accent);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
