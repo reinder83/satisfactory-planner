@@ -92,7 +92,18 @@ import {
   stageRowsOf,
   successorOf,
 } from '../public/state.ts';
-import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
+import {
+  ADA_MOODS,
+  adaChatterFrom,
+  adaChatterStored,
+  adaEncore,
+  adaEventLine,
+  adaFault as makeFault,
+  adaHeldBack,
+  adaMood,
+  adaRemarks,
+  adaStamp,
+} from '../public/ada.ts';
 import { calculate, catalog } from '../planner.ts';
 import { handbookToPlan } from '../public/handbook-migration.ts';
 import { appSource } from './helpers/app-source.ts';
@@ -124,6 +135,13 @@ function ui() {
     adaRemarks,
     adaEncore,
     makeFault,
+    ADA_MOODS,
+    adaChatterFrom,
+    adaChatterStored,
+    adaEventLine,
+    adaHeldBack,
+    adaMood,
+    adaStamp,
     progression,
     phaseSteps,
     milestoneOnlyPhase,
@@ -298,8 +316,10 @@ test('machine instructions separate total, full-speed and adjustable machines', 
 // The factories pages, their group editor and the factory dialog are components, tested in
 // tests/ui/factories.test.ts; a group's build order is its flow page
 // (tests/ui/group-flow-page.test.ts).
-test('ADA comments on the plan from the sidebar and can be muted', () => {
+test('ADA comments on the plan from the sidebar and can be set Off', () => {
   const context = ui();
+  // She comes up at Essential (#1353); this test follows all her remarks.
+  vm.runInContext("adaChatter='chatty';", context);
   // A profile migrated from the handbook (#387): its guide keeps the handbook's steps.
   context.migrated = handbookToPlan(handbook, recipes, catalog().pureLimits).plan;
   vm.runInContext(
@@ -393,10 +413,11 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   // Anything else hands the terminal back, and no timer is left running.
   vm.runInContext('adaClearFault();', context);
   assert.equal(ada().name, '');
-  // Muted: no remark.
-  vm.runInContext('adaMuted=true;', context);
-  assert.deepEqual(ada(), { muted: true });
-  vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();", context);
+  // Off: no remark, only the count of the problems she holds back.
+  vm.runInContext("adaChatter='off';", context);
+  assert.equal(ada().text, '');
+  assert.equal(ada().chatter, 'off');
+  vm.runInContext("adaChatter='chatty';adaIndex=0;adaSignature='';adaClearFault();", context);
 });
 
 test('storage follows the selected contract and small power displays in MW', () => {

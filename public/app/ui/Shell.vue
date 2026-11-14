@@ -52,6 +52,7 @@ import {
   recipeCostOf,
 } from '../../preferences.ts';
 import { allowSwitch, notesNotSaved, pending, toast } from '../api.ts';
+import { adaNotePhase } from '../ada-panel.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
 import { PAGE_NAMES } from '../page-title.ts';
@@ -356,7 +357,9 @@ async function showPhase(target: Phase): Promise<boolean> {
   phaseSwitching.value = true;
   try {
     if (!(await allowSwitch())) return false;
+    const from = phase();
     viewPhase(target);
+    adaNotePhase(from, target);
     setQuery('');
     render();
     return true;

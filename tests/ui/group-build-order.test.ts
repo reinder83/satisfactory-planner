@@ -11,7 +11,7 @@ import { render } from '../../public/app/shell.ts';
 import { calcTasks, currentBuildStatus } from '../../public/app/views/calculated.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
 import { planTasks } from '../../public/app/tasks.ts';
-import { $, $$, generated, go, open, page } from './setup.ts';
+import { $, $$, generated, go, open, page, useChatty } from './setup.ts';
 import type { FactoryGroups, Phase, ProgressState, TaskEdits } from '../../public/types/index.ts';
 
 const plan = generated();
@@ -133,6 +133,7 @@ function planRemarks(phase: Phase, state: Partial<ProgressState>) {
 }
 
 test('ADA says the steps follow the groups only when the groups change their order', () => {
+  useChatty();
   const defaults = defaultFactoryGroups(plan);
   // Default groups keep the planner's order in Phases 1 and 2 of this plan, and change it in 3.
   for (const phase of ['1', '2'] as const) {

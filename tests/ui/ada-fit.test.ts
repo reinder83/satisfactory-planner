@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.ts';
+import { adaClearFault, setAdaChatter, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { setContext, setView, setWorkspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
@@ -49,7 +49,7 @@ function open() {
 beforeEach(() => {
   unmountShell();
   document.body.innerHTML = '<div id="app"></div><dialog id="detail"></dialog>';
-  setAdaMuted(false);
+  setAdaChatter('chatty');
   setAdaIndex(0);
   adaClearFault();
   setView('plan');
@@ -100,7 +100,7 @@ test('ADA keeps her whole remark in the sidebar, with no More/Less (#738)', asyn
   assert.ok(!line.classList.contains('is-full'));
   // Her tools and the badge's easter egg stay where they were.
   assert.ok(ada.querySelector('[data-ada-next]'));
-  assert.ok(ada.querySelector('[data-ada-mute="on"]'));
+  assert.ok(ada.querySelector('[data-ada-settings]'));
   assert.ok(ada.querySelector('.ada-head .ada-mark'));
 });
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.ts';
+import { adaClearFault, setAdaChatter, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { phase, setView, setWorkspace, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { showSignedOut, unmountShell } from '../../public/app/ui/mount.ts';
@@ -18,7 +18,7 @@ const $ = <E extends Element = HTMLElement>(selector: string) =>
 beforeEach(() => {
   unmountShell();
   document.body.innerHTML = '<div id="app"></div><dialog id="detail"></dialog>';
-  setAdaMuted(false);
+  setAdaChatter('chatty');
   setAdaIndex(0);
   adaClearFault();
   setView('plan');
@@ -188,7 +188,7 @@ test('the top bar carries a short save status for phone widths, announced polite
   assert.equal($('.topbar-tools #phase-picker')!.id, 'phase-picker');
 });
 
-test('ADA speaks, cycles, mutes and unmutes', async () => {
+test('ADA speaks, cycles and has her chatter set Off and back (#1353)', async () => {
   render();
   assert.match($('.ada')!.textContent, /Artificial Directory and Assistant/);
   assert.equal($('.ada')!.dataset.tone, 'calm');
@@ -196,11 +196,13 @@ test('ADA speaks, cycles, mutes and unmutes', async () => {
   $('[data-ada-next]')!.click();
   await nextTick();
   assert.notEqual($('#ada-line')!.textContent, first, 'Another remark shows the next line');
-  $('[data-ada-mute="on"]')!.click();
+  $('[data-ada-settings]')!.click();
   await nextTick();
-  assert.match($('.ada')!.textContent, /ADA muted/);
-  assert.equal($('[data-ada-next]'), null, 'a muted assistant says nothing');
-  $('[data-ada-mute="off"]')!.click();
+  $('[data-ada-chatter="off"]')!.click();
+  await nextTick();
+  assert.equal($('[data-ada-next]'), null, 'an assistant that is Off says nothing');
+  assert.equal($('.ada')!.dataset.chatter, 'off');
+  $('[data-ada-chatter="chatty"]')!.click();
   await nextTick();
   assert.ok($('[data-ada-next]'));
 });
@@ -230,15 +232,17 @@ test('at phone width ADA is a one-line ticker that unfolds the panel in place (S
   ticker.click();
   await nextTick();
   assert.equal(ticker.getAttribute('aria-expanded'), 'false');
-  // Muted is unchanged: one line with Unmute, and no ticker.
-  $('[data-ada-mute="on"]')!.click();
+  // Off (#1353) keeps the ticker, which says it is off, and the panel is the same one.
+  ticker.click();
   await nextTick();
-  assert.equal($('[data-ada-ticker]'), null);
-  assert.match($('.ada')!.textContent, /ADA muted/);
-  // Unmuting unfolds it, so the Mute that takes focus is on screen.
-  $('[data-ada-mute="off"]')!.click();
+  $('[data-ada-settings]')!.click();
+  await nextTick();
+  $('[data-ada-chatter="off"]')!.click();
   await nextTick();
   assert.equal($('[data-ada-ticker]')!.getAttribute('aria-expanded'), 'true');
+  ticker.click();
+  await nextTick();
+  assert.equal(ticker.querySelector('.ada-ticker-text')!.textContent, 'ADA is off');
 });
 
 test('the phone ticker keeps the remark announced while folded (style.css, SP-38)', () => {

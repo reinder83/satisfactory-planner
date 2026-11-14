@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { planTasks, removedPlanTasks } from '../../public/app/tasks.ts';
-import { go, openMigrated, page } from './setup.ts';
+import { go, openMigrated, page, useChatty } from './setup.ts';
 import type { Phase, TaskEdits } from '../../public/types/index.ts';
 
 beforeEach(() => {
@@ -43,6 +43,7 @@ test('a step removed in another phase is not counted on this one', () => {
 });
 
 test('the count names only the steps removed from this phase', () => {
+  useChatty();
   const [a, b] = stepIds('3'),
     [c] = stepIds('4');
   assert.ok(a && b && c, 'both phases have steps');

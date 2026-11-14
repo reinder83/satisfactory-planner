@@ -600,25 +600,146 @@ input[type='radio'] {
   font-size: 10.5px;
   letter-spacing: 0.1em;
 }
-.ada.is-muted {
+.ada-line:empty {
+  display: none;
+}
+/* Mood (#1353): the waveform and the label take the mood's colour. */
+.ada {
+  --ada-mood: var(--blue);
+}
+.ada[data-mood='concerned'] {
+  --ada-mood: var(--accent);
+}
+.ada[data-mood='satisfied'] {
+  --ada-mood: var(--green);
+}
+.ada[data-mood='idle'],
+.ada.is-off {
+  --ada-mood: var(--dim);
+}
+.ada[data-mood='garbled'] {
+  --ada-mood: var(--red);
+}
+.ada-moodline {
   display: flex;
   align-items: center;
-  gap: 9px;
-  border-left-color: var(--line);
+  gap: 8px;
+  margin-top: 4px;
+}
+.ada-mood {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--ada-mood);
+}
+.ada-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+.ada-wave i {
+  display: block;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--ada-mood);
+  transform-origin: center;
+  animation: ada-wave 1.1s ease-in-out infinite;
+}
+.ada-wave i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.ada-wave i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.ada-wave i:nth-child(4) {
+  animation-delay: 0.45s;
+}
+.ada-wave i:nth-child(5) {
+  animation-delay: 0.6s;
+}
+/* Off: the waveform is flat. */
+.ada.is-off .ada-wave i {
+  height: 3px;
+  animation: none;
+}
+@keyframes ada-wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.ada-stamp {
+  margin-bottom: 4px;
   font-size: 10.5px;
   letter-spacing: 0.1em;
+  color: var(--dim);
+}
+.ada-action {
+  margin-top: 9px;
+}
+.ada-tools {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ada-pending {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+.ada-dot {
+  color: var(--accent);
+}
+.ada-speaker {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-width: 24px;
+  min-height: 24px;
+}
+.ada-chatter {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line2);
+}
+.ada-chatter-label {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
 }
-.ada.is-muted .ada-mark {
-  animation: none;
-  border-color: var(--line);
-  color: var(--dim);
+.ada-chatter-choices {
+  display: flex;
+  margin-top: 5px;
+  border: 1px solid var(--line);
 }
-.ada.is-muted .btn.quiet {
-  margin-left: auto;
-  padding: 2px 0;
+.ada-chatter-choices button {
+  flex: 1;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ada-chatter-choices button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #0b0d0e;
+  font-weight: 700;
+}
+.ada-chatter-hint {
+  margin: 6px 0 0;
   font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--dim);
 }
 /* The phone ticker (SP-38, AdaPanel.vue): shown at ≤720px only, below. */
 .ada-ticker {
@@ -629,7 +750,8 @@ input[type='radio'] {
 @media (prefers-reduced-motion: reduce) {
   .dot,
   .ada-mark,
-  .ada[data-tone] .ada-mark {
+  .ada[data-tone] .ada-mark,
+  .ada-wave i {
     animation: none;
   }
   .sidebar {
@@ -1538,7 +1660,6 @@ p[data-proposal-rates] {
   .assign-row .btn.quiet,
   .assign-add .btn.quiet,
   .ada-tools .btn.quiet,
-  .ada.is-muted .btn.quiet,
   .alt-tools .btn.quiet,
   .notice .btn.quiet,
   .sloop-payoff .btn.quiet {
@@ -7603,8 +7724,11 @@ button.rail-tile:hover {
   /* ADA is one line in the drawer (SP-38): ◈ and the remark cut short, a button that unfolds
      the full panel in place. Folded, the remark stays in the page as #ada-line, out of sight,
      so a new one is still announced. */
-  .ada:not(.is-muted) {
+  .ada {
     padding: 0;
+  }
+  .ada-chatter-choices button {
+    min-height: 44px;
   }
   .ada-ticker {
     display: flex;
@@ -7646,7 +7770,10 @@ button.rail-tile:hover {
   .ada .ada-head {
     display: none;
   }
-  .ada:not(.is-open) .ada-tools {
+  .ada:not(.is-open) .ada-tools,
+  .ada:not(.is-open) .ada-stamp,
+  .ada:not(.is-open) .ada-action,
+  .ada:not(.is-open) .ada-chatter {
     display: none;
   }
   .ada:not(.is-open) .ada-body {
@@ -8703,6 +8830,11 @@ button.rail-tile:hover {
   }
   .skip {
     display: none;
+  }
+  /* ADA's chatter choice (#1353) prints as text, not as a filled button. */
+  .ada-chatter-choices button[aria-pressed='true'] {
+    background: transparent;
+    color: var(--ink);
   }
   /* Notices print dark on light, bold lead and links included; the tone stays in the
      left border, which takes the darkened token colours above. */

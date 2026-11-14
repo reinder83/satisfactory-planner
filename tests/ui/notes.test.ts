@@ -9,7 +9,18 @@ import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-pan
 import { state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
-import { answerConfirms, $, $$, evil, go, open, openMigrated, page, stubFetch } from './setup.ts';
+import {
+  answerConfirms,
+  $,
+  $$,
+  evil,
+  go,
+  open,
+  openMigrated,
+  page,
+  stubFetch,
+  useChatty,
+} from './setup.ts';
 
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
@@ -234,6 +245,7 @@ test('the phase panels open and fold from the keyboard, by their summary', () =>
 // migrated from the handbook (#387), whose guide keeps the handbook's step ids.
 for (const view of ['plan', 'notes'] as const)
   test(`ADA still remarks on a phase without notes on the ${view} page`, () => {
+    useChatty();
     setAdaIndex(0);
     adaClearFault();
     const remarks = (notes: Record<string, string>) => {

@@ -272,6 +272,18 @@ export interface AdaLine {
   tone: string;
   text: string;
   name?: string;
+  // Whether the line is one the Essential chatter level still says (#1353): a problem, a
+  // milestone or a data-loss warning. Set by adaRemarks and the event lines; absent on encores
+  // and faults.
+  essential?: boolean;
+  // The one button the line may carry (#1353).
+  action?: AdaAction;
+}
+
+// A button on a line: its label and the route it opens.
+export interface AdaAction {
+  label: string;
+  view: string;
 }
 
 // One remark: see the comment above RULES.
@@ -279,6 +291,11 @@ interface AdaRule {
   id: string;
   on?: string[];
   tone: 'calm' | 'warn' | 'praise';
+  // Said at the Essential chatter level although its tone is calm (#1353): a line the user must
+  // know about, a backup growing old, a change waiting on a recalculation, a restore or import
+  // that did not do what one might assume, records that found no place. Warn and praise lines are
+  // always essential; any other calm line is said only at Chatty.
+  essential?: true;
   lead?: boolean;
   when: (facts: AdaFacts) => unknown;
   text: (facts: AdaFacts) => string;
@@ -364,6 +381,8 @@ const RULES: AdaRule[] = [
     id: 'no-save',
     lead: true,
     tone: 'calm',
+    // Without a save there is nothing else to say, at any level.
+    essential: true,
     when: facts => facts.kind === 'none',
     text: () =>
       `No save is open, so there is nothing for me to be disappointed about. Create one and I will find something.`,
@@ -622,6 +641,8 @@ const RULES: AdaRule[] = [
     id: 'build-dry',
     on: ['plan', 'factories'],
     tone: 'calm',
+    // Lines marked running deliver nothing at all: the same stall as build-waiting, which warns.
+    essential: true,
     when: facts => facts.build?.built && !facts.build.share && facts.build.next,
     text: facts =>
       `${facts.build!.built} ${facts.build!.built === 1 ? 'production line' : 'production lines'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
@@ -697,6 +718,8 @@ const RULES: AdaRule[] = [
     id: 'unplaced',
     on: ['plan', 'notes'],
     tone: 'calm',
+    // Progress that found no place in this plan: kept, but only where she points.
+    essential: true,
     when: facts => facts.unplaced > 0,
     text: facts =>
       `${plural(facts.unplaced, 'record')} from the original plan had no place in this one. They are listed at the foot of Notes, exactly as they were. I throw nothing away. It is policy.`,
@@ -705,6 +728,8 @@ const RULES: AdaRule[] = [
     id: 'site-review',
     on: ['plan', 'notes', 'factories'],
     tone: 'calm',
+    // Ticks held back for the user to place again.
+    essential: true,
     when: facts => (facts.siteReview ?? 0) > 0,
     text: facts =>
       `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines your factories make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
@@ -801,6 +826,8 @@ const RULES: AdaRule[] = [
     id: 'sloop-pins-pending',
     on: ['factories', 'plan'],
     tone: 'calm',
+    // Waiting on a recalculation, as exact-clocks-pending (warn) is.
+    essential: true,
     when: facts => (facts.sloopPinsPending ?? 0) > 0,
     text: facts =>
       `You pinned the somersloops of ${plural(facts.sloopPinsPending!, 'production line')} differently, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with somersloop pins plans ${facts.sloopPinsPending === 1 ? 'it' : 'them'} and keeps this version as a backup. The slugs can wait. They have waited this long.`,
@@ -819,6 +846,8 @@ const RULES: AdaRule[] = [
     id: 'shard-pins-pending',
     on: ['factories', 'plan'],
     tone: 'calm',
+    // Waiting on a recalculation, as exact-clocks-pending (warn) is.
+    essential: true,
     when: facts => (facts.shardPinsPending ?? 0) > 0,
     text: facts =>
       `You pinned the Power Shards of ${plural(facts.shardPinsPending!, 'production line')} differently, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with Power Shard pins plans ${facts.shardPinsPending === 1 ? 'it' : 'them'} and keeps this version as a backup. Faster machines, fewer of them. Same hunger for ore.`,
@@ -886,6 +915,8 @@ const RULES: AdaRule[] = [
     id: 'backup-old',
     on: ['backup'],
     tone: 'calm',
+    // The same data-loss warning as backup-never, only calmer.
+    essential: true,
     when: facts => facts.browserMode && (facts.backupDays ?? 0) >= 14,
     // Only after when() found a backup age.
     text: facts =>
@@ -908,11 +939,14 @@ const RULES: AdaRule[] = [
     lead: true,
     on: ['backup'],
     tone: 'calm',
+    // A restore that took progress back: the user must see what changed.
+    essential: true,
     when: facts => facts.restored && !facts.restored.good,
     // Only after when() found a restore.
     text: facts => facts.restored!.words,
   },
-  // Both editions: the merge of a friend's progress just made on this page (#1160).
+  // Both editions: the merge of a friend's progress just made on this page (#1160). Only ever adds
+  // ticks and asks nothing of the user, so it is said at Chatty only.
   {
     id: 'progress-merged',
     on: ['backup'],
@@ -953,6 +987,8 @@ const RULES: AdaRule[] = [
     id: 'imported',
     on: ['profiles'],
     tone: 'calm',
+    // The next ticks land in the open profile, not in the copy.
+    essential: true,
     when: facts => facts.imported,
     text: facts =>
       `The import added ${facts.imported} as a copy of its own. You are still on “${facts.profile}”, so your next ticks land there, not in the copy. Open the copy from the notice when you mean to. I will not ask whose factory it was.`,
@@ -1311,6 +1347,16 @@ const safe = (line: (facts: AdaFacts) => string, facts: AdaFacts) => {
   }
 };
 
+// Whether the Essential chatter level says a rule's line (#1353): every warning and praise, and a
+// calm line marked essential.
+const essentialRule = (rule: AdaRule) => rule.tone !== 'calm' || !!rule.essential;
+
+// Every remark's id, tone and whether Essential says it, in the order of RULES: for the tests that
+// pin which lines a user sees at the default setting, so a new line has to be decided.
+export function adaRuleLevels(): { id: string; tone: string; essential: boolean }[] {
+  return RULES.map(rule => ({ id: rule.id, tone: rule.tone, essential: essentialRule(rule) }));
+}
+
 // Facts in, remarks out. Never throws: a joke must not be able to break the
 // planner, so a rule that trips over unexpected data is skipped.
 // `facts` comes from adaFacts in app/ada-panel.ts. Returns every applicable rule as
@@ -1326,7 +1372,13 @@ export function adaRemarks(given: Partial<AdaFacts> = {}): AdaLine[] {
     (first, second) => rank(first, facts.view) - rank(second, facts.view),
   )) {
     try {
-      if (rule.when(facts)) out.push({ id: rule.id, tone: rule.tone, text: rule.text(facts) });
+      if (rule.when(facts))
+        out.push({
+          id: rule.id,
+          tone: rule.tone,
+          text: rule.text(facts),
+          essential: essentialRule(rule),
+        });
     } catch {}
   }
   IDLE.forEach((text, i) => {
@@ -1358,4 +1410,177 @@ export function adaFault(poke: number): AdaLine {
     name: '???',
     text: pick(FAULTS, Math.max(0, poke - 1)),
   };
+}
+
+// ── Chatter, moods and event remarks (#1353) ──────────────
+
+// How much ADA says: Off (nothing speaks; problems wait behind a dot), Essential (problems,
+// milestones and data-loss warnings) or Chatty (everything, with easter eggs). Kept per browser.
+export type AdaChatter = 'off' | 'essential' | 'chatty';
+export const ADA_CHATTERS: AdaChatter[] = ['off', 'essential', 'chatty'];
+export const ADA_CHATTER_DEFAULT: AdaChatter = 'essential';
+
+// What the setting reads as in this browser's storage. 'muted' and 'on' are the Mute switch's
+// old values (before #1353): muted becomes Off and on becomes Chatty, which is what that user
+// had. Nothing stored, or anything unknown, is the default. adaChatterStored writes values the
+// old reading also understands, so going back to an older build keeps the choice.
+export function adaChatterFrom(stored: string | null | undefined): AdaChatter {
+  if (stored === 'muted' || stored === 'off') return 'off';
+  if (stored === 'on' || stored === 'chatty') return 'chatty';
+  if (stored === 'essential') return 'essential';
+  return ADA_CHATTER_DEFAULT;
+}
+export function adaChatterStored(chatter: AdaChatter): string {
+  return chatter === 'off' ? 'muted' : chatter === 'chatty' ? 'on' : 'essential';
+}
+
+// What the Off setting holds back behind its "● 1 essential" dot: every essential remark except
+// praise (a milestone can wait for her to be turned on) and the no-save line (nothing to hold).
+export function adaHeldBack(line: AdaLine): boolean {
+  return !!line.essential && line.tone !== 'praise' && line.id !== 'no-save';
+}
+
+// The mood label beside her name, from what she is saying.
+export type AdaMood = 'concerned' | 'satisfied' | 'observant' | 'amused' | 'idle' | 'garbled';
+export const ADA_MOODS: Record<AdaMood, string> = {
+  concerned: 'CONCERNED',
+  satisfied: 'SATISFIED',
+  observant: 'OBSERVANT',
+  amused: 'AMUSED',
+  idle: 'IDLE',
+  garbled: '▒▒▒▒',
+};
+export function adaMood(line: AdaLine & { mood?: AdaMood }): AdaMood {
+  if (line.mood) return line.mood;
+  if (line.tone === 'fault') return 'garbled';
+  if (line.tone === 'warn') return 'concerned';
+  if (line.tone === 'praise') return 'satisfied';
+  if (line.id === 'no-save' || line.id === 'quiet' || line.id.startsWith('idle-')) return 'idle';
+  return 'observant';
+}
+
+// The small log stamp above a line: "LOG 0042 · DATA INTEGRITY". The number comes from the line's
+// id, so the same line always carries the same stamp.
+export function adaStamp(line: AdaLine): string {
+  let sum = 0;
+  for (const char of line.id) sum = (sum * 31 + char.charCodeAt(0)) % 9973;
+  const topic = line.id.startsWith('backup')
+    ? 'DATA INTEGRITY'
+    : line.tone === 'fault'
+      ? 'UNFILED'
+      : line.tone === 'warn'
+        ? 'ATTENTION'
+        : line.tone === 'praise'
+          ? 'MILESTONE'
+          : line.id.startsWith('event-')
+            ? 'EVENT'
+            : 'GENERAL';
+  return `LOG ${String(sum + 1).padStart(4, '0')} · ${topic}`;
+}
+
+// The things the planner reports to her as they happen (#1353). A kind said this session is not
+// said again (the panel keeps the list).
+export type AdaEventKind =
+  | 'backup'
+  | 'first-step'
+  | 'hundred-steps'
+  | 'late-step'
+  | 'line-running'
+  | 'part-delivered'
+  | 'phase-back'
+  | 'profile-removed'
+  | 'past-phase-four';
+
+export interface AdaEventParams {
+  // The line's or part's name, "Iron & Steel Works".
+  name?: string;
+  // The count of a part delivered, "125,000 of 125,000".
+  count?: string;
+  // The local time, "02:14".
+  time?: string;
+}
+
+interface AdaEventDef {
+  mood: AdaMood;
+  // Essential events are said at the Essential level too: data loss and milestones.
+  essential: boolean;
+  // The one button, when it has one.
+  action?: AdaAction;
+  text: (params: AdaEventParams) => string;
+}
+
+// Every line is at most two sentences, in her voice, and none is a quote from the game.
+const ADA_EVENTS: Record<AdaEventKind, AdaEventDef> = {
+  backup: {
+    mood: 'satisfied',
+    essential: true,
+    text: () => 'Backup filed. Should this browser perish, your legacy will not. Probably.',
+  },
+  'part-delivered': {
+    mood: 'satisfied',
+    essential: true,
+    action: { label: 'Open build plan', view: 'plan' },
+    text: p =>
+      `${p.name}: ${p.count}. I have been instructed to express gratitude on behalf of FICSIT. Consider it expressed.`,
+  },
+  'first-step': {
+    mood: 'satisfied',
+    essential: false,
+    text: () => 'One down. FICSIT has updated your file from “arrived” to “contributing”.',
+  },
+  'hundred-steps': {
+    mood: 'amused',
+    essential: false,
+    text: () =>
+      'One hundred tasks. A small cake has been approved for your sector. It will not be delivered.',
+  },
+  'late-step': {
+    mood: 'amused',
+    essential: false,
+    text: p =>
+      `It is ${p.time}. FICSIT does not recognise the concept of bedtime. Apparently neither do you.`,
+  },
+  'line-running': {
+    mood: 'satisfied',
+    essential: false,
+    text: p =>
+      `${p.name} is online. The planet has been notified it is now slightly less pristine.`,
+  },
+  'phase-back': {
+    mood: 'amused',
+    essential: false,
+    text: () => 'Revisiting the past. Nostalgia is not a recognised productivity metric.',
+  },
+  'profile-removed': {
+    mood: 'amused',
+    essential: false,
+    text: () => 'Profile removed. FICSIT prefers the term “strategic reallocation”.',
+  },
+  'past-phase-four': {
+    mood: 'garbled',
+    essential: false,
+    text: () =>
+      'They are not artifacts, Pioneer. They are ▓▓▓▓ … Apologies. A data packet was misfiled. Please continue building.',
+  },
+};
+
+// The line for an event, or null when it cannot be worded: a joke must not break the planner.
+export function adaEventLine(
+  kind: AdaEventKind,
+  params: AdaEventParams = {},
+): (AdaLine & { mood: AdaMood }) | null {
+  const def = ADA_EVENTS[kind];
+  if (!def) return null;
+  try {
+    return {
+      id: 'event-' + kind,
+      tone: def.mood === 'garbled' ? 'fault' : def.mood === 'satisfied' ? 'praise' : 'calm',
+      mood: def.mood,
+      text: def.text(params),
+      essential: def.essential,
+      ...(def.action ? { action: def.action } : {}),
+    };
+  } catch {
+    return null;
+  }
 }

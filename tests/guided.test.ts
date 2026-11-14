@@ -20,7 +20,17 @@ import {
   recipeIdOf,
   rowStepTitle,
 } from '../public/progression.ts';
-import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
+import {
+  ADA_MOODS,
+  adaChatterFrom,
+  adaChatterStored,
+  adaEncore,
+  adaEventLine,
+  adaFault as makeFault,
+  adaMood,
+  adaRemarks,
+  adaStamp,
+} from '../public/ada.ts';
 import { appSource } from './helpers/app-source.ts';
 import type { AdaFacts } from '../public/ada.ts';
 import type {
@@ -163,6 +173,12 @@ function ui() {
     adaRemarks,
     adaEncore,
     makeFault,
+    ADA_MOODS,
+    adaChatterFrom,
+    adaChatterStored,
+    adaEventLine,
+    adaMood,
+    adaStamp,
     progression,
     phaseSteps,
     milestoneOnlyPhase,

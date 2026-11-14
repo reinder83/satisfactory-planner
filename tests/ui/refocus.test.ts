@@ -457,14 +457,19 @@ test('removing a supply row moves focus to the item field of the row in its plac
   assert.ok(focusedOn('[data-supply-row="0"] input[name=supplyItem]'), describeFocus());
 });
 
-test('Mute and Unmute move focus to the button that takes their place', async () => {
+test('the chatter setting keeps focus on the button pressed (#1353)', async () => {
   render();
-  press('[data-ada-mute="on"]');
+  press('[data-ada-settings]');
   await settle();
-  assert.ok(focusedOn('[data-ada-mute="off"]'), describeFocus());
-  press('[data-ada-mute="off"]');
+  const choice = (value: string) => `[data-ada-chatter="${value}"]`;
+  (document.querySelector(choice('off')) as HTMLElement).focus();
+  press(choice('off'));
   await settle();
-  assert.ok(focusedOn('[data-ada-mute="on"]'), describeFocus());
+  assert.ok(focusedOn(choice('off')), describeFocus());
+  (document.querySelector(choice('chatty')) as HTMLElement).focus();
+  press(choice('chatty'));
+  await settle();
+  assert.ok(focusedOn(choice('chatty')), describeFocus());
 });
 
 test('Fill, Reset and Undo in the node survey move focus to the button that takes their place', async () => {

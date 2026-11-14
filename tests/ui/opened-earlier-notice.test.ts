@@ -10,7 +10,16 @@ import { phaseStepIds } from '../../public/app/opening-phase.ts';
 import { loadContext, openedFrom, phase, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks, satisfiedStepIds, stepDone } from '../../public/app/tasks.ts';
-import { $, applyUpdate, generatedWith, migratedPlan, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  applyUpdate,
+  generatedWith,
+  migratedPlan,
+  open,
+  page,
+  stubFetch,
+  useChatty,
+} from './setup.ts';
 import type {
   ContextReply,
   CurrentCalculatedPlan,
@@ -99,6 +108,7 @@ function adaOpenedEarlier(): string | undefined {
 // #974: ticking the shown phase's last open step leaves it shown, and ADA then agrees with the
 // notice that its steps are done, rather than saying it still has open steps.
 test("ADA's opened-earlier line follows the notice once every step is ticked", async () => {
+  useChatty();
   const plan = phaseOnePlan();
   open({ calculated: plan, phase: '1' });
   const ids = phaseStepIds('1' as StageKey);
@@ -122,6 +132,7 @@ test("ADA's opened-earlier line follows the notice once every step is ticked", a
 // later) is done, as the progress bar counts it, though nobody ticks it: with every other step
 // ticked the notice and ADA say the phase is done, not that one step is still open.
 test('a step done by its own condition counts as done in the notice and ADA alike', async () => {
+  useChatty();
   const plan = phaseOnePlan();
   open({ calculated: plan, phase: '1' });
   const ids = phaseStepIds('1' as StageKey);

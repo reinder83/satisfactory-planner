@@ -17,7 +17,7 @@ import { readWizard, startWizard } from '../../public/app/wizard/wizard.ts';
 import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
 import { phaseForTier } from '../../public/preferences.ts';
 import { carryOptions } from '../../public/state.ts';
-import { $, $$, catalog, generated, generatedWith, go, open, page } from './setup.ts';
+import { $, $$, catalog, generated, generatedWith, go, open, page, useChatty } from './setup.ts';
 import type {
   Catalog,
   CurrentCalculatedPlan,
@@ -329,6 +329,7 @@ test('the budgets step offers the belts you already have, and the table follows 
 // The belt advice counts a belt the plan says the player already has (#1068), as the plan's mining
 // does: no milestone to tick for it, and a plan without one advises as before.
 test('the belt advice uses the belt you already have, and asks no milestone for it', () => {
+  useChatty();
   const owning = (ownedBelt: 4 | 6) => {
     const plan = structuredClone(mined);
     plan.settings.ownedBelt = ownedBelt;
