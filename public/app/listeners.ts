@@ -7,7 +7,7 @@
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), skip link click, hashchange, #detail backdrop click, #detail
 // cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange, focus,
-// keydown (the toast's Ctrl+Z).
+// keydown (the toast's Ctrl+Z), keydown (the quick-jump shortcut).
 import {
   acceptRoute,
   flushNotes,
@@ -24,6 +24,7 @@ import { SKIP_TARGET, setQuery, setView, stateLoaded, viewOf } from './session.t
 import { render } from './shell.ts';
 import { watchToast } from './toast-place.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
+import { jumpShortcut } from './ui/jump.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
 import { resumeLiveRefresh } from './live-refresh.ts';
 import { noteWizardEdit } from './wizard/wizard.ts';
@@ -132,3 +133,6 @@ document.addEventListener('keydown', toastShortcut);
 
 // A toast that would cover the focused control it is about goes to the top (#663).
 watchToast(required('#toast'));
+
+// Ctrl+K (⌘K) or "/" opens the quick-jump search (#1351), unless the user is typing in a field.
+document.addEventListener('keydown', jumpShortcut);
