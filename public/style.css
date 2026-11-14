@@ -8605,6 +8605,22 @@ th.resource-cell {
 .extraction-panel {
   max-width: 1000px;
 }
+/* ONB-3: the world settings sit once above the counting screens, between the step tabs' form and
+   the panel, as wide as the panel. */
+.extraction-world {
+  max-width: 1000px;
+  margin-bottom: 14px;
+}
+/* ONB-6: the budgets screen's one number column; the sum behind a figure sits under it. */
+.budget-cell {
+  vertical-align: middle;
+}
+.budget-cell .budget-breakdown {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  white-space: normal;
+}
 .extraction-panel h3 {
   font-family: var(--head);
   font-size: 15px;

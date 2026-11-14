@@ -5,6 +5,7 @@
 // advice. The wizard's setting only says which one is suggested, and Edit settings names it so.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
+import { helpText } from '../../public/preferences.ts';
 import { afterAll, beforeAll, beforeEach, test } from 'vitest';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { flowRoute, setQuery, setWizard, viewOf, wizard } from '../../public/app/session.ts';
@@ -198,8 +199,18 @@ test('the setting only picks the suggested option, and is read as before', () =>
   assert.equal(box.checked, false);
   const label = plain(box.closest('label')?.textContent);
   assert.match(label, /^Suggest overclocked Water Extractors/);
-  assert.match(label, /always shows both ways to build them: at 100%, and overclocked up to 250%/);
-  assert.match(label, /only picks the one suggested first and counted in the power total/);
+  assert.match(label, /Picks which way is suggested first and counted in the power total/);
+  // ONB-5: the rest is behind the "?", in full.
+  assert.ok(label.length < 160, 'a one-line summary');
+  assert.match(
+    helpText.waterOverclock!,
+    /always shows both ways to build them: at 100%, and overclocked up to 250%/,
+  );
+  assert.match(
+    helpText.waterOverclock!,
+    /only picks the one suggested first and counted in the power total/,
+  );
+  assert.ok(box.closest('label')!.querySelector('[data-help="waterOverclock"]'));
   box.checked = true;
   readWizard($<HTMLFormElement>('#wizard-form')!);
   assert.equal(wizard!.settings.waterOverclock, true);
