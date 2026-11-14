@@ -74,7 +74,7 @@ import { AMPLIFIER_WORDS } from '../../somersloops.ts';
 import { gameShards, SHARD_RESEARCH, shardsPerMachine, powerShardWords } from '../../shards.ts';
 import { lineLoad, ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, ItemRates, Phase, StoredStage } from '../../types/index.ts';
-import type { StepList, StepTable } from '../../step-table.ts';
+import type { StepFacts, StepList, StepRate, StepTable } from '../../step-table.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
 export interface PlanStepData {
@@ -87,6 +87,9 @@ export interface PlanStepData {
   // The body as a table or a list (#1136, step-table.ts).
   table?: StepTable;
   list?: StepList;
+  // A line's text as the dialog's structure (BP-5, StepFacts in step-table.ts), drawn in place of
+  // the body.
+  facts?: StepFacts;
   // A grown line's built machines under its title, "5 of 6 built" (#1174, built-lines.ts), or
   // a switched line's change, "4 to switch from Iron Plate, 1 to add" (#1175); shown while the
   // step is not ticked.
@@ -107,6 +110,18 @@ const outputList = (row: CalcRow): string =>
   [...(row.generationMW > 0 ? [power(row.generationMW)] : []), rateList(row.outputs || {})]
     .filter(Boolean)
     .join(', ') || power(row.generationMW);
+
+// The same rates one by one (StepRate), for a step's inputs and outputs as the dialog lists them
+// (BP-5); a generator's power comes first among the outputs, as in outputList.
+const rateEntries = (rates: Record<string, number>): StepRate[] =>
+  Object.entries(rates).map(([name, rate]) => ({ name, rate: itemRate(name, rate) }));
+const outputEntries = (row: CalcRow): StepRate[] =>
+  row.generationMW > 0 || Object.keys(row.outputs || {}).length
+    ? [
+        ...(row.generationMW > 0 ? [{ name: 'Power', rate: power(row.generationMW) }] : []),
+        ...rateEntries(row.outputs || {}),
+      ]
+    : [{ name: 'Power', rate: power(row.generationMW) }];
 
 // The bundled icon a calculated row shows on its card, its dialog and its build-plan step: a
 // generator's building (icons/coal-generator.png and so on), even when it also makes waste
@@ -148,7 +163,7 @@ const calcTasksOf = perRedraw(stepInputs, (shownPhase: Phase): PlanStepData[] =>
 });
 
 // A production row's build-plan step text: what already runs and the generators the player has,
-// then its machines, inputs and outputs (rowLineText) and why the plan sinks its spare coke
+// then its machines, inputs and outputs (rowLineParts) and why the plan sinks its spare coke
 // (burnNotes, #1063), then the factory dialog's byproduct advice in
 // `snapshot`, the stage of the phase the step is in (#1022). With advice, the same words as a list
 // (#1136): the text before the advice above it, and each paragraph of the advice (one byproduct or
@@ -161,23 +176,40 @@ function rowStep(
   snapshot: StoredStage | undefined,
   shownPhase: Phase,
   title: string,
-): Pick<PlanStepData, 'body' | 'list' | 'table' | 'built' | 'spare'> {
+): Pick<PlanStepData, 'body' | 'list' | 'table' | 'facts' | 'built' | 'spare'> {
   const burn = burnNotes(row, snapshot);
   const built = builtView(row, shownPhase);
-  const lead =
-    (built ? '' : carriedStepText(row, shownPhase)) +
-    ownedGeneratorsText(row, snapshot) +
-    rowLineText(row) +
-    burn.map(note => ' ' + note).join('');
+  const carried = built ? '' : carriedStepText(row, shownPhase),
+    owned = ownedGeneratorsText(row, snapshot),
+    parts = rowLineParts(row);
+  const lead = carried + owned + parts.text + burn.map(note => ' ' + note).join('');
   const table = built?.table(title, lead);
   const text = table ? table.intro + ' ' + lead : lead;
   const extra = built && table ? { table, ...built.notes } : {};
+  // The same words as the dialog's structure (BP-5); a built line keeps its table and text.
+  const facts: Partial<Pick<PlanStepData, 'facts'>> = table
+    ? {}
+    : {
+        facts: {
+          notes: [carried, owned, ...parts.notes].map(note => note.trim()).filter(Boolean),
+          machines: parts.setup.summary,
+          perMachine: parts.perMachine,
+          inputs: parts.inputs,
+          outputs: parts.outputs,
+          extras: [...parts.extras, ...burn].map(note => note.trim()).filter(Boolean),
+        },
+      };
   const advice = rowAdvice(row, snapshot).map(adviceLineText);
-  if (!advice.length) return { body: text, ...extra };
+  if (!advice.length) return { body: text, ...facts, ...extra };
   return {
     body: text + ' ' + advice.join(' '),
-    // Under a built line's table, the advice alone.
-    list: { intro: table ? '' : lead, items: advice, label: `${title}: byproducts and inputs` },
+    // Under a built line's table or the facts, the advice alone.
+    list: {
+      intro: table || facts.facts ? '' : lead,
+      items: advice,
+      label: `${title}: byproducts and inputs`,
+    },
+    ...facts,
     ...extra,
   };
 }
@@ -322,15 +354,43 @@ function carriedStepText(row: CalcRow, shownPhase: Phase): string {
 // A production row's machines, inputs and outputs in its build-plan step (rowStep), with the
 // pointer to an easier rounded option only where the dialog shows one (#379). The machine setup is
 // worked out once per row (#1060).
-const rowLineText = (row: CalcRow): string =>
-  siteLineText(row) +
-  stockLineText(row) +
-  `${setupText(machineSetup(row))} ${sloopText(row)}${shardText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
+// The text in its parts (BP-5): the opening notes, the machine setup, the somersloop and Power Shard
+// sentences, the inputs and the outputs, and the same words joined (`text`).
+function rowLineParts(row: CalcRow) {
+  const site = siteLineText(row),
+    stock = stockLineText(row),
+    setup = machineSetup(row),
+    perMachine = setupParts(setup),
+    sloops = sloopText(row),
+    shards = shardText(row),
+    inputs = rateEntries(row.inputs || {}),
+    outputs = outputEntries(row);
+  return {
+    notes: [site, stock],
+    setup,
+    perMachine,
+    extras: [sloops, shards],
+    inputs,
+    outputs,
+    text:
+      site +
+      stock +
+      `${setup.summary} ${perMachine.label}: ${perMachine.text}.${perMachine.hint ? ' ' + perMachine.hint : ''} ${sloops}${shards}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`,
+  };
+}
 
-// A step's machines (machineSetup): the summary, then the adjustable machine's clock and output
+// A step's machines (machineSetup) after the summary: the adjustable machine's clock and output
 // with the pointer to an easier rounded option, or what each machine makes.
-const setupText = (setup: ReturnType<typeof machineSetup>): string =>
-  `${setup.summary} ${setup.partial ? 'Adjustable machine: ≈ ' + num(setup.clock) + '% → ≈ ' + setup.lastOutput + '.' + (easierSetup(setup) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + setup.fullOutput + '.'}`;
+const setupParts = (setup: ReturnType<typeof machineSetup>): StepFacts['perMachine'] =>
+  setup.partial
+    ? {
+        label: 'Adjustable machine',
+        text: '≈ ' + num(setup.clock) + '% → ≈ ' + setup.lastOutput,
+        ...(easierSetup(setup)
+          ? { hint: 'Open the production line for an easier rounded option.' }
+          : {}),
+      }
+    : { label: 'Each machine', text: setup.fullOutput };
 
 // The somersloops an amplified line takes, as a sentence with a space after it; '' for any other.
 // Machines take them only after the MAM's Production Amplifier research (#1056), whose own step

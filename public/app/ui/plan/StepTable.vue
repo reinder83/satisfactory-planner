@@ -9,7 +9,7 @@
   The lines above and after it mark the glossary terms in `terms` (#1076, ui/TermText.vue), each once.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { termParts } from '../../../preferences.ts';
 import type { StepTable } from '../../../step-table.ts';
 import { useScrollBox } from '../scroll-box.ts';
@@ -23,6 +23,14 @@ const afterTerms = computed(() => {
   const above = termParts(props.table.intro, props.terms).map(part => part.term);
   return props.terms.filter(term => !above.includes(term));
 });
+// A table with a fold (StepTable.fold, BP-5) hides the rows after its first few until "Show all".
+// The rows stay in the page, hidden, so the step's text and the table agree.
+const expanded = ref(false);
+const folded = (index: number) =>
+  !!props.table.fold && !expanded.value && index >= props.table.fold.rows;
+const foldable = computed(
+  () => !!props.table.fold && props.table.rows.length > props.table.fold.rows,
+);
 // Whether the table is wider than its box (ui/scroll-box.ts).
 const { scrollAttrs } = useScrollBox('box');
 // An empty cell hides on a phone; a short one (a rate, a count, an amount) never wraps.
@@ -44,7 +52,12 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex" data-step-table-row>
+        <tr
+          v-for="(row, rowIndex) in table.rows"
+          :key="rowIndex"
+          :hidden="folded(rowIndex) || undefined"
+          data-step-table-row
+        >
           <template v-for="(cell, index) in row" :key="index">
             <th v-if="index === 0" scope="row">{{ cell }}</th>
             <td v-else :data-label="table.columns[index]" :class="cellClass(cell)">{{ cell }}</td>
@@ -60,6 +73,16 @@ const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 })
         </tr>
       </tfoot>
     </table>
+    <button
+      v-if="foldable"
+      type="button"
+      class="btn quiet step-table-more"
+      data-step-table-more
+      :aria-expanded="expanded"
+      @click="expanded = !expanded"
+    >
+      {{ expanded ? 'Show fewer' : `Show all ${table.rows.length} ${table.fold!.noun}` }}
+    </button>
     <p v-if="table.after" data-step-table-after>
       <TermText :text="table.after" :terms="afterTerms" />
     </p>

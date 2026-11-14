@@ -107,6 +107,7 @@ const list = computed(() =>
         body: task.body,
         table: task.table,
         list: task.list,
+        facts: task.facts,
         built: task.built,
         spare: task.spare,
         done: checked(task.id),
@@ -144,7 +145,13 @@ const list = computed(() =>
         : [...groups.flatMap(group => group.items), ...unfinished, ...finished],
       marks = firstTerms(
         order.map(s =>
-          s.table ? `${s.table.intro} ${s.table.after ?? ''}` : s.list ? '' : s.body || '',
+          s.table
+            ? `${s.table.intro} ${s.table.after ?? ''}`
+            : s.facts
+              ? [...s.facts.notes, ...s.facts.extras].join(' ')
+              : s.list
+                ? ''
+                : s.body || '',
         ),
       );
     order.forEach((s, i) => (s.terms = marks[i]));
@@ -363,6 +370,7 @@ function toggleRequiredOnly(event: Event) {
         :key="step.id"
         :step="step"
         :lead="i === 0 && !step.idle"
+        :then="i === 0 ? list.open[1]?.title : undefined"
         :held="step.done && isHeld(step.id)"
         :leaving="step.done && isLeaving(step.id)"
       />

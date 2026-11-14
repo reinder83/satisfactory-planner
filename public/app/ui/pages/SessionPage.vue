@@ -11,7 +11,7 @@
   stored or recalculated here. A milestone-only phase, which plans no lines, says so.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { toast } from '../../api.ts';
 import {
   calculated,
@@ -47,6 +47,10 @@ function chooseSize(event: Event) {
 }
 
 const noteBox = ref<HTMLTextAreaElement | null>(null);
+// "Copied" beside the Copy note button for about 2 seconds (BP-11), announced by its live region.
+const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(copiedTimer));
 // Copy the To-Do note. Where the browser refuses the clipboard, the note is selected instead so
 // Ctrl+C or ⌘C copies it.
 async function copyNote() {
@@ -54,6 +58,9 @@ async function copyNote() {
   try {
     await navigator.clipboard.writeText(note);
     toast('To-Do note copied.');
+    copied.value = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied.value = false), 2000);
   } catch {
     noteBox.value?.focus();
     noteBox.value?.select();
@@ -104,6 +111,9 @@ const print = () => window.print();
         <button type="button" class="btn primary" data-session-copy @click="copyNote">
           Copy note
         </button>
+        <span class="session-copied small" aria-live="polite" data-session-copied>{{
+          copied ? 'Copied' : ''
+        }}</span>
       </section>
       <p v-if="!page.view.builds.length" class="notice info" data-session-empty>
         No open builds left in {{ page.title }}: every production line's step is ticked.

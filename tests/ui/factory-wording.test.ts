@@ -123,9 +123,11 @@ test('progress saved by the previous release loads as it was and shows in the ne
     '#' + flowRoute(HOME, '3'),
   );
   // A generated step text uses the new words.
-  const easier = [...document.querySelectorAll('#main details[data-task^="calc-3-"] p')].find(
-    body => /easier rounded option/.test(body.textContent!) && body.textContent !== OWN_BODY,
-  );
+  const easier = [
+    ...document.querySelectorAll(
+      '#main details[data-task^="calc-3-"] p, #main details[data-task^="calc-3-"] [data-step-per-machine]',
+    ),
+  ].find(body => /easier rounded option/.test(body.textContent!) && body.textContent !== OWN_BODY);
   assert.match(easier!.textContent!, /Open the production line for an easier rounded option\./);
 
   // A flow page's address from before #926 (no ?phase=) still routes, in the new words.
