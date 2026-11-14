@@ -92,14 +92,14 @@ test('Edit settings opens the open profile’s settings and recalculates only wh
   assert.ok(sent, 'the button recalculates');
   assert.equal(sent[1].planCreatedAt, plan.createdAt, 'naming the plan the edit started from');
   assert.equal(sent[1].name, 'Minimal construction · Oct 7');
-  assert.match(String(sent[1].backupName), /^Minimal construction · Oct 7 \(before edit, .+\)$/);
+  assert.match(String(sent[1].backupName), /^[^·”]+ · backup 1$/);
   const headers = calls.headers[calls.indexOf(sent)]!;
   assert.equal(headers['X-Profile-Id'], 'p');
   assert.equal(wizard, null);
   assert.equal(view, 'plan');
   assert.match(
     $('#toast')!.textContent,
-    /^Recalculated in place\. 2 production lines left unticked for review\. The previous version is kept as “Minimal construction · Oct 7 \(before edit, .+\)” under Profiles\.$/,
+    /^Recalculated in place\. 2 production lines left unticked for review\. The previous version is kept as “[^·”]+ · backup 1” under Profiles\.$/,
   );
 });
 

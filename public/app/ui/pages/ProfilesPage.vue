@@ -199,7 +199,7 @@ const menuBusy = (save: SaveCard, profile: ProfileCard) =>
 async function restore(save: SaveCard, profile: ProfileCard) {
   const into = profile.keptFor;
   if (!into || busy.value === key('restore', save, profile)) return;
-  const keptName = restoreKeptName(save.id, into.name);
+  const keptName = restoreKeptName(save.id);
   if (!(await confirmAction(restoreQuestion(profile.name, into.name, keptName)))) return;
   const involved = save.id === currentSave.id && [into.id, profile.id].includes(currentProfile.id);
   if (involved && !(await allowSwitch())) return;

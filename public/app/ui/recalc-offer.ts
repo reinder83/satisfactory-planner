@@ -92,7 +92,7 @@ export async function recalculateOffer(button: HTMLButtonElement, offer: RecalcO
     profileId = currentProfile.id,
     name = currentProfile.name,
     planCreatedAt = calculated.createdAt,
-    kept = keptName(saveId, name),
+    kept = keptName(saveId),
     // The lines that stand now (#1176): every carry pick is on, so they count as built.
     builtLines = openBuiltLines(),
     // The somersloop pins (#1235), the Power Shard pins (#1239) and the lines at exact clocks

@@ -335,7 +335,7 @@ test('Recalculate in place with items made on site recalculates this profile fro
   assert.equal(calls.headers[0]!['X-Profile-Id'], 'p');
   assert.equal(sent!.carryFrom, undefined, 'no new profile');
   assert.equal(sent!.name, evil, 'the profile keeps its name');
-  assert.match(sent!.backupName, / \(before edit, [^)]+\)$/);
+  assert.match(sent!.backupName, /^[^·”]+ · backup 1$/);
   assert.equal(sent!.planCreatedAt, plan.createdAt);
   assert.deepEqual(sent!.settings.onSite, onSiteSettings(plan, groups({ [MOTORS]: ['Wire'] })));
   assert.deepEqual(sent!.settings.onSite![MOTORS]!.items, ['Wire']);

@@ -5,7 +5,7 @@
 // name. Only new profiles are named this way; a stored name is never changed, but a profile still
 // named after its goal alone is offered such a name on its card (renameOffers). Edit settings
 // recalculates a profile in place and keeps its previous version as a profile named
-// "<name> (before edit, Oct 7, 2:05 PM)" (backupName), which "Restore this version" can swap back
+// "Oct 7 · backup 1" (backupName), which "Restore this version" can swap back
 // (app/restore-version.ts). Review lists what the edit changes
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
 import {
@@ -175,26 +175,22 @@ export const VARIANT_HINTS = {
   duplicate: 'Copy this profile with its progress, to try changes without touching it.',
 } as const;
 
-// The name the previous version of an edited profile is kept under: "<name> (before edit, Oct
-// 7, 2:05 PM)", the name cut so the whole fits in 80 characters. A second edit within the same
-// minute, whose backup would get a name one of `taken` (the save's profile names) has, is
-// numbered: "<name> (before edit 2, Oct 7, 2:05 PM)". The version a restore replaces is kept the
-// same way with `reason` 'restore': "<name> (before restore, Oct 7, 2:05 PM)".
+// The name the previous version of an edited profile is kept under (PRO-3): "Oct 7 · backup 1",
+// short enough to sit on a card, in the profile switcher and in a compare column. It carries no
+// profile name: the card says which profile it was kept for ("Kept version of ..."). The number
+// counts up past every name of `taken` (the save's profile names), so two backups made the same
+// day are told apart: "Oct 7 · backup 2". The version a restore replaces is kept the same way
+// with `reason` 'restore': "Oct 7 · restore backup 1". Only new copies are named this way; a
+// stored name, "<name> (before edit, Oct 7, 2:05 PM)" as much as one the user typed, is never
+// changed.
 export function backupName(
-  name: string,
   date = new Date(),
   taken: readonly string[] = [],
   reason: 'edit' | 'restore' = 'edit',
 ): string {
-  const when = date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const label = reason === 'restore' ? 'restore backup' : 'backup';
   for (let count = 1; ; count++) {
-    const suffix = ` (before ${reason}${count > 1 ? ' ' + count : ''}, ${when})`;
-    const named = name.slice(0, Math.max(1, NAME_LIMIT - suffix.length)).trimEnd() + suffix;
+    const named = `${nameDate(date)} · ${label} ${count}`;
     if (!taken.includes(named)) return named;
   }
 }

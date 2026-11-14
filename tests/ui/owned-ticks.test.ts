@@ -194,7 +194,7 @@ test('the button asks first, then recalculates in place with the owned fields ra
     ),
     asked[0],
   );
-  assert.match(asked[0]!, /is kept as “.*\(before edit, [^”]+\)” under Profiles/);
+  assert.match(asked[0]!, /is kept as “[^·”]+ · backup 1” under Profiles/);
   assert.equal(document.querySelector('x-evil'), null, 'the name is text');
   assert.equal(calls.length, 0, 'nothing is sent');
   asked = answerConfirms(true);
@@ -208,7 +208,7 @@ test('the button asks first, then recalculates in place with the owned fields ra
   const body = calls[0]![1];
   assert.equal(body.planCreatedAt, thePlan.createdAt, 'names the plan the offer was made on');
   assert.equal(body.name, evil, 'keeps the name');
-  assert.match(body.backupName, /\(before edit, /);
+  assert.match(body.backupName, /^[^·”]+ · backup 1$/);
   assert.equal(body.settings.ownedMiner, 2);
   assert.deepEqual(body.settings.ownedAlternates, [CAST_SCREWS]);
   assert.equal(body.settings.ownedBelt, undefined, 'nothing else raised');

@@ -835,7 +835,7 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   readCarry(form);
   // An edit always has a save: Edit settings opens one of its profiles.
   const saveId = wizardDraft.saveId!,
-    kept = keptName(saveId, edit.name);
+    kept = keptName(saveId);
   await withDraftBuiltLines(wizardDraft);
   const done = await postRecalculation(
     {
