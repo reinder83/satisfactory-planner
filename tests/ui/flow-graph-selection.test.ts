@@ -73,7 +73,11 @@ const press = async (id: string) => {
 const panel = () => $('#detail [data-flow-graph-selection]');
 const text = (el: Element) => el.textContent!.replace(/\s+/g, ' ').trim();
 
-beforeEach(showFactories);
+// An earlier test may have left the address on a flow page.
+beforeEach(async () => {
+  history.replaceState(null, '', '#factories');
+  await showFactories();
+});
 afterEach(async () => {
   if (!dialog().open) return;
   dialog().close();
@@ -217,9 +221,10 @@ test('Open line opens the production line dialog in the graph’s place', async 
   assert.notEqual($('#detail .eyebrow')!.textContent, 'FACTORY · FLOW GRAPH');
 });
 
-test('Open in build order closes the graph and goes to the factory’s flow page with the line focused', async () => {
+// The flow page draws the open step as a card and the others as rows (BO-1): a line that is not
+// the open step is opened by its row, then its card takes focus.
+async function openInBuildOrder(id: string) {
   await openGraph();
-  const id = busyLine(graphOf());
   await press(id);
   $<HTMLButtonElement>('#detail [data-selection-order]')!.click();
   await settle();
@@ -232,4 +237,16 @@ test('Open in build order closes the graph and goes to the factory’s flow page
   for (let i = 0; i < 20 && document.activeElement !== card(); i++) await settle();
   assert.ok(card(), 'the flow page has a card for the line');
   assert.equal(document.activeElement, card(), 'the line’s card has focus');
+}
+
+test('Open in build order closes the graph and goes to the factory’s flow page with the line focused', async () => {
+  await openInBuildOrder(busyLine(graphOf()));
+});
+
+test('Open in build order opens a step that is only a row on the flow page', async () => {
+  const flow = shownGroupFlow(GROUP)!;
+  const last = flow.lines[flow.lines.length - 1]!;
+  assert.ok(flow.lines.length > 2);
+  await openInBuildOrder('line:' + last.id);
+  assert.equal($('#main [data-step-row="' + last.id + '"]'), null, 'it is a card now');
 });
