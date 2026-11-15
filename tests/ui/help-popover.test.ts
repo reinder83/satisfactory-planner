@@ -11,10 +11,15 @@ import { nextTick } from 'vue';
 import { afterEach, beforeEach, test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
 import HelpPopover from '../../public/app/ui/HelpPopover.vue';
+import { markIntroSeen, resetIntroSeen } from '../../public/app/sessions.ts';
 import { helpText } from '../../public/preferences.ts';
 import { $, $$, generated, go, open, page } from './setup.ts';
 
-beforeEach(() => page());
+beforeEach(() => {
+  page();
+  localStorage.clear();
+  resetIntroSeen();
+});
 // A help left mounted would still hear the next test's taps.
 const mounted: VueWrapper[] = [];
 afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
@@ -75,7 +80,8 @@ test('a name without a help text draws nothing', () => {
   assert.equal(document.querySelector('[data-help]'), null);
 });
 
-test('the Build sequence intro is a "?" beside the heading, not a paragraph', async () => {
+test('the Build sequence intro is a "?" beside the heading, not a paragraph once it was seen', async () => {
+  markIntroSeen();
   open({ calculated: generated(), phase: '3' });
   go('plan');
   render();

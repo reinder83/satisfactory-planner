@@ -105,6 +105,17 @@ function focusHeading() {
   window.scrollTo(0, 0);
 }
 
+// For the phone strip's page-opening button (#1355): the drawer around the button closes and takes
+// its focus with it, which would leave it on <body>. Focus goes to the heading of the page the
+// button opened (the page already shown, when it is that one), waiting a few frames for a page
+// that is still being drawn.
+export function focusPageHeading(tries = 30) {
+  const heading = document.querySelector<HTMLElement>('#main h1');
+  if (heading) focusHeading();
+  else if (tries > 0) requestAnimationFrame(() => focusPageHeading(tries - 1));
+  else focusHeading();
+}
+
 // For the wizard's five steps and the guided start (#608): Continue and Back replace the screen's
 // form, so the pressed button goes with it. Focus goes to the new screen's heading
 // (ui/form/StepHeading.vue, tabindex="-1"), whose name says which step it is, and only when focus

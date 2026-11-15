@@ -1192,6 +1192,19 @@ p[data-proposal-rates] {
   gap: 8px;
 }
 /* A heading with its "?" beside it (X-3, ui/HelpPopover.vue). */
+/* The build plan's intro, shown once per browser (BP-13, ui/plan/BuildIntro.vue). */
+.build-intro {
+  margin: 0 0 12px;
+}
+.build-intro p {
+  margin: 0 0 8px;
+}
+.build-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
 .head-with-help {
   display: flex;
   align-items: center;

@@ -35,6 +35,9 @@ export interface AdaFacts {
   // Ticks set in the open profile (#1353): never backed up with 50+ of them is a factory history
   // that lives in one browser.
   ticks?: number;
+  // How many times this browser has opened the app, from 1 (#1353, app/sessions.ts, kept in
+  // localStorage only): never backed up in 3 sessions says the same as 50 ticks.
+  sessions?: number;
   // Headroom of the stage's power as a whole percentage of what it can supply, when it is 0-9%
   // (not short, which `power` says); absent otherwise.
   // The spare power as the Resources page shows it (displayPercent), e.g. "9.5%", when under 10.
@@ -996,8 +999,10 @@ const RULES: AdaRule[] = [
     on: ['backup'],
     tone: 'warn',
     when: facts => facts.browserMode && facts.backupDays === null,
+    // One remark whatever the history: the stronger wording from 50 ticks or the third session
+    // (#1353), not a second line for it.
     text: facts =>
-      (facts.ticks ?? 0) >= 50
+      (facts.ticks ?? 0) >= 50 || (facts.sessions ?? 0) >= 3
         ? `Your entire factory history lives in one browser tab, and it has never been exported. FICSIT calls that a single point of failure; I call it Tuesday. Backup → Export all saves.`
         : `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
   },

@@ -16,6 +16,7 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { markIntroSeen } from '../../public/app/sessions.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { headroomAdvice } from '../../public/app/views/calculated.ts';
 import { SEARCH_PAUSE_MS } from '../../public/app/ui/search-field.ts';
@@ -943,6 +944,8 @@ test("a guided plan shows the guide's steps for the phase, under their own ids",
 // steps it doesn't have (#479); without a guide the intro is as before.
 test('the Build sequence intro follows whether the plan has a guide', async () => {
   const intro = () => $$('#main .split > section > p.small.muted').map(p => p.textContent!.trim());
+  // Once per browser (BP-13) the intro is shown as well; it was seen already here.
+  markIntroSeen();
   open({ calculated: generated, phase: '3' });
   go('plan');
   render();

@@ -109,6 +109,7 @@ import { OWNED_GENERATORS, driveCapWords, objectiveWords, phaseBelt } from '../p
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 import type { Step } from './tasks.ts';
 import { mapLayerShown } from './map-markers.ts';
+import { sessionCount } from './sessions.ts';
 
 // localStorage key for the chatter setting (#1353): 'muted' (Off), 'essential' or 'on' (Chatty),
 // the first and last being what the Mute switch stored before.
@@ -782,6 +783,7 @@ function adaFacts(): AdaFacts {
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
     fastest: fastestFact(),
     backupDays: backupDays(workspace.lastBackup),
+    sessions: sessionCount(),
     post: phase() === 'post',
     startPhase: startPhase(),
     milestoneOnly: milestones ? phaseLabel(startPhase()) : '',
