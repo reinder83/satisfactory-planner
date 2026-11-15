@@ -62,6 +62,7 @@ import { legacy } from '../bridge.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
+import HelpPopover from '../HelpPopover.vue';
 import CollapseToggle from './CollapseToggle.vue';
 import FactoryHandover from './FactoryHandover.vue';
 import FactoryWaiting from './FactoryWaiting.vue';
@@ -338,7 +339,11 @@ async function undoRemove(update: FactoryRestore, name: string, profile: Profile
           @click="exportSft($event, section.id)"
         >
           Export to Satisfactory Tools</button
-        ><a
+        ><HelpPopover
+          v-if="section.members.length"
+          name="sftImport"
+          topic="Export to Satisfactory Tools"
+        /><a
           v-if="section.members.length > 1"
           class="btn"
           :href="'#' + flowRoute(section.id)"

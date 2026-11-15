@@ -123,3 +123,11 @@ test('the survey budgets table is one block per resource on a narrow phone (ONB-
     /content:\s*attr\(data-label\)/,
   );
 });
+
+test('the toast never takes a click from the controls under it; only its buttons are pressable (BUG-8, #1355)', () => {
+  // At the bottom it sat over a row of cards for several seconds, hiding their Built and Running
+  // controls from the pointer: the strip lets clicks through, and only a button on it answers.
+  assert.match(rule([style], '#toast'), /pointer-events:\s*none/);
+  assert.match(rule([style], '#toast .toast-action'), /pointer-events:\s*auto/);
+  assert.match(rule([style], '#toast .toast-actions'), /pointer-events:\s*auto/);
+});

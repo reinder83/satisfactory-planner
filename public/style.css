@@ -6589,6 +6589,16 @@ button.rail-tile:hover {
 #toast.show {
   display: block;
 }
+/* The strip never takes a click from the page under it (BUG-8, #1355): at the bottom it sat over a
+   row of cards, and their Built and Running controls could not be pressed while it showed. Only a
+   button on it (Undo, How to import) is pressable. */
+#toast {
+  pointer-events: none;
+}
+#toast .toast-actions,
+#toast .toast-action {
+  pointer-events: auto;
+}
 #toast.error {
   border-color: var(--red);
   background: #241a18;
