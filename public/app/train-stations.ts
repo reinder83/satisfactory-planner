@@ -151,6 +151,24 @@ export function moveTo<T>(list: readonly T[], from: number, to: number): T[] {
   out.splice(to, 0, out.splice(from, 1)[0]!);
   return out;
 }
+// The index of the item a dragged item is held over (#1399): the one whose box holds the point,
+// so a tall row takes the drop as soon as the pointer enters it and not only past its middle; in a
+// gap or outside every box, the item whose centre is nearest.
+export function hitIndex(
+  boxes: readonly { left: number; top: number; right: number; bottom: number }[],
+  x: number,
+  y: number,
+): number {
+  const inside = boxes.findIndex(
+    box => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom,
+  );
+  if (inside >= 0) return inside;
+  return nearestIndex(
+    boxes.map(box => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 })),
+    x,
+    y,
+  );
+}
 // The index of the centre nearest the point (a dragged item lands where it is held over), or -1
 // for no items. Ties go to the earlier one.
 export function nearestIndex(

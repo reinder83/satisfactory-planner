@@ -223,7 +223,9 @@ function switchTo(id: string, open: boolean) {
   return openProfile(currentSave.id, id, on => (switching.value = on));
 }
 // A page of the switcher's menu, through the address as a sidebar link would.
-// "Edit settings" in the switcher (#1071): All settings on the open profile's settings.
+// "Edit settings" in the switcher (#1071): All settings on the open profile's settings. With the
+// plan's settings lines shown (#1399) the menu's one entry for it is "Plan settings…" at their
+// head, so the lines read as a menu entry; without the lines it stays "Edit settings" below.
 function editOpen() {
   closeMenu(false);
   void startEdit(currentSave.id, currentProfile.id).catch(error =>
@@ -524,7 +526,19 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
             aria-label="Plan settings"
             data-plan-settings
           >
-            <div class="eyebrow" aria-hidden="true">Plan settings</div>
+            <button
+              v-if="frame.editable"
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              class="btn plan-settings-open"
+              data-edit-open-profile
+              data-plan-settings-open
+              @click="editOpen"
+            >
+              Plan settings…
+            </button>
+            <div v-else class="eyebrow" aria-hidden="true">Plan settings</div>
             <p v-for="(line, i) in frame.footer.slice(1)" :key="i" class="small">
               {{ line }}
             </p>
@@ -552,7 +566,7 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
             </button>
           </div>
           <button
-            v-if="frame.editable"
+            v-if="frame.editable && frame.footer.length <= 1"
             type="button"
             role="menuitem"
             tabindex="-1"

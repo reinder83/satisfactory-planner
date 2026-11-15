@@ -97,3 +97,34 @@ test('MAP-5: pins far enough apart all show their names', async () => {
   });
   for (const id of ['fg-parts01', 'fg-elec001', 'fg-far0001']) assert.equal(hidden(id), false, id);
 });
+
+// #1399: a touch screen has no hover, so a name left out comes back by pressing its pin, and goes
+// again when another pin or the bare map is pressed.
+test('#1399: on touch, pressing a pin with its name left out shows it until the map is pressed', async () => {
+  await showMap({
+    'fg-parts01': { x: -98000, y: 61250 },
+    'fg-elec001': { x: -93000, y: 64000 },
+    'fg-far0001': { x: 300000, y: -200000 },
+  });
+  const press = (el: Element, pointerType: string) =>
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType }));
+  const pin = (id: string) => $<HTMLElement>(`[data-map-factory="${id}"]`)!;
+  assert.equal(hidden('fg-elec001'), true);
+  press(pin('fg-elec001'), 'mouse');
+  await settle();
+  assert.equal(hidden('fg-elec001'), true, 'a mouse has hover: its press changes nothing');
+  press(pin('fg-elec001'), 'touch');
+  await settle();
+  assert.equal(hidden('fg-elec001'), false, 'a finger on the pin shows its name');
+  assert.equal(pin('fg-elec001').hasAttribute('data-revealed'), true, 'drawn over the others');
+  assert.equal(hidden('fg-far0001'), false);
+  press($('[data-map-image]')!, 'touch');
+  await settle();
+  assert.equal(hidden('fg-elec001'), true, 'a press on the bare map puts it away again');
+  assert.equal(pin('fg-elec001').hasAttribute('data-revealed'), false);
+  press(pin('fg-elec001'), 'touch');
+  await settle();
+  press(pin('fg-parts01'), 'touch');
+  await settle();
+  assert.equal(hidden('fg-elec001'), true, 'another pin takes the reveal');
+});
