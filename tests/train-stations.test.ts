@@ -32,6 +32,7 @@ import {
   cargoItems,
   moveAt,
   moveTo,
+  hitIndex,
   nearestIndex,
   newStationId,
   newStationName,
@@ -335,6 +336,21 @@ test('nearestIndex names the centre closest to the point', () => {
   assert.equal(nearestIndex(centres, 100, 20), 1);
   assert.equal(nearestIndex(centres, 0, 90), 2, 'a wrapped row of chips: the one below');
   assert.equal(nearestIndex([], 5, 5), -1);
+});
+
+// #1399: a tall row takes the drop from its top edge on, not only past the midpoint the nearest
+// centre makes between it and a short neighbour.
+test('hitIndex names the box the point is in, else the nearest centre', () => {
+  const box = (top: number, bottom: number) => ({ left: 0, right: 100, top, bottom });
+  const boxes = [box(0, 40), box(44, 344), box(348, 388)];
+  const centres = boxes.map(b => ({ x: 50, y: (b.top + b.bottom) / 2 }));
+  assert.equal(hitIndex(boxes, 50, 60), 1, 'just inside the tall row');
+  assert.equal(nearestIndex(centres, 50, 60), 0, 'where the nearest centre says the short one');
+  assert.equal(hitIndex(boxes, 50, 340), 1);
+  assert.equal(hitIndex(boxes, 50, 360), 2);
+  assert.equal(hitIndex(boxes, 50, 42), 0, 'in the gap: the nearer centre');
+  assert.equal(hitIndex(boxes, 500, 200), 1, 'outside every box: the nearest centre');
+  assert.equal(hitIndex([], 5, 5), -1);
 });
 
 // Both editions: the stations are saved, kept through a reload, a full export and import, a

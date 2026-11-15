@@ -112,7 +112,7 @@ test('the footer is a menu button naming the open profile, with the save’s pro
   );
   assert.deepEqual(
     $$('#profile-switcher [role="menuitem"]').map(b => b.textContent!.trim()),
-    ['Edit settings', 'All saves & profiles', 'Set up user accounts'],
+    ['Plan settings…', 'All saves & profiles', 'Set up user accounts'],
     'no Sign out while accounts are off',
   );
   assert.ok(
@@ -125,7 +125,7 @@ test('the footer is a menu button naming the open profile, with the save’s pro
   await nextTick();
   assert.deepEqual(
     $$('#profile-switcher [role="menuitem"]').map(b => b.textContent!.trim()),
-    ['Edit settings', 'All saves & profiles', 'Account', 'Sign out'],
+    ['Plan settings…', 'All saves & profiles', 'Account', 'Sign out'],
   );
 });
 
@@ -137,13 +137,15 @@ test('the switcher works from the keyboard like the other menus', async () => {
   await nextTick();
   assert.equal(menu().hidden, false);
   assert.equal(button.getAttribute('aria-expanded'), 'true');
-  assert.equal(focused(), evil + 'Open', 'it opens on the first profile');
+  assert.equal(focused(), 'Plan settings…', 'it opens on the first item (#1399)');
+  key('ArrowDown');
+  assert.equal(focused(), evil + 'Open');
   key('ArrowDown');
   assert.equal(focused(), 'Second try');
   key('End');
   assert.equal(focused(), 'Set up user accounts');
   key('ArrowDown');
-  assert.equal(focused(), evil + 'Open', 'the arrows wrap');
+  assert.equal(focused(), 'Plan settings…', 'the arrows wrap');
   key('Escape');
   await nextTick();
   assert.equal(menu().hidden, true);

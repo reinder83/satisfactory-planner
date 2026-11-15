@@ -501,6 +501,10 @@ input[type='radio'] {
   border-bottom: 1px solid var(--line);
 }
 /* The open profile's settings at the top of the switcher's menu (PRO-5): plain lines, no items. */
+.plan-settings .plan-settings-open {
+  width: 100%;
+  justify-content: flex-start;
+}
 .plan-settings p {
   margin: 0;
   color: var(--ink);
@@ -6474,9 +6478,9 @@ button.rail-tile:hover {
 .map-marker:is(:hover, :focus) .map-marker-label[data-label-hidden] {
   visibility: visible;
 }
-.map-factory:is(:hover, :focus),
-.map-station:is(:hover, :focus),
-.map-marker:is(:hover, :focus) {
+.map-factory:is(:hover, :focus, [data-revealed]),
+.map-station:is(:hover, :focus, [data-revealed]),
+.map-marker:is(:hover, :focus, [data-revealed]) {
   z-index: 3;
 }
 /* "Place factory": the factory to place and the button, kept together when the toolbar wraps. */

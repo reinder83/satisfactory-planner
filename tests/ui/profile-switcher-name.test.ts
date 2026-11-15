@@ -49,7 +49,16 @@ test('a short name is the switcher’s one line, its settings lines are in the m
   assert.equal(settings.getAttribute('aria-label'), 'Plan settings');
   assert.equal(settings.querySelectorAll('p').length, 3);
   assert.ok(/purity/.test(settings.textContent!), settings.textContent!);
-  assert.equal($('#profile-switcher [data-plan-settings] [role^="menuitem"]'), null, 'text only');
+  // #1399: one menu entry at the head of the lines, so the group reads as part of the menu.
+  const entries = settings.querySelectorAll('[role="menuitem"]');
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]!.textContent!.trim(), 'Plan settings…');
+  assert.ok(entries[0]!.hasAttribute('data-edit-open-profile'), 'it opens the profile’s settings');
+  assert.equal(
+    document.querySelectorAll('#profile-switcher [data-edit-open-profile]').length,
+    1,
+    'the entry is not doubled',
+  );
 });
 
 // #1355 (PRO-3 polish): a kept version's name is only "Nov 14 · backup 2", so the switcher's menu

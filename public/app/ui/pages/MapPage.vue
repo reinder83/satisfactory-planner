@@ -226,6 +226,8 @@ const mapHandlers = {
   pointerdown(e: PointerEvent) {
     const el = box.value;
     const target = e.target instanceof Element ? e.target : null;
+    if (e.pointerType === 'touch')
+      revealed.value = target?.closest<HTMLElement>('[data-node]')?.dataset.node ?? '';
     if (!target?.closest('[data-map-factory], [data-map-factory-remove]')) selected.value = '';
     if (el && e.pointerType === 'mouse' && !target?.closest('[data-node], button, a, input')) {
       e.preventDefault();
@@ -330,7 +332,14 @@ const hiddenNames = computed(() => {
       });
   return hiddenLabels(labels);
 });
-const nameHidden = (id: string) => hiddenNames.value.has(id) || undefined;
+// A touch screen has no hover, so a name left out comes back by a tap (#1399), the way a mouse
+// gets it by pointing: a finger pressed on a pin (`[data-node]`) shows that pin's name, drawn over
+// the others, until a finger presses another pin or the bare map. The tap still does what it
+// did (open the pin, pick the factory); zooming in still brings every name back.
+const revealed = ref('');
+const nameHidden = (id: string) =>
+  (hiddenNames.value.has(id) && revealed.value !== id) || undefined;
+const isRevealed = (id: string) => revealed.value === id || undefined;
 
 // Saving a moved marker or factory: at once when a drag ends or it loses focus, NUDGE_SAVE_DELAY
 // after the last arrow key, and before the page goes; only when it moved.
@@ -887,6 +896,7 @@ function onKey(e: KeyboardEvent) {
                 draggable="false"
                 :style="{ left: item.left + 'px', top: item.top + 'px' }"
                 :data-node="'factory:' + item.factory.id"
+                :data-revealed="isRevealed('factory:' + item.factory.id)"
                 :data-map-factory="item.factory.id"
                 :aria-label="item.aria"
                 @keydown="onFactoryKey($event, item.factory)"
@@ -935,6 +945,7 @@ function onKey(e: KeyboardEvent) {
               class="map-station"
               :style="{ left: item.left + 'px', top: item.top + 'px' }"
               :data-node="'station:' + item.station.id"
+              :data-revealed="isRevealed('station:' + item.station.id)"
               :data-map-station="item.station.id"
               :aria-label="item.aria"
               @click="editStation(item.station.id)"
@@ -960,6 +971,7 @@ function onKey(e: KeyboardEvent) {
               class="map-marker"
               :style="{ left: item.left + 'px', top: item.top + 'px', '--marker': item.hex }"
               :data-node="'marker:' + item.marker.id"
+              :data-revealed="isRevealed('marker:' + item.marker.id)"
               :data-map-marker="item.marker.id"
               :data-marker-kind="item.marker.type"
               :aria-label="item.aria"
