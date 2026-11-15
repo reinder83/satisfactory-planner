@@ -38,7 +38,9 @@ test('the frame shows the open save and profile, escaped, around the page', () =
     $('.sidebar-foot .profile-switcher')!.textContent.startsWith(evil),
     'the footer names the profile',
   );
-  assert.equal($('.sidebar-foot .profile-switcher')!.querySelectorAll('br').length, 3);
+  // One line on the button (PRO-5); the settings lines are in its menu.
+  assert.equal($('.sidebar-foot .profile-switcher')!.querySelectorAll('br').length, 0);
+  assert.equal($('.sidebar-foot [data-plan-settings]')!.querySelectorAll('p').length, 3);
   // The page itself is drawn into the frame's <main>.
   assert.ok($('#main .heading-row'), 'the plan page is drawn into <main>');
 });

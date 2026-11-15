@@ -92,7 +92,7 @@ test('leaving another step changes nothing about it', async () => {
 });
 
 test('the sidebar names it on a plan calculated with it, and only then', () => {
-  const footer = () => $('.sidebar-foot .profile-switcher')!.textContent!;
+  const footer = () => $('.sidebar-foot [data-plan-settings]')!.textContent!;
   for (const counted of [false, true]) {
     unmountShell();
     document.body.innerHTML = '<div id="app"></div><dialog id="detail"></dialog>';

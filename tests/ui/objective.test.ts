@@ -148,7 +148,7 @@ test('a draft keeps its objective, and the fewest buildings leaves the field out
 });
 
 test('the sidebar names the objective a plan was calculated with, only when not the fewest buildings', () => {
-  const footer = () => $('.sidebar-foot .profile-switcher')!.textContent!;
+  const footer = () => $('.sidebar-foot [data-plan-settings]')!.textContent!;
   for (const [objective, shown] of [
     [undefined, null],
     ['power', 'Objective: least power'],
@@ -165,7 +165,7 @@ test('the sidebar names the objective a plan was calculated with, only when not 
     if (shown) assert.ok(footer().includes(shown), footer());
     else assert.doesNotMatch(footer(), /Objective/);
     assert.equal(
-      $('.sidebar-foot .profile-switcher')!.querySelectorAll('br').length,
+      $('.sidebar-foot [data-plan-settings]')!.querySelectorAll('p').length,
       shown ? 4 : 3,
     );
   }

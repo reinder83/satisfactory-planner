@@ -85,7 +85,7 @@ test('a draft shows its cap, 0 is a cap, and a blank box leaves the field out ag
 });
 
 test('the sidebar names the cap on hard drives a plan was calculated with, beside the other caps', () => {
-  const footer = () => plain($('.sidebar-foot .profile-switcher')!.textContent);
+  const footer = () => plain($('.sidebar-foot [data-plan-settings]')!.textContent);
   for (const [extra, shown] of [
     [{}, null],
     [{ driveCap: 3 }, 'Caps: at most 3 hard-drive alternates'],

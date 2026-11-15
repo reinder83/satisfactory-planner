@@ -210,7 +210,7 @@ test('a resource with every node left out is named on the budgets screen; a surv
 });
 
 test('the sidebar names how many nodes a plan leaves out, only when it leaves some out', () => {
-  const footer = () => $('.sidebar-foot .profile-switcher')!.textContent!;
+  const footer = () => $('.sidebar-foot [data-plan-settings]')!.textContent!;
   for (const [excludedNodes, shown] of [
     [undefined, null],
     [{ 'Iron Ore': { impure: 0, normal: 2, pure: 4 } }, '6 resource nodes left out'],
@@ -230,7 +230,7 @@ test('the sidebar names how many nodes a plan leaves out, only when it leaves so
     if (shown) assert.ok(footer().includes(shown), footer());
     else assert.doesNotMatch(footer(), /left out/);
     assert.equal(
-      $('.sidebar-foot .profile-switcher')!.querySelectorAll('br').length,
+      $('.sidebar-foot [data-plan-settings]')!.querySelectorAll('p').length,
       shown ? 4 : 3,
     );
   }

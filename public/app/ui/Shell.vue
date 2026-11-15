@@ -18,7 +18,9 @@
   and how old the last backup is; the page-top "saves stay in this browser" banner is only on Backup.
 
   The profile switcher (SP-07, #242) is the sidebar footer as a menu button (ui/ActionMenu.vue):
-  the open profile's name and settings lines on the button, and in its menu the open save's
+  the open profile's name, one line, on the button (PRO-5, #1355: it showed five more lines of
+  settings), and in its menu first "Plan settings", the lines the button used to show (purity and
+  elevator multiplier, power, left-out nodes, costs, objective, caps, date: profileFooter), then the open save's
   profiles, "All saves & profiles", then "Account" and "Sign out" on the server or "Backups &
   transfer" in the browser edition. A profile opens through openProfile in ui/actions.ts, the
   profiles page's Open, so it asks about unsaved notes first; signing out is the account page's
@@ -513,11 +515,20 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
               <path d="M1.5 5 5 1.5 8.5 5M1.5 9 5 12.5 8.5 9" /></svg
             ><span class="profile-switcher-name" :title="frame.footer[0]">{{
               frame.footer[0]
-            }}</span
-            ><template v-for="(line, i) in frame.footer.slice(1)" :key="i"
-              ><br />{{ line }}</template
-            ></template
+            }}</span></template
           >
+          <div
+            v-if="frame.footer.length > 1"
+            class="action-menu-group plan-settings"
+            role="group"
+            aria-label="Plan settings"
+            data-plan-settings
+          >
+            <div class="eyebrow" aria-hidden="true">Plan settings</div>
+            <p v-for="(line, i) in frame.footer.slice(1)" :key="i" class="small">
+              {{ line }}
+            </p>
+          </div>
           <div
             v-if="frame.profiles.length"
             class="action-menu-group"
