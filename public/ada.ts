@@ -1114,6 +1114,39 @@ const RULES: AdaRule[] = [
     text: facts =>
       `One profile in “${facts.save}”. No control group. Duplicate it before you rewrite half the build plan — Saves & profiles → Duplicate.`,
   },
+  // Empty pages (X-7, #1355): each page says in a line what will appear and gives the one way
+  // forward the page itself also shows. Facts only; they never speak on a page that has content.
+  {
+    id: 'empty-factories',
+    on: ['factories'],
+    tone: 'calm',
+    mood: 'amused',
+    action: goTo('Open build plan', 'plan'),
+    when: facts =>
+      facts.view === 'factories' && facts.kind === 'calculated' && !facts.factories.total,
+    text: facts =>
+      `${facts.phaseLabel} builds no production lines, so this page is a very tidy nothing. Your factories appear here once a phase builds them; the build plan has the steps that come first.`,
+  },
+  {
+    id: 'empty-logistics',
+    on: ['logistics'],
+    tone: 'calm',
+    mood: 'amused',
+    action: goTo('Open factories', 'factories'),
+    when: facts =>
+      facts.view === 'logistics' && facts.kind === 'calculated' && !facts.factories.total,
+    text: facts =>
+      `Nothing moves between factories in ${facts.phaseLabel}, because nothing is built yet. Logistics fills in as production lines are sorted into factories.`,
+  },
+  {
+    id: 'empty-storage',
+    on: ['storage'],
+    tone: 'calm',
+    mood: 'amused',
+    when: facts => facts.view === 'storage' && facts.kind === 'calculated' && !facts.storage?.total,
+    text: () =>
+      'No container is planned, so every position is reserved, which FICSIT files under optimism. Pick a storage supply in Edit settings and the addresses appear, or lay the room out yourself with Edit layout.',
+  },
   {
     id: 'groups',
     on: ['factories'],

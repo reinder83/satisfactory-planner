@@ -214,6 +214,32 @@ test('Plan a train line opens the Trains tab', () => {
   assert.deepEqual(action, { label: 'Plan a train line', view: 'logistics', tab: 'trains' });
 });
 
+// X-7 (#1355): the empty Factories, Logistics and Storage pages each get one remark, with the page's
+// own way forward as the button; none on a page that has content.
+test('an empty page says what will appear, and only while it is empty', () => {
+  const none = { factories: { done: 0, total: 0 } };
+  const factories = lineOf(
+    { view: 'factories', phaseLabel: 'Phase 1', ...none },
+    'empty-factories',
+  )!;
+  assert.match(factories.text, /^Phase 1 builds no production lines/);
+  assert.deepEqual(factories.action, { label: 'Open build plan', view: 'plan' });
+  assert.equal(lineOf({ view: 'factories' }, 'empty-factories'), undefined, 'lines: no remark');
+  assert.equal(lineOf({ view: 'plan', ...none }, 'empty-factories'), undefined, 'another page');
+  const logistics = lineOf({ view: 'logistics', ...none }, 'empty-logistics')!;
+  assert.match(logistics.text, /^Nothing moves between factories in Phase 3/);
+  assert.equal(logistics.action?.view, 'factories');
+  assert.equal(lineOf({ view: 'logistics' }, 'empty-logistics'), undefined);
+  const storage = lineOf({ view: 'storage', storage: { done: 0, total: 0 } }, 'empty-storage')!;
+  assert.match(storage.text, /^No container is planned/);
+  assert.equal(lineOf({ view: 'storage' }, 'empty-storage'), undefined, '8 containers: no remark');
+  assert.equal(
+    lineOf({ view: 'storage', kind: 'none', storage: { done: 0, total: 0 } }, 'empty-storage'),
+    undefined,
+  );
+  for (const line of [factories, logistics, storage]) assert.ok(sentences(line.text) <= 2, line.id);
+});
+
 test('every new line is at most two sentences', () => {
   const lines = [
     lineOf({ powerThin: '4%' }, 'power-thin'),
