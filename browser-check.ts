@@ -1095,6 +1095,15 @@ try {
     'one step ticked, the one chosen',
   );
   await page.waitForTimeout(250);
+  // PRO-5 (#1355): the sidebar's profile switcher is one line, its settings are in its menu.
+  assert.equal(await page.locator('[data-profile-switcher] br').count(), 0);
+  assert.ok((await page.locator('[data-plan-settings] p').count()) >= 1, 'settings in the menu');
+  // BAK-3 (#1355): the plan shows the phase's note, and every step has a note of its own.
+  await page.locator('#main [data-note-for="phase-1"]').waitFor();
+  assert.ok(
+    (await page.locator('#main [data-task] [data-item-note]').count()) > 0,
+    'a note on each step',
+  );
   await page.locator('[data-phase-notes-link]').focus();
   await page.keyboard.press('Enter');
   await page.locator('#phase-note-1').waitFor();

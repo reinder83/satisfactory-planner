@@ -24,6 +24,7 @@ import type { Phase } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 import NoteBox from '../NoteBox.vue';
 import PageHeader from '../PageHeader.vue';
+import ItemNotes from '../notes/ItemNotes.vue';
 import SiteReview from '../notes/SiteReview.vue';
 import UnplacedRecords from '../notes/UnplacedRecords.vue';
 
@@ -101,6 +102,7 @@ const page = computed(() =>
       />
     </details>
   </section>
+  <ItemNotes />
   <SiteReview />
   <UnplacedRecords />
 </template>

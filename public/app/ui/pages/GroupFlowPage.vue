@@ -56,6 +56,7 @@ import FlowCard from '../group-flow/FlowCard.vue';
 import FlowComesIn from '../group-flow/FlowComesIn.vue';
 import FlowPorts from '../group-flow/FlowPorts.vue';
 import FlowTable from '../group-flow/FlowTable.vue';
+import ItemNote from '../notes/ItemNote.vue';
 import PageHeader from '../PageHeader.vue';
 import PhaseTabs from '../PhaseTabs.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
@@ -147,6 +148,7 @@ const page = computed(() =>
     const status = current ? currentBuildStatus() : null;
     const produced = status?.produced ?? {};
     return {
+      id: groupId,
       name: groups.groups.find(group => group.id === groupId)?.name ?? null,
       phase: phaseLabel(current ? phase() : shown),
       working: phaseLabel(phase()),
@@ -220,6 +222,14 @@ function printPage() {
         Print
       </button>
     </div>
+    <ItemNote
+      v-if="page.name !== null"
+      :key="'gf-note-' + page.id"
+      :note-key="'group-' + page.id"
+      empty-label="Add a note for this factory"
+      filled-label="Factory note"
+      :label="'Notes: ' + page.name"
+    />
     <PhaseTabs
       v-if="page.name !== null"
       :tabs="page.tabs"

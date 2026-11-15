@@ -3094,6 +3094,16 @@ p.eyebrow {
 .notes-phases > p {
   margin: 0 0 14px;
 }
+/* The step and factory notes (ui/notes/ItemNotes.vue), under the phase notes (BAK-3). */
+.notes-phases + .notes-items {
+  margin-top: 24px;
+}
+.notes-items > p {
+  margin: 0 0 14px;
+}
+.notes-items > .section-head {
+  margin-bottom: 4px;
+}
 /* What the move from the original plan could not place (ui/notes/UnplacedRecords.vue, #499),
    listed under the phase notes. Saved text wraps and keeps its line breaks. */
 .notes-phases + .unplaced {
@@ -3117,6 +3127,49 @@ p.eyebrow {
   display: block;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* A note on one thing (BAK-3, ui/notes/ItemNote.vue): a disclosure button on a step, a factory or
+   the phase on the build plan, 44px tall on a phone. */
+.item-note {
+  margin: 8px 0;
+}
+.item-note-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.item-note-toggle::before {
+  content: '▸';
+  width: 1em;
+}
+.item-note-toggle[aria-expanded='true']::before {
+  content: '▾';
+}
+.item-note-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.item-note-toggle .muted {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.item-note-body {
+  margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .item-note-toggle {
+    min-height: 44px;
+  }
 }
 .phase-notes summary {
   margin: -16px;
