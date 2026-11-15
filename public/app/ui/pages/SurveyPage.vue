@@ -176,7 +176,7 @@ function submit() {
             <a :href="MAP_URL" target="_blank" rel="noreferrer"
               >Satisfactory Calculator interactive map</a
             >, upload your save there and copy the counts it lists into the next two screens.
-            <HelpPopover name="surveySource" topic="Counting nodes by hand" />
+            <HelpPopover name="surveySource" topic="Where your numbers come from" />
           </div>
           <h2>How you will mine them</h2>
           <p>

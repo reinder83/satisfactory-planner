@@ -292,6 +292,6 @@ function reveal() {
     <a href="https://satisfactory.wiki.gg/wiki/Portal" target="_blank" rel="noreferrer"
       >Portal reference</a
     >.
-    <HelpPopover name="portals" topic="Main Portals" />
+    <HelpPopover name="portals" topic="Main Portal" />
   </p>
 </template>
