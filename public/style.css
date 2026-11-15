@@ -6374,6 +6374,25 @@ button.rail-tile:hover {
   stroke: var(--bg2);
   stroke-width: 3px;
 }
+/* A name that would cover another name or pin at this zoom is not drawn (MAP-5,
+   app/map-labels.ts). It comes back while its pin is pointed at, focused or picked, drawn over the
+   others, and once the map is zoomed in far enough for it to fit. */
+.map-factory-label[data-label-hidden],
+.map-station-label[data-label-hidden],
+.map-marker-label[data-label-hidden],
+.map-line-label[data-label-hidden] {
+  visibility: hidden;
+}
+.map-factory:is(:hover, :focus, :focus-within) .map-factory-label[data-label-hidden],
+.map-station:is(:hover, :focus) .map-station-label[data-label-hidden],
+.map-marker:is(:hover, :focus) .map-marker-label[data-label-hidden] {
+  visibility: visible;
+}
+.map-factory:is(:hover, :focus),
+.map-station:is(:hover, :focus),
+.map-marker:is(:hover, :focus) {
+  z-index: 3;
+}
 /* "Place factory": the factory to place and the button, kept together when the toolbar wraps. */
 .map-place {
   display: inline-flex;

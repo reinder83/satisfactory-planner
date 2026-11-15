@@ -71,6 +71,7 @@ import {
   setMarkerAnchor,
 } from '../../map-markers.ts';
 import { STATUS_TEXT, countText, needsText, powerText } from '../../map-factory-card.ts';
+import { hiddenLabels, lineNameBox, nameBox, type MapLabel } from '../../map-labels.ts';
 import { openFlowGraph } from '../../factory-detail.ts';
 import {
   mapLinePath,
@@ -300,6 +301,36 @@ const drawnLines = computed(() =>
     labelY: line.label.y * zoom.value - 8,
   })),
 );
+
+// The names left out at this zoom (MAP-5, map-labels.ts): in the order of importance (the factory
+// picked, the other factories, the stations, the markers, the train lines' names), a name that
+// would cover another name is not drawn; it shows on hover and on focus, and once
+// zooming in has moved the pins apart. The pins, their links and their accessible names stay.
+const hiddenNames = computed(() => {
+  const labels: MapLabel[] = [];
+  const add = (id: string, left: number, top: number, text: string, px: number, maxCh: number) =>
+    labels.push({ id, box: nameBox(left, top, text, px, maxCh) });
+  if (showFactories.value) {
+    const first = drawnFactories.value.filter(item => item.factory.id === selected.value);
+    const rest = drawnFactories.value.filter(item => item.factory.id !== selected.value);
+    for (const item of [...first, ...rest])
+      add('factory:' + item.factory.id, item.left, item.top, item.factory.name, 13, 20);
+  }
+  if (showStations.value)
+    for (const item of drawnStations.value)
+      add('station:' + item.station.id, item.left, item.top, item.station.name, 12.5, 20);
+  if (showMarkers.value)
+    for (const item of drawn.value)
+      add('marker:' + item.marker.id, item.left, item.top, item.marker.name, 12, 18);
+  if (showLines.value)
+    for (const line of drawnLines.value)
+      labels.push({
+        id: 'line:' + line.id,
+        box: lineNameBox(line.labelX, line.labelY, line.label.text),
+      });
+  return hiddenLabels(labels);
+});
+const nameHidden = (id: string) => hiddenNames.value.has(id) || undefined;
 
 // Saving a moved marker or factory: at once when a drag ends or it loses focus, NUDGE_SAVE_DELAY
 // after the last arrow key, and before the page goes; only when it moved.
@@ -837,7 +868,13 @@ function onKey(e: KeyboardEvent) {
             >
               <path class="map-line-shadow" :d="line.d" />
               <path class="map-line-path" :d="line.d" />
-              <text class="map-line-label" :x="line.labelX" :y="line.labelY" text-anchor="middle">
+              <text
+                class="map-line-label"
+                :x="line.labelX"
+                :y="line.labelY"
+                text-anchor="middle"
+                :data-label-hidden="nameHidden('line:' + line.id)"
+              >
                 {{ line.label.text }}
               </text>
             </g>
@@ -865,7 +902,12 @@ function onKey(e: KeyboardEvent) {
                 <span class="map-factory-pin" aria-hidden="true"
                   ><svg viewBox="0 0 20 20"><path :d="FACTORY_ICON" fill-rule="evenodd" /></svg
                 ></span>
-                <span class="map-factory-label" aria-hidden="true">{{ item.factory.name }}</span>
+                <span
+                  class="map-factory-label"
+                  aria-hidden="true"
+                  :data-label-hidden="nameHidden('factory:' + item.factory.id)"
+                  >{{ item.factory.name }}</span
+                >
               </a>
               <button
                 v-if="removeShown(item.factory.id)"
@@ -902,7 +944,12 @@ function onKey(e: KeyboardEvent) {
               <span class="map-station-pin" aria-hidden="true"
                 ><svg viewBox="0 0 20 20"><path :d="STATION_ICON" fill-rule="evenodd" /></svg
               ></span>
-              <span class="map-station-label" aria-hidden="true">{{ item.station.name }}</span>
+              <span
+                class="map-station-label"
+                aria-hidden="true"
+                :data-label-hidden="nameHidden('station:' + item.station.id)"
+                >{{ item.station.name }}</span
+              >
             </button>
           </template>
           <template v-if="showMarkers">
@@ -923,7 +970,12 @@ function onKey(e: KeyboardEvent) {
               <span class="map-marker-pin" aria-hidden="true"
                 ><svg viewBox="0 0 20 20"><path :d="item.icon" /></svg
               ></span>
-              <span class="map-marker-label" aria-hidden="true">{{ item.marker.name }}</span>
+              <span
+                class="map-marker-label"
+                aria-hidden="true"
+                :data-label-hidden="nameHidden('marker:' + item.marker.id)"
+                >{{ item.marker.name }}</span
+              >
             </button>
           </template>
         </div>
