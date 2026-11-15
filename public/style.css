@@ -7130,6 +7130,36 @@ button.rail-tile:hover {
 .action-menu-list[hidden] {
   display: none;
 }
+/* A profile card's ⋯ menu is a bottom sheet on a phone (MOB-6, #1355): the dropdown opened over the
+   next card, and its items overlapped what was under it. The sheet sits at the foot of the window
+   over a dimmed page; the dimmed part is the list's own transparent ::before, so a press on it
+   reaches the menu (ActionMenu.vue closes it) instead of the card below. */
+@media (max-width: 720px) {
+  .profile-actions .action-menu-list {
+    position: fixed;
+    z-index: 45;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    margin: 0;
+    min-width: 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    border-width: 2px 0 0;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.6);
+  }
+  .profile-actions .action-menu-list::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+  }
+  .profile-actions .action-menu-list .btn {
+    min-height: 44px;
+  }
+}
 .action-menu-list .btn {
   justify-content: flex-start;
   width: 100%;

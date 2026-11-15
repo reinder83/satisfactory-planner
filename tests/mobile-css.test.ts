@@ -131,3 +131,15 @@ test('the toast never takes a click from the controls under it; only its buttons
   assert.match(rule([style], '#toast .toast-action'), /pointer-events:\s*auto/);
   assert.match(rule([style], '#toast .toast-actions'), /pointer-events:\s*auto/);
 });
+
+test('a profile card’s ⋯ menu is a bottom sheet over a dimmed page on a phone (MOB-6, #1355)', () => {
+  const sheet = rule(phone, '.profile-actions .action-menu-list');
+  assert.match(sheet, /position:\s*fixed/);
+  assert.match(sheet, /bottom:\s*0/);
+  assert.match(sheet, /left:\s*0/);
+  assert.match(sheet, /right:\s*0/);
+  assert.match(sheet, /box-shadow:\s*0 0 0 100vmax/, 'the page behind is dimmed');
+  assert.match(rule(phone, '.profile-actions .action-menu-list .btn'), /min-height:\s*44px/);
+  // Wide screens keep the dropdown under the button.
+  assert.match(rule([style], '.action-menu-list'), /position:\s*absolute/);
+});

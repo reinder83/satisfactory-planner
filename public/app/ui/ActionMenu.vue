@@ -16,6 +16,9 @@
   item that would say so is out of sight. The ⋯ is drawn (an inline SVG), since neither
   typeface has the glyph.
 
+  On a phone the menu of a profile card opens as a bottom sheet over a dimmed page (MOB-6, #1355,
+  style.css): the dropdown reached over the next card. A press on the dimmed part closes it.
+
   The sidebar's profile switcher (Shell.vue, SP-07) uses the same menu with its own button: the
   `trigger` slot replaces ⋯ with the button's content (which then names it, so `label` is left
   out) and `triggerClass` its classes. Its items may also be role="menuitemradio" with
@@ -106,9 +109,23 @@ function menuKey(event: KeyboardEvent) {
   } else if (event.key === 'Tab') hide(false);
 }
 
-// Capture: before the item's own handler, which then finds focus on ⋯.
+// Capture: before the item's own handler, which then finds focus on ⋯. A press on the dimmed page
+// around a phone's bottom sheet (MOB-6) lands on the list element itself, outside its own box: that
+// closes it, rather than passing through to whatever card is under the finger.
 function chosen(event: Event) {
   if (event.target instanceof Element && event.target.closest('[role^="menuitem"]')) hide(true);
+  else if (event.target === list.value && event instanceof MouseEvent) {
+    const box = list.value.getBoundingClientRect();
+    const inside =
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom;
+    if (!inside) {
+      event.stopPropagation();
+      hide(true);
+    }
+  }
 }
 
 // Focus that leaves the menu for another control (Shift+Tab, a click elsewhere) closes it.
