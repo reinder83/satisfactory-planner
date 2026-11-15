@@ -213,11 +213,20 @@ onBeforeUnmount(() => {
       type="button"
       class="btn"
       :aria-pressed="view.paused"
+      aria-describedby="estimate-pause-why"
       data-estimate-pause
       @click="setEstimatePaused(!view.paused, form())"
     >
       {{ view.paused ? 'Resume live estimate' : 'Pause live estimate' }}
     </button>
+    <!-- Why a user would pause (ONB-7, #1355). -->
+    <p id="estimate-pause-why" class="small muted" data-estimate-pause-why>
+      {{
+        view.paused
+          ? 'Paused: nothing is calculated until you resume.'
+          : 'Pause while you change many values.'
+      }}
+    </p>
     <p class="small muted">
       Calculated from the settings on screen, as Review will be. Review has every phase.
     </p>
