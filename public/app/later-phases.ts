@@ -122,16 +122,17 @@ export function groupGrowth(
   return sizes.some(size => size.machines > 0) ? sizes : [];
 }
 
-// The factory heading's line: "Phase 3: 641 machines, ≈ 1,230 foundations · Phase 4: 3,908, ≈
-// 7,400 · Phase 5: 10,618, ≈ 21,000". Machines are rounded, foundations rounded up.
-export function groupGrowthText(sizes: GroupPhaseSize[]): string {
-  return sizes
-    .map(({ phase, machines, foundations }, i) => {
-      const count = Math.round(machines),
-        room = Math.ceil(foundations - 1e-9);
-      return i
-        ? `Phase ${phase}: ${localeNumber(count)}, ≈\u00a0${localeNumber(room)}`
-        : `Phase ${phase}: ${localeNumber(count)} ${count === 1 ? 'machine' : 'machines'}, ≈\u00a0${localeNumber(room)} ${room === 1 ? 'foundation' : 'foundations'}`;
-    })
-    .join(' · ');
+// The rows of the small table under a factory's heading (FAC-6, #1355): Phase, Machines and
+// Foundations, "3 · 180 · 354", "4 · 627 · 1,383". Machines are rounded, foundations rounded up.
+export interface GroupGrowthRow {
+  phase: StageKey;
+  machines: string;
+  foundations: string;
+}
+export function groupGrowthRows(sizes: GroupPhaseSize[]): GroupGrowthRow[] {
+  return sizes.map(({ phase, machines, foundations }) => ({
+    phase,
+    machines: localeNumber(Math.round(machines)),
+    foundations: localeNumber(Math.ceil(foundations - 1e-9)),
+  }));
 }

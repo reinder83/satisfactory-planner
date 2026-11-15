@@ -8283,6 +8283,33 @@ button.rail-tile:hover {
 .group-growth > span {
   display: block;
 }
+/* The same as a tiny three-column table (FAC-6, #1355): the phase, its machines and its foundations
+   line up, which the one run of text did not. */
+.group-growth-table {
+  border-collapse: collapse;
+  margin: 2px 0 4px;
+}
+.group-growth-table th,
+.group-growth-table td {
+  padding: 2px 16px 2px 0;
+  text-align: left;
+  font-weight: 400;
+}
+.group-growth-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.group-growth-table thead th {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.group-growth-table thead th:not(:first-child) {
+  text-align: right;
+}
+.group-growth-table tbody th {
+  color: var(--ink);
+}
 /* The production line dialog's expansion table has five columns (#1299): closer cells on a
    phone, so it fits a 320px screen without scrolling sideways. */
 @media (max-width: 480px) {

@@ -138,7 +138,7 @@ test('a line’s build-plan step says it too, a dropped line that it is not need
     );
 });
 
-test('a factory heading gives its machines and rough foundations per phase', async () => {
+test('a factory heading gives its machines and rough foundations per phase, as a small table (FAC-6)', async () => {
   const { plan, grown, dropped } = await show('factories');
   const line = $(`#section-${ALPHA} [data-group-growth]`)!;
   assert.ok(line.classList.contains('muted'));
@@ -146,12 +146,21 @@ test('a factory heading gives its machines and rough foundations per phase', asy
   const room = (count: number, row: CalcRow) => machineFoundations(row.machine, count);
   const foundations3 = Math.ceil(room(grown.machines, grown) + room(dropped.machines, dropped));
   const grown4 = plan.stages['4']!.rows!.find(row => row.id === grown.id)!;
-  assert.equal(
-    text(line.querySelector('[data-group-growth-phases]')),
-    `Phase 3: ${machines3.toLocaleString('en-US')} machines, ≈ ${foundations3.toLocaleString('en-US')} foundations` +
-      ` · Phase 4: 89, ≈ ${Math.ceil(room(89, grown4)).toLocaleString('en-US')}` +
-      ` · Phase 5: 225, ≈ ${Math.ceil(room(225, grown4)).toLocaleString('en-US')}`,
+  const table = line.querySelector('table[data-group-growth-phases]')!;
+  assert.deepEqual(
+    [...table.querySelectorAll('thead th')].map(cell => text(cell)),
+    ['Phase', 'Machines', '≈ Foundations'],
+    'three columns',
   );
+  const rows = [...table.querySelectorAll('tbody tr')].map(row =>
+    [...row.children].map(cell => text(cell)),
+  );
+  assert.deepEqual(rows, [
+    ['3', machines3.toLocaleString('en-US'), foundations3.toLocaleString('en-US')],
+    ['4', '89', Math.ceil(room(89, grown4)).toLocaleString('en-US')],
+    ['5', '225', Math.ceil(room(225, grown4)).toLocaleString('en-US')],
+  ]);
+  assert.equal(table.querySelectorAll('tbody th[scope="row"]').length, 3, 'a row header per phase');
   // It says what the estimate leaves out.
   assert.match(
     text(line),
