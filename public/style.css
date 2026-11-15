@@ -3696,6 +3696,19 @@ tr.muted td:first-child {
   border-color: var(--accent);
   color: var(--bright);
 }
+/* A finished room (STO-2, #1355): a status label in the green of a done card, with nothing of a
+   button's box, so it cannot be mistaken for a disabled one. */
+.bay-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 2px;
+  color: var(--green);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 /* On a phone the bay's buttons (Complete room, ← →, Hide bay, Remove bay) are 44px touch
    targets (#832). They are quiet buttons drawn as boxes, so they have no underline to keep.
    "Move to…" beside them, a select, is a 44px touch target too (#842). Height only. */

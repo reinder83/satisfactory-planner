@@ -162,8 +162,8 @@ test('Complete room keeps focus while it saves, then goes on to the next room (#
   assert.equal(net.calls.length, 1);
   await net.release();
   await settle();
-  assert.equal($<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled, true, 'room A is done');
-  assert.match($('[data-complete-bay="A"]')!.textContent!, /Room A completed/);
+  assert.equal($('[data-complete-bay="A"]'), null, 'room A is done: no button left');
+  assert.match($('[data-bay-completed="A"]')!.textContent!, /Room A completed/);
   assert.ok(focusedOn('[data-complete-bay="B"]'), describeFocus());
   assert.equal(net.calls.length, 1);
 });

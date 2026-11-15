@@ -492,11 +492,11 @@ test('Done and "Complete room" write the four checks of each container', async (
   for (const k of named.flatMap(slotKeys)) state.checks[k] = true;
   render();
   await nextTick();
-  const complete = bay.querySelector<HTMLButtonElement>('[data-complete-bay]')!;
-  assert.equal(complete.disabled, true);
-  // Nothing is saving, so it shows no wait cursor (#948) and says it is done.
-  useStylesheet();
-  assert.equal(cursorOf(complete), 'default');
+  // A finished room says so as a status label, not as a greyed-out button (STO-2, #1355).
+  assert.equal(bay.querySelector('[data-complete-bay]'), null, 'no button left to press');
+  const complete = bay.querySelector<HTMLElement>('[data-bay-completed]')!;
+  assert.equal(complete.tagName, 'SPAN');
+  assert.equal(complete.getAttribute('role'), 'status');
   assert.equal(complete.textContent.trim(), 'Room A completed ✓');
   assert.equal(
     bay.querySelector('.bay-actions .muted')!.textContent,
@@ -860,7 +860,8 @@ test('"Complete room" stays disabled once the saved room is complete', async () 
   const button = $('[data-complete-bay="A"]')!;
   button.click();
   await settle();
-  assert.equal($<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled, true);
+  assert.equal($('[data-complete-bay="A"]'), null);
+  assert.ok($('[data-bay-completed="A"]'), 'room A is a status label now');
 });
 
 test('a handbook bay can be hidden in edit mode and restored, and its items are listed meanwhile', async () => {
