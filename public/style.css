@@ -448,8 +448,8 @@ input[type='radio'] {
 }
 /* A long profile name shows one line, cut with an ellipsis, so it cannot make the sidebar scroll
    at a short window (#792): the footer is as tall as it is for a short name. The whole name is
-   still the button's text and title, and the menu and the profiles page show it in full. Inline,
-   so the <br> before the settings lines still ends its line. A cut after two lines
+   still the button's text and title, and the menu and the profiles page show it in full. It is
+   the button's one line (PRO-5: the settings lines are in its menu). A cut after two lines
    would need the clamp property this stylesheet keeps out, so that ADA's remark is never cut
    (tests/ui/ada-fit.test.ts). */
 .profile-switcher-name {
@@ -499,6 +499,12 @@ input[type='radio'] {
   gap: 6px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
+}
+/* The open profile's settings at the top of the switcher's menu (PRO-5): plain lines, no items. */
+.plan-settings p {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
 .action-menu-list [aria-checked='true'] {
   border-color: var(--accent);
@@ -1901,6 +1907,33 @@ textarea::placeholder {
   margin-left: 12px;
 }
 
+/* What an empty page will show and the way forward (X-7, ui/EmptyGuide.vue). */
+.empty-guide {
+  margin: 14px 0;
+  padding: 12px 16px;
+  border: 1px dashed #343b41;
+  background: var(--panel);
+}
+.empty-guide h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.empty-guide p {
+  margin: 0 0 6px;
+  max-width: 62ch;
+}
+.empty-guide-links a,
+.empty-guide-links .btn {
+  margin-right: 4px;
+}
+@media (max-width: 720px) {
+  .empty-guide-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 /* ── Factory cards ─────────────────────────────────────── */
 .cards {
   display: grid;
@@ -2667,11 +2700,22 @@ p.eyebrow {
   padding: 0;
   list-style: none;
 }
+/* A car is a 44px chip you can drag or move with the arrow keys (LOG-5). */
 .line-car {
+  min-height: 44px;
   border: 1px solid var(--line);
   background: var(--panel);
-  padding: 3px 8px;
+  color: inherit;
+  padding: 3px 12px;
+  font: inherit;
   font-size: 12px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.line-car:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .line-car.loco {
   border-color: var(--accent);
@@ -2723,9 +2767,40 @@ p.eyebrow {
   flex: 1 1 12rem;
   min-width: 0;
 }
-.platform-number {
+.platform-title {
   flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+}
+.platform-number {
+  flex: 0 0 auto;
   color: var(--bright);
+}
+/* The ⠿ handle to drag a platform row or a train car with (ui/sort-drag.ts, LOG-4, LOG-5): a
+   44px target, which a finger can hold without the page scrolling under it. The row held is dimmed
+   and the one it would land on is outlined. */
+.sort-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-left: -8px;
+  color: var(--dim);
+  font-size: 18px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.sort-handle:hover {
+  color: var(--accent);
+}
+.sort-source {
+  opacity: 0.55;
+}
+.sort-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
 }
 .platform-tools {
   display: flex;
@@ -2734,6 +2809,26 @@ p.eyebrow {
 }
 .platform-tools .btn {
   min-width: 40px;
+}
+/* The row's tools are 44px targets, ⋯ included (LOG-4). */
+.platform-tools .btn,
+.platform-tools .action-menu-button {
+  min-height: 44px;
+}
+/* In a narrow dialog the tools sit on a row of their own at the left, so their menu opens to the
+   right of ⋯ instead of off the left edge. */
+@media (max-width: 800px) {
+  .platform-tools {
+    position: relative;
+  }
+  .platform-tools .action-menu {
+    position: static;
+  }
+  .platform-tools .action-menu-list {
+    right: auto;
+    left: 0;
+    min-width: min(230px, 80vw);
+  }
 }
 .platform-cargo {
   margin-top: 4px;
@@ -3026,6 +3121,16 @@ p.eyebrow {
 .notes-phases > p {
   margin: 0 0 14px;
 }
+/* The step and factory notes (ui/notes/ItemNotes.vue), under the phase notes (BAK-3). */
+.notes-phases + .notes-items {
+  margin-top: 24px;
+}
+.notes-items > p {
+  margin: 0 0 14px;
+}
+.notes-items > .section-head {
+  margin-bottom: 4px;
+}
 /* What the move from the original plan could not place (ui/notes/UnplacedRecords.vue, #499),
    listed under the phase notes. Saved text wraps and keeps its line breaks. */
 .notes-phases + .unplaced {
@@ -3049,6 +3154,49 @@ p.eyebrow {
   display: block;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* A note on one thing (BAK-3, ui/notes/ItemNote.vue): a disclosure button on a step, a factory or
+   the phase on the build plan, 44px tall on a phone. */
+.item-note {
+  margin: 8px 0;
+}
+.item-note-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.item-note-toggle::before {
+  content: '▸';
+  width: 1em;
+}
+.item-note-toggle[aria-expanded='true']::before {
+  content: '▾';
+}
+.item-note-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.item-note-toggle .muted {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.item-note-body {
+  margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .item-note-toggle {
+    min-height: 44px;
+  }
 }
 .phase-notes summary {
   margin: -16px;
@@ -6311,6 +6459,25 @@ button.rail-tile:hover {
   paint-order: stroke;
   stroke: var(--bg2);
   stroke-width: 3px;
+}
+/* A name that would cover another name or pin at this zoom is not drawn (MAP-5,
+   app/map-labels.ts). It comes back while its pin is pointed at, focused or picked, drawn over the
+   others, and once the map is zoomed in far enough for it to fit. */
+.map-factory-label[data-label-hidden],
+.map-station-label[data-label-hidden],
+.map-marker-label[data-label-hidden],
+.map-line-label[data-label-hidden] {
+  visibility: hidden;
+}
+.map-factory:is(:hover, :focus, :focus-within) .map-factory-label[data-label-hidden],
+.map-station:is(:hover, :focus) .map-station-label[data-label-hidden],
+.map-marker:is(:hover, :focus) .map-marker-label[data-label-hidden] {
+  visibility: visible;
+}
+.map-factory:is(:hover, :focus),
+.map-station:is(:hover, :focus),
+.map-marker:is(:hover, :focus) {
+  z-index: 3;
 }
 /* "Place factory": the factory to place and the button, kept together when the toolbar wraps. */
 .map-place {

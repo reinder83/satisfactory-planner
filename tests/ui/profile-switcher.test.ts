@@ -87,7 +87,8 @@ test('the footer is a menu button naming the open profile, with the save’s pro
   const button = trigger();
   assert.equal(button.closest('.sidebar-foot') !== null, true, 'it is the sidebar footer');
   assert.ok(button.textContent!.startsWith(evil), 'the footer names the open profile');
-  assert.equal(button.querySelectorAll('br').length, 3, 'the settings lines stay on the button');
+  assert.equal(button.querySelectorAll('br').length, 0, 'one line on the button (PRO-5)');
+  assert.equal(menu().querySelectorAll('[data-plan-settings] p').length, 3, 'settings: the menu');
   assert.equal(button.getAttribute('aria-haspopup'), 'menu');
   assert.equal(button.getAttribute('aria-expanded'), 'false');
   assert.equal(button.getAttribute('aria-label'), null, 'its own text names it');
@@ -106,7 +107,7 @@ test('the footer is a menu button naming the open profile, with the save’s pro
     ['true', 'false', 'false'],
   );
   assert.equal(
-    $('#profile-switcher [role="group"]')!.getAttribute('aria-label'),
+    $('#profile-switcher [role="group"]:not([data-plan-settings])')!.getAttribute('aria-label'),
     'Profiles in ' + evil,
   );
   assert.deepEqual(

@@ -37,6 +37,8 @@ import TrainDiagram from '../factories/TrainDiagram.vue';
 import TrainLines from '../factories/TrainLines.vue';
 import TrainStations from '../factories/TrainStations.vue';
 import TrainsFromLinks from '../factories/TrainsFromLinks.vue';
+import { state } from '../../session.ts';
+import EmptyGuide from '../EmptyGuide.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import { tabKeyTarget } from '../plan/plan-tabs.ts';
@@ -48,6 +50,8 @@ const page = computed(() =>
     rows: !!calcStage()?.rows?.length,
     groups: calculated ? factoryGroupsState().groups.length : 0,
     phase: phaseLabel(phase()),
+    // No train station and no train line: the Trains tab has nothing yet (X-7).
+    noTrains: !state.trainStations?.length && !state.trainLines?.length,
   })),
 );
 
@@ -60,6 +64,13 @@ const active = ref<LogisticsTab>(logisticsTab);
 function openTab(tab: LogisticsTab) {
   active.value = tab;
   setLogisticsTab(tab);
+}
+// "Open Between factories" in the Trains tab's empty guide: the tab opens and takes focus.
+function showLinks() {
+  openTab('links');
+  void nextTick(() =>
+    document.querySelector<HTMLButtonElement>('[data-logistics-tab="links"]')?.focus(),
+  );
 }
 // Arrow keys, Home and End move between the tabs and open the one they reach.
 function tabKey(event: KeyboardEvent) {
@@ -119,7 +130,20 @@ const subtitle = computed(() => {
       </button>
     </div>
     <div v-bind="panelAttrs('links')" data-logistics-panel="links">
-      <MilestoneOnlyNotice v-if="page.milestones" />
+      <template v-if="page.milestones">
+        <MilestoneOnlyNotice />
+        <EmptyGuide page="logistics" title="What will appear here">
+          <p class="small">
+            What each factory sends the others, and by which belt, pipe or vehicle, once your
+            production lines are sorted into factories. This phase builds no production lines, so
+            nothing moves yet.
+          </p>
+          <template #links
+            ><a href="#factories" data-empty-link>Open Factories</a>, where the lines are sorted
+            into factories.</template
+          >
+        </EmptyGuide>
+      </template>
       <div v-else-if="!page.rows" class="notice info" data-logistics-empty="phase">
         This phase has no production lines, so nothing moves between factories yet.
       </div>
@@ -131,6 +155,18 @@ const subtitle = computed(() => {
       <GroupLinks v-else />
     </div>
     <div v-bind="panelAttrs('trains')" data-logistics-panel="trains">
+      <EmptyGuide v-if="page.noTrains" page="trains" title="What will appear here">
+        <p class="small">
+          Your train stations with their platforms, your train lines with what each wagon carries,
+          and what to check on them. A link you set to go by train on Between factories can propose
+          them for you; you can also add each one below.
+        </p>
+        <template #links
+          ><button type="button" class="btn" data-empty-link @click="showLinks">
+            Open Between factories
+          </button></template
+        >
+      </EmptyGuide>
       <TrainsFromLinks />
       <TrainStations />
       <TrainLines />

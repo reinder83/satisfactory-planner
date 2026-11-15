@@ -43,6 +43,8 @@ import { render } from '../../shell.ts';
 import { removedStepNews, restoredStepNews } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import { listNames } from '../../../wording.ts';
+import { safeKey } from '../../../state.ts';
+import ItemNote from '../notes/ItemNote.vue';
 import TermText from '../TermText.vue';
 import StepFacts from './StepFacts.vue';
 import StepIcon from './StepIcon.vue';
@@ -73,6 +75,8 @@ const props = withDefaults(
 // page it opens focuses this step's line, and Back from it focuses this link again (aimFlowLine
 // in ui/refocus.ts).
 const splitId = computed(() => 'step-split-' + props.step.id);
+// The step's own note (BAK-3), a notes record under `step-<id>`; none for an id too long to be a key.
+const noteKey = computed(() => (safeKey('step-' + props.step.id) ? 'step-' + props.step.id : ''));
 // The note of a line a delivered part leaves without work (#1062), which also describes the
 // step's checkbox.
 const idleId = computed(() => 'step-idle-' + props.step.id);
@@ -379,6 +383,13 @@ async function deletePersonal(event: Event) {
           <b>Materials:</b> {{ step.materials.parts }}</template
         >
       </p>
+      <ItemNote
+        v-if="noteKey"
+        :note-key="noteKey"
+        empty-label="Add a note"
+        filled-label="Note"
+        :label="'Note: ' + step.title"
+      />
       <button
         v-if="lead"
         type="button"

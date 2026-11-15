@@ -153,3 +153,16 @@ test('Expert All settings fields are wide enough for the longest label on one li
   // A phone keeps its two fields a row.
   assert.match(rule(phone, '.wizard-panel.compact .form-grid'), /repeat\(2, minmax\(0, 1fr\)\)/);
 });
+
+test('a drag handle is a 44px target that a finger can drag (LOG-4)', () => {
+  const handle = rule([style], '.sort-handle');
+  assert.match(handle, /min-width:\s*44px/);
+  assert.match(handle, /min-height:\s*44px/);
+  assert.match(handle, /touch-action:\s*none/);
+});
+
+test('a train car chip is a 44px target that a finger can drag (LOG-5)', () => {
+  const car = rule([style], '.line-car');
+  assert.match(car, /min-height:\s*44px/);
+  assert.match(car, /touch-action:\s*none/);
+});

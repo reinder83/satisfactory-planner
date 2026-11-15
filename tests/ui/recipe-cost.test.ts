@@ -91,7 +91,7 @@ test('a draft keeps its multiplier, and 1× leaves the field out again', async (
 });
 
 test('the sidebar names the recipe part cost a plan was calculated with, only when not 1×', () => {
-  const footer = () => $('.sidebar-foot .profile-switcher')!.textContent!;
+  const footer = () => $('.sidebar-foot [data-plan-settings]')!.textContent!;
   for (const [recipeCost, shown] of [
     [undefined, null],
     [2, '2× recipe part cost'],
@@ -107,7 +107,7 @@ test('the sidebar names the recipe part cost a plan was calculated with, only wh
     if (shown) assert.ok(footer().includes(shown), footer());
     else assert.doesNotMatch(footer(), /recipe part cost/);
     assert.equal(
-      $('.sidebar-foot .profile-switcher')!.querySelectorAll('br').length,
+      $('.sidebar-foot [data-plan-settings]')!.querySelectorAll('p').length,
       shown ? 4 : 3,
     );
   }

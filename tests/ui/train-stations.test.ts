@@ -386,3 +386,91 @@ test('Enter in the cargo field adds the item it names and never saves the statio
     'Remove Bauxite from platform 2',
   );
 });
+
+// LOG-4: the platform editor's rows are dragged by a ⠿ handle, and the removal is in a ⋯ menu per
+// row instead of a red button on each one.
+const pointer = (target: Element, type: string, y: number) =>
+  target.dispatchEvent(
+    new PointerEvent(type, { pointerId: 1, clientX: 5, clientY: y, button: 0, bubbles: true }),
+  );
+// Rows 100 px apart, as a browser would lay them out (happy-dom does no layout).
+function layOut(list: Element[]) {
+  list.forEach((element, i) => {
+    element.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: i * 100,
+        width: 300,
+        height: 90,
+        right: 300,
+        bottom: i * 100 + 90,
+      }) as DOMRect;
+  });
+}
+async function dragPlatform(
+  from: number,
+  to: number,
+  finish: 'pointerup' | 'escape' = 'pointerup',
+) {
+  layOut(rows());
+  const handle = inRow(from, '[data-platform-drag]');
+  pointer(handle, 'pointerdown', from * 100 + 45);
+  pointer(handle, 'pointermove', to * 100 + 45);
+  if (finish === 'escape')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  pointer(handle, 'pointerup', to * 100 + 45);
+  await settle();
+}
+const kinds = () =>
+  rows().map(row => row.querySelector<HTMLSelectElement>('[data-platform-kind]')!.value);
+
+test('LOG-4: a platform row is dragged by its handle and lands where it is let go', async () => {
+  await showLogistics({ trainStations: [MINE] });
+  $<HTMLButtonElement>(`[data-station-edit="${MINE.id}"]`)!.click();
+  await settle();
+  assert.deepEqual(kinds(), ['empty', 'load', 'unload']);
+  assert.equal(
+    inRow(0, '[data-platform-drag]').getAttribute('aria-hidden'),
+    'true',
+    'the keyboard has the up and down buttons, so the handle is for the pointer only',
+  );
+  await dragPlatform(0, 2);
+  assert.deepEqual(kinds(), ['load', 'unload', 'empty']);
+  assert.equal(inRow(0, '.platform-number').textContent, 'Platform 1');
+  // Nothing is saved before Save.
+  assert.deepEqual(sent, []);
+  // Escape while dragging drops nothing; a press that never moves is no drag.
+  await dragPlatform(0, 2, 'escape');
+  assert.deepEqual(kinds(), ['load', 'unload', 'empty']);
+  const handle = inRow(1, '[data-platform-drag]');
+  pointer(handle, 'pointerdown', 145);
+  pointer(handle, 'pointerup', 145);
+  await settle();
+  assert.deepEqual(kinds(), ['load', 'unload', 'empty']);
+  $<HTMLButtonElement>('[data-station-save]')!.click();
+  await settle();
+  assert.deepEqual(
+    (sent[0]! as { value: { platforms: { kind: string }[] } }).value.platforms.map(p => p.kind),
+    ['load', 'unload', 'empty'],
+  );
+});
+
+test('LOG-4: the removal is in each row’s ⋯ menu, not a red button on every row', async () => {
+  await showLogistics({ trainStations: [MINE] });
+  $<HTMLButtonElement>(`[data-station-edit="${MINE.id}"]`)!.click();
+  await settle();
+  assert.equal($$('.platform-tools > .btn.danger').length, 0, 'no red button stands in the row');
+  assert.equal($$('[data-platform-menu]').length, 3, 'a ⋯ button on each row');
+  const menu = inRow(1, '[data-platform-menu]');
+  assert.equal(menu.getAttribute('aria-label'), 'More actions: platform 2');
+  assert.equal(menu.getAttribute('aria-haspopup'), 'menu');
+  menu.click();
+  await settle();
+  const item = inRow(1, '[role="menuitem"][data-platform-remove]');
+  assert.equal(item.textContent!.trim(), 'Remove');
+  assert.equal(document.activeElement, item, 'the menu opens on its item');
+  item.click();
+  await settle();
+  assert.equal(rows().length, 2);
+  assert.equal(document.activeElement, inRow(1, '[data-platform-kind]'), 'focus on the next row');
+});

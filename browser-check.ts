@@ -1095,6 +1095,15 @@ try {
     'one step ticked, the one chosen',
   );
   await page.waitForTimeout(250);
+  // PRO-5 (#1355): the sidebar's profile switcher is one line, its settings are in its menu.
+  assert.equal(await page.locator('[data-profile-switcher] br').count(), 0);
+  assert.ok((await page.locator('[data-plan-settings] p').count()) >= 1, 'settings in the menu');
+  // BAK-3 (#1355): the plan shows the phase's note, and every step has a note of its own.
+  await page.locator('#main [data-note-for="phase-1"]').waitFor();
+  assert.ok(
+    (await page.locator('#main [data-task] [data-item-note]').count()) > 0,
+    'a note on each step',
+  );
   await page.locator('[data-phase-notes-link]').focus();
   await page.keyboard.press('Enter');
   await page.locator('#phase-note-1').waitFor();
@@ -1540,6 +1549,35 @@ try {
   await page.locator('#detail [data-cargo="Iron Plate"]').waitFor();
   assert.equal(await cargo.inputValue(), '', 'a fresh cargo field');
   assert.ok(await cargo.evaluate(field => field === document.activeElement), 'with focus in it');
+  // LOG-4 (#1355): a platform row is dragged by its ⠿ handle, and Remove is in the row's ⋯ menu.
+  await page.locator('#detail [data-platform-add]').click();
+  await page.locator('#detail [data-platform-add]').click();
+  await page.locator('#detail [data-platform-kind]').nth(1).selectOption('unload');
+  await page.locator('#detail [data-platform-kind]').nth(2).selectOption('empty');
+  const platformKinds = () =>
+    page
+      .locator('#detail [data-platform-kind]')
+      .evaluateAll(selects => selects.map(select => (select as HTMLSelectElement).value));
+  assert.deepEqual(await platformKinds(), ['load', 'unload', 'empty']);
+  // The last row dragged up over the one above it (both in view, as the first row is tall).
+  await page.locator('#detail [data-platform-drag]').nth(2).scrollIntoViewIfNeeded();
+  const grip = (await page.locator('#detail [data-platform-drag]').nth(2).boundingBox())!;
+  assert.ok(grip.width >= 44 && grip.height >= 44, 'the handle is a 44px target');
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2 + 5, grip.y + grip.height / 2 - 30, { steps: 4 });
+  const upper = (await page.locator('#detail [data-platform-drag]').nth(1).boundingBox())!;
+  await page.mouse.move(upper.x + upper.width / 2, upper.y + upper.height / 2 + 8, { steps: 10 });
+  await page.mouse.up();
+  assert.deepEqual(await platformKinds(), ['load', 'empty', 'unload'], 'dragged up one place');
+  assert.equal(
+    await page.locator('#detail .platform-tools > .btn.danger').count(),
+    0,
+    'no red button on every row',
+  );
+  await page.locator('#detail [data-platform-menu]').nth(0).click();
+  await page.locator('#detail [data-platform-remove]').nth(0).click();
+  assert.equal(await page.locator('#detail [data-platform]').count(), 2, 'removed from the menu');
   await page.locator('#detail [data-station-cancel]').click();
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   await page.goto(base + '#storage');

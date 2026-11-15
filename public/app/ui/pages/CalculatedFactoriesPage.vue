@@ -72,6 +72,7 @@ import MineOnly from '../factories/MineOnly.vue';
 import NextUp from '../factories/NextUp.vue';
 import RecalcBanner from '../plan/RecalcBanner.vue';
 import PageHeader from '../PageHeader.vue';
+import EmptyGuide from '../EmptyGuide.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import SiteSection from '../factories/SiteSection.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
@@ -233,6 +234,17 @@ async function roundUp(event: Event) {
     <!-- The recalculation notice is about the whole plan, not this phase (#1014). -->
     <RecalcBanner on-site />
     <MilestoneOnlyNotice />
+    <EmptyGuide page="factories" title="What will appear here">
+      <p class="small">
+        Every production line the plan builds in a phase, as a card with its machines, inputs and
+        Built and Running boxes, grouped into factories by where you build them. This phase builds
+        none, so nothing is listed yet.
+      </p>
+      <template #links
+        ><a href="#plan" data-empty-link>Open the build plan</a> for the steps that come
+        first.</template
+      >
+    </EmptyGuide>
   </template>
   <template v-else-if="page">
     <PageHeader

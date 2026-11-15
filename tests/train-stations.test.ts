@@ -31,6 +31,8 @@ import { openBrowserStore } from '../public/browser-store.ts';
 import {
   cargoItems,
   moveAt,
+  moveTo,
+  nearestIndex,
   newStationId,
   newStationName,
   nodesText,
@@ -310,6 +312,29 @@ test('the station words: owners, platforms, counts and a new name', () => {
   assert.deepEqual(platformOfKind('load', { kind: 'unload' }), { kind: 'load', cargo: [] });
   assert.deepEqual(platformOfKind('empty', load), { kind: 'empty' });
   assert.deepEqual(platformOfKind('unload', { kind: 'empty' }), { kind: 'unload' });
+});
+
+// LOG-4/LOG-5: a dragged row or car lands where it is held.
+test('moveTo takes one item out and puts it at another place, nothing else changes', () => {
+  const list = ['a', 'b', 'c', 'd'];
+  assert.deepEqual(moveTo(list, 0, 2), ['b', 'c', 'a', 'd']);
+  assert.deepEqual(moveTo(list, 3, 0), ['d', 'a', 'b', 'c']);
+  assert.deepEqual(moveTo(list, 1, 1), list);
+  assert.deepEqual(moveTo(list, 4, 0), list, 'out of range: unchanged');
+  assert.deepEqual(moveTo(list, 0, -1), list);
+  assert.deepEqual(list, ['a', 'b', 'c', 'd'], 'the list given is never changed');
+});
+
+test('nearestIndex names the centre closest to the point', () => {
+  const centres = [
+    { x: 10, y: 10 },
+    { x: 110, y: 10 },
+    { x: 10, y: 60 },
+  ];
+  assert.equal(nearestIndex(centres, 12, 14), 0);
+  assert.equal(nearestIndex(centres, 100, 20), 1);
+  assert.equal(nearestIndex(centres, 0, 90), 2, 'a wrapped row of chips: the one below');
+  assert.equal(nearestIndex([], 5, 5), -1);
 });
 
 // Both editions: the stations are saved, kept through a reload, a full export and import, a

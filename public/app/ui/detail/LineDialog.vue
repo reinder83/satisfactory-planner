@@ -27,7 +27,7 @@ import { whileBusy } from '../../busy.ts';
 import { required } from '../../format.ts';
 import { state } from '../../session.ts';
 import { estimateText, tripFromMap } from '../../train-proposal.ts';
-import { moveAt, removeAt } from '../../train-stations.ts';
+import { moveAt, moveTo, removeAt } from '../../train-stations.ts';
 import {
   DIRECTION_TEXT,
   newLineId,
@@ -40,6 +40,7 @@ import { closeDetail } from '../actions.ts';
 import { legacy } from '../bridge.ts';
 import LineChecks from '../factories/LineChecks.vue';
 import LineWagons from '../factories/LineWagons.vue';
+import { beginSortDrag } from '../sort-drag.ts';
 import { deleteLine, focusLine, saveLine } from '../train-line-actions.ts';
 import DialogFrame from './DialogFrame.vue';
 
@@ -129,6 +130,30 @@ function carName(car: TrainCar, i: number): string {
   return i > 0 && i === cars.value.length - 1 ? 'Rear locomotive' : 'Locomotive';
 }
 const full = computed(() => cars.value.length >= TRAIN_CAR_MAX);
+// A car moved along the train (LOG-5), by a drag or by the arrow keys on its chip: the cars keep
+// their kinds, only their order changes, and the saved line is the same shape. Focus follows the
+// car that moved.
+async function moveCar(from: number, to: number, refocus: boolean) {
+  if (to < 0 || to >= cars.value.length || to === from) return;
+  cars.value = moveTo(cars.value, from, to);
+  announce(`${carName(cars.value[to]!, to)} moved to position ${to + 1} of ${cars.value.length}.`);
+  if (!refocus) return;
+  await nextTick();
+  form.value?.querySelectorAll<HTMLElement>('[data-car]')[to]?.focus();
+}
+function carKey(event: KeyboardEvent, at: number) {
+  const by = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+  if (!by) return;
+  event.preventDefault();
+  void moveCar(at, at + by, true);
+}
+function dragCar(event: PointerEvent, at: number) {
+  beginSortDrag(event, {
+    items: () => [...(form.value?.querySelectorAll<HTMLElement>('.line-consist > li') ?? [])],
+    from: at,
+    onDrop: to => void moveCar(at, to, false),
+  });
+}
 function addWagon() {
   if (full.value) return;
   cars.value = withWagon(cars.value, direction.value);
@@ -246,10 +271,23 @@ function typed() {
         <legend>Train, front to back</legend>
         <p v-if="!cars.length" class="small" data-line-no-cars>No cars yet.</p>
         <ol v-else class="line-consist" aria-label="Cars, front to back">
-          <li v-for="(car, i) in cars" :key="i" :class="['line-car', car]" :data-car="car">
-            {{ carName(car, i) }}
+          <li v-for="(car, i) in cars" :key="i">
+            <button
+              type="button"
+              :class="['line-car', car]"
+              :data-car="car"
+              :aria-describedby="cars.length > 1 ? 'line-car-hint' : undefined"
+              :aria-label="`${carName(car, i)}, car ${i + 1} of ${cars.length}`"
+              @keydown="carKey($event, i)"
+              @pointerdown="dragCar($event, i)"
+            >
+              {{ carName(car, i) }}
+            </button>
           </li>
         </ol>
+        <p v-if="cars.length > 1" id="line-car-hint" class="small muted" data-line-car-hint>
+          Drag a car, or focus it and press the arrow keys, to move it along the train.
+        </p>
         <div class="platform-tools">
           <button type="button" class="btn" :disabled="full" data-line-add-wagon @click="addWagon">
             + Wagon

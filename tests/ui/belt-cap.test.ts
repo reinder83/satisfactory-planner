@@ -94,7 +94,7 @@ test('a draft shows its belt cap, and "No cap" leaves the field out again', asyn
 });
 
 test('the sidebar names the belt cap a plan was calculated with, beside the caps per phase', () => {
-  const footer = () => plain($('.sidebar-foot .profile-switcher')!.textContent);
+  const footer = () => plain($('.sidebar-foot [data-plan-settings]')!.textContent);
   for (const [extra, shown] of [
     [{}, null],
     [{ beltCap: 4 }, 'Caps: belts up to Mk.4 (480/min)'],

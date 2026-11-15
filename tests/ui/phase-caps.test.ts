@@ -89,7 +89,7 @@ test('a draft shows its caps, and blank boxes leave the field out again', async 
 });
 
 test('the sidebar names the caps a plan was calculated with, only when it has one', () => {
-  const footer = () => $('.sidebar-foot .profile-switcher')!.textContent!;
+  const footer = () => $('.sidebar-foot [data-plan-settings]')!.textContent!;
   for (const [caps, shown] of [
     [undefined, null],
     [{ mw: 2500 }, 'Caps: at most 2,500 MW per phase'],

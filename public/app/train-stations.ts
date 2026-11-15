@@ -143,6 +143,32 @@ export function moveAt<T>(list: readonly T[], at: number, by: -1 | 1): T[] {
   return out;
 }
 export const removeAt = <T>(list: readonly T[], at: number): T[] => list.filter((_, i) => i !== at);
+// One item taken out of `from` and put at `to` (a drag, LOG-4/LOG-5): the others keep their order.
+export function moveTo<T>(list: readonly T[], from: number, to: number): T[] {
+  if (from < 0 || from >= list.length || to < 0 || to >= list.length || from === to)
+    return [...list];
+  const out = [...list];
+  out.splice(to, 0, out.splice(from, 1)[0]!);
+  return out;
+}
+// The index of the centre nearest the point (a dragged item lands where it is held over), or -1
+// for no items. Ties go to the earlier one.
+export function nearestIndex(
+  centres: readonly { x: number; y: number }[],
+  x: number,
+  y: number,
+): number {
+  let best = -1;
+  let bestDistance = Infinity;
+  centres.forEach((centre, i) => {
+    const distance = (centre.x - x) ** 2 + (centre.y - y) ** 2;
+    if (distance < bestDistance) {
+      best = i;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
 
 // The toasts of a deleted station and of its Undo.
 export const stationDeletedNews = (name: string, lines = 0) =>

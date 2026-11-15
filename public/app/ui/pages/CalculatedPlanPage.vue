@@ -68,6 +68,7 @@ import HandoverSummary from '../plan/HandoverSummary.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import NextPhase from '../plan/NextPhase.vue';
 import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
+import ItemNote from '../notes/ItemNote.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
@@ -139,6 +140,7 @@ const page = computed(() =>
     const buildings = num(rows.reduce((total, row) => total + row.machines, 0));
     return {
       title: phaseLabel(phase()),
+      phaseKey: phase(),
       profileName: currentProfile.name,
       post: phase() === 'post',
       // Post Phase 5's finish card (#1069): whether Phase 5's delivery is complete.
@@ -349,6 +351,15 @@ function tabKey(event: KeyboardEvent) {
                it when another phase is shown. Today's session is the button beside Edit steps
                (BP-11). -->
           <BuildIntro v-if="!page.guided && !page.milestones" :key="page.title" />
+          <!-- The phase's note (BAK-3), the Notes page's own record, above the steps so it is read
+               before them; open when it has text. -->
+          <ItemNote
+            :key="'phase-note-' + page.phaseKey"
+            :note-key="'phase-' + page.phaseKey"
+            :empty-label="'Add a note for ' + page.title"
+            :filled-label="page.title + ' note'"
+            :label="page.title + ' notes'"
+          />
           <Checklist />
           <AddTaskForm placeholder="Add a task…" />
           <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>

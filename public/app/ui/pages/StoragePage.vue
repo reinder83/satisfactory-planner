@@ -13,6 +13,8 @@
 import { computed, nextTick } from 'vue';
 import {
   calculated,
+  currentProfile,
+  currentSave,
   floor,
   layoutEditing,
   query,
@@ -47,7 +49,9 @@ import LayoutEditor from '../storage/LayoutEditor.vue';
 import StorageBay from '../storage/StorageBay.vue';
 import StorageChecklist from '../storage/StorageChecklist.vue';
 import WorkshopPanel from '../storage/WorkshopPanel.vue';
+import EmptyGuide from '../EmptyGuide.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
+import { startEdit } from '../../wizard/wizard.ts';
 
 // The most search results listed at once (#240); a short query can match most of the room.
 const RESULT_LIMIT = 24;
@@ -135,6 +139,8 @@ const page = computed(() =>
       // built-room notice is dropped (decision 3B on #387).
       template: floor === 'ground' && !calculated?.engine?.startsWith('handbook-'),
       query,
+      // No container is planned on any floor (X-7): nothing to show but the empty room.
+      none: floors.every(storageFloor => !(progress.get(storageFloor.id)?.named ?? 0)),
       results: matches.slice(0, RESULT_LIMIT),
       matches: matches.length,
       elsewhere: matches.filter(m => m.floor !== floor).length,
@@ -168,6 +174,13 @@ const page = computed(() =>
     };
   }),
 );
+
+// "Pick the storage supply" in the empty guide: Edit settings on its Preferences step (X-7).
+function pickStorage() {
+  void startEdit(currentSave.id, currentProfile.id, 2).catch(error =>
+    toast((error as Error).message, true),
+  );
+}
 
 // A floor tab: switch floor. The search stays (#240), and narrows the new floor.
 function showFloor(id: string) {
@@ -414,6 +427,17 @@ function toggleLayout() {
     :bays="page.floorBays"
     :hidden-here="page.hiddenHere"
   /><WorkshopPanel v-if="page.workshop" />
+  <EmptyGuide v-if="page.none" page="storage" title="What will appear here">
+    <p class="small">
+      A container for each item you picked as storage supply, at a stable address you tick off as
+      you build, label, connect and verify it. None is planned yet, so every position is reserved.
+    </p>
+    <template #links
+      ><button type="button" class="btn" data-empty-link @click="pickStorage">
+        Pick the storage supply in Edit settings</button
+      >, or add containers yourself with Edit layout.</template
+    >
+  </EmptyGuide>
   <div v-if="page.template" class="notice info">
     Optional storage template. Each position has its own checklist; nothing is assumed built.
   </div>
