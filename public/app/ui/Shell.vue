@@ -476,7 +476,7 @@ const topWorkOn = (v: View) => v !== 'plan' || milestoneOnly();
           ></a
         >
       </nav>
-      <AdaPanel @acted="closeMenu(false)" />
+      <AdaPanel @acted="refocus => closeMenu(refocus === true)" />
       <div :class="['save-status', frame.notSaved ? 'is-not-saved' : '']">
         <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
         ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
