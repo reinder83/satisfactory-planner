@@ -8,7 +8,8 @@
   nodes, or storage) and its platforms in order are edited here: each platform loads cargo (one
   item, or several for mixed cargo, picked with the item search), unloads or stays empty, and a
   load or unload platform has the belt that feeds or drains it. Platforms are added at the end,
-  moved up and down and removed with buttons, so all of it works from the keyboard; a move or a
+  moved up and down with buttons, or dragged by the ⠿ handle before its number (LOG-4), and
+  removed from the ⋯ menu beside them, so all of it works from the keyboard; a move or a
   removal is announced and focus stays on the platform moved, or goes to the next one. Nothing is
   saved before Save, which sends the whole station as one `trainStation` update and puts focus on
   the station's Edit button on the page: Cancel, × and Escape leave the station as it was. "Delete
@@ -48,6 +49,7 @@ import {
   pipeChoices,
   wellsChoice,
   moveAt,
+  moveTo,
   newStationId,
   newStationName,
   nodesText,
@@ -56,8 +58,10 @@ import {
 } from '../../train-stations.ts';
 import { closeDetail } from '../actions.ts';
 import { legacy } from '../bridge.ts';
+import ActionMenu from '../ActionMenu.vue';
 import ItemIcon from '../ItemIcon.vue';
 import ItemSearch from '../form/ItemSearch.vue';
+import { beginSortDrag } from '../sort-drag.ts';
 import { deleteStation, focusStation, saveStation } from '../train-station-actions.ts';
 import DialogFrame from './DialogFrame.vue';
 
@@ -178,6 +182,18 @@ async function move(at: number, by: -1 | 1, which: 'up' | 'down') {
   const ends = to === 0 ? 'up' : to === draft.value.length - 1 ? 'down' : null;
   const button = ends === which ? (which === 'up' ? 'down' : 'up') : which;
   await focusIn(key, `[data-platform-${button}]`);
+}
+// Drag a row by its ⠿ handle (LOG-4): the row lands where it is let go, announced as a move with
+// the buttons is. The handle is no tab stop; ↑ ↓ are the keyboard's way.
+function dragRow(event: PointerEvent, at: number) {
+  beginSortDrag(event, {
+    items: () => [...(form.value?.querySelectorAll<HTMLElement>('.platform-row') ?? [])],
+    from: at,
+    onDrop(to) {
+      draft.value = moveTo(draft.value, at, to);
+      announce(`Platform moved to position ${to + 1} of ${draft.value.length}.`);
+    },
+  });
 }
 async function remove(at: number) {
   const after = draft.value[at + 1]?.key ?? draft.value[at - 1]?.key ?? null;
@@ -382,7 +398,16 @@ function typed() {
             :data-platform-key="entry.key"
           >
             <div class="platform-head">
-              <strong class="platform-number">Platform {{ i + 1 }}</strong>
+              <div class="platform-title">
+                <span
+                  class="sort-handle"
+                  aria-hidden="true"
+                  title="Drag to reorder"
+                  data-platform-drag
+                  @pointerdown="dragRow($event, i)"
+                  >⠿</span
+                ><strong class="platform-number">Platform {{ i + 1 }}</strong>
+              </div>
               <label class="field"
                 >Type<select
                   :value="entry.platform.kind"
@@ -444,15 +469,23 @@ function typed() {
                 >
                   ↓
                 </button>
-                <button
-                  type="button"
-                  class="btn danger"
-                  :aria-label="`Remove: platform ${i + 1}`"
-                  data-platform-remove
-                  @click="remove(i)"
+                <ActionMenu
+                  :id="'platform-menu-' + entry.key"
+                  :label="`More actions: platform ${i + 1}`"
+                  data-platform-menu
                 >
-                  Remove
-                </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    tabindex="-1"
+                    class="btn danger"
+                    :aria-label="`Remove: platform ${i + 1}`"
+                    data-platform-remove
+                    @click="remove(i)"
+                  >
+                    Remove
+                  </button>
+                </ActionMenu>
               </div>
             </div>
             <div v-if="entry.platform.kind === 'load'" class="platform-cargo">
