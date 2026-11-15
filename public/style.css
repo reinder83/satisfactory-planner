@@ -7589,7 +7589,7 @@ button.rail-tile:hover {
   max-width: 1296px;
 }
 .wizard-panel.compact .form-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 262px), 1fr));
   gap: 6px 14px;
 }
 .wizard-panel.compact .field input,

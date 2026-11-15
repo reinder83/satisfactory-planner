@@ -143,3 +143,13 @@ test('a profile card’s ⋯ menu is a bottom sheet over a dimmed page on a phon
   // Wide screens keep the dropdown under the button.
   assert.match(rule([style], '.action-menu-list'), /position:\s*absolute/);
 });
+
+test('Expert All settings fields are wide enough for the longest label on one line (ONB-8, #1355)', () => {
+  // "Elevator requirement multiplier" and its ⓘ wrapped to two lines in columns of 190px; measured
+  // in a real browser, the label fits one line from about 262px (4 columns at 1440px).
+  const grid = rule([style], '.wizard-panel.compact .form-grid');
+  const min = Number(/minmax\(min\(100%, (\d+)px\), 1fr\)/.exec(grid)?.[1]);
+  assert.ok(min >= 262, `the column minimum is ${min}px`);
+  // A phone keeps its two fields a row.
+  assert.match(rule(phone, '.wizard-panel.compact .form-grid'), /repeat\(2, minmax\(0, 1fr\)\)/);
+});
