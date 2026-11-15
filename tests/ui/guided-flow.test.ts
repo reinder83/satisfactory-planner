@@ -221,16 +221,20 @@ test('the step count follows the detail level and the answers, never the screen 
   for (const level of ['beginner', 'standard'] as const) {
     for (const width of [1440, 390]) {
       const media = window.matchMedia;
-      window.matchMedia = ((query: string) => ({
+      window.matchMedia = (query: string): MediaQueryList => ({
         matches: query.includes('max-width: 720px')
           ? width <= 720
           : query.includes('min-width: 721px')
             ? width > 720
             : false,
         media: query,
+        onchange: null,
         addEventListener() {},
         removeEventListener() {},
-      })) as typeof window.matchMedia;
+        addListener() {},
+        removeListener() {},
+        dispatchEvent: () => false,
+      });
       const answers = { recipes: 'standard', wholeMachines: true } as const;
       draftAt({ detail: level }, answers);
       const flow = guidedFlow();

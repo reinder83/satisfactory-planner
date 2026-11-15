@@ -203,7 +203,8 @@ test('every literal help topic is words the same screen shows beside the button 
     const topics = [...source.matchAll(/(?<![:\w])topic="([^"]+)"/g)].map(match => match[1]!);
     // The file's text without the topic attributes themselves.
     const shown = flat(source.replace(/(?<![:\w])topic="[^"]+"/g, ''));
-    for (const topic of topics) if (!shown.includes(flat(topic))) failures.push(`${file}: ${topic}`);
+    for (const topic of topics)
+      if (!shown.includes(flat(topic))) failures.push(`${file}: ${topic}`);
   }
   assert.deepEqual(failures, []);
 });
