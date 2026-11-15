@@ -116,3 +116,47 @@ test('a complete delivery of a later phase does not read as Phase 3', async () =
   await nextTick();
   assert.equal(text(later), '1 remaining');
 });
+
+test('+ Add puts parts handed in since onto the saved count, within the target (BP-14, #1355)', async () => {
+  openMigrated({ state: { deliveries: { [id]: 100 } } });
+  stubFetch({ '/api/update': (update: UpdateOp) => applyUpdate(update) });
+  render();
+  const total = $<HTMLInputElement>(`#delivery-${id}`)!;
+  const field = $<HTMLInputElement>(`[data-delivery-add="${id}"]`)!;
+  const go = $<HTMLButtonElement>(`[data-delivery-add-go="${id}"]`)!;
+  assert.equal(total.value, '100', 'the total field is still there');
+  assert.equal(field.getAttribute('placeholder'), '+ add');
+  assert.match(field.getAttribute('aria-label')!, /^Parts to add to /);
+  // The button adds to the saved count and empties the field.
+  field.value = '1500';
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  go.click();
+  await settle();
+  assert.equal(state.deliveries[id], 1600);
+  assert.equal($<HTMLInputElement>(`[data-delivery-add="${id}"]`)!.value, '');
+  assert.equal($<HTMLInputElement>(`#delivery-${id}`)!.value, '1600');
+  // Enter in the field does the same.
+  const again = $<HTMLInputElement>(`[data-delivery-add="${id}"]`)!;
+  again.value = '400';
+  again.dispatchEvent(new Event('input', { bubbles: true }));
+  again.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await settle();
+  assert.equal(state.deliveries[id], 2000);
+  // More than the delivery still needs is refused, and says how many more it takes.
+  const over = $<HTMLInputElement>(`[data-delivery-add="${id}"]`)!;
+  over.value = '125000';
+  over.dispatchEvent(new Event('input', { bubbles: true }));
+  $<HTMLButtonElement>(`[data-delivery-add-go="${id}"]`)!.click();
+  await settle();
+  assert.equal(state.deliveries[id], 2000, 'nothing was written');
+  assert.match($('#toast')!.textContent!, /would pass the 125,000 needed: at most 123,000 more/);
+  // Zero, a fraction and an empty field add nothing.
+  for (const text of ['0', '2.5']) {
+    const field = $<HTMLInputElement>(`[data-delivery-add="${id}"]`)!;
+    field.value = text;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    $<HTMLButtonElement>(`[data-delivery-add-go="${id}"]`)!.click();
+    await settle();
+    assert.equal(state.deliveries[id], 2000, text);
+  }
+});
