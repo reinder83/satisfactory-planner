@@ -1664,3 +1664,26 @@ test("a guided plan's power commissioning and blocks on the resources page", asy
   await settle();
   assert.equal($('#main [data-guide-power]'), null);
 });
+
+test('a press on the dimmed page around a profile ⋯ menu closes it, one inside it does not (MOB-6, #1355)', async () => {
+  go('profiles');
+  render();
+  const card = $$('.profile-card')[1]!;
+  const trigger = card.querySelector<HTMLButtonElement>('[data-profile-menu="p"]')!;
+  const menu = $('#profile-menu-s-p')!;
+  trigger.click();
+  await nextTick();
+  assert.equal(menu.hidden, false, 'open');
+  // As a phone's bottom sheet the list is 300 x 120 at the foot of a 400 x 800 window; the rest
+  // of the window is its dimmed backdrop, whose presses land on the list element itself.
+  menu.getBoundingClientRect = () => new DOMRect(50, 680, 300, 120);
+  const press = (x: number, y: number) =>
+    menu.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+  press(100, 700);
+  await nextTick();
+  assert.equal(menu.hidden, false, 'a press on the sheet’s own padding leaves it open');
+  press(100, 200);
+  await nextTick();
+  assert.equal(menu.hidden, true, 'a press on the dimmed page closes it');
+  assert.equal(document.activeElement, trigger, 'focus is back on ⋯');
+});

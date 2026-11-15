@@ -190,3 +190,21 @@ test('every help button is named by words a sighted user reads, capitalised like
     [],
   );
 });
+
+test('every literal help topic is words the same screen shows beside the button (#1355)', () => {
+  // "Help: <topic>" must be what the heading, label or legend beside the ⓘ says, as a sighted
+  // user reads it: a topic that is not in the file's own text names something else.
+  const dir = path.join(process.cwd(), 'public/app/ui');
+  const flat = (text: string) => text.replace(/\s+/g, ' ').toLowerCase();
+  const failures: string[] = [];
+  for (const file of fs.readdirSync(dir, { recursive: true })) {
+    if (!String(file).endsWith('.vue')) continue;
+    const source = fs.readFileSync(path.join(dir, String(file)), 'utf8');
+    const topics = [...source.matchAll(/(?<![:\w])topic="([^"]+)"/g)].map(match => match[1]!);
+    // The file's text without the topic attributes themselves.
+    const shown = flat(source.replace(/(?<![:\w])topic="[^"]+"/g, ''));
+    for (const topic of topics)
+      if (!shown.includes(flat(topic))) failures.push(`${file}: ${topic}`);
+  }
+  assert.deepEqual(failures, []);
+});

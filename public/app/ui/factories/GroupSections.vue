@@ -48,7 +48,7 @@ import {
   type ProfileScope,
 } from '../../session.ts';
 import { FOOTPRINT_NOTE } from '../../footprints.ts';
-import { groupGrowth, groupGrowthText } from '../../later-phases.ts';
+import { groupGrowth, groupGrowthRows, type GroupGrowthRow } from '../../later-phases.ts';
 import { groupCountText } from '../../built-lines.ts';
 import { rowPlaces } from '../../group-order.ts';
 import type { FactoryGroups } from '../../../types/index.ts';
@@ -62,6 +62,7 @@ import { legacy } from '../bridge.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
+import HelpPopover from '../HelpPopover.vue';
 import CollapseToggle from './CollapseToggle.vue';
 import FactoryHandover from './FactoryHandover.vue';
 import FactoryWaiting from './FactoryWaiting.vue';
@@ -98,7 +99,7 @@ const sections = computed(() =>
         made: onSiteEntriesText(onSite[group.id]?.made || []),
         marked: onSiteEntriesText(onSite[group.id]?.marked || []),
         // Its machines in the phase shown and each later one, with a rough footprint (#1299):
-        // "Phase 3: 41 machines, ≈ 60 foundations · Phase 4: 97, ≈ 140". The whole factory,
+        // as a table of phase, machines and foundations (FAC-6). The whole factory,
         // whatever the search and chips show; outside edit mode only.
         growth: growthOf(group.id, groups),
         // Its machines built in the phase shown (#1300): "312 / 641 machines built".
@@ -125,10 +126,11 @@ function waitingOf(groupId: string) {
 }
 
 // A factory's size now and in the later phases of the plan (groupGrowth in later-phases.ts,
-// #1299), '' while editing or when it has no machine in any of them.
-function growthOf(groupId: string, groups: FactoryGroups): string {
-  if (!calculated || factoryEditing) return '';
-  return groupGrowthText(groupGrowth(calculated, stage(), groupId, groups));
+// #1299) as the rows of a small table (FAC-6), none while editing or when it has no machine in any
+// of them.
+function growthOf(groupId: string, groups: FactoryGroups): GroupGrowthRow[] {
+  if (!calculated || factoryEditing) return [];
+  return groupGrowthRows(groupGrowth(calculated, stage(), groupId, groups));
 }
 
 // A factory's machines built and needed in the phase shown (#1300, groupBuiltCount), '' while
@@ -286,10 +288,28 @@ async function undoRemove(update: FactoryRestore, name: string, profile: Profile
           <p v-if="section.built" class="small group-built" data-group-built>
             {{ section.built }}
           </p>
-          <p v-if="section.growth" class="small muted group-growth" data-group-growth>
-            <span data-group-growth-phases>{{ section.growth }}</span>
+          <div v-if="section.growth.length" class="small muted group-growth" data-group-growth>
+            <table class="group-growth-table" data-group-growth-phases>
+              <caption class="visually-hidden">
+                Machines and rough foundations of this factory, by phase
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Phase</th>
+                  <th scope="col">Machines</th>
+                  <th scope="col">≈ Foundations</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in section.growth" :key="row.phase" :data-growth-phase="row.phase">
+                  <th scope="row">{{ row.phase }}</th>
+                  <td>{{ row.machines }}</td>
+                  <td>{{ row.foundations }}</td>
+                </tr>
+              </tbody>
+            </table>
             <span class="group-growth-note">{{ FOOTPRINT_NOTE }}</span>
-          </p>
+          </div>
         </div>
       </div>
       <button
@@ -319,7 +339,11 @@ async function undoRemove(update: FactoryRestore, name: string, profile: Profile
           @click="exportSft($event, section.id)"
         >
           Export to Satisfactory Tools</button
-        ><a
+        ><HelpPopover
+          v-if="section.members.length"
+          name="sftImport"
+          topic="Export to Satisfactory Tools"
+        /><a
           v-if="section.members.length > 1"
           class="btn"
           :href="'#' + flowRoute(section.id)"

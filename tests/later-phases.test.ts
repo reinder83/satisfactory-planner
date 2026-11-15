@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { FOUNDATION_M2, MACHINE_FOOTPRINTS, machineFoundations } from '../public/app/footprints.ts';
 import {
   groupGrowth,
-  groupGrowthText,
+  groupGrowthRows,
   laterPhase,
   lineGrowth,
   lineGrowthText,
@@ -206,26 +206,26 @@ test('a factory counts its share of its lines in each phase, with their foundati
     { phase: '4', machines: 18, foundations: 22.5 },
     { phase: '5', machines: 40, foundations: 50 },
   ]);
-  assert.equal(
-    groupGrowthText(sizes),
-    'Phase 3: 10 machines, ≈\u00a013 foundations · Phase 4: 18, ≈\u00a023 · Phase 5: 40, ≈\u00a050',
-  );
+  assert.deepEqual(groupGrowthRows(sizes), [
+    { phase: '3', machines: '10', foundations: '13' },
+    { phase: '4', machines: '18', foundations: '23' },
+    { phase: '5', machines: '40', foundations: '50' },
+  ]);
   // Beta: half the rods and the Refineries, which Phase 4 does not build.
-  assert.equal(
-    groupGrowthText(groupGrowth(plan, '3', 'fg-b', groups)),
-    'Phase 3: 4 machines, ≈\u00a010 foundations · Phase 4: 2, ≈\u00a03 · Phase 5: 10, ≈\u00a035',
-  );
+  assert.deepEqual(groupGrowthRows(groupGrowth(plan, '3', 'fg-b', groups)), [
+    { phase: '3', machines: '4', foundations: '10' },
+    { phase: '4', machines: '2', foundations: '3' },
+    { phase: '5', machines: '10', foundations: '35' },
+  ]);
   // From Phase 5 only that phase; a factory with no machine anywhere has nothing to say.
-  assert.equal(
-    groupGrowthText(groupGrowth(plan, '5', 'fg-a', groups)),
-    'Phase 5: 40 machines, ≈\u00a050 foundations',
-  );
+  assert.deepEqual(groupGrowthRows(groupGrowth(plan, '5', 'fg-a', groups)), [
+    { phase: '5', machines: '40', foundations: '50' },
+  ]);
   assert.deepEqual(groupGrowth(plan, '3', 'fg-c', groups), []);
   assert.deepEqual(groupGrowth(null, '3', 'fg-a', groups), []);
   // One machine is a machine.
   const one = planOf({ '5': [row('plate', 'Packager', 1)] });
-  assert.equal(
-    groupGrowthText(groupGrowth(one, '5', 'fg-a', groups)),
-    'Phase 5: 1 machine, ≈\u00a01 foundation',
-  );
+  assert.deepEqual(groupGrowthRows(groupGrowth(one, '5', 'fg-a', groups)), [
+    { phase: '5', machines: '1', foundations: '1' },
+  ]);
 });

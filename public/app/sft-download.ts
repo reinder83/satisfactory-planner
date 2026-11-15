@@ -11,6 +11,16 @@ import { stageBudgets } from '../mining.ts';
 // The tab's name in Satisfactory Tools, and the file's: "Iron & steel, Phase 3".
 const sftTabName = (groupName: string, phaseKey: string) => `${groupName}, ${phaseLabel(phaseKey)}`;
 
+// Opens the "?" beside factory `groupId`'s export button: the steps for importing the file.
+function showImportHelp(groupId: string) {
+  const help = document.querySelector<HTMLElement>(
+    `[data-group-sft="${CSS.escape(groupId)}"] ~ .help-pop .help-btn`,
+  );
+  help?.scrollIntoView?.({ block: 'center' });
+  help?.focus();
+  help?.click();
+}
+
 // Writes the .sft file of factory group `groupId` in the phase shown, and says what to do with it.
 export async function exportGroupToSft(groupId: string): Promise<void> {
   const storedStage = calcStage();
@@ -34,9 +44,13 @@ export async function exportGroupToSft(groupId: string): Promise<void> {
   try {
     const text = await sftFileText([tab], new Date());
     downloadBlob(new Blob([text], { type: 'text/plain' }), fileName);
-    toast(
-      `Saved ${fileName}. On satisfactorytools.com, open the Production planner and choose Import.`,
-    );
+    // One line, with the steps behind "How to import" (the "?" beside the button): the long toast
+    // covered the cards' Built and Running controls for as long as it showed (BUG-8, #1355).
+    toast(`Saved ${fileName}.`, false, {
+      label: 'How to import',
+      shortcut: false,
+      run: () => showImportHelp(groupId),
+    });
   } catch {
     toast('This browser could not write the file: it needs CompressionStream.', true);
   }

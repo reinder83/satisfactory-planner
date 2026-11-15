@@ -13,6 +13,9 @@ export const helpText: Record<string, string> = {
   // The Backup page's summary of a restore (X-6, #1352).
   restoreChangesHelp:
     'Counted from this profile just before the restore and just after it, against the plan it already had. It is not stored: it stays until you dismiss it or leave the page. A line counts as running when its running box is ticked. The restore replaces the whole progress, so other parts that differ (personal tasks, storage, trains, map markers…) are named without counts. The restore itself is not undone from here; to go back, restore the earlier backup.',
+  // "Export to Satisfactory Tools" on a factory (BUG-8, #1355): what the export toast used to say.
+  sftImport:
+    'On satisfactorytools.com open the Production planner, choose Import and pick the .sft file this button saved. Its tab holds this factory’s lines for the phase shown. Nothing changes in the planner.',
   profilesHelp:
     "Edit settings recalculates a profile in place, keeps its progress and keeps the current version as a separate profile; that version's ⋯ menu has Restore this version, which swaps it back. Create a save starts a new world with its own profiles and progress; Try another profile calculates another profile in the same save from different settings; Duplicate copies a profile with its progress so you can try changes without touching the original. Share downloads a file with the plan, storage layout, factories and step edits — without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a save or profile with ✎ beside its name; renaming does not change progress. A profile still named after its goal alone offers a name that says what it is; ✕ keeps its name. Profiles keep a frozen calculation so later planner updates cannot silently change your targets.",
   worldSeed:

@@ -1481,17 +1481,13 @@ try {
       .evaluateAll(slots => slots.map(slot => slot.dataset.completeSlot ?? ''));
     await page.locator('[data-complete-bay="A"]').click();
     // These functions run in the page, which has the button and the dialog.
-    await page.waitForFunction(
-      () => document.querySelector<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled,
-    );
+    await page.waitForFunction(() => !!document.querySelector('[data-bay-completed="A"]'));
     const progress = await api<ProgressState>('/api/state');
     for (const id of shown)
       for (const step of ['built', 'labelled', 'connected', 'verified'])
         assert.equal(progress.checks['slot-' + id + '-' + step], true);
     await page.locator('[data-complete-slot="A01"]').uncheck();
-    await page.waitForFunction(
-      () => !document.querySelector<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled,
-    );
+    await page.waitForFunction(() => !!document.querySelector('[data-complete-bay="A"]'));
     assert.equal(
       await page.locator('#detail').evaluate((dialog: HTMLDialogElement) => dialog.open),
       false,

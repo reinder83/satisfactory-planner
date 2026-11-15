@@ -1,6 +1,6 @@
 // What a production line and a factory grow to in the later phases of the plan (#1299): one muted
-// line on the line's card, in its dialog over the expansion table (which also gives its clocks and
-// power per phase) and in its build-plan step, "Phase 4: 89 · Phase 5: 225 Refineries", or "Not
+// line in the line's dialog over the expansion table (which also gives its clocks and power per
+// phase) and in its build-plan step (not on its card, FAC-5), "Phase 4: 89 · Phase 5: 225 Refineries", or "Not
 // needed after Phase 3"; and under each factory's name its machines and rough foundations per
 // phase, labelled as an estimate. Nothing is stored or recalculated: the plan's stages are read.
 import assert from 'node:assert/strict';
@@ -83,17 +83,13 @@ beforeEach(() => {
   setHideDone(false);
 });
 
-test('a line card says what the same line needs in the later phases (#1299)', async () => {
+test('a line card does not carry the later phases: they are in its dialog and step (FAC-5, #1355)', async () => {
   const { grown, steady, dropped } = await show('factories');
-  const later = (row: CalcRow) => card(row.id).querySelector('[data-later-growth]');
-  assert.equal(text(later(grown)), 'Later phases: ' + growText(grown));
-  // The prefix is for screen readers; the card shows the figures.
-  assert.equal(text(later(grown)!.querySelector('.visually-hidden')), 'Later phases:');
-  assert.ok(later(grown)!.classList.contains('muted'));
-  assert.equal(text(later(dropped)), 'Later phases: Not needed after Phase 3');
-  // The same machines in every later phase: nothing to say.
-  assert.equal(later(steady), null);
-  // Phase 5 has no later phase.
+  assert.equal($('#main [data-later-growth]'), null, 'no card repeats it');
+  for (const row of [grown, steady, dropped])
+    assert.equal(card(row.id).querySelector('[data-later-growth]'), null);
+  assert.doesNotMatch(card(grown.id).textContent!, /Phase 4: 89/);
+  // The dialog of the same card still says it (the next test), and Phase 5 has no later phase.
   open({ calculated: planned().plan, phase: '5', state: {} });
   render();
   await nextTick();
@@ -138,7 +134,7 @@ test('a line’s build-plan step says it too, a dropped line that it is not need
     );
 });
 
-test('a factory heading gives its machines and rough foundations per phase', async () => {
+test('a factory heading gives its machines and rough foundations per phase, as a small table (FAC-6)', async () => {
   const { plan, grown, dropped } = await show('factories');
   const line = $(`#section-${ALPHA} [data-group-growth]`)!;
   assert.ok(line.classList.contains('muted'));
@@ -146,12 +142,21 @@ test('a factory heading gives its machines and rough foundations per phase', asy
   const room = (count: number, row: CalcRow) => machineFoundations(row.machine, count);
   const foundations3 = Math.ceil(room(grown.machines, grown) + room(dropped.machines, dropped));
   const grown4 = plan.stages['4']!.rows!.find(row => row.id === grown.id)!;
-  assert.equal(
-    text(line.querySelector('[data-group-growth-phases]')),
-    `Phase 3: ${machines3.toLocaleString('en-US')} machines, ≈ ${foundations3.toLocaleString('en-US')} foundations` +
-      ` · Phase 4: 89, ≈ ${Math.ceil(room(89, grown4)).toLocaleString('en-US')}` +
-      ` · Phase 5: 225, ≈ ${Math.ceil(room(225, grown4)).toLocaleString('en-US')}`,
+  const table = line.querySelector('table[data-group-growth-phases]')!;
+  assert.deepEqual(
+    [...table.querySelectorAll('thead th')].map(cell => text(cell)),
+    ['Phase', 'Machines', '≈ Foundations'],
+    'three columns',
   );
+  const rows = [...table.querySelectorAll('tbody tr')].map(row =>
+    [...row.children].map(cell => text(cell)),
+  );
+  assert.deepEqual(rows, [
+    ['3', machines3.toLocaleString('en-US'), foundations3.toLocaleString('en-US')],
+    ['4', '89', Math.ceil(room(89, grown4)).toLocaleString('en-US')],
+    ['5', '225', Math.ceil(room(225, grown4)).toLocaleString('en-US')],
+  ]);
+  assert.equal(table.querySelectorAll('tbody th[scope="row"]').length, 3, 'a row header per phase');
   // It says what the estimate leaves out.
   assert.match(
     text(line),

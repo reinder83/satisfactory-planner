@@ -125,7 +125,8 @@ async function completeRoom(event: Event) {
     } catch {}
   });
   await nextTick();
-  if (button.disabled) await refocus();
+  // The pressed button is a status label once the room is done, so focus goes on to the next room.
+  if (button.disabled || !button.isConnected) await refocus();
 }
 
 // A container's Done box, busy while it saves (app/busy.ts). A failed write unticks it again.
@@ -411,17 +412,22 @@ async function addContainer(event: Event) {
         >
           Hide bay
         </button>
-        <button
+        <!-- A finished room is a status, not a greyed-out button (STO-2, #1355): there is nothing
+             left to press, and a disabled button looks broken on a phone. -->
+        <span
+          v-if="view.named && view.done === view.named"
+          class="bay-completed"
+          :data-bay-completed="bay.id"
+          role="status"
+          >Room {{ bay.id }} completed <span aria-hidden="true">✓</span></span
+        ><button
+          v-else
           class="btn quiet"
           :data-complete-bay="bay.id"
-          :disabled="!view.named || view.done === view.named"
+          :disabled="!view.named"
           @click="completeRoom"
         >
-          {{
-            view.named && view.done === view.named
-              ? `Room ${bay.id} completed ✓`
-              : `Complete room ${bay.id}`
-          }}
+          Complete room {{ bay.id }}
         </button></span
       >
     </div>

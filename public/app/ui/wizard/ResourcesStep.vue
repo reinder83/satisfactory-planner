@@ -118,7 +118,7 @@ const overclock = ref(!!draft().settings.overclock);
       <caption class="small muted">
         These budgets are the most any phase draws; each phase gets what its miner, clock and belts
         take from the same nodes.
-        <HelpPopover name="phaseBudgets" topic="Budgets per phase" />
+        <HelpPopover name="phaseBudgets" topic="These budgets" />
       </caption>
       <thead>
         <tr>

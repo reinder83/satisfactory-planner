@@ -11,7 +11,7 @@
   and the strip and always show the panel.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import {
   adaChatter,
   adaClearFault,
@@ -33,7 +33,9 @@ import { invalidate, legacy } from './bridge.ts';
 import { focusPageHeading } from './refocus.ts';
 
 // A pressed button or "Later" in the phone strip: the menu drawer around it closes (Shell.vue).
-const emit = defineEmits<{ acted: [] }>();
+// `acted` closes the phone drawer around the panel; with `refocus` the ☰ button that opened it takes
+// focus back (a press that opens no page), otherwise the page it opened does.
+const emit = defineEmits<{ acted: [refocus?: boolean] }>();
 const ada = computed(() => legacy(adaView));
 // Whether the phone ticker has unfolded the full panel. View state only, never saved.
 const open = ref(false);
@@ -119,6 +121,9 @@ function act(fromStrip = false) {
   if (action.step) setJumpTarget(action.step);
   if (action.tab) setLogisticsTab(action.tab);
   // At phone width the panel sits in the modal menu drawer: close it before the page is focused.
+  // The strip's button lets go of focus first, as a followed drawer link does (Shell.vue
+  // navFollowed): while it still held it, the page the press opens would not take focus (#1355).
+  if (fromStrip) (document.activeElement as HTMLElement | null)?.blur?.();
   emit('acted');
   navigate(action.view as View);
   // The step's checkbox: the build plan only focuses it when it is opened, not when it is already
@@ -137,11 +142,17 @@ const strip = computed(() => {
   return !!now && now.chatter !== 'off' && !!(now.action || now.event);
 });
 
-// "Later": an event remark goes, and the others wait for the next one.
+// "Later": an event remark goes, and the others wait for the next one. The button goes with it, so
+// focus must not fall to <body> (#1355): the phone strip's press closes the drawer, whose ☰ takes
+// focus back (no page opens), and the panel's press leaves it on "Another remark" beside it.
 function later(fromStrip = false) {
-  if (fromStrip) emit('acted');
+  if (fromStrip) {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    emit('acted', true);
+  }
   adaDismissEvent();
   invalidate();
+  if (!fromStrip) void nextTick(() => document.querySelector<HTMLElement>('#ada-next')?.focus());
 }
 
 // The badge is decoration, not a control: it is hidden from assistive software and nothing

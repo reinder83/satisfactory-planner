@@ -3,11 +3,13 @@
   rate }: a calculated plan's delivery, with the id `<stage>-<item slug>`. An unsaved count is 0
   (a profile migrated from the handbook had the handbook's starting counts written as saved
   counts by the migration, #387). A committed entry must be a whole number from 0 to the target;
-  an invalid one, or a failed write, puts the saved count back.
+  an invalid one, or a failed write, puts the saved count back. Beside the total field, "+ Add"
+  takes the parts handed in since (BP-14, #1355): it adds them to the saved count, within the
+  target, and writes the new total as the total field does, so nothing is stored differently.
 -->
 <script setup lang="ts">
 import { vNumber } from '../form/number-input.ts';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { save, toast } from '../../api.ts';
 import { duration, num } from '../../format.ts';
 import { state } from '../../session.ts';
@@ -57,6 +59,37 @@ function putBack(input: HTMLInputElement, shown = draft.value) {
   if (settle(draft, shown, String(saved()))) input.value = draft.value;
 }
 
+// "+ Add": parts handed in since the count was last set, added to the saved count. A whole number
+// from 1; more than the delivery still needs is refused and says how many more it takes.
+const adding = ref('');
+const addField = ref<HTMLInputElement | null>(null);
+async function add() {
+  const field = addField.value,
+    delivery = props.delivery,
+    more = Number(adding.value),
+    count = saved(),
+    left = Math.max(0, delivery.target - count);
+  if (!field || isNaN(more) || adding.value.trim() === '') return;
+  if (!Number.isInteger(more) || more < 1) {
+    toast('Enter a whole number of parts to add.', true);
+    return;
+  }
+  if (more > left) {
+    toast(
+      left
+        ? `Adding ${num(more)} would pass the ${num(delivery.target)} needed: at most ${num(left)} more.`
+        : `${delivery.name} is already delivered in full.`,
+      true,
+    );
+    return;
+  }
+  try {
+    await save({ type: 'delivery', key: delivery.id, value: count + more });
+    adding.value = '';
+    render();
+  } catch {}
+}
+
 async function change(event: Event) {
   const input = event.target as HTMLInputElement,
     delivery = props.delivery,
@@ -92,6 +125,30 @@ async function change(event: Event) {
         @change="change"
         @blur="left"
       /><small>/ {{ num(delivery.target) }}</small>
+    </div>
+    <div class="delivery-add" role="group" :aria-label="'Add to ' + delivery.name">
+      <input
+        :id="'delivery-add-' + delivery.id"
+        ref="addField"
+        v-model="adding"
+        type="text"
+        v-number
+        min="1"
+        :max="delivery.target"
+        step="1"
+        placeholder="+ add"
+        :aria-label="'Parts to add to ' + delivery.name + ' delivered'"
+        :data-delivery-add="delivery.id"
+        @keydown.enter.prevent="add"
+      /><button
+        type="button"
+        class="btn"
+        :data-delivery-add-go="delivery.id"
+        :aria-label="'+ Add to ' + delivery.name"
+        @click="add"
+      >
+        + Add
+      </button>
     </div>
     <div class="progress-track">
       <span :style="{ width: counter.width + '%' }"></span>

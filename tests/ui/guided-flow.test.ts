@@ -212,3 +212,52 @@ test('Review says which budgets a fitting phase stays within', () => {
 });
 
 const main = () => text('#main');
+
+test('the step count follows the detail level and the answers, never the screen size (ONB-9, #1355)', async () => {
+  // The design review saw "1 of 6" on a desktop Beginner start and "1 of 8" on a phone Standard
+  // one: two detail levels, not two sizes. Beginner leaves out the recipes and exactness
+  // questions, so its count is two lower; the same level counts the same on any width.
+  const counted: Record<string, string[]> = {};
+  for (const level of ['beginner', 'standard'] as const) {
+    for (const width of [1440, 390]) {
+      const media = window.matchMedia;
+      window.matchMedia = (query: string): MediaQueryList => ({
+        matches: query.includes('max-width: 720px')
+          ? width <= 720
+          : query.includes('min-width: 721px')
+            ? width > 720
+            : false,
+        media: query,
+        onchange: null,
+        addEventListener() {},
+        removeEventListener() {},
+        addListener() {},
+        removeListener() {},
+        dispatchEvent: () => false,
+      });
+      const answers = { recipes: 'standard', wholeMachines: true } as const;
+      draftAt({ detail: level }, answers);
+      const flow = guidedFlow();
+      const shown = [];
+      for (let step = 1; step <= flow.length; step++) {
+        draftAt({ detail: level, guidedStep: step }, answers);
+        assert.equal($$('.guided-progress [role="listitem"]').length, flow.length + 1);
+        shown.push(text('[data-guided-count]'));
+      }
+      window.matchMedia = media;
+      (counted[level] ??= []).push(shown.join(','));
+    }
+  }
+  assert.equal(
+    counted.beginner![0],
+    counted.beginner![1],
+    'Beginner counts the same at 1440 and 390',
+  );
+  assert.equal(
+    counted.standard![0],
+    counted.standard![1],
+    'Standard counts the same at 1440 and 390',
+  );
+  const total = (level: string) => Number(/ of (\d+),/.exec(counted[level]![0]!)?.[1]);
+  assert.ok(total('beginner') < total('standard'), 'Beginner asks fewer questions than Standard');
+});

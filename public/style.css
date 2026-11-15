@@ -3105,6 +3105,17 @@ p.eyebrow {
   color: var(--ink);
   font-size: 12px;
 }
+/* "+ Add" beside the total (BP-14, #1355): the field and its button on a row of their own. */
+.delivery .delivery-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.delivery .delivery-add .btn {
+  font-size: 11.5px;
+  padding: 7px 12px;
+}
 .delivery small {
   color: var(--dim);
   font-size: 11px;
@@ -3695,6 +3706,19 @@ tr.muted td:first-child {
 .bay-actions .btn.quiet:hover {
   border-color: var(--accent);
   color: var(--bright);
+}
+/* A finished room (STO-2, #1355): a status label in the green of a done card, with nothing of a
+   button's box, so it cannot be mistaken for a disabled one. */
+.bay-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 2px;
+  color: var(--green);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 /* On a phone the bay's buttons (Complete room, ← →, Hide bay, Remove bay) are 44px touch
    targets (#832). They are quiet buttons drawn as boxes, so they have no underline to keep.
@@ -6589,6 +6613,16 @@ button.rail-tile:hover {
 #toast.show {
   display: block;
 }
+/* The strip never takes a click from the page under it (BUG-8, #1355): at the bottom it sat over a
+   row of cards, and their Built and Running controls could not be pressed while it showed. Only a
+   button on it (Undo, How to import) is pressable. */
+#toast {
+  pointer-events: none;
+}
+#toast .toast-actions,
+#toast .toast-action {
+  pointer-events: auto;
+}
 #toast.error {
   border-color: var(--red);
   background: #241a18;
@@ -7107,6 +7141,36 @@ button.rail-tile:hover {
 .action-menu-list[hidden] {
   display: none;
 }
+/* A profile card's ⋯ menu is a bottom sheet on a phone (MOB-6, #1355): the dropdown opened over the
+   next card, and its items overlapped what was under it. The sheet sits at the foot of the window
+   over a dimmed page; the dimmed part is the list's own transparent ::before, so a press on it
+   reaches the menu (ActionMenu.vue closes it) instead of the card below. */
+@media (max-width: 720px) {
+  .profile-actions .action-menu-list {
+    position: fixed;
+    z-index: 45;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    margin: 0;
+    min-width: 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    border-width: 2px 0 0;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.6);
+  }
+  .profile-actions .action-menu-list::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+  }
+  .profile-actions .action-menu-list .btn {
+    min-height: 44px;
+  }
+}
 .action-menu-list .btn {
   justify-content: flex-start;
   width: 100%;
@@ -7525,7 +7589,7 @@ button.rail-tile:hover {
   max-width: 1296px;
 }
 .wizard-panel.compact .form-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 262px), 1fr));
   gap: 6px 14px;
 }
 .wizard-panel.compact .field input,
@@ -8282,6 +8346,37 @@ button.rail-tile:hover {
 }
 .group-growth > span {
   display: block;
+}
+/* The same as a tiny three-column table (FAC-6, #1355): the phase, its machines and its foundations
+   line up, which the one run of text did not. */
+.group-growth-table {
+  width: auto;
+  border-collapse: collapse;
+  margin: 2px 0 4px;
+}
+.group-growth-table th,
+.group-growth-table td {
+  padding: 1px 14px 1px 0;
+  border: 0;
+  text-align: left;
+  font-weight: 400;
+}
+.group-growth-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.group-growth-table thead th {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.group-growth-table thead th:not(:first-child) {
+  text-align: right;
+}
+.group-growth-table tbody th {
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
 }
 /* The production line dialog's expansion table has five columns (#1299): closer cells on a
    phone, so it fits a 320px screen without scrolling sideways. */

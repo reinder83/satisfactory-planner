@@ -191,6 +191,41 @@ test('a strip button closes the modal menu drawer around it, whether it opens a 
   setRestoredProgress(null);
 });
 
+test('the strip’s Later gives focus back to the menu button that opened the drawer, not <body> (#1355)', async () => {
+  setAdaChatter('chatty');
+  adaNote('part-delivered', { name: 'Versatile Framework', count: '1 of 1' });
+  render();
+  await nextTick();
+  const toggle = $<HTMLButtonElement>('[data-menu-toggle]')!;
+  toggle.click();
+  await nextTick();
+  await nextTick();
+  const later = $<HTMLButtonElement>('[data-ada-strip-later]')!;
+  later.focus();
+  later.click();
+  // The drawer closes and takes the button with it: focus is lost, as a hidden button loses it.
+  later.blur();
+  await nextTick();
+  await nextTick();
+  assert.equal($('#sidebar')!.getAttribute('role'), null, 'the drawer is closed');
+  assert.equal($('[data-ada-strip-later]'), null, 'the remark is gone');
+  assert.equal(document.activeElement, toggle, 'focus is on the menu button');
+});
+
+test('the panel’s Later leaves focus on Another remark, not <body> (#1355)', async () => {
+  setAdaChatter('chatty');
+  adaNote('part-delivered', { name: 'Versatile Framework', count: '1 of 1' });
+  render();
+  await nextTick();
+  const later = $<HTMLButtonElement>('[data-ada-later]')!;
+  later.focus();
+  later.click();
+  await nextTick();
+  await nextTick();
+  assert.equal($('[data-ada-later]'), null, 'the remark is gone');
+  assert.equal(document.activeElement, $('#ada-next'), 'focus is on Another remark');
+});
+
 test('Plan a train line opens Logistics on the Trains tab whichever tab was used last', async () => {
   setAdaChatter('chatty');
   setLogisticsTab('links');

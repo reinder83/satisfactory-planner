@@ -89,10 +89,16 @@ test('the button writes the factory’s tab as a .sft file and says how to impor
     assert.match(entry.item, /^Desc_\w+_C$/);
   assert.ok(tab.request.resourceMax.Desc_OreIron_C > 0, 'the phase’s budgets');
   assert.match(name, /^[a-z0-9-]+-phase-3\.sft$/);
-  assert.equal(
-    toastText(),
-    `Saved ${name}. On satisfactorytools.com, open the Production planner and choose Import.`,
-  );
+  // One short line with "How to import" after it, not the steps in the toast (BUG-8, #1355).
+  assert.equal($('#toast')!.firstChild!.textContent!.trim(), `Saved ${name}.`);
+  assert.doesNotMatch(toastText(), /Production planner/);
+  const how = $<HTMLButtonElement>('#toast [data-toast-action]')!;
+  assert.equal(how.textContent, 'How to import');
+  how.click();
+  await settle();
+  const help = $<HTMLButtonElement>(`#main [data-group-sft="${GROUP}"] ~ .help-pop .help-btn`)!;
+  assert.equal(help.getAttribute('aria-expanded'), 'true', 'the ? beside the button opens');
+  assert.match($('[data-help-tip]')!.textContent!, /Production planner.*Import/);
   // Nothing is saved, and the button is ready again.
   assert.equal(button().getAttribute('aria-disabled'), null);
   assert.deepEqual(state.checks, checks);

@@ -1673,6 +1673,22 @@ test('leaving the step or pausing cancels the estimate, and a late answer is ign
   assert.equal($('[data-estimate-pause]')!.getAttribute('aria-pressed'), 'false');
 });
 
+test('the pause button says when to use it, and the button is described by it (ONB-7, #1355)', async () => {
+  freshEstimate();
+  stubFetch({ '/api/preview': estimated(0.5) });
+  wizardAt(3);
+  await pause(30);
+  const button = $<HTMLButtonElement>('[data-estimate-pause]')!;
+  const why = $('[data-estimate-pause-why]')!;
+  assert.equal(why.textContent!.trim(), 'Pause while you change many values.');
+  assert.equal(button.getAttribute('aria-describedby'), why.id);
+  button.click();
+  await nextTick();
+  assert.match($('[data-estimate-pause-why]')!.textContent!, /^s*Paused: nothing is calculated/);
+  button.click();
+  await pause(30);
+});
+
 // With whole machines on, the estimate is solved twice: first with exact ratios, which is quick
 // even for a heavy plan and is shown as a quick estimate, then as the settings stand, which
 // replaces it. An edit made during the quick pass skips the whole-machine pass of the old
