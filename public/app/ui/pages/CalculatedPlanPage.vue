@@ -56,6 +56,7 @@ import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
+import BuildIntro from '../plan/BuildIntro.vue';
 import BuildStatusPanel from '../plan/BuildStatusPanel.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
@@ -343,9 +344,11 @@ function tabKey(event: KeyboardEvent) {
             Production starts in {{ page.start }}, so gather, handcraft or build a starter supply of
             what each one costs.
           </p>
-          <!-- Its text is the "?" beside the heading (X-3, helpText.buildIntro), not a paragraph
-               repeated on every phase (BP-13). Today's session is the button beside Edit steps
+          <!-- Its text is the "?" beside the heading (X-3, helpText.buildIntro), shown here once per
+               browser (BP-13, ui/plan/BuildIntro.vue), not repeated on every phase; the key hides
+               it when another phase is shown. Today's session is the button beside Edit steps
                (BP-11). -->
+          <BuildIntro v-if="!page.guided && !page.milestones" :key="page.title" />
           <Checklist />
           <AddTaskForm placeholder="Add a task…" />
           <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>

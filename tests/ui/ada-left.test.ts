@@ -58,6 +58,26 @@ test('the strip under the folded ticker has the event remark button and Later, t
   assert.equal($('[data-ada-strip-later]'), null, 'Later drops the event and its strip buttons');
 });
 
+test('the strip button that opens a page leaves focus on the opened page heading, not <body> (#1355)', async () => {
+  setAdaChatter('chatty');
+  go('factories');
+  adaNote('part-delivered', { name: 'Versatile Framework', count: '125,000 of 125,000' });
+  render();
+  await nextTick();
+  const button = $<HTMLButtonElement>('[data-ada-strip-action]')!;
+  button.focus();
+  button.click();
+  // The drawer closes and takes the button with it: focus is lost, as a hidden button loses it.
+  button.blur();
+  await nextTick();
+  for (let i = 0; i < 5 && document.activeElement === document.body; i++) await frames();
+  assert.equal(location.hash, '#plan');
+  const heading = $('#main h1')!;
+  assert.ok(heading);
+  assert.equal(document.activeElement, heading, 'the opened page heading has focus');
+  assert.equal(heading.getAttribute('tabindex'), '-1');
+});
+
 test('the strip is absent without a button or event, and when she is Off', async () => {
   render();
   await nextTick();

@@ -190,6 +190,22 @@ test('never backed up is one remark at any tick count, stronger from 50 ticks', 
   assert.equal(ids.filter(id => id.startsWith('backup-never')).length, 1, ids.join());
 });
 
+test('never backed up is stronger from the third session, one remark at 2 and at 3 (#1353)', () => {
+  const over = { view: 'backup', browserMode: true, backupDays: null, ticks: 4 } as const;
+  const strong = /^Your entire factory history lives in one browser tab/;
+  assert.match(lineOf({ ...over, sessions: 1 }, 'backup-never')!.text, /^This browser has never/);
+  assert.match(lineOf({ ...over, sessions: 2 }, 'backup-never')!.text, /^This browser has never/);
+  const third = lineOf({ ...over, sessions: 3 }, 'backup-never')!;
+  assert.match(third.text, strong);
+  assert.equal(third.essential, true, 'a warning, so it is kept at Essential and Off');
+  assert.match(lineOf({ ...over, sessions: 40 }, 'backup-never')!.text, strong);
+  // No count (an older caller) reads as before; a backup silences it at any count.
+  assert.match(lineOf({ ...over }, 'backup-never')!.text, /^This browser has never/);
+  assert.equal(lineOf({ ...over, sessions: 9, backupDays: 2 }, 'backup-never'), undefined);
+  const ids = adaRemarks(baseFacts({ ...over, sessions: 5 })).map(r => r.id);
+  assert.equal(ids.filter(id => id.startsWith('backup-never')).length, 1, ids.join());
+});
+
 test('Plan a train line opens the Trains tab', () => {
   const action = lineOf(
     { view: 'map', trainStations: 2, trainLines: 0 },

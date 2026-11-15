@@ -30,6 +30,7 @@ import { setJumpTarget } from '../step-jump.ts';
 import type { AdaAction, AdaChatter } from '../../ada.ts';
 import type { View } from '../session.ts';
 import { invalidate, legacy } from './bridge.ts';
+import { focusPageHeading } from './refocus.ts';
 
 // A pressed button or "Later" in the phone strip: the menu drawer around it closes (Shell.vue).
 const emit = defineEmits<{ acted: [] }>();
@@ -112,7 +113,7 @@ function focusWhenDrawn(selector: string, tries = 30) {
     element.focus({ preventScroll: true });
   } else if (tries > 0) requestAnimationFrame(() => focusWhenDrawn(selector, tries - 1));
 }
-function act() {
+function act(fromStrip = false) {
   const action: AdaAction | null | undefined = ada.value?.action;
   if (!action) return;
   if (action.step) setJumpTarget(action.step);
@@ -126,6 +127,9 @@ function act() {
     ? `#main input[data-check="${CSS.escape(action.step)}"]`
     : action.target;
   if (target) requestAnimationFrame(() => focusWhenDrawn(target));
+  // The strip's button goes with the drawer it was in, which would leave focus on <body> (#1355):
+  // with no target to focus, the opened page's heading takes it, as after any page change.
+  else if (fromStrip) requestAnimationFrame(() => focusPageHeading());
 }
 // The phone strip under the folded ticker: her button and "Later", when the line has them.
 const strip = computed(() => {
@@ -175,7 +179,7 @@ function poke() {
         class="btn ada-strip-action"
         type="button"
         data-ada-strip-action
-        @click="act"
+        @click="act(true)"
       >
         {{ ada.action.label }}
       </button>
@@ -210,7 +214,7 @@ function poke() {
       </div>
       <div v-if="ada.stamp" class="ada-stamp" data-ada-stamp>{{ ada.stamp }}</div>
       <p class="ada-line" id="ada-line" role="status" aria-live="polite">{{ said }}</p>
-      <button v-if="ada.action" class="btn ada-action" type="button" data-ada-action @click="act">
+      <button v-if="ada.action" class="btn ada-action" type="button" data-ada-action @click="act()">
         {{ ada.action.label }}
       </button>
       <div class="ada-tools">
