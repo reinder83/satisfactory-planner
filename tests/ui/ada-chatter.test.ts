@@ -3,7 +3,7 @@
 // events add one remark each, once, capped, and never at Off.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
-import { beforeEach, test } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 import {
   ADA_EVENT_CAP,
   adaChatter,
@@ -228,6 +228,9 @@ test('a saved tick tells her, and a first step is not said at Essential (#1353)'
     ...state,
     checks: { ...state.checks, [key]: true },
   });
+  // At noon: a tick between 01:00 and 05:00 is her late-step remark instead, which wins.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 14, 12, 0, 0));
   // A profile with nothing ticked: the first tick is her first event.
   state.checks = {};
   setAdaChatter('chatty');
@@ -242,4 +245,5 @@ test('a saved tick tells her, and a first step is not said at Essential (#1353)'
   state.checks = {};
   await save({ type: 'check', key: 'two', value: true });
   assert.doesNotMatch(adaCurrent()!.text, /^One down./);
+  vi.useRealTimers();
 });
