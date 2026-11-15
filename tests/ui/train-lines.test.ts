@@ -239,3 +239,97 @@ test('deleting a station takes it off the lines, and its Undo puts them back', a
   assert.equal(state.trainStations!.length, 2);
   assert.deepEqual(state.trainLines, [SHUTTLE], 'the line has its stop back');
 });
+
+// LOG-5: the cars of the train are chips that can be moved along it, by a drag or the arrow keys.
+const carPointer = (target: Element, type: string, x: number, y: number) =>
+  target.dispatchEvent(
+    new PointerEvent(type, { pointerId: 1, clientX: x, clientY: y, button: 0, bubbles: true }),
+  );
+// Chips 100 px apart in a row, as a browser would lay them out (happy-dom does no layout).
+function layOutCars() {
+  $$('.line-consist > li').forEach((chip, i) => {
+    chip.getBoundingClientRect = () =>
+      ({
+        left: i * 100,
+        top: 0,
+        width: 90,
+        height: 44,
+        right: i * 100 + 90,
+        bottom: 44,
+      }) as DOMRect;
+  });
+}
+
+test('LOG-5: a car chip is a button that a drag moves along the train; Escape drops nothing', async () => {
+  await showTrains({ trainLines: [SHUTTLE] });
+  await click(`[data-line-edit="${SHUTTLE.id}"]`);
+  assert.deepEqual(cars(), ['Locomotive', 'Wagon 1', 'Wagon 2']);
+  const chips = $$<HTMLButtonElement>('button[data-car]');
+  assert.equal(chips.length, 3, 'each chip is a button');
+  assert.equal(chips[1]!.getAttribute('aria-label'), 'Wagon 1, car 2 of 3');
+  assert.equal(chips[1]!.getAttribute('aria-describedby'), 'line-car-hint');
+  assert.ok($('#line-car-hint'), 'the hint is on the page');
+  // The locomotive dragged to the end of the train.
+  layOutCars();
+  carPointer(chips[0]!, 'pointerdown', 40, 20);
+  carPointer(chips[0]!, 'pointermove', 240, 20);
+  carPointer(chips[0]!, 'pointerup', 240, 20);
+  await settle();
+  assert.deepEqual(
+    $$('[data-car]').map(car => car.dataset.car),
+    ['wagon', 'wagon', 'loco'],
+  );
+  assert.deepEqual(cars(), ['Wagon 1', 'Wagon 2', 'Rear locomotive']);
+  // Escape in the middle of a drag: nothing moves.
+  layOutCars();
+  const first = $$<HTMLButtonElement>('button[data-car]')[0]!;
+  carPointer(first, 'pointerdown', 40, 20);
+  carPointer(first, 'pointermove', 240, 20);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  carPointer(first, 'pointerup', 240, 20);
+  await settle();
+  assert.deepEqual(cars(), ['Wagon 1', 'Wagon 2', 'Rear locomotive']);
+  // Nothing is saved until Save, and then the cars are in the new order.
+  assert.deepEqual(sent, []);
+  await click('[data-line-save]');
+  const update = sent[0]! as { value: { cars: string[] } };
+  assert.deepEqual(update.value.cars, ['wagon', 'wagon', 'loco']);
+});
+
+test('LOG-5: the arrow keys move a focused car and focus stays on it', async () => {
+  await showTrains({ trainLines: [SHUTTLE] });
+  await click(`[data-line-edit="${SHUTTLE.id}"]`);
+  const chip = (at: number) => $$<HTMLButtonElement>('button[data-car]')[at]!;
+  chip(0).focus();
+  chip(0).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  await settle();
+  assert.deepEqual(
+    $$('[data-car]').map(car => car.dataset.car),
+    ['wagon', 'loco', 'wagon'],
+  );
+  assert.equal(document.activeElement, chip(1), 'focus follows the locomotive');
+  // At the end of the train a further press does nothing.
+  chip(1).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  await settle();
+  chip(2).focus();
+  chip(2).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  await settle();
+  assert.deepEqual(
+    $$('[data-car]').map(car => car.dataset.car),
+    ['wagon', 'wagon', 'loco'],
+  );
+  chip(2).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  await settle();
+  assert.deepEqual(
+    $$('[data-car]').map(car => car.dataset.car),
+    ['wagon', 'wagon', 'loco'],
+  );
+  assert.equal(document.activeElement, chip(2));
+  chip(2).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  await settle();
+  assert.deepEqual(
+    $$('[data-car]').map(car => car.dataset.car),
+    ['wagon', 'loco', 'wagon'],
+  );
+  assert.equal(document.activeElement, chip(1));
+});
